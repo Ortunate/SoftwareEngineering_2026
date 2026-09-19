@@ -1,0 +1,49 @@
+name: Deploy Savior to GitHub Pages
+
+on:
+  push:
+    branches:
+      - '兜底选题-儿童口算练习'
+    paths:
+      - 'savior/**'
+      - '.github/workflows/savior-pages.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: savior-github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test
+        run: node savior/tests/run.cjs
+      - name: Build static site
+        run: node savior/scripts/build.cjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: savior/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,17 +1,32 @@
 /* Practice timing, keyboard guidance, and transparent feedback. */
-.exercise-toolbar{gap:18px;flex-wrap:wrap}
-.timer-block{display:flex;align-items:center;gap:10px;margin-left:auto;color:var(--green)}
+.exercise-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:16px;align-items:center}
+.timer-block{display:flex;align-items:center;gap:10px;min-width:0;color:var(--green)}
 .timer-block>span{font-size:12px}
 .timer-block strong{font-size:24px;font-variant-numeric:tabular-nums;letter-spacing:1px}
 .keyboard-hints{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:-3px 0 22px;padding:12px 16px;background:#f0f4ea;border-radius:9px;color:#75826b;font-size:11px}
-.keyboard-hints small{margin-left:auto;font-size:10px}
+.keyboard-hints small{margin-left:auto;font-size:12px}
+.keyboard-hints>span{white-space:nowrap}
 kbd{display:inline-block;background:#fff;border:1px solid #d6dfcf;border-bottom-width:2px;border-radius:4px;padding:1px 6px;font:inherit;color:var(--green)}
 .performance-card{border:1px solid var(--border);border-radius:12px;background:#fff;padding:22px;margin:20px 0}
 .performance-card h3{font-size:19px;margin:12px 0}
 .performance-card>p{font-size:13px;margin:12px 0}
 .performance-metrics{display:flex;gap:20px;flex-wrap:wrap;color:var(--muted);font-size:12px}
-.performance-metrics strong{font-size:17px;color:var(--green);font-variant-numeric:tabular-nums;margin-left:5px}
+.performance-metrics strong{font-size:17px;color:var(--green);font-variant-numeric:tabular-nums;margin-left:5px;white-space:nowrap}
 .evaluation-rules{font-size:11px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px}
 .evaluation-rules summary{cursor:pointer;display:list-item}
 .evaluation-rules p{margin:10px 0 0;line-height:1.9}
-@media(max-width:520px){.exercise-toolbar{gap:10px}.timer-block{gap:6px}.timer-block strong{font-size:21px}.keyboard-hints{gap:10px}.keyboard-hints small{margin-left:0;width:100%}.performance-metrics{gap:12px}.performance-card{padding:18px}.performance-metrics strong{font-size:15px}}
+@media(max-width:700px){
+  .exercise-toolbar{grid-template-columns:minmax(0,1fr) auto;gap:12px}
+  .exercise-toolbar>.button{grid-column:1 / -1;justify-self:start}
+  .keyboard-hints{gap:10px;font-size:12px}
+  .keyboard-hints small{margin-left:0;flex-basis:100%}
+  .performance-metrics{gap:12px}
+}
+@media(max-width:480px){
+  .timer-block{gap:6px}
+  .timer-block strong{font-size:22px}
+  .exercise-toolbar>.button{width:100%}
+  .performance-card{padding:18px}
+  .performance-metrics{display:grid;grid-template-columns:minmax(0,1fr)}
+  .performance-metrics strong{font-size:17px}
+}

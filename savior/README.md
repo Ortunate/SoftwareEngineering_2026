@@ -1,6 +1,6 @@
 # 小芽口算
 
-五个给定题目中第 2 项「儿童学习」的候选实现，版本 1.0.0（ver1.0）。面向小学低年级学生与家长，提供口算出题、批改、错题巩固及成长记录。独立存放在 `savior/`，尚不代表小组最终选题。
+五个给定题目中第 2 项「儿童学习」的候选实现，当前版本 1.0.1（ver1.0 的响应式修订）。面向小学低年级学生与家长，提供口算出题、批改、错题巩固及成长记录。独立存放在 `savior/`，尚不代表小组最终选题。
 
 选择理由：目标用户和每日 30 题的场景明确；出题与判题规则能够独立验证；软件工程各阶段有具体内容；日常调试不依赖校园网。
 
@@ -84,6 +84,7 @@ savior/
 | [测试计划](docs/testing/test-plan.md) | 自动化覆盖与需求追踪 |
 | [测试报告](docs/testing/test-report.md) | 实际测试结果及未验证事项 |
 | [手动验收清单](docs/testing/manual-acceptance.md) | 请用户执行的浏览器与打印测试 |
+| [多分辨率验收](docs/testing/responsive-acceptance.md) | Windows Chrome、系统缩放、分屏与跨平台手动检查 |
 | [用户手册](docs/release/user-guide.md) | 操作、数据保存、常见问题 |
 | [发布与演示](docs/release/release-plan.md) | 静态发布、课程发布要求、8 分钟演示 |
 | [课程报告提纲](docs/report-outline.md) | 依课程样本组织各章及证据材料 |

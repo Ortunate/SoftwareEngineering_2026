@@ -1,0 +1,12 @@
+{
+  "name": "savior-math-garden",
+  "version": "1.0.0",
+  "private": true,
+  "description": "小学低年级口算练习与错题巩固候选项目",
+  "scripts": {
+    "start": "node scripts/serve.cjs",
+    "test": "node tests/run.cjs",
+    "build": "node scripts/build.cjs"
+  },
+  "engines": { "node": ">=18" }
+}

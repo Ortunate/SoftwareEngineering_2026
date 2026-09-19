@@ -1,0 +1,192 @@
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.MathGarden = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const PRESETS = {
+    starter: { label: '起步练习', description: '10 以内加减，建立数感', max: 10, operations: ['+', '-'], carry: 'any' },
+    growing: { label: '进阶练习', description: '20 以内加减，巩固进退位', max: 20, operations: ['+', '-'], carry: 'any' },
+    explorer: { label: '综合练习', description: '100 以内加减与表内乘除', max: 100, operations: ['+', '-', '*', '/'], carry: 'any' }
+  };
+  const SYMBOLS = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+  const blankState = () => ({ version: 1, sessions: [], mistakes: [] });
+  function validateConfig(config) {
+    if (!config || ![10, 20, 50, 100].includes(config.max)) throw new Error('请选择有效的数值范围。');
+    if (!Number.isInteger(config.count) || config.count < 5 || config.count > 50) throw new Error('题量应为 5–50 道整数。');
+    if (!Array.isArray(config.operations) || !config.operations.length || new Set(config.operations).size !== config.operations.length || config.operations.some(op => !Object.hasOwn(SYMBOLS, op))) throw new Error('请至少选择一种运算，且不要重复。');
+    if (!['any', 'without', 'with'].includes(config.carry)) throw new Error('进退位设置无效。');
+    return config;
+  }
+  function makeQuestion(a, b, op) {
+    const answer = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b;
+    const carry = op === '+' ? a % 10 + b % 10 >= 10 : op === '-' ? a % 10 < b % 10 : false;
+    const category = op === '+' ? (carry ? '进位加法' : '不进位加法') : op === '-' ? (carry ? '退位减法' : '不退位减法') : op === '*' ? '表内乘法' : '整除除法';
+    return { id: `${a}:${op}:${b}`, a, b, op, answer, category };
+  }
+  function buildPool(config) {
+    validateConfig(config);
+    const pool = [];
+    for (const op of config.operations) {
+      for (let a = 0; a <= config.max; a++) {
+        for (let b = 0; b <= config.max; b++) {
+          if (op === '+' && a + b > config.max) continue;
+          if (op === '-' && a < b) continue;
+          if (op === '*' && (a < 1 || b < 1 || a > 9 || b > 9 || a * b > config.max)) continue;
+          if (op === '/' && (a < 1 || b < 1 || b > 9 || a % b !== 0 || a / b > 9)) continue;
+          const q = makeQuestion(a, b, op);
+          if ((op === '+' || op === '-') && config.carry !== 'any') {
+            const carries = q.category === '进位加法' || q.category === '退位减法';
+            if (carries !== (config.carry === 'with')) continue;
+          }
+          pool.push(q);
+        }
+      }
+    }
+    return pool;
+  }
+  function shuffle(items, random = Math.random) {
+    const output = [...items];
+    for (let i = output.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [output[i], output[j]] = [output[j], output[i]];
+    }
+    return output;
+  }
+  function generate(config, random = Math.random) {
+    const pool = buildPool(config);
+    if (pool.length < config.count) throw new Error(`当前条件只有 ${pool.length} 道不同题目，请减少题量或放宽范围。`);
+    // Round-robin across selected operations avoids a large addition pool drowning out division.
+    const groups = config.operations.map(op => shuffle(pool.filter(q => q.op === op), random));
+    const selected = [];
+    while (selected.length < config.count) {
+      for (const group of groups) {
+        if (group.length && selected.length < config.count) selected.push(group.pop());
+      }
+    }
+    return shuffle(selected, random);
+  }
+  function grade(questions, answers) {
+    return questions.map(q => {
+      const raw = String(answers[q.id] ?? '').trim();
+      const value = /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+      return { ...q, submitted: value, correct: value === q.answer };
+    });
+  }
+  function record(state, session) {
+    const next = JSON.parse(JSON.stringify(state));
+    if (next.sessions.some(s => s.id === session.id)) return next;
+    next.sessions.push(session);
+    next.sessions = next.sessions.slice(-200);
+    for (const q of session.results) {
+      const old = next.mistakes.find(m => m.id === q.id);
+      if (!q.correct) {
+        if (old) Object.assign(old, { misses: old.misses + 1, streak: 0, lastSeen: session.date, lastAnswer: q.submitted });
+        else next.mistakes.push({ ...makeQuestion(q.a, q.b, q.op), misses: 1, streak: 0, lastSeen: session.date, lastAnswer: q.submitted });
+      } else if (old) {
+        old.streak = Math.min(2, old.streak + 1);
+        old.lastSeen = session.date;
+      }
+    }
+    next.mistakes = next.mistakes.slice(-2000);
+    return next;
+  }
+  function reviewQuestions(state, random = Math.random) {
+    const pending = state.mistakes.filter(m => m.streak < 2);
+    if (!pending.length) return [];
+    // Original questions verify mastery; same-category variants prevent rote answer recall.
+    const originals = shuffle(pending, random).slice(0, 10).map(q => makeQuestion(q.a, q.b, q.op));
+    const selected = [...originals];
+    const ids = new Set(selected.map(q => q.id));
+    const pool = buildPool({ max: 100, count: 30, operations: ['+', '-', '*', '/'], carry: 'any' });
+    for (const old of originals) {
+      const ceiling = Math.max(old.a, old.b, old.answer);
+      const range = [10, 20, 50, 100].find(n => n >= ceiling);
+      const candidates = pool.filter(q => q.category === old.category && Math.max(q.a, q.b, q.answer) <= range && !ids.has(q.id));
+      if (candidates.length) {
+        const q = candidates[Math.floor(random() * candidates.length)];
+        selected.push(q);
+        ids.add(q.id);
+      }
+    }
+    return shuffle(selected, random);
+  }
+  function createTimer(now = () => performance.now()) {
+    let accumulated = 0;
+    let runningSince = null;
+    return {
+      setRunning(running) {
+        const time = now();
+        if (runningSince !== null) accumulated += Math.max(0, time - runningSince);
+        runningSince = running ? time : null;
+      },
+      seconds() {
+        const extra = runningSince === null ? 0 : Math.max(0, now() - runningSince);
+        return Math.floor((accumulated + extra) / 1000);
+      },
+      isRunning() { return runningSince !== null; }
+    };
+  }
+  function assess(results, seconds) {
+    if (!results.length || !Number.isFinite(seconds) || seconds < 0) throw new Error('练习评估数据无效。');
+    const correct = results.filter(q => q.correct).length;
+    const answered = results.filter(q => q.submitted !== null).length;
+    const ratio = correct / results.length;
+    const referenceTotal = results.reduce((sum, q) => {
+      if (q.op === '*') return sum + 8;
+      if (q.op === '/') return sum + 10;
+      const range = Math.max(q.a, q.b, q.answer);
+      return sum + (range <= 10 ? 8 : range <= 20 ? 12 : 20);
+    }, 0);
+    let tier, label, advice;
+    if (answered < results.length) {
+      tier = 'incomplete'; label = '先完成，再看节奏'; advice = '本次有未填写的题目，不判断熟练度。先把空题和错题补练一下。';
+    } else if (ratio < 0.9) {
+      tier = 'accuracy'; label = '先巩固准确性'; advice = '先关注错题的计算方法，暂时不用追求更快。';
+    } else if (results.length < 5 || seconds < results.length) {
+      tier = 'insufficient'; label = '暂不判断熟练度'; advice = '本次题量或计时不足以作为节奏参考，保留正确率和用时记录。';
+    } else if (seconds <= referenceTotal) {
+      tier = 'fluent'; label = ratio === 1 ? '正确又顺畅' : '较熟练，注意小失误'; advice = ratio === 1 ? '本套题正确且节奏流畅，可以保持练习，或尝试稍高一点的难度。' : '本套题节奏流畅，先订正少量错题，再继续练习。';
+    } else {
+      tier = 'steady'; label = '准确优先，稳步熟悉'; advice = '准确率已经不错。按自己的节奏巩固，逐步减少犹豫即可。';
+    }
+    return { tier, label, advice, accuracy: Math.round(ratio * 100), averageSeconds: seconds / results.length, referenceSeconds: referenceTotal / results.length };
+  }
+  function validateState(data) {
+    const fail = () => { throw new Error('备份格式不正确，原有记录未更改。'); };
+    if (!data || data.version !== 1 || !Array.isArray(data.sessions) || !Array.isArray(data.mistakes) || data.sessions.length > 200 || data.mistakes.length > 2000) fail();
+    const question = q => {
+      if (!q || !Number.isInteger(q.a) || !Number.isInteger(q.b) || q.a < 0 || q.b < 0 || q.a > 100 || q.b > 100 || !Object.hasOwn(SYMBOLS, q.op) || (q.op === '/' && (q.a < 1 || q.b < 1 || q.b > 9 || q.a / q.b > 9)) || (q.op === '*' && (q.a < 1 || q.b < 1 || q.a > 9 || q.b > 9))) fail();
+      const canonical = makeQuestion(q.a, q.b, q.op);
+      if (q.id !== canonical.id || q.answer !== canonical.answer || q.category !== canonical.category || !Number.isInteger(q.answer) || q.answer < 0 || q.answer > 100) fail();
+    };
+    const validDate = x => typeof x === 'string' && x.length <= 40 && Number.isFinite(Date.parse(x));
+    const submitted = x => x === null || (Number.isInteger(x) && x >= 0 && x <= 999);
+    const sessionIds = new Set();
+    for (const s of data.sessions) {
+      if (!s || typeof s.id !== 'string' || s.id.length > 100 || sessionIds.has(s.id) || !validDate(s.date) || !['practice', 'review'].includes(s.mode) || !Number.isInteger(s.seconds) || s.seconds < 0 || !Array.isArray(s.results) || s.results.length < 1 || s.results.length > 50) fail();
+      if (s.timing !== undefined && !['active-v1', 'paper-v1'].includes(s.timing)) fail();
+      sessionIds.add(s.id);
+      const ids = new Set();
+      for (const q of s.results) {
+        question(q);
+        if (ids.has(q.id) || !submitted(q.submitted) || q.correct !== (q.submitted === q.answer)) fail();
+        ids.add(q.id);
+      }
+    }
+    const ids = new Set();
+    for (const m of data.mistakes) {
+      question(m);
+      if (ids.has(m.id) || !Number.isInteger(m.misses) || m.misses < 1 || !Number.isInteger(m.streak) || m.streak < 0 || m.streak > 2 || !validDate(m.lastSeen) || !submitted(m.lastAnswer)) fail();
+      ids.add(m.id);
+    }
+    // Only retain known fields; imported data cannot inject arbitrary object properties.
+    return {
+      version: 1,
+      sessions: data.sessions.map(s => ({ id: s.id, date: s.date, mode: s.mode, seconds: s.seconds, ...(s.timing ? { timing: s.timing } : {}), results: s.results.map(q => ({ ...makeQuestion(q.a, q.b, q.op), submitted: q.submitted, correct: q.correct })) })),
+      mistakes: data.mistakes.map(m => ({ ...makeQuestion(m.a, m.b, m.op), misses: m.misses, streak: m.streak, lastSeen: m.lastSeen, lastAnswer: m.lastAnswer }))
+    };
+  }
+  return { PRESETS, SYMBOLS, blankState, validateConfig, makeQuestion, buildPool, generate, grade, record, reviewQuestions, createTimer, assess, validateState };
+});

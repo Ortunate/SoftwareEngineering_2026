@@ -87,3 +87,27 @@ test('T26: advanced timing scales by steps and generation has a bounded failure'
   assert.equal(L.referenceSeconds(q), 60);
   assert.throws(() => L.generate(cfg(), () => 0), /减少题量/);
 });
+
+test('T27: progress distinguishes no records, short sets, partial samples and readiness', () => {
+  const old = C.validateState({ version: 1, sessions: [], mistakes: [] });
+  assert.equal(C.progress(old, 'starter').sampleCount, 0);
+  assert.match(C.progress(old, 'starter').message, /暂无本阶段记录/);
+  const questions = C.generate({ ...C.PRESETS.starter, count: 10 }, rng(11));
+  let state = C.record(old, session('short', questions.slice(0, 5), 'starter'));
+  assert.match(C.progress(state, 'starter').message, /每次都不足10题/);
+  for (let n = 1; n <= 3; n++) {
+    state = C.record(state, session(n, questions, 'starter'));
+    const p = C.progress(state, 'starter');
+    assert.equal(p.sampleCount, n);
+    assert.equal(p.ready, n === 3);
+    if (n < 3) {
+      assert.ok(p.message.includes(`已有${n}次`));
+      assert.ok(p.message.includes(`还需${3 - n}次`));
+      assert.ok(!p.message.includes('最近3次'));
+    }
+  }
+  const wrong = session('wrong', questions, 'starter'); wrong.results = C.grade(questions, {});
+  state = C.record(state, wrong);
+  assert.equal(C.progress(state, 'starter').ready, false);
+  assert.match(C.progress(state, 'starter').message, /最近3次.*2次正确率/);
+});

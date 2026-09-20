@@ -12,7 +12,7 @@
   let printing = false;
   const expression = C.expression;
   const percentage = results => Math.round(results.filter(q => q.correct).length / results.length * 100);
-  const dateLabel = date => new Date(date).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const dateLabel = date => new Date(date).toLocaleString('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   function notice(message) { $('notice').textContent = message; $('notice').hidden = false; }
   const duration = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   function syncTimer() {
@@ -33,8 +33,8 @@
     const evaluation = C.assess(session.results, session.seconds);
     const currentTiming = session.timing === 'active-v1';
     const label = currentTiming ? evaluation.label : session.timing === 'paper-v1' ? '纸笔练习记录' : '历史练习记录';
-    const advice = currentTiming ? evaluation.advice : session.timing === 'paper-v1' ? '打印后的录入时间不代表纸笔作答时间，不作节奏评价。' : '旧版记录包含离开页面的时间，不作节奏评价。';
-    return `<div class="performance-card"><span class="pill">本次练习表现</span><h3>${label}</h3><div class="performance-metrics"><span>用时 <strong>${duration(session.seconds)}</strong></span><span>平均 <strong>${evaluation.averageSeconds.toFixed(1)} 秒/题</strong></span><span>准确率 <strong>${evaluation.accuracy}%</strong></span></div><p>${advice}</p><details class="evaluation-rules"><summary>计时与判断规则</summary><p>准确率 = 答对题数 ÷ 总题数，空题计错；用时不影响准确率。平均用时包含本页检查答案的时间。练习计时在切换页面、隐藏标签、确认弹窗和打印时暂停。</p><p>全部作答且准确率 ≥ 90%，至少 5 题、平均用时 ≥ 1 秒时才参考节奏。每题参考：10 以内加减 8 秒、20 以内 12 秒、更大范围 20 秒，表内乘法 8 秒、整除除法 10 秒。高级题按步数累计，每步参考：100以内18秒、含负数20秒、千以内30秒、万以内45秒；数域优先。当前题单参考均值为 ${evaluation.referenceSeconds.toFixed(1)} 秒/题。</p><p>这些是本应用的初始练习规则，不是教育测评标准。题目熟悉程度、输入方式和检查习惯均会影响用时；不用于不同孩子之间排名。</p></details></div>`;
+    const advice = currentTiming ? evaluation.advice : session.timing === 'paper-v1' ? '打印后的录入时间不代表纸笔作答时间，不作节奏评价。' : '这条旧记录的计时方式与当前版本不同，记录时长仅供查看，不用于判断熟练程度。';
+    return `<div class="performance-card"><span class="pill">本次练习表现</span><h3>${label}</h3><div class="performance-metrics"><span>${currentTiming ? '练习用时' : '记录时长'} <strong>${duration(session.seconds)}</strong></span>${currentTiming ? `<span>平均 <strong>${evaluation.averageSeconds.toFixed(1)} 秒/题</strong></span>` : ''}<span>准确率 <strong>${evaluation.accuracy}%</strong></span></div><p>${advice}</p><details class="evaluation-rules"><summary>计时与判断规则</summary><p>准确率 = 答对题数 ÷ 总题数，空题计错；用时不影响准确率。平均用时包含本页检查答案的时间。练习计时在切换页面、隐藏标签、确认弹窗和打印时暂停。</p><p>全部作答且准确率 ≥ 90%，至少 5 题、平均用时 ≥ 1 秒时才参考节奏。每题参考：10 以内加减 8 秒、20 以内 12 秒、更大范围 20 秒，表内乘法 8 秒、整除除法 10 秒。高级题按步数累计，每步参考：100以内18秒、含负数20秒、千以内30秒、万以内45秒；范围较大时采用该范围的参考时间。当前题单参考均值为 ${evaluation.referenceSeconds.toFixed(1)} 秒/题。</p><p>这些是本应用的初始练习规则，不是教育测评标准。题目熟悉程度、输入方式和检查习惯均会影响用时；不用于不同孩子之间排名。</p></details></div>`;
   }
   function save(next) {
     state = next;
@@ -68,10 +68,10 @@
   }
   function stat(number, title, subtitle) { return `<div class="stat-card"><span>${title}</span><strong>${number}</strong><small>${subtitle}</small></div>`; }
   function renderSummaries() {
-    $('learning-progress').innerHTML = `<div class="card analysis-card"><h2>我的学习路线</h2><p class="hint">预设阶段最近三次有效练习（每次至少10题）均达到90%，提示可以尝试下一阶段。用时不影响此建议，不锁定题型；负数为选学内容。更换配置即为自定义练习。</p><div class="stage-grid">${Object.entries(C.PRESETS).map(([key, preset]) => {
+    $('learning-progress').innerHTML = `<div class="card analysis-card"><h2>我的学习路线</h2><p class="hint">选择页面上的阶段练习后，这里会累计进度。每次至少10题，才用于判断是否适合进阶；积累满3次后，查看最近3次的正确率是否都达到90%。用时不影响进阶建议，你也可以随时选择其他阶段。仅调整题量仍计入所选阶段；修改其他条件则属于自定义练习。</p><div class="stage-grid">${Object.entries(C.PRESETS).map(([key, preset]) => {
       const p = C.progress(state, key);
-      return `<article class="stage-card"><h3>${preset.label}</h3><p>${p.sessions}次 · ${p.total}题 · 正确率 ${p.accuracy === null ? '—' : p.accuracy + '%'}</p><small>${p.ready ? '已达到进阶参考，可尝试下一阶段或继续巩固' : `最近三次有效练习：${p.qualified}/3 次达到90%`}</small></article>`;
-    }).join('')}</div></div>`;
+      return `<article class="stage-card"><h3>${preset.label}</h3><p>${p.sessions ? `累计练习${p.sessions}次 · ${p.total}题 · 正确率${p.accuracy}%` : '暂无本阶段统计'}</p><small>${p.message}</small></article>`;
+    }).join('')}</div><p class="hint">旧版记录没有标注阶段，仍可在下方查看；自定义练习和错题巩固也不计入这里。阶段累计持续保留，下方练习详情最多保留200次。负数属于选学内容。</p></div>`;
     const pending = state.mistakes.filter(m => m.streak < 2);
     $('mistake-badge').textContent = pending.length;
     const today = new Date().toDateString();
@@ -80,7 +80,7 @@
     $('dashboard-stats').innerHTML = stat(todayResults.length, '今天已练习', '一道一道，积累进步') + stat(todayResults.length ? `${percentage(todayResults)}<em>%</em>` : '—', '今日正确率', todayResults.length ? '包含今日所有提交' : '完成练习后点亮') + stat(pending.length, '等待巩固', '把小失误变成新收获');
     $('review-button').disabled = !pending.length;
     const mastered = state.mistakes.length - pending.length;
-    $('mistake-content').innerHTML = state.mistakes.length ? `<div class="mini-summary">${pending.length} 道待巩固 · ${mastered} 道已巩固</div><div class="mistake-grid">${[...state.mistakes].sort((a, b) => (a.streak >= 2) - (b.streak >= 2) || b.misses - a.misses).map(m => `<article class="card mistake-card"><span class="pill ${m.streak >= 2 ? 'success' : ''}">${m.streak >= 2 ? '已巩固' : `待巩固 · ${m.streak}/2`}</span><h2>${expression(m)} = ${m.answer}</h2><p>${m.category} · 累计答错 ${m.misses} 次</p><small>上次错误答案：${m.lastAnswer === null ? '未填写 / 无效' : m.lastAnswer}</small></article>`).join('')}</div>` : '<div class="empty-state"><span aria-hidden="true">✿</span><h2>花园里还没有错题</h2><p>完成一次练习后，需要巩固的题目会出现在这里。</p></div>';
+    $('mistake-content').innerHTML = state.mistakes.length ? `<div class="mini-summary">${pending.length} 道待巩固 · ${mastered} 道已巩固</div><div class="mistake-grid">${[...state.mistakes].sort((a, b) => (a.streak >= 2) - (b.streak >= 2) || b.misses - a.misses).map(m => `<article class="card mistake-card"><span class="pill ${m.streak >= 2 ? 'success' : ''}">${m.streak >= 2 ? '已巩固' : `待巩固 · 原题已连续答对${m.streak}次，还需${2 - m.streak}次`}</span><h2>${expression(m)} = ${m.answer}</h2><p>${m.category} · 累计答错 ${m.misses} 次</p><small>上次错误答案：${m.lastAnswer === null ? '未填写或格式不正确' : m.lastAnswer}</small></article>`).join('')}</div>` : '<div class="empty-state"><span aria-hidden="true">✿</span><h2>花园里还没有错题</h2><p>完成一次练习后，需要巩固的题目会出现在这里。</p></div>';
     if (!state.sessions.length) {
       $('history-content').innerHTML = '<div class="empty-state"><span aria-hidden="true">▥</span><h2>第一步，从今天开始</h2><p>完成练习，留下第一份成长记录。</p></div>';
       return;
@@ -88,7 +88,7 @@
     const all = state.sessions.flatMap(s => s.results);
     const categories = {};
     for (const q of all) { const item = categories[q.category] ||= { count: 0, wrong: 0 }; item.count++; if (!q.correct) item.wrong++; }
-    $('history-content').innerHTML = `<div class="stat-grid">${stat(state.sessions.length, '累计练习', '最近保留的练习次数')}${stat(all.length, '累计题量', '包含巩固练习')}${stat(`${percentage(all)}<em>%</em>`, '整体正确率', '每一道题都计入')}</div><div class="card analysis-card"><h2>按题型看看掌握情况</h2>${Object.entries(categories).map(([label, item]) => `<div class="category-row"><span>${label}</span><div class="bar-track"><div style="width:${Math.round((item.count - item.wrong) / item.count * 100)}%"></div></div><span>${item.count - item.wrong}/${item.count} 正确</span></div>`).join('')}</div><div class="section-heading"><h2>每一次小小进步</h2><span class="hint">最近 200 次</span></div><div class="history-list">${[...state.sessions].reverse().map(s => `<details class="card history-card"><summary><span><strong>${s.mode === 'review' ? '错题巩固' : '口算练习'}</strong><small>${dateLabel(s.date)} · ${s.results.length} 题 · ${duration(s.seconds)}</small></span><span class="score-tag">${percentage(s.results)}%<small>正确率 · 展开详情</small></span></summary>${performanceMarkup(s)}<div class="result-grid">${s.results.map(q => resultCard(q)).join('')}</div></details>`).join('')}</div>`;
+    $('history-content').innerHTML = `<div class="stat-grid">${stat(state.sessions.length, '已保存的练习', '仅统计下方保留的记录')}${stat(all.length, '已保存的题量', '包含普通练习与错题巩固')}${stat(`${percentage(all)}<em>%</em>`, '这些记录的正确率', '按已保存的所有题目计算')}</div><div class="card analysis-card"><h2>按题型看看掌握情况</h2>${Object.entries(categories).map(([label, item]) => `<div class="category-row"><span>${label}</span><div class="bar-track"><div style="width:${Math.round((item.count - item.wrong) / item.count * 100)}%"></div></div><span>${item.count - item.wrong}/${item.count} 正确</span></div>`).join('')}</div><div class="section-heading"><h2>每一次小小进步</h2><span class="hint">已保存 ${state.sessions.length} 次 · 最多保留 200 次</span></div><div class="history-list">${[...state.sessions].reverse().map(s => `<details class="card history-card"><summary><span><strong>${s.mode === 'review' ? '错题巩固' : s.stage ? C.PRESETS[s.stage].label : '普通练习（未标注阶段）'}</strong><small>${dateLabel(s.date)} · ${s.results.length} 题 · ${duration(s.seconds)}</small></span><span class="score-tag">${percentage(s.results)}%<small>正确率 · 展开详情</small></span></summary>${performanceMarkup(s)}<div class="result-grid">${s.results.map(q => resultCard(q)).join('')}</div></details>`).join('')}</div>`;
   }
   function presets() {
     $('preset-list').innerHTML = Object.entries(C.PRESETS).map(([key, preset], i) => `<button type="button" class="preset ${selectedPreset === key ? 'selected' : ''}" data-preset="${key}" aria-pressed="${selectedPreset === key}"><span class="preset-icon" aria-hidden="true">${['◔', '◑', '✳'][i % 3]}</span><span><strong>${preset.label}</strong><small>${preset.description}</small></span><span class="preset-check" aria-hidden="true">${selectedPreset === key ? '✓' : '○'}</span></button>`).join('');
@@ -109,7 +109,7 @@
     tab('practice');
     $('answer-0').focus();
   }
-  function resultCard(q) { return `<div class="result-item ${q.correct ? 'correct' : 'incorrect'}"><strong>${expression(q)} = ${q.answer}</strong><small>${q.correct ? '✓ 答对了' : `待巩固 · 你的答案 ${q.submitted === null ? '未填写' : q.submitted}`}</small>${q.kind === 'expression' ? `<details class="solution"><summary>查看计算步骤</summary><ol>${C.explain(q).map(step => `<li>${step}</li>`).join('')}</ol></details>` : ''}</div>`; }
+  function resultCard(q) { return `<div class="result-item ${q.correct ? 'correct' : 'incorrect'}"><strong>${expression(q)} = ${q.answer}</strong><small>${q.correct ? '✓ 答对了' : `待巩固 · 你的答案 ${q.submitted === null ? '未填写或格式不正确' : q.submitted}`}</small>${q.kind === 'expression' ? `<details class="solution"><summary>查看计算步骤</summary><ol>${C.explain(q).map(step => `<li>${step}</li>`).join('')}</ol></details>` : ''}</div>`; }
   function submit(event) {
     event.preventDefault();
     if (!active || active.submitted) return;

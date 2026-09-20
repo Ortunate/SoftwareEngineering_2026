@@ -18,7 +18,17 @@
   function progress(state, key) {
     const item = state.stageStats?.[key];
     const recent = item?.recentAccuracy || [];
-    return { sessions: item?.sessions || 0, total: item?.total || 0, accuracy: item?.total ? Math.round(item.correct / item.total * 100) : null, ready: recent.length === 3 && recent.every(x => x >= .9), qualified: recent.filter(x => x >= .9).length };
+    const sessions = item?.sessions || 0;
+    const sampleCount = recent.length;
+    const qualified = recent.filter(x => x >= .9).length;
+    const ready = sampleCount === 3 && qualified === 3;
+    let message;
+    if (!sessions) message = '暂无本阶段记录。选择这个阶段完成练习后，这里会显示进度。';
+    else if (!sampleCount) message = '已有练习记录，但每次都不足10题。完成一套至少10题的练习后，开始积累进阶参考。';
+    else if (sampleCount < 3) message = `已有${sampleCount}次可用于进阶参考的练习，其中${qualified}次正确率达到90%。还需${3 - sampleCount}次至少10题的练习，再判断是否适合进阶。`;
+    else if (ready) message = '最近3次至少10题的练习，正确率都达到90%。可以尝试更有挑战的内容，也可以继续巩固。';
+    else message = `最近3次至少10题的练习中，${qualified}次正确率达到90%。建议先巩固错题；这3次都达到90%时，再考虑进阶。`;
+    return { sessions, total: item?.total || 0, accuracy: item?.total ? Math.round(item.correct / item.total * 100) : null, ready, qualified, sampleCount, message };
   }
   function makeQuestion(a, b, op) {
     const answer = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b;

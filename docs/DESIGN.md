@@ -19,6 +19,7 @@
 │   └── game/
 │       ├── game_types.hpp
 │       ├── bullet_system.hpp/.cpp
+│       ├── settings.hpp/.cpp
 │       ├── stage_system.hpp/.cpp
 │       └── game.hpp/.cpp
 └── tests/core_tests.cpp
@@ -35,7 +36,11 @@
 - W/S 沿观察方向移动，A/D 横移，Space 上升，Left Shift 下降。
 - 玩家不能越过立方体六个表面。
 
-所有战斗键位都保存在 `KeyBindings` 中。主菜单的 OPTIONS 页面可以逐项重新绑定；发生重复时交换两个动作的按键，确保一个按键不会同时触发两个动作。低速移动默认使用 C，避免与默认下降键 Left Shift 冲突。
+所有战斗键位都保存在 `KeyBindings` 中。主菜单的 OPTIONS 一级页面负责 FPS 上限调节，并通过 KEY BINDINGS 进入按键配置二级页面。按键发生重复时交换两个动作的原按键，确保一个按键不会同时触发两个动作。低速移动默认使用 C，避免与默认下降键 Left Shift 冲突。
+
+FPS 上限提供 30、60、120、144、240 和 Unlimited 六档，通过 raylib 的 `SetTargetFPS` 即时应用。窗口未强制启用垂直同步，因此各档位不会被 VSync 设置覆盖。
+
+设置持久化由独立的 `settings` 模块负责。程序启动时先使用 `std::filesystem::exists` 检查当前运行目录中的 `red_mist_settings.cfg`：文件不存在时构造默认 `GameSettings` 并创建文件；文件存在时逐项读取 FPS 和 `KeyBindings`。修改 FPS、完成改键或恢复默认键位后立即保存。读取过程中会校验 FPS 档位、按键有效性和键位唯一性，损坏的数据会回退并重写为有效设置。
 
 立方体六个表面绘制空间网格，中央绘制红、绿、蓝三条坐标轴，帮助玩家判断深度、速度和朝向。
 

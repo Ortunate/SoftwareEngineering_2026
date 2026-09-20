@@ -28,6 +28,7 @@ FetchContent_MakeAvailable(raylib)
 add_executable(red_mist_demo
     src/main.cpp
     src/game/bullet_system.cpp
+    src/game/settings.cpp
     src/game/stage_system.cpp
     src/game/game.cpp
 )
@@ -46,6 +47,7 @@ if(BUILD_TESTING)
     add_executable(red_mist_tests
         tests/core_tests.cpp
         src/game/bullet_system.cpp
+        src/game/settings.cpp
     )
     target_include_directories(red_mist_tests PRIVATE src)
     target_link_libraries(red_mist_tests PRIVATE raylib)

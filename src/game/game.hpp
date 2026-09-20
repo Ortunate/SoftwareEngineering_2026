@@ -26,10 +26,19 @@ public:
 private:
     static constexpr std::size_t kEnemyCapacity = 128;
 
+    enum class OptionsPage {
+        General,
+        KeyBindings,
+    };
+
     void StartRun();
     void EnterMainMenu();
+    void LoadSettings();
+    void SaveSettings() const;
     void UpdateMainMenu();
     void UpdateOptions();
+    void UpdateKeyBindings();
+    void AdjustFpsLimit(int offset);
     void UpdatePlayer(float deltaTime);
     void UpdateCamera();
     void UpdateEnemies(float deltaTime);
@@ -58,6 +67,7 @@ private:
     void DrawOverlay() const;
     void DrawMainMenu() const;
     void DrawOptions() const;
+    void DrawKeyBindings() const;
 
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
@@ -74,7 +84,10 @@ private:
     float screenFlashTimer_ = 0.0F;
     std::string message_;
     int selectedMenuItem_ = 0;
+    OptionsPage optionsPage_ = OptionsPage::General;
+    int selectedOption_ = 0;
     int selectedBinding_ = 0;
+    int fpsLimitIndex_ = 1;
     bool waitingForBinding_ = false;
     bool shouldQuit_ = false;
 };

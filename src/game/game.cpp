@@ -1,8 +1,10 @@
 #include "game/game.hpp"
+#include "game/settings.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iterator>
 #include <numbers>
 #include <utility>
 
@@ -51,6 +53,7 @@ Game::Game() {
     camera_.up = {0.0F, 1.0F, 0.0F};
     camera_.fovy = 72.0F;
     camera_.projection = CAMERA_PERSPECTIVE;
+    LoadSettings();
     Reset();
 }
 
@@ -65,9 +68,31 @@ void Game::Start() {
 
 void Game::OpenOptions() {
     state_ = RunState::Options;
+    optionsPage_ = OptionsPage::General;
+    selectedOption_ = 0;
     selectedBinding_ = 0;
     waitingForBinding_ = false;
     EnableCursor();
+}
+
+void Game::LoadSettings() {
+    const GameSettings settings = LoadOrCreateSettings(kSettingsFilename);
+    bindings_ = settings.bindings;
+    const auto fpsLimit = std::find(kSupportedFpsLimits.begin(),
+                                    kSupportedFpsLimits.end(),
+                                    settings.fpsLimit);
+    fpsLimitIndex_ = fpsLimit == kSupportedFpsLimits.end()
+                         ? 1
+                         : static_cast<int>(std::distance(kSupportedFpsLimits.begin(),
+                                                          fpsLimit));
+    SetTargetFPS(kSupportedFpsLimits[fpsLimitIndex_]);
+}
+
+void Game::SaveSettings() const {
+    const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_]};
+    if (!SaveSettingsFile(kSettingsFilename, settings)) {
+        TraceLog(LOG_WARNING, "SETTINGS: Failed to save %s", kSettingsFilename);
+    }
 }
 
 void Game::StartRun() {
@@ -187,6 +212,69 @@ void Game::UpdateMainMenu() {
 }
 
 void Game::UpdateOptions() {
+    if (optionsPage_ == OptionsPage::KeyBindings) {
+        UpdateKeyBindings();
+        return;
+    }
+
+    constexpr int itemCount = 3;
+    constexpr int fpsIndex = 0;
+    constexpr int bindingsIndex = 1;
+    constexpr int backIndex = 2;
+
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        state_ = RunState::MainMenu;
+        selectedMenuItem_ = 1;
+        return;
+    }
+    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
+        selectedOption_ = (selectedOption_ + itemCount - 1) % itemCount;
+    }
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
+        selectedOption_ = (selectedOption_ + 1) % itemCount;
+    }
+
+    const float centerX = static_cast<float>(GetScreenWidth()) * 0.5F;
+    constexpr float startY = 238.0F;
+    constexpr float rowSpacing = 74.0F;
+    const Vector2 mouse = GetMousePosition();
+    bool hoveringItem = false;
+    for (int index = 0; index < itemCount; ++index) {
+        const Rectangle row{centerX - 270.0F,
+                            startY + static_cast<float>(index) * rowSpacing,
+                            540.0F, 54.0F};
+        if (CheckCollisionPointRec(mouse, row)) {
+            selectedOption_ = index;
+            hoveringItem = true;
+        }
+    }
+
+    if (selectedOption_ == fpsIndex) {
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
+            AdjustFpsLimit(-1);
+        } else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
+            AdjustFpsLimit(1);
+        }
+    }
+
+    const bool mouseConfirmed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                                hoveringItem;
+    const bool confirmed = IsKeyPressed(KEY_ENTER) || mouseConfirmed;
+    if (!confirmed) return;
+
+    if (selectedOption_ == fpsIndex) {
+        AdjustFpsLimit(1);
+    } else if (selectedOption_ == bindingsIndex) {
+        optionsPage_ = OptionsPage::KeyBindings;
+        selectedBinding_ = 0;
+        waitingForBinding_ = false;
+    } else if (selectedOption_ == backIndex) {
+        state_ = RunState::MainMenu;
+        selectedMenuItem_ = 1;
+    }
+}
+
+void Game::UpdateKeyBindings() {
     constexpr int bindingCount = static_cast<int>(kBindingNames.size());
     constexpr int resetIndex = bindingCount;
     constexpr int backIndex = bindingCount + 1;
@@ -206,8 +294,8 @@ void Game::UpdateOptions() {
     }
 
     if (IsKeyPressed(KEY_ESCAPE)) {
-        state_ = RunState::MainMenu;
-        selectedMenuItem_ = 1;
+        optionsPage_ = OptionsPage::General;
+        selectedOption_ = 1;
         return;
     }
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
@@ -248,10 +336,18 @@ void Game::UpdateOptions() {
         waitingForBinding_ = true;
     } else if (selectedBinding_ == resetIndex) {
         bindings_ = KeyBindings{};
+        SaveSettings();
     } else {
-        state_ = RunState::MainMenu;
-        selectedMenuItem_ = 1;
+        optionsPage_ = OptionsPage::General;
+        selectedOption_ = 1;
     }
+}
+
+void Game::AdjustFpsLimit(int offset) {
+    const int count = static_cast<int>(kSupportedFpsLimits.size());
+    fpsLimitIndex_ = (fpsLimitIndex_ + offset + count) % count;
+    SetTargetFPS(kSupportedFpsLimits[fpsLimitIndex_]);
+    SaveSettings();
 }
 
 void Game::UpdatePlayer(float deltaTime) {
@@ -670,6 +766,7 @@ void Game::SetBinding(int index, int key) {
         }
     }
     *target = key;
+    SaveSettings();
 }
 
 std::string Game::KeyLabel(int key) {
@@ -961,12 +1058,79 @@ void Game::DrawMainMenu() const {
 }
 
 void Game::DrawOptions() const {
+    if (optionsPage_ == OptionsPage::KeyBindings) {
+        DrawKeyBindings();
+        return;
+    }
+
     const int screenWidth = GetScreenWidth();
     const int screenHeight = GetScreenHeight();
     const float centerX = static_cast<float>(screenWidth) * 0.5F;
     DrawRectangle(0, 0, screenWidth, screenHeight, Color{2, 4, 14, 205});
 
-    const char* title = "OPTIONS  KEY BINDINGS";
+    const char* title = "OPTIONS";
+    DrawText(title, (screenWidth - MeasureText(title, 48)) / 2,
+             70, 48, RAYWHITE);
+    const char* instruction = "Display and control settings";
+    DrawText(instruction, (screenWidth - MeasureText(instruction, 19)) / 2,
+             132, 19, Color{155, 190, 215, 255});
+
+    constexpr int itemCount = 3;
+    constexpr float startY = 238.0F;
+    constexpr float rowSpacing = 74.0F;
+    const char* labels[itemCount] = {"FPS LIMIT", "KEY BINDINGS", "BACK"};
+    for (int index = 0; index < itemCount; ++index) {
+        const Rectangle row{centerX - 270.0F,
+                            startY + static_cast<float>(index) * rowSpacing,
+                            540.0F, 54.0F};
+        const bool selected = selectedOption_ == index;
+        DrawRectangleRounded(row, 0.16F, 8,
+                             selected ? Color{90, 24, 50, 235}
+                                      : Color{8, 15, 30, 220});
+        DrawRectangleRoundedLinesEx(row, 0.16F, 8,
+                                    selected ? 2.0F : 1.0F,
+                                    selected ? Color{255, 110, 145, 255}
+                                             : Color{58, 95, 125, 210});
+        DrawText(labels[index], static_cast<int>(row.x + 18.0F),
+                 static_cast<int>(row.y + 16.0F), 22,
+                 selected ? RAYWHITE : Color{175, 195, 210, 255});
+
+        if (index == 0) {
+            const int fpsLimit = kSupportedFpsLimits[fpsLimitIndex_];
+            const char* fpsLabel = fpsLimit == 0 ? "<  UNLIMITED  >"
+                                                 : TextFormat("<  %d  >", fpsLimit);
+            DrawText(fpsLabel,
+                     static_cast<int>(row.x + row.width - 18.0F) -
+                         MeasureText(fpsLabel, 22),
+                     static_cast<int>(row.y + 16.0F), 22,
+                     selected ? Color{120, 215, 255, 255}
+                              : Color{110, 160, 195, 255});
+        } else if (index == 1) {
+            const char* arrow = ">";
+            DrawText(arrow,
+                     static_cast<int>(row.x + row.width - 30.0F),
+                     static_cast<int>(row.y + 16.0F), 22,
+                     selected ? Color{120, 215, 255, 255}
+                              : Color{110, 160, 195, 255});
+        }
+    }
+
+    const char* currentFps = TextFormat("CURRENT FPS  %d", GetFPS());
+    DrawText(currentFps, (screenWidth - MeasureText(currentFps, 18)) / 2,
+             474, 18, Color{120, 175, 205, 235});
+    const char* footer =
+        "Up / Down: Select     Left / Right: Adjust     Enter: Confirm     Esc: Back";
+    DrawText(footer, (screenWidth - MeasureText(footer, 17)) / 2,
+             screenHeight - 42, 17, Color{145, 175, 198, 235});
+}
+
+void Game::DrawKeyBindings() const {
+    const int screenWidth = GetScreenWidth();
+    const int screenHeight = GetScreenHeight();
+    const float centerX = static_cast<float>(screenWidth) * 0.5F;
+    DrawRectangle(0, 0, screenWidth, screenHeight, Color{2, 4, 14, 205});
+
+    const char* title = "KEY BINDINGS";
     DrawText(title, (screenWidth - MeasureText(title, 42)) / 2,
              45, 42, RAYWHITE);
     const char* instruction =
@@ -1019,7 +1183,7 @@ void Game::DrawOptions() const {
                  static_cast<int>(buttons[index].y + 12.0F), 18, RAYWHITE);
     }
 
-    const char* footer = "Arrow Keys / W / S: Select     Enter: Rebind     Esc: Back";
+    const char* footer = "Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options";
     DrawText(footer, (screenWidth - MeasureText(footer, 17)) / 2,
              screenHeight - 42, 17, Color{145, 175, 198, 235});
 

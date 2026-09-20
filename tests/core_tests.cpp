@@ -1,17 +1,42 @@
 #include "game/bullet_system.hpp"
+#include "game/settings.hpp"
 
 #include <cassert>
 #include <cmath>
+#include <filesystem>
 #include <numbers>
+#include <system_error>
 
 int main() {
     using redmist::BulletOwner;
     using redmist::BulletSystem;
+    using redmist::GameSettings;
     using redmist::KeyBindings;
 
     const KeyBindings defaultBindings;
     assert(defaultBindings.descend == KEY_LEFT_SHIFT);
     assert(defaultBindings.focus == KEY_C);
+
+    const std::filesystem::path settingsPath =
+        std::filesystem::temp_directory_path() /
+        "red_mist_settings_core_test.cfg";
+    std::error_code settingsError;
+    std::filesystem::remove(settingsPath, settingsError);
+    const GameSettings createdSettings =
+        redmist::LoadOrCreateSettings(settingsPath);
+    assert(std::filesystem::exists(settingsPath));
+    assert(createdSettings.fpsLimit == 60);
+    assert(createdSettings.bindings.descend == KEY_LEFT_SHIFT);
+
+    GameSettings changedSettings = createdSettings;
+    changedSettings.fpsLimit = 144;
+    changedSettings.bindings.fire = KEY_F1;
+    assert(redmist::SaveSettingsFile(settingsPath, changedSettings));
+    const GameSettings loadedSettings =
+        redmist::LoadOrCreateSettings(settingsPath);
+    assert(loadedSettings.fpsLimit == 144);
+    assert(loadedSettings.bindings.fire == KEY_F1);
+    std::filesystem::remove(settingsPath, settingsError);
 
     const Vector3 forward = BulletSystem::DirectionFromYawPitch(0.0F, 0.0F);
     assert(std::abs(forward.x) < 0.0001F);

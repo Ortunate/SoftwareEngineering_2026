@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "Red Mist 3D - Stage 1 Normal Demo");
     SetExitKey(KEY_NULL);
     SetWindowMinSize(900, 620);

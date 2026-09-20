@@ -9,6 +9,7 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="src/styles.css">
   <link rel="stylesheet" href="src/practice.css">
+  <script defer src="src/learning.js"></script>
   <script defer src="src/core.js"></script>
   <script defer src="src/app.js"></script>
 </head>
@@ -36,9 +37,15 @@
           <div class="section-heading"><div><h2>准备今天的练习</h2><p>按正在学习的内容选择，无须拘泥于年级。</p></div><span class="pill">默认 30 题</span></div>
           <div class="preset-grid" id="preset-list"></div>
           <form id="config-form" class="card config-card">
-            <div class="form-grid"><label>数值范围<select id="range" name="range"><option value="10">10 以内</option><option value="20" selected>20 以内</option><option value="50">50 以内</option><option value="100">100 以内</option></select></label><label>练习题量<input id="count" type="number" min="5" max="50" value="30" required><small>5–50 道，每次按自己的节奏练习</small></label><label>加减法进退位<select id="carry"><option value="any">不限</option><option value="without">不含进退位</option><option value="with">只练进退位</option></select></label></div>
+            <div class="form-grid"><label>数值范围<select id="range" name="range"><option value="10">10 以内</option><option value="20" selected>20 以内</option><option value="50">50 以内</option><option value="100">100 以内</option><option value="1000">1,000 以内</option><option value="10000">10,000 以内</option></select></label><label>练习题量<input id="count" type="number" min="5" max="50" value="30" required><small>5–50 道，每次按自己的节奏练习</small></label><label>加减法进退位<select id="carry"><option value="any">不限</option><option value="without">不含进退位</option><option value="with">只练进退位</option></select></label></div>
+            <div class="form-grid growth-options">
+              <label>算式类型<select id="exercise-mode"><option value="single">一步运算</option><option value="mixed">混合运算（先乘除后加减）</option><option value="brackets">带括号运算</option></select></label>
+              <label>复合运算步数<select id="steps"><option value="2">两步</option><option value="3">三步</option></select></label>
+              <label>乘除法范围<select id="facts"><option value="table">表内乘除</option><option value="wide">多位数乘除一位数</option></select></label>
+            </div>
+            <label class="negative-option"><input type="checkbox" id="negative"> 加入负数（课外拓展，建议家长指导）</label>
             <fieldset><legend>练习哪些运算？</legend><div class="operation-options"><label><input type="checkbox" name="operation" value="+" checked> 加法 +</label><label><input type="checkbox" name="operation" value="-" checked> 减法 −</label><label><input type="checkbox" name="operation" value="*"> 乘法 ×</label><label><input type="checkbox" name="operation" value="/"> 除法 ÷</label></div></fieldset>
-            <p class="hint">加减法的操作数与结果不超出所选范围；乘法使用 1–9 的乘数，除法只出整除题。进退位设置仅影响加减法。</p>
+            <p class="hint">所有操作数、中间值及结果的绝对值不超出范围；除法只出整除题。复合运算和负数不筛选进退位。多位数及复合题可用草稿纸，不必追求口算速度。年级标签只是建议，请按实际学习进度选练。</p>
             <div class="form-footer"><span>准备完成后，即可开始独立练习</span><button class="button primary" type="submit">生成练习 <span aria-hidden="true">→</span></button></div>
           </form>
           <div class="tip-strip"><span aria-hidden="true">✧</span><p><strong>想用纸笔练习？</strong>生成题目后可以打印题单，答案会另起一页。</p></div>
@@ -46,8 +53,8 @@
         <div id="exercise-panel" hidden></div>
       </section>
       <section id="mistakes-view" class="view" hidden><div class="section-heading"><div><span class="eyebrow">GROW THROUGH PRACTICE</span><h1>错题花园</h1><p>每一次订正，都是下一次进步的开始。</p></div><button id="review-button" class="button primary">开始巩固 →</button></div><p class="hint">巩固练习最多选 10 道原错题，并加入同类型变式题。原题连续答对两次后标记为已巩固。</p><div id="mistake-content"></div></section>
-      <section id="history-view" class="view" hidden><div class="section-heading"><div><span class="eyebrow">YOUR LITTLE MILESTONES</span><h1>成长记录</h1><p>认真练习的每一天，都值得被看见。</p></div></div><div id="history-content"></div></section>
-      <section id="settings-view" class="view" hidden><div class="section-heading"><div><h1>数据与帮助</h1><p>把成长留在自己手里。</p></div></div><div class="card help-card"><h2>记录保存在这里</h2><p>练习记录只保存在当前浏览器、当前网站地址下，不会上传。换浏览器、换访问地址或清除浏览器数据后，记录不会自动迁移。当前版本适合一个孩子使用。</p><p>最多保留最近 200 次练习和 2,000 道错题。建议定期导出备份。</p><div class="button-row"><button id="export-button" class="button primary">导出备份</button><label class="button secondary file-label">导入备份<input type="file" id="import-file" accept="application/json,.json"></label></div><p class="hint">导入会替换本机现有记录，操作前会询问确认。只导入本应用生成的备份。</p></div><div class="card help-card"><h2>怎么开始？</h2><ol><li>在今日练习选择范围、题量和运算。</li><li>生成练习并填写答案，提交后查看批改。</li><li>到错题花园巩固，再到成长记录查看变化。</li></ol><p>纸笔练习可打印空白题单和答案页。由家长核对后，在本次题单中录入孩子的答案并提交，才能生成错题和学习记录。</p><p>本应用不要求联网登录；页面及资源加载完成后，核心练习可以离线运行。在线地址首次访问仍需要网络，本地版可直接打开 index.html。</p></div><div class="card help-card danger-zone"><h2>清空学习记录</h2><p>清空后无法从本机恢复，请先导出备份。</p><button id="clear-button" class="button danger">清空全部记录</button></div></section>
+      <section id="history-view" class="view" hidden><div class="section-heading"><div><span class="eyebrow">YOUR LITTLE MILESTONES</span><h1>成长记录</h1><p>认真练习的每一天，都值得被看见。</p></div></div><div id="learning-progress"></div><div id="history-content"></div></section>
+      <section id="settings-view" class="view" hidden><div class="section-heading"><div><h1>数据与帮助</h1><p>把成长留在自己手里。</p></div></div><div class="card help-card"><h2>记录保存在这里</h2><p>练习记录只保存在当前浏览器、当前网站地址下，不会上传。换浏览器、换访问地址或清除浏览器数据后，记录不会自动迁移。当前版本适合一个孩子使用。</p><p>详细记录最多保留最近 200 次练习和 2,000 道错题；各预设阶段的累计题量、正确题数和练习次数持续保留，不受 200 次限制。自定义练习不计入阶段进度。建议定期导出备份。</p><div class="button-row"><button id="export-button" class="button primary">导出备份</button><label class="button secondary file-label">导入备份<input type="file" id="import-file" accept="application/json,.json"></label></div><p class="hint">导入会替换本机现有记录，操作前会询问确认。只导入本应用生成的备份。</p></div><div class="card help-card"><h2>怎么开始？</h2><ol><li>在今日练习选择范围、题量和运算。</li><li>生成练习并填写答案，提交后查看批改。</li><li>到错题花园巩固，再到成长记录查看变化。</li></ol><p>纸笔练习可打印空白题单和答案页。由家长核对后，在本次题单中录入孩子的答案并提交，才能生成错题和学习记录。</p><p>本应用不要求联网登录；页面及资源加载完成后，核心练习可以离线运行。在线地址首次访问仍需要网络，本地版可直接打开 index.html。</p></div><div class="card help-card danger-zone"><h2>清空学习记录</h2><p>清空后无法从本机恢复，请先导出备份。</p><button id="clear-button" class="button danger">清空全部记录</button></div></section>
       <footer class="footer">小芽口算 <span>用适合的练习，陪伴每一次成长。</span></footer>
     </main>
   </div>

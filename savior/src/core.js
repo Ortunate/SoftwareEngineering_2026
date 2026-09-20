@@ -1,23 +1,24 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === 'object' && module.exports ? require('./learning.js') : root.MathLearning);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.MathGarden = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (L) {
   'use strict';
 
-  const PRESETS = {
-    starter: { label: '起步练习', description: '10 以内加减，建立数感', max: 10, operations: ['+', '-'], carry: 'any' },
-    growing: { label: '进阶练习', description: '20 以内加减，巩固进退位', max: 20, operations: ['+', '-'], carry: 'any' },
-    explorer: { label: '综合练习', description: '100 以内加减与表内乘除', max: 100, operations: ['+', '-', '*', '/'], carry: 'any' }
-  };
+  const PRESETS = L.PRESETS;
   const SYMBOLS = { '+': '+', '-': '−', '*': '×', '/': '÷' };
-  const blankState = () => ({ version: 1, sessions: [], mistakes: [] });
-  function validateConfig(config) {
-    if (!config || ![10, 20, 50, 100].includes(config.max)) throw new Error('请选择有效的数值范围。');
-    if (!Number.isInteger(config.count) || config.count < 5 || config.count > 50) throw new Error('题量应为 5–50 道整数。');
-    if (!Array.isArray(config.operations) || !config.operations.length || new Set(config.operations).size !== config.operations.length || config.operations.some(op => !Object.hasOwn(SYMBOLS, op))) throw new Error('请至少选择一种运算，且不要重复。');
-    if (!['any', 'without', 'with'].includes(config.carry)) throw new Error('进退位设置无效。');
-    return config;
+  const blankState = () => ({ version: 2, sessions: [], mistakes: [], stageStats: {} });
+  const validateConfig = L.normalize;
+  const canonicalQuestion = q => q.kind === 'expression' ? L.make(q.tree, q.profile) : makeQuestion(q.a, q.b, q.op);
+  const expression = q => q.kind === 'expression' ? L.expression(q.tree) : `${q.a} ${SYMBOLS[q.op]} ${q.b}`;
+  function parseAnswer(raw) {
+    const text = String(raw ?? '').trim().replace(/[−－]/g, '-').replace(/[０-９]/g, x => String(x.charCodeAt(0) - 65296));
+    return /^-?\d{1,5}$/.test(text) ? Number(text) : null;
+  }
+  function progress(state, key) {
+    const item = state.stageStats?.[key];
+    const recent = item?.recentAccuracy || [];
+    return { sessions: item?.sessions || 0, total: item?.total || 0, accuracy: item?.total ? Math.round(item.correct / item.total * 100) : null, ready: recent.length === 3 && recent.every(x => x >= .9), qualified: recent.filter(x => x >= .9).length };
   }
   function makeQuestion(a, b, op) {
     const answer = op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : a / b;
@@ -26,7 +27,8 @@
     return { id: `${a}:${op}:${b}`, a, b, op, answer, category };
   }
   function buildPool(config) {
-    validateConfig(config);
+    config = validateConfig(config);
+    if (config.max > 100 || config.mode !== 'single' || config.negative || config.facts !== 'table') throw new Error('高级题型使用按需生成。');
     const pool = [];
     for (const op of config.operations) {
       for (let a = 0; a <= config.max; a++) {
@@ -55,6 +57,8 @@
     return output;
   }
   function generate(config, random = Math.random) {
+    config = validateConfig(config);
+    if (config.max > 100 || config.mode !== 'single' || config.negative || config.facts !== 'table') return L.generate(config, random);
     const pool = buildPool(config);
     if (pool.length < config.count) throw new Error(`当前条件只有 ${pool.length} 道不同题目，请减少题量或放宽范围。`);
     // Round-robin across selected operations avoids a large addition pool drowning out division.
@@ -70,20 +74,28 @@
   function grade(questions, answers) {
     return questions.map(q => {
       const raw = String(answers[q.id] ?? '').trim();
-      const value = /^\d{1,3}$/.test(raw) ? Number(raw) : null;
+      const value = parseAnswer(raw);
       return { ...q, submitted: value, correct: value === q.answer };
     });
   }
   function record(state, session) {
     const next = JSON.parse(JSON.stringify(state));
     if (next.sessions.some(s => s.id === session.id)) return next;
+    next.version = 2;
+    next.stageStats ||= {};
+    if (session.mode === 'practice' && Object.hasOwn(PRESETS, session.stage)) {
+      const item = next.stageStats[session.stage] ||= { sessions: 0, total: 0, correct: 0, recentAccuracy: [] };
+      const correct = session.results.filter(q => q.correct).length;
+      item.sessions++; item.total += session.results.length; item.correct += correct;
+      if (session.results.length >= 10) item.recentAccuracy = [...item.recentAccuracy, correct / session.results.length].slice(-3);
+    }
     next.sessions.push(session);
     next.sessions = next.sessions.slice(-200);
     for (const q of session.results) {
       const old = next.mistakes.find(m => m.id === q.id);
       if (!q.correct) {
         if (old) Object.assign(old, { misses: old.misses + 1, streak: 0, lastSeen: session.date, lastAnswer: q.submitted });
-        else next.mistakes.push({ ...makeQuestion(q.a, q.b, q.op), misses: 1, streak: 0, lastSeen: session.date, lastAnswer: q.submitted });
+        else next.mistakes.push({ ...canonicalQuestion(q), misses: 1, streak: 0, lastSeen: session.date, lastAnswer: q.submitted });
       } else if (old) {
         old.streak = Math.min(2, old.streak + 1);
         old.lastSeen = session.date;
@@ -96,11 +108,18 @@
     const pending = state.mistakes.filter(m => m.streak < 2);
     if (!pending.length) return [];
     // Original questions verify mastery; same-category variants prevent rote answer recall.
-    const originals = shuffle(pending, random).slice(0, 10).map(q => makeQuestion(q.a, q.b, q.op));
+    const originals = shuffle(pending, random).slice(0, 10).map(canonicalQuestion);
     const selected = [...originals];
     const ids = new Set(selected.map(q => q.id));
     const pool = buildPool({ max: 100, count: 30, operations: ['+', '-', '*', '/'], carry: 'any' });
     for (const old of originals) {
+      if (old.kind === 'expression') {
+        try {
+          const variant = L.generate({ ...old.profile, count: 5 }, random).find(q => q.category === old.category && !ids.has(q.id));
+          if (variant) { selected.push(variant); ids.add(variant.id); }
+        } catch { /* Keep the original when no valid variant can be generated. */ }
+        continue;
+      }
       const ceiling = Math.max(old.a, old.b, old.answer);
       const range = [10, 20, 50, 100].find(n => n >= ceiling);
       const candidates = pool.filter(q => q.category === old.category && Math.max(q.a, q.b, q.answer) <= range && !ids.has(q.id));
@@ -133,12 +152,7 @@
     const correct = results.filter(q => q.correct).length;
     const answered = results.filter(q => q.submitted !== null).length;
     const ratio = correct / results.length;
-    const referenceTotal = results.reduce((sum, q) => {
-      if (q.op === '*') return sum + 8;
-      if (q.op === '/') return sum + 10;
-      const range = Math.max(q.a, q.b, q.answer);
-      return sum + (range <= 10 ? 8 : range <= 20 ? 12 : 20);
-    }, 0);
+    const referenceTotal = results.reduce((sum, q) => sum + L.referenceSeconds(q), 0);
     let tier, label, advice;
     if (answered < results.length) {
       tier = 'incomplete'; label = '先完成，再看节奏'; advice = '本次有未填写的题目，不判断熟练度。先把空题和错题补练一下。';
@@ -155,18 +169,25 @@
   }
   function validateState(data) {
     const fail = () => { throw new Error('备份格式不正确，原有记录未更改。'); };
-    if (!data || data.version !== 1 || !Array.isArray(data.sessions) || !Array.isArray(data.mistakes) || data.sessions.length > 200 || data.mistakes.length > 2000) fail();
+    if (!data || ![1, 2].includes(data.version) || !Array.isArray(data.sessions) || !Array.isArray(data.mistakes) || data.sessions.length > 200 || data.mistakes.length > 2000) fail();
     const question = q => {
+      if (q?.kind === 'expression') {
+        let canonical;
+        try { canonical = L.make(q.tree, q.profile); } catch { fail(); }
+        if (q.id !== canonical.id || q.answer !== canonical.answer || q.category !== canonical.category) fail();
+        return;
+      }
       if (!q || !Number.isInteger(q.a) || !Number.isInteger(q.b) || q.a < 0 || q.b < 0 || q.a > 100 || q.b > 100 || !Object.hasOwn(SYMBOLS, q.op) || (q.op === '/' && (q.a < 1 || q.b < 1 || q.b > 9 || q.a / q.b > 9)) || (q.op === '*' && (q.a < 1 || q.b < 1 || q.a > 9 || q.b > 9))) fail();
       const canonical = makeQuestion(q.a, q.b, q.op);
       if (q.id !== canonical.id || q.answer !== canonical.answer || q.category !== canonical.category || !Number.isInteger(q.answer) || q.answer < 0 || q.answer > 100) fail();
     };
     const validDate = x => typeof x === 'string' && x.length <= 40 && Number.isFinite(Date.parse(x));
-    const submitted = x => x === null || (Number.isInteger(x) && x >= 0 && x <= 999);
+    const submitted = x => x === null || (Number.isInteger(x) && x >= -99999 && x <= 99999);
     const sessionIds = new Set();
     for (const s of data.sessions) {
       if (!s || typeof s.id !== 'string' || s.id.length > 100 || sessionIds.has(s.id) || !validDate(s.date) || !['practice', 'review'].includes(s.mode) || !Number.isInteger(s.seconds) || s.seconds < 0 || !Array.isArray(s.results) || s.results.length < 1 || s.results.length > 50) fail();
       if (s.timing !== undefined && !['active-v1', 'paper-v1'].includes(s.timing)) fail();
+      if (s.stage !== undefined && !Object.hasOwn(PRESETS, s.stage)) fail();
       sessionIds.add(s.id);
       const ids = new Set();
       for (const q of s.results) {
@@ -181,12 +202,20 @@
       if (ids.has(m.id) || !Number.isInteger(m.misses) || m.misses < 1 || !Number.isInteger(m.streak) || m.streak < 0 || m.streak > 2 || !validDate(m.lastSeen) || !submitted(m.lastAnswer)) fail();
       ids.add(m.id);
     }
+    const stageStats = {};
+    if (data.version === 2) {
+      if (!data.stageStats || typeof data.stageStats !== 'object' || Array.isArray(data.stageStats)) fail();
+      for (const [key, item] of Object.entries(data.stageStats)) {
+        if (!Object.hasOwn(PRESETS, key) || !item || !['sessions', 'total', 'correct'].every(k => Number.isSafeInteger(item[k]) && item[k] >= 0) || item.correct > item.total || item.total > item.sessions * 50 || !Array.isArray(item.recentAccuracy) || item.recentAccuracy.length > 3 || item.recentAccuracy.some(x => typeof x !== 'number' || !Number.isFinite(x) || x < 0 || x > 1)) fail();
+        stageStats[key] = { sessions: item.sessions, total: item.total, correct: item.correct, recentAccuracy: [...item.recentAccuracy] };
+      }
+    }
     // Only retain known fields; imported data cannot inject arbitrary object properties.
     return {
-      version: 1,
-      sessions: data.sessions.map(s => ({ id: s.id, date: s.date, mode: s.mode, seconds: s.seconds, ...(s.timing ? { timing: s.timing } : {}), results: s.results.map(q => ({ ...makeQuestion(q.a, q.b, q.op), submitted: q.submitted, correct: q.correct })) })),
-      mistakes: data.mistakes.map(m => ({ ...makeQuestion(m.a, m.b, m.op), misses: m.misses, streak: m.streak, lastSeen: m.lastSeen, lastAnswer: m.lastAnswer }))
+      version: 2, stageStats,
+      sessions: data.sessions.map(s => ({ id: s.id, date: s.date, mode: s.mode, seconds: s.seconds, ...(s.stage ? { stage: s.stage } : {}), ...(s.timing ? { timing: s.timing } : {}), results: s.results.map(q => ({ ...canonicalQuestion(q), submitted: q.submitted, correct: q.correct })) })),
+      mistakes: data.mistakes.map(m => ({ ...canonicalQuestion(m), misses: m.misses, streak: m.streak, lastSeen: m.lastSeen, lastAnswer: m.lastAnswer }))
     };
   }
-  return { PRESETS, SYMBOLS, blankState, validateConfig, makeQuestion, buildPool, generate, grade, record, reviewQuestions, createTimer, assess, validateState };
+  return { expression, explain: L.explain, parseAnswer, progress, PRESETS, SYMBOLS, blankState, validateConfig, makeQuestion, buildPool, generate, grade, record, reviewQuestions, createTimer, assess, validateState };
 });

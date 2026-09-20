@@ -24,7 +24,7 @@ test('T13: local server delivers app resources and excludes private development 
     assert.equal(index.status, 200);
     assert.match(index.body, /小芽口算/);
     assert.match(index.headers['content-type'], /text\/html/);
-    for (const resource of ['/src/core.js', '/src/app.js', '/src/styles.css', '/src/practice.css']) {
+    for (const resource of ['/src/learning.js', '/src/core.js', '/src/app.js', '/src/styles.css', '/src/practice.css']) {
       const response = await request(port, resource);
       assert.equal(response.status, 200);
       assert.ok(response.body.length > 100);

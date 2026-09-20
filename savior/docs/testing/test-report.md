@@ -31,3 +31,9 @@
 ## 2026-09-19 发布验证补充
 
 GitHub Actions上的19项测试和构建通过。首次发布因构建作业缺少私有Pages配置读取权限失败，补上 `pages: read` 后发布成功。线上地址 https://ortunate.github.io/SoftwareEngineering_2026/ 的首页与4个运行资源均返回HTTP 200，首页包含应用标题；这是HTTP验证，不是浏览器自动化验收。用户本地填写的手动验收表仍由用户维护，未被此部署提交覆盖。
+
+## 2.0 扩展验证 · 2026-09-20
+
+`node savior/tests/run.cjs`：26项通过，0失败、0跳过，约0.5秒量级（不代表浏览器呈现性能）。保留T01–T19，新增T20–T26：八阶段8000道题、多位数进退位、括号及结合顺序、负号输入、旧schema迁移、高级错题、备份篡改、205次练习后的累计保持、进阶资格及有界生成失败。HTTP测试覆盖新增learning.js。
+
+`node --check savior/src/app.js`及静态构建通过，构建包含6个运行文件和SHA256SUMS。新增界面、打印与跨分辨率尚需按[growth-acceptance.md](growth-acceptance.md)人工检查。没有把上一版本人工通过的假设当作2.0已验收，也未改写用户维护的旧验收表。

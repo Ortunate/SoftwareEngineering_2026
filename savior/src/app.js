@@ -5,12 +5,12 @@
   const $ = id => document.getElementById(id);
   let state = C.blankState();
   let active = null;
-  let selectedPreset = 'growing';
+  let selectedPreset = 'starter';
   let loadProblem = false;
   let currentTab = 'practice';
   let dialogOpen = false;
   let printing = false;
-  const expression = q => `${q.a} ${C.SYMBOLS[q.op]} ${q.b}`;
+  const expression = C.expression;
   const percentage = results => Math.round(results.filter(q => q.correct).length / results.length * 100);
   const dateLabel = date => new Date(date).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   function notice(message) { $('notice').textContent = message; $('notice').hidden = false; }
@@ -34,7 +34,7 @@
     const currentTiming = session.timing === 'active-v1';
     const label = currentTiming ? evaluation.label : session.timing === 'paper-v1' ? '纸笔练习记录' : '历史练习记录';
     const advice = currentTiming ? evaluation.advice : session.timing === 'paper-v1' ? '打印后的录入时间不代表纸笔作答时间，不作节奏评价。' : '旧版记录包含离开页面的时间，不作节奏评价。';
-    return `<div class="performance-card"><span class="pill">本次练习表现</span><h3>${label}</h3><div class="performance-metrics"><span>用时 <strong>${duration(session.seconds)}</strong></span><span>平均 <strong>${evaluation.averageSeconds.toFixed(1)} 秒/题</strong></span><span>准确率 <strong>${evaluation.accuracy}%</strong></span></div><p>${advice}</p><details class="evaluation-rules"><summary>计时与判断规则</summary><p>准确率 = 答对题数 ÷ 总题数，空题计错；用时不影响准确率。平均用时包含本页检查答案的时间。练习计时在切换页面、隐藏标签、确认弹窗和打印时暂停。</p><p>全部作答且准确率 ≥ 90%，至少 5 题、平均用时 ≥ 1 秒时才参考节奏。每题参考：10 以内加减 8 秒、20 以内 12 秒、更大范围 20 秒，表内乘法 8 秒、整除除法 10 秒；混合题按题目累计。当前题单参考均值为 ${evaluation.referenceSeconds.toFixed(1)} 秒/题。</p><p>这些是本应用的初始练习规则，不是教育测评标准。题目熟悉程度、输入方式和检查习惯均会影响用时；不用于不同孩子之间排名。</p></details></div>`;
+    return `<div class="performance-card"><span class="pill">本次练习表现</span><h3>${label}</h3><div class="performance-metrics"><span>用时 <strong>${duration(session.seconds)}</strong></span><span>平均 <strong>${evaluation.averageSeconds.toFixed(1)} 秒/题</strong></span><span>准确率 <strong>${evaluation.accuracy}%</strong></span></div><p>${advice}</p><details class="evaluation-rules"><summary>计时与判断规则</summary><p>准确率 = 答对题数 ÷ 总题数，空题计错；用时不影响准确率。平均用时包含本页检查答案的时间。练习计时在切换页面、隐藏标签、确认弹窗和打印时暂停。</p><p>全部作答且准确率 ≥ 90%，至少 5 题、平均用时 ≥ 1 秒时才参考节奏。每题参考：10 以内加减 8 秒、20 以内 12 秒、更大范围 20 秒，表内乘法 8 秒、整除除法 10 秒。高级题按步数累计，每步参考：100以内18秒、含负数20秒、千以内30秒、万以内45秒；数域优先。当前题单参考均值为 ${evaluation.referenceSeconds.toFixed(1)} 秒/题。</p><p>这些是本应用的初始练习规则，不是教育测评标准。题目熟悉程度、输入方式和检查习惯均会影响用时；不用于不同孩子之间排名。</p></details></div>`;
   }
   function save(next) {
     state = next;
@@ -68,6 +68,10 @@
   }
   function stat(number, title, subtitle) { return `<div class="stat-card"><span>${title}</span><strong>${number}</strong><small>${subtitle}</small></div>`; }
   function renderSummaries() {
+    $('learning-progress').innerHTML = `<div class="card analysis-card"><h2>我的学习路线</h2><p class="hint">预设阶段最近三次有效练习（每次至少10题）均达到90%，提示可以尝试下一阶段。用时不影响此建议，不锁定题型；负数为选学内容。更换配置即为自定义练习。</p><div class="stage-grid">${Object.entries(C.PRESETS).map(([key, preset]) => {
+      const p = C.progress(state, key);
+      return `<article class="stage-card"><h3>${preset.label}</h3><p>${p.sessions}次 · ${p.total}题 · 正确率 ${p.accuracy === null ? '—' : p.accuracy + '%'}</p><small>${p.ready ? '已达到进阶参考，可尝试下一阶段或继续巩固' : `最近三次有效练习：${p.qualified}/3 次达到90%`}</small></article>`;
+    }).join('')}</div></div>`;
     const pending = state.mistakes.filter(m => m.streak < 2);
     $('mistake-badge').textContent = pending.length;
     const today = new Date().toDateString();
@@ -87,17 +91,17 @@
     $('history-content').innerHTML = `<div class="stat-grid">${stat(state.sessions.length, '累计练习', '最近保留的练习次数')}${stat(all.length, '累计题量', '包含巩固练习')}${stat(`${percentage(all)}<em>%</em>`, '整体正确率', '每一道题都计入')}</div><div class="card analysis-card"><h2>按题型看看掌握情况</h2>${Object.entries(categories).map(([label, item]) => `<div class="category-row"><span>${label}</span><div class="bar-track"><div style="width:${Math.round((item.count - item.wrong) / item.count * 100)}%"></div></div><span>${item.count - item.wrong}/${item.count} 正确</span></div>`).join('')}</div><div class="section-heading"><h2>每一次小小进步</h2><span class="hint">最近 200 次</span></div><div class="history-list">${[...state.sessions].reverse().map(s => `<details class="card history-card"><summary><span><strong>${s.mode === 'review' ? '错题巩固' : '口算练习'}</strong><small>${dateLabel(s.date)} · ${s.results.length} 题 · ${duration(s.seconds)}</small></span><span class="score-tag">${percentage(s.results)}%<small>正确率 · 展开详情</small></span></summary>${performanceMarkup(s)}<div class="result-grid">${s.results.map(q => resultCard(q)).join('')}</div></details>`).join('')}</div>`;
   }
   function presets() {
-    $('preset-list').innerHTML = Object.entries(C.PRESETS).map(([key, preset], i) => `<button type="button" class="preset ${selectedPreset === key ? 'selected' : ''}" data-preset="${key}" aria-pressed="${selectedPreset === key}"><span class="preset-icon" aria-hidden="true">${['◔', '◑', '✳'][i]}</span><span><strong>${preset.label}</strong><small>${preset.description}</small></span><span class="preset-check" aria-hidden="true">${selectedPreset === key ? '✓' : '○'}</span></button>`).join('');
+    $('preset-list').innerHTML = Object.entries(C.PRESETS).map(([key, preset], i) => `<button type="button" class="preset ${selectedPreset === key ? 'selected' : ''}" data-preset="${key}" aria-pressed="${selectedPreset === key}"><span class="preset-icon" aria-hidden="true">${['◔', '◑', '✳'][i % 3]}</span><span><strong>${preset.label}</strong><small>${preset.description}</small></span><span class="preset-check" aria-hidden="true">${selectedPreset === key ? '✓' : '○'}</span></button>`).join('');
   }
-  function config() { return { max: Number($('range').value), count: Number($('count').value), carry: $('carry').value, operations: [...document.querySelectorAll('[name="operation"]:checked')].map(input => input.value) }; }
+  function config() { return { max: Number($('range').value), count: Number($('count').value), carry: $('carry').value, mode: $('exercise-mode').value, steps: Number($('steps').value), facts: $('facts').value, negative: $('negative').checked, operations: [...document.querySelectorAll('[name="operation"]:checked')].map(input => input.value) }; }
   function canReplace() { return !active || active.submitted || confirmAction('当前练习尚未提交。放弃本次答案，开始新练习吗？'); }
   function start(questions, mode) {
-    active = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, questions, mode, timer: C.createTimer(), submitted: false, printed: false };
+    active = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, questions, mode, stage: mode === 'practice' ? selectedPreset : null, timer: C.createTimer(), submitted: false, printed: false };
     $('setup-panel').hidden = true;
     $('exercise-panel').hidden = false;
-    $('exercise-panel').innerHTML = `<div class="section-heading"><div><span class="eyebrow">ONE QUESTION AT A TIME</span><h1>${mode === 'review' ? '把错题变成进步' : '专心练习，慢慢来'}</h1><p>共 ${questions.length} 题 · 不限时，认真比速度更重要</p></div><button id="back-button" class="button secondary">重新设置</button></div><div class="exercise-toolbar"><span id="answer-progress" role="status" aria-live="polite">已填写 0 / ${questions.length}</span><button id="print-button" class="button secondary">打印题单与答案</button></div><form id="answer-form" novalidate><div class="question-grid">${questions.map((q, i) => `<div class="card question-card"><span class="question-number">${String(i + 1).padStart(2, '0')}</span><label for="answer-${i}">${expression(q)} =</label><input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" id="answer-${i}" data-question="${q.id}" aria-label="第 ${i + 1} 题：${expression(q)} 的答案" autocomplete="off"></div>`).join('')}</div><div class="submit-bar"><p>检查一遍，准备好就提交吧。</p><button class="button primary" type="submit">完成并批改 ✓</button></div></form><div id="result-panel" aria-live="polite"></div>`;
+    $('exercise-panel').innerHTML = `<div class="section-heading"><div><span class="eyebrow">ONE QUESTION AT A TIME</span><h1>${mode === 'review' ? '把错题变成进步' : '专心练习，慢慢来'}</h1><p>共 ${questions.length} 题 · 不限时，认真比速度更重要</p></div><button id="back-button" class="button secondary">重新设置</button></div><div class="exercise-toolbar"><span id="answer-progress" role="status" aria-live="polite">已填写 0 / ${questions.length}</span><button id="print-button" class="button secondary">打印题单与答案</button></div><form id="answer-form" novalidate><div class="question-grid">${questions.map((q, i) => `<div class="card question-card"><span class="question-number">${String(i + 1).padStart(2, '0')}</span><label for="answer-${i}">${expression(q)} =</label><input type="text" inputmode="text" maxlength="6" id="answer-${i}" data-question="${q.id}" aria-label="第 ${i + 1} 题：${expression(q)} 的答案" autocomplete="off"></div>`).join('')}</div><div class="submit-bar"><p>检查一遍，准备好就提交吧。</p><button class="button primary" type="submit">完成并批改 ✓</button></div></form><div id="result-panel" aria-live="polite"></div>`;
     $('answer-progress').insertAdjacentHTML('afterend', '<div class="timer-block"><span id="timer-status">练习用时</span><strong id="exercise-timer" role="timer" aria-label="练习用时">00:00</strong></div>');
-    $('answer-form').insertAdjacentHTML('beforebegin', '<div class="keyboard-hints"><span><kbd>Tab</kbd> 下一题</span><span><kbd>Shift</kbd> + <kbd>Tab</kbd> 上一题</span><span><kbd>Enter</kbd> 提交批改</span><small>切换页面或隐藏标签时自动暂停计时</small></div>');
+    $('answer-form').insertAdjacentHTML('beforebegin', '<div class="keyboard-hints"><span><kbd>Tab</kbd> 下一题</span><span><kbd>Shift</kbd> + <kbd>Tab</kbd> 上一题</span><span><kbd>Enter</kbd> 提交批改</span><small>负数答案输入 -；可用草稿纸。切换页面或隐藏标签时暂停计时</small></div>');
     $('back-button').onclick = () => { if (canReplace()) { active = null; $('setup-panel').hidden = false; $('exercise-panel').hidden = true; renderSummaries(); } };
     $('print-button').onclick = printSheet;
     $('answer-form').oninput = () => { const filled = [...document.querySelectorAll('[data-question]')].filter(input => input.value.trim()).length; $('answer-progress').textContent = `已填写 ${filled} / ${questions.length}`; };
@@ -105,19 +109,19 @@
     tab('practice');
     $('answer-0').focus();
   }
-  function resultCard(q) { return `<div class="result-item ${q.correct ? 'correct' : 'incorrect'}"><strong>${expression(q)} = ${q.answer}</strong><small>${q.correct ? '✓ 答对了' : `待巩固 · 你的答案 ${q.submitted === null ? '未填写' : q.submitted}`}</small></div>`; }
+  function resultCard(q) { return `<div class="result-item ${q.correct ? 'correct' : 'incorrect'}"><strong>${expression(q)} = ${q.answer}</strong><small>${q.correct ? '✓ 答对了' : `待巩固 · 你的答案 ${q.submitted === null ? '未填写' : q.submitted}`}</small>${q.kind === 'expression' ? `<details class="solution"><summary>查看计算步骤</summary><ol>${C.explain(q).map(step => `<li>${step}</li>`).join('')}</ol></details>` : ''}</div>`; }
   function submit(event) {
     event.preventDefault();
     if (!active || active.submitted) return;
     const inputs = [...document.querySelectorAll('[data-question]')];
-    const invalid = inputs.find(input => input.value.trim() && !/^\d{1,3}$/.test(input.value.trim()));
-    if (invalid) { notice('答案请填写 0–999 的非负整数。'); invalid.focus(); return; }
+    const invalid = inputs.find(input => input.value.trim() && C.parseAnswer(input.value) === null);
+    if (invalid) { notice('答案请填写 -99999 至 99999 的整数，可使用负号，不支持小数或算式。'); invalid.focus(); return; }
     const blank = inputs.filter(input => !input.value.trim()).length;
     if (blank && !confirmAction(`还有 ${blank} 道题未填写，提交后将记为错题。确定提交吗？`)) return;
     const answers = Object.fromEntries(inputs.map(input => [input.dataset.question, input.value]));
     const results = C.grade(active.questions, answers);
     active.timer.setRunning(false);
-    const session = { id: active.id, date: new Date().toISOString(), mode: active.mode, seconds: active.timer.seconds(), timing: active.printed ? 'paper-v1' : 'active-v1', results };
+    const session = { id: active.id, date: new Date().toISOString(), mode: active.mode, ...(active.stage ? { stage: active.stage } : {}), seconds: active.timer.seconds(), timing: active.printed ? 'paper-v1' : 'active-v1', results };
     save(C.record(state, session));
     active.submitted = true;
     syncTimer();
@@ -135,6 +139,8 @@
     active.printed = true;
     const questions = active.questions;
     $('print-area').innerHTML = `<section class="print-sheet"><h1>小芽口算 · 每日练习</h1><p>姓名：____________　日期：____________　共 ${questions.length} 题</p><div class="print-grid">${questions.map((q, i) => `<div>${i + 1}.　${expression(q)} = ______</div>`).join('')}</div></section><section class="print-sheet answer-sheet"><h1>小芽口算 · 参考答案</h1><p>请将本页与题单分开，由家长核对。</p><div class="print-grid">${questions.map((q, i) => `<div>${i + 1}.　${expression(q)} = ${q.answer}</div>`).join('')}</div></section>`;
+    if (questions.some(q => q.kind === 'expression')) $('print-area').classList.add('advanced-print');
+    else $('print-area').classList.remove('advanced-print');
     window.print();
   }
   document.querySelectorAll('[data-tab]').forEach(button => { button.onclick = () => tab(button.dataset.tab); });
@@ -146,10 +152,21 @@
     const preset = C.PRESETS[selectedPreset];
     $('range').value = preset.max;
     $('carry').value = preset.carry;
+    $('exercise-mode').value = preset.mode;
+    $('steps').value = preset.steps;
+    $('facts').value = preset.facts;
+    $('negative').checked = preset.negative;
+    syncOptions();
     document.querySelectorAll('[name="operation"]').forEach(input => { input.checked = preset.operations.includes(input.value); });
     presets();
   };
-  $('config-form').onchange = event => { if (event.target.id !== 'count') { selectedPreset = null; presets(); } };
+  function syncOptions() {
+    const compound = $('exercise-mode').value !== 'single';
+    $('steps').disabled = !compound;
+    $('carry').disabled = compound || $('negative').checked;
+    if ($('carry').disabled) $('carry').value = 'any';
+  }
+  $('config-form').onchange = event => { syncOptions(); if (event.target.id !== 'count') { selectedPreset = null; presets(); } };
   $('config-form').onsubmit = event => {
     event.preventDefault();
     try { const questions = C.generate(config()); if (canReplace()) start(questions, 'practice'); }
@@ -170,7 +187,7 @@
     const file = event.target.files[0];
     if (!file) return;
     try {
-      if (file.size > 5 * 1024 * 1024) throw new Error('备份文件超过 5 MB，请选择本应用导出的备份。');
+      if (file.size > 32 * 1024 * 1024) throw new Error('备份文件超过 32 MB，请选择本应用导出的备份。');
       const next = C.validateState(JSON.parse(await file.text()));
       if (!confirmAction(`备份包含 ${next.sessions.length} 次练习、${next.mistakes.length} 道错题。导入将替换本机记录并结束当前练习，继续吗？`)) return;
       loadProblem = false;
@@ -198,6 +215,7 @@
   setInterval(syncTimer, 1000);
   window.addEventListener('storage', event => { if (event.key === STORAGE_KEY) notice('另一个页面更新了学习记录。请先导出本页备份，再刷新页面，以免互相覆盖。建议只在一个标签页练习。'); });
   $('today-label').textContent = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
+  syncOptions();
   presets();
   tab('practice');
 })();

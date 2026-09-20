@@ -1,2 +1,9 @@
 # Microsoft Office temporary lock files
 ~$*
+
+# Local build products and editor metadata
+.DS_Store
+.vscode/
+build/
+build-*/
+cmake-build-*/

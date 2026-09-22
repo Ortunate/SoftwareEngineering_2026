@@ -1,48 +1,233 @@
 {
-    "version": 2,
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
     "configurePresets": [
         {
-            "name": "debug",
-            "displayName": "Debug - Clang",
-            "generator": "Unix Makefiles",
-            "binaryDir": "${sourceDir}/build-vscode",
+            "name": "common",
+            "hidden": true,
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_C_COMPILER": "/usr/bin/clang",
-                "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+                "CMAKE_CXX_STANDARD": "20",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
-            "name": "release",
-            "displayName": "Release - Clang",
+            "name": "macos-debug",
+            "displayName": "macOS Debug - Clang",
+            "inherits": "common",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
             "generator": "Unix Makefiles",
-            "binaryDir": "${sourceDir}/build-vscode-release",
+            "binaryDir": "${sourceDir}/build/macos-debug",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_C_COMPILER": "/usr/bin/clang",
-                "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++"
+            }
+        },
+        {
+            "name": "macos-release",
+            "displayName": "macOS Release - Clang",
+            "inherits": "macos-debug",
+            "binaryDir": "${sourceDir}/build/macos-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "windows",
+            "displayName": "Windows - Visual Studio 2022 x64",
+            "inherits": "common",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build/windows"
+        },
+        {
+            "name": "windows-gcc-base",
+            "hidden": true,
+            "inherits": "common",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "generator": "MinGW Makefiles",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "windows-gcc-debug",
+            "displayName": "Windows Debug - GCC",
+            "inherits": "windows-gcc-base",
+            "binaryDir": "${sourceDir}/build/windows-gcc-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "windows-gcc-release",
+            "displayName": "Windows Release - GCC",
+            "inherits": "windows-gcc-base",
+            "binaryDir": "${sourceDir}/build/windows-gcc-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "debug",
-            "displayName": "Build Debug",
-            "configurePreset": "debug"
+            "name": "macos-debug",
+            "displayName": "Build macOS Debug",
+            "configurePreset": "macos-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
         },
         {
-            "name": "release",
-            "displayName": "Build Release",
-            "configurePreset": "release"
+            "name": "macos-release",
+            "displayName": "Build macOS Release",
+            "configurePreset": "macos-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
+            "name": "windows-debug",
+            "displayName": "Build Windows Debug",
+            "configurePreset": "windows",
+            "configuration": "Debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-release",
+            "displayName": "Build Windows Release",
+            "configurePreset": "windows",
+            "configuration": "Release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-gcc-debug",
+            "displayName": "Build Windows Debug - GCC",
+            "configurePreset": "windows-gcc-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-gcc-release",
+            "displayName": "Build Windows Release - GCC",
+            "configurePreset": "windows-gcc-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
         }
     ],
     "testPresets": [
         {
-            "name": "debug",
-            "displayName": "Test Debug",
-            "configurePreset": "debug",
+            "name": "macos-debug",
+            "displayName": "Test macOS Debug",
+            "configurePreset": "macos-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "macos-release",
+            "displayName": "Test macOS Release",
+            "configurePreset": "macos-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "windows-debug",
+            "displayName": "Test Windows Debug",
+            "configurePreset": "windows",
+            "configuration": "Debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "windows-release",
+            "displayName": "Test Windows Release",
+            "configurePreset": "windows",
+            "configuration": "Release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "windows-gcc-debug",
+            "displayName": "Test Windows Debug - GCC",
+            "configurePreset": "windows-gcc-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "windows-gcc-release",
+            "displayName": "Test Windows Release - GCC",
+            "configurePreset": "windows-gcc-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
             "output": {
                 "outputOnFailure": true
             }

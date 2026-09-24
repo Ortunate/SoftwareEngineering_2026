@@ -1,7 +1,8 @@
 #pragma once
 
-#include "core/fixed_pool.hpp"
+#include "game/boss.hpp"
 #include "game/bullet_system.hpp"
+#include "game/enemy.hpp"
 #include "game/game_types.hpp"
 #include "game/stage_system.hpp"
 
@@ -15,6 +16,7 @@ namespace redmist {
 class Game {
 public:
     Game();
+    ~Game();
 
     void Reset();
     void Start();
@@ -65,6 +67,7 @@ private:
     void DrawArena() const;
     void DrawHud() const;
     void DrawOverlay() const;
+    void DrawSpellCutIn() const;
     void DrawMainMenu() const;
     void DrawOptions() const;
     void DrawKeyBindings() const;
@@ -72,9 +75,9 @@ private:
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
     Player player_{};
-    Boss boss_{};
+    RumiaBoss boss_{};
     BulletSystem bullets_{};
-    FixedPool<Enemy, kEnemyCapacity> enemies_{};
+    EnemyPool<kEnemyCapacity> enemies_{};
     StageDirector stage_{};
     KeyBindings bindings_{};
 
@@ -82,6 +85,11 @@ private:
     int graze_ = 0;
     float messageTimer_ = 0.0F;
     float screenFlashTimer_ = 0.0F;
+    float spellCutInTimer_ = 0.0F;
+    Texture2D spellPortrait_{};
+    Texture2D fairyTexture_{};
+    Texture2D eliteTexture_{};
+    Texture2D bulletTexture_{};
     std::string message_;
     int selectedMenuItem_ = 0;
     OptionsPage optionsPage_ = OptionsPage::General;

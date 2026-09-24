@@ -1,5 +1,9 @@
 #include "game/bullet_system.hpp"
+#include "game/bullet_patterns.hpp"
+#include "game/boss.hpp"
+#include "game/enemy.hpp"
 #include "game/settings.hpp"
+#include "game/stage_system.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -54,8 +58,11 @@ int main() {
     assert(std::abs(aimed.z - 0.8F) < 0.0001F);
 
     BulletSystem bullets;
-    bullets.SpawnSphereStar(BulletOwner::Enemy, {0.0F, 0.0F, 0.0F},
-                            64, 2.5F, 0.0F, RED);
+    redmist::pattern::ForEachSphereDirection(64, 0.0F,
+        [&bullets](Vector3 direction) {
+            bullets.Spawn(BulletOwner::Enemy, {},
+                          redmist::pattern::Scale(direction, 2.5F), 0.16F, RED);
+        });
     assert(bullets.Pool().ActiveCount() == 64);
 
     bool hasPositiveX = false;
@@ -77,11 +84,59 @@ int main() {
            hasPositiveZ && hasNegativeZ);
 
     bullets.Reset();
-    bullets.SpawnCone(BulletOwner::Enemy, {}, {0.0F, 0.0F, 1.0F},
-                      2, 6, 0.45F, 3.0F, 0.0F, BLUE);
+    redmist::pattern::ForEachConeDirection({0.0F, 0.0F, 1.0F},
+        2, 6, 0.45F, 0.0F, [&bullets](Vector3 direction) {
+            bullets.Spawn(BulletOwner::Enemy, {},
+                          redmist::pattern::Scale(direction, 3.0F), 0.16F, BLUE);
+        });
     assert(bullets.Pool().ActiveCount() == 13);
 
     bullets.ClearEnemyBullets();
     assert(bullets.Pool().ActiveCount() == 0);
+
+    redmist::FairyEnemy fairy(redmist::PathKind::Straight, {0.0F, 0.0F, 5.0F});
+    fairy.Update(0.9F, {}, bullets);
+    assert(bullets.Pool().ActiveCount() == 1);
+    bullets.Reset();
+
+    redmist::OrbEnemy orb(redmist::PathKind::Straight, {0.0F, 0.0F, 5.0F});
+    orb.Update(0.9F, {}, bullets);
+    assert(bullets.Pool().ActiveCount() == 6);
+    bullets.Reset();
+
+    redmist::EliteEnemy elite(redmist::PathKind::Straight, {0.0F, 0.0F, 5.0F});
+    elite.Update(0.9F, {}, bullets);
+    assert(bullets.Pool().ActiveCount() == 42);
+    bullets.Reset();
+
+    redmist::RumiaBoss boss;
+    boss.Start();
+    assert(boss.SpellName() == nullptr);
+    assert(std::abs(boss.position.x - 3.0F) < 0.0001F);
+    assert(!boss.Update(1.0F, {}, bullets));
+    assert(bullets.Pool().ActiveCount() == 22);
+    bullets.Reset();
+    assert(!boss.Update(5.4F, {}, bullets));
+    assert(std::abs(boss.position.x + 3.0F) < 0.0001F);
+    assert(boss.SpellName() == nullptr);
+    assert(boss.Update(10.6F, {}, bullets));
+    assert(!boss.AdvancePhase());
+    assert(!boss.active);
+
+    redmist::StageDirector stage;
+    int bossEvents = 0;
+    int enemyEvents = 0;
+    stage.Update(42.0F, [&](const redmist::StageEvent& event) {
+        if (event.kind == redmist::StageEventKind::StartBoss) ++bossEvents;
+        if (event.kind == redmist::StageEventKind::SpawnLine ||
+            event.kind == redmist::StageEventKind::SpawnCrossingPair ||
+            event.kind == redmist::StageEventKind::SpawnElite) ++enemyEvents;
+    });
+    assert(bossEvents == 1);
+    assert(enemyEvents == 15);
+    stage.Update(60.0F, [&](const redmist::StageEvent& event) {
+        if (event.kind == redmist::StageEventKind::StartBoss) ++bossEvents;
+    });
+    assert(bossEvents == 1);
     return 0;
 }

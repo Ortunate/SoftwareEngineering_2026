@@ -28,6 +28,8 @@ FetchContent_MakeAvailable(raylib)
 add_executable(red_mist_demo
     src/main.cpp
     src/game/bullet_system.cpp
+    src/game/enemy.cpp
+    src/game/boss.cpp
     src/game/settings.cpp
     src/game/stage_system.cpp
     src/game/game.cpp
@@ -35,6 +37,12 @@ add_executable(red_mist_demo
 
 target_include_directories(red_mist_demo PRIVATE src)
 target_link_libraries(red_mist_demo PRIVATE raylib)
+
+add_custom_command(TARGET red_mist_demo POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            $<TARGET_FILE_DIR:red_mist_demo>/assets
+)
 
 if(MSVC)
     target_compile_options(red_mist_demo PRIVATE /W4 /permissive-)
@@ -47,7 +55,10 @@ if(BUILD_TESTING)
     add_executable(red_mist_tests
         tests/core_tests.cpp
         src/game/bullet_system.cpp
+        src/game/enemy.cpp
+        src/game/boss.cpp
         src/game/settings.cpp
+        src/game/stage_system.cpp
     )
     target_include_directories(red_mist_tests PRIVATE src)
     target_link_libraries(red_mist_tests PRIVATE raylib)

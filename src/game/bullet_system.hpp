@@ -17,22 +17,6 @@ public:
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
                   float radius, Color color, Vector3 acceleration = {});
 
-    // Emits concentric rings across a cone oriented along `axis`.
-    void SpawnCone(BulletOwner owner, Vector3 origin, Vector3 axis,
-                   int ringCount, int bulletsPerRing, float coneAngle,
-                   float speed, float roll, Color color,
-                   float radius = 0.16F);
-
-    // Emits uniform directions over a complete sphere using a Fibonacci
-    // lattice. This is the 3D replacement for a planar star burst.
-    void SpawnSphereStar(BulletOwner owner, Vector3 origin, int count,
-                         float speed, float rotation, Color color,
-                         float radius = 0.16F);
-
-    void SpawnAimedCone(Vector3 origin, Vector3 target, int ringCount,
-                        int bulletsPerRing, float coneAngle, float speed,
-                        float roll, Color color);
-
     void ClearEnemyBullets();
     FixedPool<Bullet, kCapacity>& Pool() { return bullets_; }
     const FixedPool<Bullet, kCapacity>& Pool() const { return bullets_; }

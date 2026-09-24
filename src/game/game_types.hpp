@@ -29,21 +29,6 @@ struct Bullet {
 enum class EnemyKind : std::uint8_t { Fairy, Orb, Elite };
 enum class PathKind : std::uint8_t { Straight, Helix, SweepLeft, SweepRight };
 
-struct Enemy {
-    bool active = false;
-    EnemyKind kind = EnemyKind::Fairy;
-    PathKind path = PathKind::Straight;
-    Vector3 position{};
-    Vector3 origin{};
-    float age = 0.0F;
-    float health = 10.0F;
-    float maxHealth = 10.0F;
-    float speed = 1.0F;
-    float fireTimer = 0.0F;
-    float fireInterval = 1.5F;
-    int scoreValue = 500;
-};
-
 struct Player {
     // Camera position and collision center are always identical.
     Vector3 position{0.0F, 0.0F, -6.5F};
@@ -73,18 +58,6 @@ struct KeyBindings {
     int fire = KEY_Z;
     int bomb = KEY_X;
     int pause = KEY_P;
-};
-
-struct Boss {
-    bool active = false;
-    Vector3 position{0.0F, 2.0F, 7.2F};
-    float health = 0.0F;
-    float maxHealth = 0.0F;
-    float phaseTimer = 0.0F;
-    float fireTimer = 0.0F;
-    float moveClock = 0.0F;
-    float starRotation = 0.0F;
-    int phase = 0;
 };
 
 enum class RunState : std::uint8_t {

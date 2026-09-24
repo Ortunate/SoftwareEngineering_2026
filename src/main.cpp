@@ -31,28 +31,30 @@ int main(int argc, char** argv) {
     SetWindowMinSize(900, 620);
     SetTargetFPS(60);
 
-    redmist::Game game;
-    if (captureGameplay) {
-        game.Start();
-        for (int frame = 0; frame < 360; ++frame) {
-            game.Update(1.0F / 60.0F);
+    {
+        redmist::Game game;
+        if (captureGameplay) {
+            game.Start();
+            for (int frame = 0; frame < 360; ++frame) {
+                game.Update(1.0F / 60.0F);
+            }
+        } else if (captureOptions) {
+            game.OpenOptions();
         }
-    } else if (captureOptions) {
-        game.OpenOptions();
-    }
-    int renderedFrames = 0;
-    while (!WindowShouldClose() && !game.ShouldQuit()) {
-        const float deltaTime = std::min(GetFrameTime(), 1.0F / 20.0F);
-        game.Update(deltaTime);
+        int renderedFrames = 0;
+        while (!WindowShouldClose() && !game.ShouldQuit()) {
+            const float deltaTime = std::min(GetFrameTime(), 1.0F / 20.0F);
+            game.Update(deltaTime);
 
-        BeginDrawing();
-        ClearBackground(Color{7, 9, 20, 255});
-        game.Draw();
-        EndDrawing();
+            BeginDrawing();
+            ClearBackground(Color{7, 9, 20, 255});
+            game.Draw();
+            EndDrawing();
 
-        if (captureFrame && ++renderedFrames >= 4) {
-            TakeScreenshot(capturePath.c_str());
-            break;
+            if (captureFrame && ++renderedFrames >= 4) {
+                TakeScreenshot(capturePath.c_str());
+                break;
+            }
         }
     }
 

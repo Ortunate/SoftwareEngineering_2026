@@ -1,6 +1,6 @@
 # Red Mist 3D Demo
 
-一个使用 C++20 和 raylib 实现的原创 3D 弹幕射击课设原型。演示节奏参考《东方红魔乡》一面 Normal 难度，但不包含原作代码、关卡数据或美术音频素材。
+一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Normal 一面开场至道中露米娅退场。以[用户提供的通关录像](https://www.bilibili.com/video/BV1P2Yb6gE83/)作视觉参考；现有出怪时间、弹数和弹速仍为近似值，尚未完成逐帧校准，因此当前版本不能称为 1:1 复刻。
 
 ## 已实现
 
@@ -14,7 +14,9 @@
 - Fibonacci 球面星状散射与三维锥形瞄准弹
 - 擦弹、残机、Bomb、分数和暂停
 - 事件驱动的道中编队
-- 强化敌人与两阶段 Boss
+- Fairy、Orb、Elite 敌人子类分别定义并释放自己的弹幕技能
+- 道中露米娅的一段普通攻击，右—中—左—中—右移动，击破或超时后结束演示
+- 新绘制的露米娅、普通妖精、强化妖精与弹体透明贴图，分别用于 Boss、敌人和部分弹幕的三维朝向相机渲染
 - Windows/macOS 共用 CMake 工程
 - 核心弹幕数学测试
 
@@ -24,7 +26,7 @@
 - 支持 C++20 的编译器
 - Git，用于 CMake 首次下载 raylib 5.5
 
-raylib 会在首次配置时通过 CMake FetchContent 下载，项目没有其他运行时依赖或素材文件。
+raylib 会在首次配置时通过 CMake FetchContent 下载。贴图位于 `assets/rumia_modern.png`、`assets/fairy_modern.png`、`assets/elite_modern.png` 和 `assets/bullet_pearl.png`，构建时会自动复制到可执行文件旁的 `assets` 目录。
 
 ## macOS
 
@@ -82,6 +84,12 @@ ctest --test-dir build --output-on-failure
 程序启动时会在当前运行目录中查找 `red_mist_settings.cfg`。如果文件不存在，程序会加载默认设置并自动创建该文件；FPS 或按键发生变化时会立即写回。无效的 FPS、按键值或重复按键会回退为安全的默认值。
 
 详细架构和数据结构见 `docs/DESIGN.md`。
+
+## 弹幕与关卡结构
+
+`BulletSystem` 只创建单颗弹体，并负责对象池、运动更新和清除；它不决定弹幕图案。`FairyEnemy`、`OrbEnemy`、`EliteEnemy` 各自实现 `UseSkill`，由 `Enemy::Update` 按开火计时器调用。`RumiaBoss` 的 `FireAimedVolley` 生成道中战的朝向玩家弹幕。Normal 道中露米娅没有符卡；项目中的符卡显示接口保留作后续关卡扩展，本段不会触发。
+
+当前的三维化方式是将敌人与 Boss 放进可移动的立方体战场，并让弹幕在朝向玩家的三维锥面传播。玩家可以沿三个坐标轴移动和转向。此设计保留了参考战斗的出场顺序与道中 Boss 边界，但原作的二维运动投影、资源掉落、火力成长、对话、音效、精确时间轴和逐弹参数还未复刻。
 
 ## 开发截图
 

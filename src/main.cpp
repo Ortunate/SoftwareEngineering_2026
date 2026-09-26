@@ -3,6 +3,7 @@
 #include "raylib.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 
@@ -13,8 +14,21 @@ int main(int argc, char** argv) {
     bool captureFrame = false;
     bool captureGameplay = false;
     bool captureOptions = false;
+    bool captureStage = false;
+    float captureStageTime = 0.0F;
+    float captureYaw = 0.0F;
+    float capturePitch = 0.0F;
+    bool captureDebug = false;
     std::string capturePath = "red_mist_capture.png";
-    if (argc >= 2 && (std::string_view(argv[1]) == "--capture" ||
+    if (argc >= 3 && std::string_view(argv[1]) == "--capture-stage") {
+        captureFrame = true;
+        captureStage = true;
+        captureStageTime = std::clamp(std::strtof(argv[2], nullptr), 0.0F, 180.0F);
+        if (argc >= 4) capturePath = argv[3];
+        if (argc >= 5) captureYaw = std::strtof(argv[4], nullptr);
+        if (argc >= 6) capturePitch = std::strtof(argv[5], nullptr);
+        if (argc >= 7) captureDebug = std::string_view(argv[6]) == "--debug-render";
+    } else if (argc >= 2 && (std::string_view(argv[1]) == "--capture" ||
                       std::string_view(argv[1]) == "--capture-gameplay" ||
                       std::string_view(argv[1]) == "--capture-options")) {
         captureFrame = true;
@@ -33,7 +47,15 @@ int main(int argc, char** argv) {
 
     {
         redmist::Game game;
-        if (captureGameplay) {
+        if (captureStage) {
+            game.StartPreview();
+            game.SetDebugDraw(captureDebug);
+            for (float elapsed = 0.0F; elapsed < captureStageTime;
+                 elapsed += 1.0F / 30.0F) {
+                game.Update(1.0F / 30.0F);
+            }
+            game.SetPreviewView(captureYaw, capturePitch);
+        } else if (captureGameplay) {
             game.Start();
             for (int frame = 0; frame < 360; ++frame) {
                 game.Update(1.0F / 60.0F);
@@ -45,6 +67,7 @@ int main(int argc, char** argv) {
         while (!WindowShouldClose() && !game.ShouldQuit()) {
             const float deltaTime = std::min(GetFrameTime(), 1.0F / 20.0F);
             game.Update(deltaTime);
+            if (captureStage) game.SetPreviewView(captureYaw, capturePitch);
 
             BeginDrawing();
             ClearBackground(Color{7, 9, 20, 255});

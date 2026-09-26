@@ -5,6 +5,7 @@
 #include "game/enemy.hpp"
 #include "game/game_types.hpp"
 #include "game/stage_system.hpp"
+#include "game/sprite_renderer.hpp"
 
 #include "raylib.h"
 
@@ -20,6 +21,9 @@ public:
 
     void Reset();
     void Start();
+    void StartPreview();
+    void SetPreviewView(float yawDegrees, float pitchDegrees);
+    void SetDebugDraw(bool enabled) { debugRender_ = enabled; }
     void OpenOptions();
     void Update(float deltaTime);
     void Draw() const;
@@ -53,7 +57,8 @@ private:
     void FirePlayerShot();
     void UseBomb();
     void DamagePlayer();
-    void StartBoss();
+    void StartMidboss();
+    void StartFinalBoss();
     void AdvanceBossPhase();
     void SetMessage(std::string message, float duration);
 
@@ -68,6 +73,7 @@ private:
     void DrawHud() const;
     void DrawOverlay() const;
     void DrawSpellCutIn() const;
+    void DrawDialogue() const;
     void DrawMainMenu() const;
     void DrawOptions() const;
     void DrawKeyBindings() const;
@@ -86,10 +92,18 @@ private:
     float messageTimer_ = 0.0F;
     float screenFlashTimer_ = 0.0F;
     float spellCutInTimer_ = 0.0F;
+    float dialogueTimer_ = 0.0F;
+    bool dialogueActive_ = false;
     Texture2D spellPortrait_{};
+    Texture2D reimuPortrait_{};
+    Model skyboxModel_{};
+    TextureCubemap skyboxTexture_{};
+    Shader skyboxShader_{};
     Texture2D fairyTexture_{};
     Texture2D eliteTexture_{};
     Texture2D bulletTexture_{};
+    Texture2D redBulletTexture_{};
+    SpriteRenderer spriteRenderer_{};
     std::string message_;
     int selectedMenuItem_ = 0;
     OptionsPage optionsPage_ = OptionsPage::General;
@@ -98,6 +112,7 @@ private:
     int fpsLimitIndex_ = 1;
     bool waitingForBinding_ = false;
     bool shouldQuit_ = false;
+    bool debugRender_ = false;
 };
 
 }  // namespace redmist

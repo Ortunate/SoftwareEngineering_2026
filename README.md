@@ -1,6 +1,6 @@
 # Red Mist 3D Demo
 
-一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Normal 一面开场至道中露米娅退场。以[用户提供的通关录像](https://www.bilibili.com/video/BV1P2Yb6gE83/)作视觉参考；现有出怪时间、弹数和弹速仍为近似值，尚未完成逐帧校准，因此当前版本不能称为 1:1 复刻。
+一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Normal 一面开场至一面结算。流程依据用户提供的 187 秒本地录像重排；事件时间与弹幕参数仍是近似值，尚未完成逐帧校准，因此当前版本不能称为 1:1 复刻。
 
 ## 已实现
 
@@ -14,9 +14,12 @@
 - Fibonacci 球面星状散射与三维锥形瞄准弹
 - 擦弹、残机、Bomb、分数和暂停
 - 事件驱动的道中编队
-- Fairy、Orb、Elite 敌人子类分别定义并释放自己的弹幕技能
-- 道中露米娅的一段普通攻击，右—中—左—中—右移动，击破或超时后结束演示
-- 新绘制的露米娅、普通妖精、强化妖精与弹体透明贴图，分别用于 Boss、敌人和部分弹幕的三维朝向相机渲染
+- Fairy、DarkFairy、Orb、Elite 敌人子类分别定义并释放自己的弹幕技能
+- 道中露米娅普通攻击、后续妖精编队、灵梦与露米娅对话、关底四阶段及一面结算
+- 关底阶段按普通攻击 →「夜符 Night Bird」→ 普通攻击 →「境符 Demarcation」推进，两张符卡展示立绘与名称
+- 程序生成的红雾天空盒，以及新绘制的灵梦和露米娅立绘、两类妖精与红蓝弹体贴图
+- 红雾背景使用六面天空盒，转动镜头时保持固定的世界方向，避免球面极区拉伸
+- 子弹、敌人和 Boss 的贴图锚点与球形判定中心分别配置；大幅仰俯视时贴图仍面向镜头
 - Windows/macOS 共用 CMake 工程
 - 核心弹幕数学测试
 
@@ -26,7 +29,13 @@
 - 支持 C++20 的编译器
 - Git，用于 CMake 首次下载 raylib 5.5
 
-raylib 会在首次配置时通过 CMake FetchContent 下载。贴图位于 `assets/rumia_modern.png`、`assets/fairy_modern.png`、`assets/elite_modern.png` 和 `assets/bullet_pearl.png`，构建时会自动复制到可执行文件旁的 `assets` 目录。
+raylib 会在首次配置时通过 CMake FetchContent 下载。贴图位于 `assets` 目录，构建时会自动复制到可执行文件旁。
+
+天空盒素材是 `assets/crimson_mist_skybox.png`，按 OpenGL 的 +X、-X、+Y、-Y、+Z、-Z 顺序横向排列。六面由同一个方向采样函数生成；如需重绘，在项目根目录运行 `cmake --build build --target generate_skybox`，然后运行 `./build/generate_skybox assets/crimson_mist_skybox.png`（Windows 下使用对应的可执行文件路径）。常规构建只加载现成贴图，不在启动时生成纹理。
+
+弹体保留 `bullet_pearl.png` 与 `bullet_red.png` 原图；游戏使用裁去透明边并缩小到 512×512 的 `*_runtime.png`。重新生成时运行 `cmake --build build --target generate_sprite_assets`，然后运行 `./build/generate_sprite_assets assets`。构建游戏目标时会把贴图和着色器复制到可执行文件旁。
+
+需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets`。该程序在可见窗口分别测量空场景和 8192 发弹幕场景的平均帧时间；数值随机器和窗口状态变化。
 
 ## macOS
 
@@ -78,6 +87,7 @@ ctest --test-dir build --output-on-failure
 | Esc / P | 暂停或继续 |
 | R | 胜利或失败后重新开始 |
 | M / Esc | 暂停、胜利或失败界面返回主菜单 |
+| F3 | 显示或隐藏判定球与发弹点调试图层 |
 
 开始界面的 `OPTIONS` 提供 30、60、120、144、240 和 Unlimited 六档 FPS 上限，使用左右方向键调节并立即生效。进入 `KEY BINDINGS` 二级页面后，可以修改前进、后退、左右移动、上升、下降、低速、射击、Bomb 和暂停键。将一个动作绑定到已使用的按键时，系统会自动交换两个动作的原按键。
 
@@ -87,9 +97,9 @@ ctest --test-dir build --output-on-failure
 
 ## 弹幕与关卡结构
 
-`BulletSystem` 只创建单颗弹体，并负责对象池、运动更新和清除；它不决定弹幕图案。`FairyEnemy`、`OrbEnemy`、`EliteEnemy` 各自实现 `UseSkill`，由 `Enemy::Update` 按开火计时器调用。`RumiaBoss` 的 `FireAimedVolley` 生成道中战的朝向玩家弹幕。Normal 道中露米娅没有符卡；项目中的符卡显示接口保留作后续关卡扩展，本段不会触发。
+`BulletSystem` 只创建单颗弹体，并负责对象池、运动更新和清除；它不决定弹幕图案。各敌人子类实现 `UseSkill`，由 `Enemy::Update` 按开火计时器调用。`RumiaBoss` 分别处理道中和关底遭遇，并在关底阶段调用两种普通攻击与两张符卡技能函数。道中露米娅没有符卡；关底符卡开始时清除旧弹幕，展示立绘与名称，再释放弹幕。
 
-当前的三维化方式是将敌人与 Boss 放进可移动的立方体战场，并让弹幕在朝向玩家的三维锥面传播。玩家可以沿三个坐标轴移动和转向。此设计保留了参考战斗的出场顺序与道中 Boss 边界，但原作的二维运动投影、资源掉落、火力成长、对话、音效、精确时间轴和逐弹参数还未复刻。
+当前的三维化方式是将敌人与 Boss 放进可移动的立方体战场，并让弹幕在朝向玩家的三维锥面传播。玩家可以沿三个坐标轴移动和转向。对话以英文简述表现，流程顺序参考录像；原作的二维运动投影、资源掉落、火力成长、音效、精确时间轴和逐弹参数还未复刻。录像观察与时间映射见 [Stage 1 对照记录](docs/STAGE1_REFERENCE.md)。
 
 ## 开发截图
 
@@ -99,4 +109,7 @@ ctest --test-dir build --output-on-failure
 ./build/red_mist_demo --capture red_mist_capture.png
 ./build/red_mist_demo --capture-gameplay gameplay_capture.png
 ./build/red_mist_demo --capture-options options_capture.png
+./build/red_mist_demo --capture-stage 125 night_bird_capture.png
+./build/red_mist_demo --capture-stage 6 side_view.png 90 20
+./build/red_mist_demo --capture-stage 8 hitbox_capture.png 0 0 --debug-render
 ```

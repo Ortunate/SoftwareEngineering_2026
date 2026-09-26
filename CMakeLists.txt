@@ -32,17 +32,38 @@ add_executable(red_mist_demo
     src/game/boss.cpp
     src/game/settings.cpp
     src/game/stage_system.cpp
+    src/game/sprite_renderer.cpp
     src/game/game.cpp
 )
 
 target_include_directories(red_mist_demo PRIVATE src)
 target_link_libraries(red_mist_demo PRIVATE raylib)
 
-add_custom_command(TARGET red_mist_demo POST_BUILD
+# Rebuild the six-face strip only when its source artwork needs changing.
+add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
+target_link_libraries(generate_skybox PRIVATE raylib)
+
+add_executable(generate_sprite_assets EXCLUDE_FROM_ALL
+    tools/generate_sprite_assets.cpp)
+target_link_libraries(generate_sprite_assets PRIVATE raylib)
+
+add_executable(sprite_benchmark EXCLUDE_FROM_ALL
+    tools/sprite_benchmark.cpp
+    src/game/sprite_renderer.cpp
+    src/game/bullet_system.cpp
+    src/game/enemy.cpp
+    src/game/boss.cpp
+)
+target_include_directories(sprite_benchmark PRIVATE src)
+target_link_libraries(sprite_benchmark PRIVATE raylib)
+
+add_custom_target(copy_assets
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/assets
             $<TARGET_FILE_DIR:red_mist_demo>/assets
+    VERBATIM
 )
+add_dependencies(red_mist_demo copy_assets)
 
 if(MSVC)
     target_compile_options(red_mist_demo PRIVATE /W4 /permissive-)

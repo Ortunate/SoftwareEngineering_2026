@@ -12,7 +12,9 @@ enum class StageEventKind : std::uint8_t {
     SpawnStarFormation,
     SpawnCrossingPair,
     SpawnElite,
-    StartBoss,
+    StartMidboss,
+    StartDialogue,
+    StartFinalBoss,
     ShowMessage
 };
 

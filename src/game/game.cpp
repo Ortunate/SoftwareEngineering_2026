@@ -1,6 +1,8 @@
 #include "game/game.hpp"
 #include "game/settings.hpp"
 
+#include "rlgl.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -58,18 +60,50 @@ Game::Game() {
     spellPortrait_ = LoadTexture(portraitPath.string().c_str());
     const std::filesystem::path assetsPath =
         std::filesystem::path(GetApplicationDirectory()) / "assets";
+    reimuPortrait_ = LoadTexture((assetsPath / "reimu_modern.png").string().c_str());
+    const std::filesystem::path skyboxPath = assetsPath / "crimson_mist_skybox.png";
+    Image skyboxImage = LoadImage(skyboxPath.string().c_str());
+    if (skyboxImage.data != nullptr &&
+        skyboxImage.width == skyboxImage.height * 6) {
+        skyboxTexture_ = LoadTextureCubemap(skyboxImage,
+                                            CUBEMAP_LAYOUT_LINE_HORIZONTAL);
+    }
+    if (skyboxImage.data != nullptr) UnloadImage(skyboxImage);
+    if (IsTextureValid(skyboxTexture_)) {
+        const std::filesystem::path shaderPath = assetsPath / "shaders";
+        skyboxShader_ = LoadShader((shaderPath / "skybox.vs").string().c_str(),
+                                   (shaderPath / "skybox.fs").string().c_str());
+        const int environmentLocation =
+            GetShaderLocation(skyboxShader_, "environmentMap");
+        if (IsShaderValid(skyboxShader_) && environmentLocation >= 0) {
+            const int textureUnit = MATERIAL_MAP_CUBEMAP;
+            SetShaderValue(skyboxShader_, environmentLocation, &textureUnit,
+                           SHADER_UNIFORM_INT);
+            skyboxModel_ = LoadModelFromMesh(GenMeshCube(1.0F, 1.0F, 1.0F));
+            skyboxModel_.materials[0].shader = skyboxShader_;
+            skyboxModel_.materials[0].maps[MATERIAL_MAP_CUBEMAP].texture =
+                skyboxTexture_;
+        }
+    }
     fairyTexture_ = LoadTexture((assetsPath / "fairy_modern.png").string().c_str());
     eliteTexture_ = LoadTexture((assetsPath / "elite_modern.png").string().c_str());
-    bulletTexture_ = LoadTexture((assetsPath / "bullet_pearl.png").string().c_str());
+    bulletTexture_ = LoadTexture((assetsPath / "bullet_pearl_runtime.png").string().c_str());
+    redBulletTexture_ = LoadTexture((assetsPath / "bullet_red_runtime.png").string().c_str());
+    spriteRenderer_.Load(assetsPath);
     LoadSettings();
     Reset();
 }
 
 Game::~Game() {
     if (spellPortrait_.id != 0) UnloadTexture(spellPortrait_);
+    if (reimuPortrait_.id != 0) UnloadTexture(reimuPortrait_);
+    if (skyboxModel_.meshCount != 0) UnloadModel(skyboxModel_);
+    if (skyboxShader_.id != 0) UnloadShader(skyboxShader_);
+    if (skyboxTexture_.id != 0) UnloadTexture(skyboxTexture_);
     if (fairyTexture_.id != 0) UnloadTexture(fairyTexture_);
     if (eliteTexture_.id != 0) UnloadTexture(eliteTexture_);
     if (bulletTexture_.id != 0) UnloadTexture(bulletTexture_);
+    if (redBulletTexture_.id != 0) UnloadTexture(redBulletTexture_);
 }
 
 void Game::Reset() {
@@ -79,6 +113,19 @@ void Game::Reset() {
 
 void Game::Start() {
     StartRun();
+}
+
+void Game::StartPreview() {
+    StartRun();
+    player_.invulnerableTimer = 1000.0F;
+}
+
+void Game::SetPreviewView(float yawDegrees, float pitchDegrees) {
+    constexpr float degreesToRadians = std::numbers::pi_v<float> / 180.0F;
+    player_.yaw = yawDegrees * degreesToRadians;
+    player_.pitch = std::clamp(pitchDegrees * degreesToRadians,
+                               -1.45F, 1.45F);
+    UpdateCamera();
 }
 
 void Game::OpenOptions() {
@@ -121,6 +168,8 @@ void Game::StartRun() {
     graze_ = 0;
     screenFlashTimer_ = 0.0F;
     spellCutInTimer_ = 0.0F;
+    dialogueTimer_ = 0.0F;
+    dialogueActive_ = false;
     shouldQuit_ = false;
     UpdateCamera();
     DisableCursor();
@@ -134,6 +183,7 @@ void Game::EnterMainMenu() {
     bullets_.Reset();
     enemies_.Clear();
     boss_ = RumiaBoss{};
+    dialogueActive_ = false;
     player_.position = {0.0F, 0.0F, -6.5F};
     player_.yaw = 0.0F;
     player_.pitch = 0.0F;
@@ -150,6 +200,7 @@ void Game::Update(float deltaTime) {
         UpdateOptions();
         return;
     }
+    if (IsKeyPressed(KEY_F3)) debugRender_ = !debugRender_;
 
     if (state_ == RunState::Won || state_ == RunState::GameOver) {
         if (IsKeyPressed(KEY_R)) {
@@ -179,6 +230,7 @@ void Game::Update(float deltaTime) {
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
     screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
     spellCutInTimer_ = std::max(0.0F, spellCutInTimer_ - deltaTime);
+    if (dialogueActive_) dialogueTimer_ += deltaTime;
     player_.invulnerableTimer =
         std::max(0.0F, player_.invulnerableTimer - deltaTime);
     player_.bombCooldown = std::max(0.0F, player_.bombCooldown - deltaTime);
@@ -395,7 +447,8 @@ void Game::UpdatePlayer(float deltaTime) {
     UpdateCamera();
 
     player_.fireTimer -= deltaTime;
-    if ((IsKeyDown(bindings_.fire) || IsMouseButtonDown(MOUSE_BUTTON_LEFT)) &&
+    if (!dialogueActive_ &&
+        (IsKeyDown(bindings_.fire) || IsMouseButtonDown(MOUSE_BUTTON_LEFT)) &&
         player_.fireTimer <= 0.0F) {
         FirePlayerShot();
         player_.fireTimer = focused ? 0.075F : 0.09F;
@@ -442,10 +495,10 @@ void Game::ResolveCollisions() {
     if (playerWasHit) DamagePlayer();
 
     enemies_.ForEachActive([this](Enemy& enemy) {
+        if (enemy.age < 0.0F) return;
         bullets_.Pool().ForEachActive([&enemy](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player) return;
-            constexpr float enemyRadius = 0.55F;
-            const float collisionDistance = bullet.radius + enemyRadius;
+            const float collisionDistance = bullet.radius + enemy.hitRadius;
             if (DistanceSquared(bullet.position, enemy.position) <=
                 collisionDistance * collisionDistance) {
                 bullet.active = false;
@@ -461,8 +514,7 @@ void Game::ResolveCollisions() {
     if (boss_.active) {
         bullets_.Pool().ForEachActive([this](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player) return;
-            constexpr float bossRadius = 0.95F;
-            const float collisionDistance = bullet.radius + bossRadius;
+            const float collisionDistance = bullet.radius + boss_.hitRadius;
             if (DistanceSquared(bullet.position, boss_.position) <=
                 collisionDistance * collisionDistance) {
                 bullet.active = false;
@@ -520,19 +572,21 @@ void Game::HandleStageEvent(const StageEvent& event) {
         case StageEventKind::SpawnElite:
             SpawnEnemy(EnemyKind::Elite, PathKind::Helix, event.center);
             break;
-        case StageEventKind::StartBoss:
-            StartBoss();
+        case StageEventKind::StartMidboss:
+            StartMidboss();
+            break;
+        case StageEventKind::StartDialogue:
+            enemies_.Clear();
+            bullets_.ClearEnemyBullets();
+            dialogueActive_ = true;
+            dialogueTimer_ = 0.0F;
+            messageTimer_ = 0.0F;
+            break;
+        case StageEventKind::StartFinalBoss:
+            StartFinalBoss();
             break;
         case StageEventKind::ShowMessage:
-            if (stage_.Elapsed() < 5.0F) {
-                SetMessage("Stage 1  Mystic Flier  Normal", 2.4F);
-            } else if (stage_.Elapsed() < 30.0F) {
-                SetMessage("Fairy formation incoming", 2.0F);
-            } else if (stage_.Elapsed() < 43.0F) {
-                SetMessage("WARNING  MIDBOSS APPROACHING", 1.8F);
-            } else {
-                SetMessage("Rumia", 2.0F);
-            }
+            SetMessage("Stage 1  Mystic Flier  Normal", 2.4F);
             break;
     }
 }
@@ -542,6 +596,9 @@ void Game::SpawnEnemy(EnemyKind kind, PathKind path, Vector3 position,
     switch (kind) {
         case EnemyKind::Fairy:
             enemies_.Add(std::make_unique<FairyEnemy>(path, position, delay));
+            break;
+        case EnemyKind::DarkFairy:
+            enemies_.Add(std::make_unique<DarkFairyEnemy>(path, position, delay));
             break;
         case EnemyKind::Orb:
             enemies_.Add(std::make_unique<OrbEnemy>(path, position, delay));
@@ -558,9 +615,11 @@ void Game::FirePlayerShot() {
     const Vector3 muzzle = Add(player_.position, Scale(forward, 0.55F));
     const Vector3 velocity = Scale(forward, 20.0F);
     bullets_.Spawn(BulletOwner::Player, Add(muzzle, Scale(right, -0.11F)),
-                   velocity, 0.09F, kPlayerBulletColor);
+                   velocity, 0.09F, kPlayerBulletColor,
+                   BulletVisualKind::BluePearl);
     bullets_.Spawn(BulletOwner::Player, Add(muzzle, Scale(right, 0.11F)),
-                   velocity, 0.09F, kPlayerBulletColor);
+                   velocity, 0.09F, kPlayerBulletColor,
+                   BulletVisualKind::BluePearl);
 }
 
 void Game::UseBomb() {
@@ -593,24 +652,38 @@ void Game::DamagePlayer() {
     }
 }
 
-void Game::StartBoss() {
+void Game::StartMidboss() {
     enemies_.Clear();
     bullets_.ClearEnemyBullets();
-    boss_.Start();
+    boss_.StartMidboss();
     SetMessage("Rumia  Midboss", 2.0F);
+}
+
+void Game::StartFinalBoss() {
+    dialogueActive_ = false;
+    enemies_.Clear();
+    bullets_.ClearEnemyBullets();
+    boss_.StartFinalBoss();
+    SetMessage("Rumia  Stage 1 Boss", 2.0F);
 }
 
 void Game::AdvanceBossPhase() {
     if (!boss_.active) return;
     bullets_.ClearEnemyBullets();
+    const bool wasMidboss =
+        boss_.CurrentEncounter() == RumiaBoss::Encounter::Midboss;
     const int completedPhase = boss_.phase;
     if (boss_.AdvancePhase()) {
         score_ += completedPhase == 1 ? 15000 : 25000;
-        spellCutInTimer_ = kSpellCutInDuration;
+        spellCutInTimer_ = boss_.SpellName() != nullptr
+                               ? kSpellCutInDuration : 0.0F;
         messageTimer_ = 0.0F;
+    } else if (wasMidboss) {
+        score_ += 5000;
+        SetMessage("Rumia retreated", 1.6F);
     } else {
         score_ += 50000;
-        SetMessage("Rumia retreated", 2.0F);
+        messageTimer_ = 0.0F;
         state_ = RunState::Won;
         EnableCursor();
     }
@@ -740,89 +813,34 @@ void Game::Draw() const {
 
 void Game::DrawWorld() const {
     BeginMode3D(camera_);
+    if (skyboxModel_.meshCount != 0) {
+        rlDisableBackfaceCulling();
+        rlDisableDepthMask();
+        DrawModel(skyboxModel_, {}, 1.0F, WHITE);
+        rlDrawRenderBatchActive();
+        rlEnableDepthMask();
+        rlEnableBackfaceCulling();
+    }
     DrawArena();
 
-    bullets_.Pool().ForEachActive([this](const Bullet& bullet) {
-        if (bulletTexture_.id != 0 &&
-            (bullet.owner == BulletOwner::Player || bullet.color.b > 190)) {
-            const float size = bullet.radius * 2.5F;
-            DrawBillboardRec(camera_, bulletTexture_,
-                             {0.0F, 0.0F, static_cast<float>(bulletTexture_.width),
-                              static_cast<float>(bulletTexture_.height)},
-                             bullet.position, {size, size}, WHITE);
-        } else {
-            DrawSphere(bullet.position, bullet.radius, bullet.color);
-        }
-        DrawSphereWires(bullet.position, bullet.radius * 1.22F, 5, 5,
-                        bullet.owner == BulletOwner::Enemy ? RAYWHITE
-                                                          : Color{130, 240, 255, 255});
+    std::array<const Enemy*, kEnemyCapacity> visibleEnemies{};
+    std::size_t visibleCount = 0;
+    enemies_.ForEachActive([&](const Enemy& enemy) {
+        if (enemy.age >= 0.0F) visibleEnemies[visibleCount++] = &enemy;
     });
-
-    enemies_.ForEachActive([this](const Enemy& enemy) {
-        if (enemy.age < 0.0F) return;
-        Color color = Color{100, 210, 255, 255};
-        float radius = 0.5F;
-        if (enemy.kind == EnemyKind::Orb) {
-            color = Color{255, 125, 195, 255};
-            radius = 0.62F;
-        } else if (enemy.kind == EnemyKind::Elite) {
-            color = Color{190, 95, 255, 255};
-            radius = 0.85F;
-        }
-        if (enemy.kind == EnemyKind::Orb && bulletTexture_.id != 0) {
-            DrawBillboardRec(camera_, bulletTexture_,
-                             {0.0F, 0.0F, static_cast<float>(bulletTexture_.width),
-                              static_cast<float>(bulletTexture_.height)},
-                             enemy.position, {radius * 2.2F, radius * 2.2F}, WHITE);
-        } else if (enemy.kind == EnemyKind::Elite && eliteTexture_.id != 0) {
-            const float height = radius * 3.6F;
-            const float width = height * static_cast<float>(eliteTexture_.width) /
-                                static_cast<float>(eliteTexture_.height);
-            DrawBillboardRec(camera_, eliteTexture_,
-                             {0.0F, 0.0F, static_cast<float>(eliteTexture_.width),
-                              static_cast<float>(eliteTexture_.height)},
-                             enemy.position, {width, height}, WHITE);
-        } else if (fairyTexture_.id != 0) {
-            const float height = radius * 3.6F;
-            const float width = height * static_cast<float>(fairyTexture_.width) /
-                                static_cast<float>(fairyTexture_.height);
-            DrawBillboardRec(camera_, fairyTexture_,
-                             {0.0F, 0.0F, static_cast<float>(fairyTexture_.width),
-                              static_cast<float>(fairyTexture_.height)},
-                             enemy.position, {width, height}, WHITE);
-        } else {
-            DrawSphere(enemy.position, radius, color);
-        }
-        DrawSphereWires(enemy.position, radius * 1.28F, 9, 9, WHITE);
-        DrawCubeWires(enemy.position, radius * 2.4F, radius * 2.4F,
-                      radius * 2.4F, Fade(color, 0.65F));
-    });
-
-    if (boss_.active) {
-        if (spellPortrait_.id != 0) {
-            const float height = 3.2F;
-            const float width = height * static_cast<float>(spellPortrait_.width) /
-                                static_cast<float>(spellPortrait_.height);
-            DrawBillboardRec(camera_, spellPortrait_,
-                             {0.0F, 0.0F, static_cast<float>(spellPortrait_.width),
-                              static_cast<float>(spellPortrait_.height)},
-                             boss_.position, {width, height}, WHITE);
-        } else {
-            DrawSphere(boss_.position, 0.95F, Color{255, 85, 120, 255});
-        }
-        DrawSphereWires(boss_.position, 1.32F, 16, 12,
-                        Color{255, 220, 120, 255});
-        DrawCubeWires(boss_.position, 2.6F, 2.6F, 2.6F,
-                      Color{255, 80, 170, 190});
-    }
+    spriteRenderer_.Draw(camera_, bullets_,
+                         std::span<const Enemy*>(visibleEnemies.data(), visibleCount),
+                         boss_, player_.position,
+                         {bulletTexture_, redBulletTexture_, fairyTexture_,
+                          eliteTexture_, spellPortrait_}, debugRender_);
 
     EndMode3D();
 }
 
 void Game::DrawArena() const {
     constexpr float h = kArenaHalfExtent;
-    const Color border{80, 185, 235, 230};
-    const Color grid{45, 95, 130, 80};
+    const Color border{170, 105, 150, 190};
+    const Color grid{100, 65, 115, 70};
     DrawCubeWires({0.0F, 0.0F, 0.0F}, h * 2.0F, h * 2.0F, h * 2.0F, border);
 
     constexpr float step = 2.5F;
@@ -906,17 +924,27 @@ void Game::DrawHud() const {
                              0.5F, 12,
                              boss_.phase == 1 ? Color{255, 80, 110, 255}
                                               : Color{190, 80, 255, 255});
-        DrawText("RUMIA  MIDBOSS  NORMAL",
+        DrawText(boss_.CurrentEncounter() == RumiaBoss::Encounter::Midboss
+                     ? "RUMIA  MIDBOSS  NORMAL"
+                     : "RUMIA  STAGE BOSS  NORMAL",
                  static_cast<int>(left), 48, 18, RAYWHITE);
     }
 
-    const char* controls =
-        "Mouse Look  WASD Move  Space Up  LShift Down  C Focus  LMB/Z Fire  RMB/X Bomb";
-    DrawText(controls, 16, GetScreenHeight() - 29, 17,
-             Color{185, 205, 220, 235});
-    DrawText("CAMERA = HITBOX", GetScreenWidth() - 190, GetScreenHeight() - 56,
-             17, Color{255, 125, 145, 240});
+    if (!dialogueActive_ && state_ != RunState::Won &&
+        state_ != RunState::GameOver) {
+        const char* controls =
+            "Mouse Look  WASD Move  Space Up  LShift Down  C Focus  LMB/Z Fire  RMB/X Bomb";
+        DrawText(controls, 16, GetScreenHeight() - 29, 17,
+                 Color{185, 205, 220, 235});
+        DrawText("CAMERA = HITBOX", GetScreenWidth() - 190, GetScreenHeight() - 56,
+                 17, Color{255, 125, 145, 240});
+    }
     DrawFPS(GetScreenWidth() - 90, 16);
+    if (debugRender_) {
+        DrawText("F3  HITBOX: yellow bullet / cyan body / magenta muzzle",
+                 16, GetScreenHeight() - 57, 14,
+                 Color{255, 225, 120, 255});
+    }
 }
 
 void Game::DrawOverlay() const {
@@ -932,6 +960,7 @@ void Game::DrawOverlay() const {
         DrawText(message_.c_str(), x, y, fontSize, RAYWHITE);
     }
 
+    DrawDialogue();
     DrawSpellCutIn();
 
     if (state_ == RunState::Paused) {
@@ -946,7 +975,7 @@ void Game::DrawOverlay() const {
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{0, 0, 0, 175});
-        const char* title = state_ == RunState::Won ? "MIDBOSS CLEAR" : "GAME OVER";
+        const char* title = state_ == RunState::Won ? "STAGE 1 CLEAR" : "GAME OVER";
         DrawText(title, (GetScreenWidth() - MeasureText(title, 56)) / 2,
                  GetScreenHeight() / 2 - 75, 56,
                  state_ == RunState::Won ? GOLD : Color{255, 90, 110, 255});
@@ -961,6 +990,61 @@ void Game::DrawOverlay() const {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{220, 240, 255, alpha});
     }
+}
+
+void Game::DrawDialogue() const {
+    if (!dialogueActive_) return;
+    struct DialogueLine {
+        const char* speaker;
+        const char* text;
+        bool rumiaSpeaking;
+    };
+    constexpr std::array<DialogueLine, 6> lines{{
+        {"REIMU", "The mist is getting thicker...", false},
+        {"REIMU", "Someone is hiding in the dark.", false},
+        {"RUMIA", "You can see me from there?", true},
+        {"REIMU", "Are you behind this strange night?", false},
+        {"RUMIA", "Maybe. I like the darkness.", true},
+        {"REIMU", "Then I'll clear a path through it!", false},
+    }};
+    const int index = std::clamp(static_cast<int>(dialogueTimer_ / 2.5F),
+                                  0, static_cast<int>(lines.size()) - 1);
+    const DialogueLine& line = lines[index];
+    const float screenW = static_cast<float>(GetScreenWidth());
+    const float screenH = static_cast<float>(GetScreenHeight());
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                  Color{10, 5, 22, 45});
+    const float portraitH = screenH * 0.58F;
+    if (reimuPortrait_.id != 0) {
+        const float portraitW = portraitH * reimuPortrait_.width /
+                                reimuPortrait_.height;
+        DrawTexturePro(reimuPortrait_,
+                       {0.0F, 0.0F, static_cast<float>(reimuPortrait_.width),
+                        static_cast<float>(reimuPortrait_.height)},
+                       {12.0F, screenH - portraitH - 82.0F,
+                        portraitW, portraitH}, {0.0F, 0.0F}, 0.0F,
+                       line.rumiaSpeaking ? Color{170, 170, 185, 165} : WHITE);
+    }
+    if (spellPortrait_.id != 0) {
+        const float portraitW = portraitH * spellPortrait_.width /
+                                spellPortrait_.height;
+        DrawTexturePro(spellPortrait_,
+                       {0.0F, 0.0F, static_cast<float>(spellPortrait_.width),
+                        static_cast<float>(spellPortrait_.height)},
+                       {screenW - portraitW - 12.0F,
+                        screenH - portraitH - 82.0F, portraitW, portraitH},
+                       {0.0F, 0.0F}, 0.0F,
+                       line.rumiaSpeaking ? WHITE : Color{170, 170, 185, 165});
+    }
+    const Rectangle panel{screenW * 0.15F, screenH - 118.0F,
+                          screenW * 0.7F, 92.0F};
+    DrawRectangleRounded(panel, 0.2F, 12, Color{11, 7, 25, 230});
+    DrawRectangleLinesEx(panel, 2.0F, Color{225, 155, 190, 220});
+    DrawText(line.speaker, static_cast<int>(panel.x + 20.0F),
+             static_cast<int>(panel.y + 10.0F), 22,
+             Color{255, 165, 198, 255});
+    DrawText(line.text, static_cast<int>(panel.x + 20.0F),
+             static_cast<int>(panel.y + 42.0F), 21, RAYWHITE);
 }
 
 void Game::DrawSpellCutIn() const {

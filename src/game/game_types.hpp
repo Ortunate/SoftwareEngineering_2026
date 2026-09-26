@@ -10,11 +10,13 @@ constexpr float kArenaHalfExtent = 10.0F;
 constexpr float kArenaPadding = 0.35F;
 
 enum class BulletOwner : std::uint8_t { Player, Enemy };
+enum class BulletVisualKind : std::uint8_t { BluePearl, RedOrb, SolidSphere };
 
 struct Bullet {
     bool active = false;
     bool grazed = false;
     BulletOwner owner = BulletOwner::Enemy;
+    BulletVisualKind visual = BulletVisualKind::SolidSphere;
     Vector3 position{};
     Vector3 velocity{};
     Vector3 acceleration{};
@@ -26,7 +28,7 @@ struct Bullet {
     Color color = WHITE;
 };
 
-enum class EnemyKind : std::uint8_t { Fairy, Orb, Elite };
+enum class EnemyKind : std::uint8_t { Fairy, DarkFairy, Orb, Elite };
 enum class PathKind : std::uint8_t { Straight, Helix, SweepLeft, SweepRight };
 
 struct Player {

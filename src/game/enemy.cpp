@@ -15,6 +15,12 @@ Enemy::Enemy(EnemyKind enemyKind, PathKind enemyPath, Vector3 start, float delay
     : kind(enemyKind), path(enemyPath), position(start), origin(start),
       age(-delay), fireTimer(0.8F + delay) {}
 
+Vector3 Enemy::MuzzlePosition(Vector3 playerPosition) const {
+    return pattern::Add(position,
+        pattern::Scale(BulletSystem::DirectionTo(position, playerPosition),
+                       hitRadius * 0.55F));
+}
+
 void Enemy::Update(float deltaTime, Vector3 playerPosition, BulletSystem& bullets) {
     age += deltaTime;
     if (age < 0.0F) return;
@@ -62,9 +68,25 @@ FairyEnemy::FairyEnemy(PathKind path, Vector3 start, float delay)
 }
 
 void FairyEnemy::UseSkill(BulletSystem& bullets, Vector3 playerPosition) {
-    const Vector3 direction = BulletSystem::DirectionTo(position, playerPosition);
-    bullets.Spawn(BulletOwner::Enemy, position, pattern::Scale(direction, 3.3F),
-                  0.16F, kEnemyRed);
+    const Vector3 muzzle = MuzzlePosition(playerPosition);
+    const Vector3 direction = BulletSystem::DirectionTo(muzzle, playerPosition);
+    bullets.Spawn(BulletOwner::Enemy, muzzle, pattern::Scale(direction, 3.3F),
+                  0.16F, kEnemyRed, BulletVisualKind::RedOrb);
+}
+
+DarkFairyEnemy::DarkFairyEnemy(PathKind path, Vector3 start, float delay)
+    : Enemy(EnemyKind::DarkFairy, path, start, delay) {
+    health = maxHealth = 12.0F;
+    speed = 1.7F;
+    fireInterval = 1.55F;
+    scoreValue = 650;
+}
+
+void DarkFairyEnemy::UseSkill(BulletSystem& bullets, Vector3 playerPosition) {
+    const Vector3 muzzle = MuzzlePosition(playerPosition);
+    const Vector3 direction = BulletSystem::DirectionTo(muzzle, playerPosition);
+    bullets.Spawn(BulletOwner::Enemy, muzzle, pattern::Scale(direction, 3.5F),
+                  0.17F, kEnemyRed, BulletVisualKind::RedOrb);
 }
 
 OrbEnemy::OrbEnemy(PathKind path, Vector3 start, float delay)
@@ -73,14 +95,17 @@ OrbEnemy::OrbEnemy(PathKind path, Vector3 start, float delay)
     speed = 1.15F;
     fireInterval = 1.5F;
     scoreValue = 900;
+    hitRadius = 0.62F;
 }
 
 void OrbEnemy::UseSkill(BulletSystem& bullets, Vector3 playerPosition) {
-    const Vector3 axis = BulletSystem::DirectionTo(position, playerPosition);
+    const Vector3 muzzle = MuzzlePosition(playerPosition);
+    const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
     pattern::ForEachConeDirection(axis, 1, 5, 0.24F, age * 0.2F,
-        [this, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, position,
-                          pattern::Scale(direction, 3.0F), 0.16F, kEnemyBlue);
+        [muzzle, &bullets](Vector3 direction) {
+            bullets.Spawn(BulletOwner::Enemy, muzzle,
+                          pattern::Scale(direction, 3.0F), 0.16F, kEnemyBlue,
+                          BulletVisualKind::BluePearl);
         });
 }
 
@@ -90,20 +115,23 @@ EliteEnemy::EliteEnemy(PathKind path, Vector3 start, float delay)
     speed = 0.28F;
     fireInterval = 1.15F;
     scoreValue = 5000;
+    hitRadius = 0.78F;
 }
 
 void EliteEnemy::UseSkill(BulletSystem& bullets, Vector3 playerPosition) {
+    const Vector3 muzzle = MuzzlePosition(playerPosition);
     pattern::ForEachSphereDirection(34, age * 0.35F,
-        [this, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, position,
+        [muzzle, &bullets](Vector3 direction) {
+            bullets.Spawn(BulletOwner::Enemy, muzzle,
                           pattern::Scale(direction, 2.45F), 0.16F,
-                          kEnemyPurple);
+                          kEnemyPurple, BulletVisualKind::BluePearl);
         });
-    const Vector3 axis = BulletSystem::DirectionTo(position, playerPosition);
+    const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
     pattern::ForEachConeDirection(axis, 1, 7, 0.32F, age,
-        [this, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, position,
-                          pattern::Scale(direction, 3.5F), 0.16F, kEnemyRed);
+        [muzzle, &bullets](Vector3 direction) {
+            bullets.Spawn(BulletOwner::Enemy, muzzle,
+                          pattern::Scale(direction, 3.5F), 0.16F, kEnemyRed,
+                          BulletVisualKind::RedOrb);
         });
 }
 

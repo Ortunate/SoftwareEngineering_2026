@@ -15,7 +15,8 @@ public:
     void Update(float deltaTime);
 
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
-                  float radius, Color color, Vector3 acceleration = {});
+                  float radius, Color color, BulletVisualKind visual,
+                  Vector3 acceleration = {});
 
     void ClearEnemyBullets();
     FixedPool<Bullet, kCapacity>& Pool() { return bullets_; }

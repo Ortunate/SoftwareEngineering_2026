@@ -61,12 +61,13 @@ void BulletSystem::Update(float deltaTime) {
 
 Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
                             Vector3 velocity, float radius, Color color,
-                            Vector3 acceleration) {
+                            BulletVisualKind visual, Vector3 acceleration) {
     Bullet* bullet = bullets_.Acquire();
     if (bullet == nullptr) {
         return nullptr;
     }
     bullet->owner = owner;
+    bullet->visual = visual;
     bullet->position = position;
     bullet->velocity = velocity;
     bullet->acceleration = acceleration;

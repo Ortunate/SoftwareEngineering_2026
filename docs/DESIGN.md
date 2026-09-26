@@ -4,7 +4,7 @@
 
 项目实现一个可在 Windows 和 macOS 运行的真正三维弹幕射击演示。战斗发生在边长 20 个逻辑单位的立方体内部，玩家可以沿 X、Y、Z 三轴移动并自由观察。摄像机位置与玩家碰撞球中心始终完全一致，因此画面视点就是判定点。
 
-当前战斗范围为《东方红魔乡：新典》Normal 开场至一面道中露米娅结束。事件时刻和攻击参数根据通关录像近似设置，尚未逐帧核对。角色和弹体贴图为新绘制素材。
+当前战斗范围为《东方红魔乡：新典》Normal 开场至一面结算。事件时刻和攻击参数根据用户提供的本地通关录像近似设置，尚未逐帧核对。天空盒由程序生成，角色和弹体贴图为新绘制素材。
 
 ## 2 项目结构
 
@@ -24,11 +24,24 @@
 │       ├── boss.hpp/.cpp
 │       ├── settings.hpp/.cpp
 │       ├── stage_system.hpp/.cpp
+│       ├── sprite_renderer.hpp/.cpp
 │       └── game.hpp/.cpp
 ├── assets/rumia_modern.png
+├── assets/reimu_modern.png
 ├── assets/fairy_modern.png
 ├── assets/elite_modern.png
 ├── assets/bullet_pearl.png
+├── assets/bullet_red.png
+├── assets/bullet_pearl_runtime.png
+├── assets/bullet_red_runtime.png
+├── assets/crimson_mist_stage.png
+├── assets/crimson_mist_skybox.png
+├── assets/shaders/skybox.vs/.fs
+├── assets/shaders/sprite_cutout.fs
+├── assets/shaders/bullet_core.fs
+├── tools/generate_skybox.cpp
+├── tools/generate_sprite_assets.cpp
+├── tools/sprite_benchmark.cpp
 └── tests/core_tests.cpp
 ```
 
@@ -51,6 +64,12 @@ FPS 上限提供 30、60、120、144、240 和 Unlimited 六档，通过 raylib 
 
 立方体六个表面绘制空间网格，中央绘制红、绿、蓝三条坐标轴，帮助玩家判断深度、速度和朝向。
 
+红雾背景由六面 cubemap 和一个立方体模型绘制。顶点着色器从视图矩阵中去掉平移，只保留旋转，因此玩家移动时背景保持无限远、转动时显示固定世界方向。天空绘制时关闭背面剔除和深度写入，随后恢复这两项状态供敌人和弹幕使用。六面贴图由同一个方向采样函数生成，云、月亮和远山跨面连续；旧的 `crimson_mist_stage.png` 保留作原始画风参考，不参与运行时渲染。
+
+`position` 始终是三维判定球中心。`SpriteRenderer` 为各类敌人和 Boss 定义立绘的归一化躯干锚点及世界尺寸，用 `DrawBillboardPro` 将该锚点对齐到 `position`；屏幕上方向由摄像机朝向计算，因此高仰俯角下仍完整显示。敌人与 Boss 的发弹点从判定中心沿瞄准方向向前偏移，调试图层按 F3 显示判定球和发弹点。延迟入场的敌人在 `age < 0` 时不参与绘制或碰撞。
+
+弹体由明确的 `BulletVisualKind` 指定蓝珠、红弹或实体球，不再根据颜色猜贴图。两张运行时弹体贴图由原图裁去透明外边并缩小至 512×512；显示直径相对碰撞半径校准。绘制先用透明裁剪着色器写入弹体实心部分的深度，再绘制角色，最后在关闭深度写入后用加色混合绘制近处弹体光晕。渲染按弹体贴图分组，近镜头弹体只显示较淡的光晕，以免遮蔽视线。
+
 ## 4 核心数据结构
 
 ### 4.1 Bullet
@@ -60,6 +79,7 @@ struct Bullet {
     bool active;
     bool grazed;
     BulletOwner owner;
+    BulletVisualKind visual;
     Vector3 position;
     Vector3 velocity;
     Vector3 acceleration;
@@ -84,11 +104,11 @@ struct Bullet {
 
 ### 4.4 Enemy 与 Boss
 
-`Enemy` 是抽象基类；`FairyEnemy`、`OrbEnemy`、`EliteEnemy` 分别实现唯一的 `UseSkill`，由共用的 `Enemy::Update` 按计时器调用。敌人航线包括直线、三维螺旋和左右交叉。`Boss` 是独立抽象基类，`RumiaBoss` 在当前道中战中只实现普通攻击技能。Normal 道中战没有符卡，`SpellName()` 返回空值。符卡演出接口留给后续关卡。
+`Enemy` 是抽象基类；`FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy`、`EliteEnemy` 分别实现唯一的 `UseSkill`，由共用的 `Enemy::Update` 按计时器调用。敌人航线包括直线、三维螺旋和左右交叉。`Boss` 是独立抽象基类，`RumiaBoss` 区分道中与关底遭遇。道中只有普通攻击；关底依次包含普通攻击、「Night Bird」、第二段普通攻击和「Demarcation」。
 
 ### 4.5 StageEvent
 
-关卡由带时间戳的事件表驱动。生成事件包含三维中心坐标、敌人数、间距、敌人类型和队形类型。当前事件表覆盖开场至道中露米娅出现，不生成道中 Boss 后的敌人。事件时刻是近似值。
+关卡由带时间戳的事件表驱动。生成事件包含三维中心坐标、敌人数、间距、敌人类型和队形类型。当前事件表覆盖开场、道中 Boss、后半段编队、对话和关底 Boss。事件时刻是近似值，录像时间映射见 `docs/STAGE1_REFERENCE.md`。
 
 ## 5 三维弹幕算法
 
@@ -125,17 +145,22 @@ direction = (r cos(phi), y, r sin(phi))
 ```text
 主菜单
   -> 三维道中编队
-  -> 妖精编队与强化敌人
+  -> 蓝色与紫色妖精编队
   -> 道中露米娅普通攻击
-  -> 露米娅击破或超时退场
-  -> 当前演示结束
+  -> 后半段妖精编队
+  -> 灵梦与露米娅对话
+  -> 关底露米娅普通攻击
+  -> 夜符 Night Bird
+  -> 第二段普通攻击
+  -> 境符 Demarcation
+  -> 一面结算
 ```
 
 ## 7 当前限制
 
-- 立方体战场仍是程序生成；露米娅、普通妖精、强化妖精和部分弹体已使用新绘制贴图。
-- 录像页面限制逐帧读取；当前出怪时间、弹数、弹速和敌机航线仍需本地视频或游戏数据校准。
-- 尚未实现原作的掉落、火力成长、对话、音频及二维投影一致性。
+- 立方体战场与红雾天空盒由程序生成；灵梦、露米娅、两类妖精和部分弹体已使用新绘制贴图。
+- 当前出怪时间、弹数、弹速和敌机航线按录像概括设置，仍需逐帧校准。
+- 尚未实现原作的掉落、火力成长、音频及二维投影一致性；对话为英文简述。
 - 当前使用球形碰撞，不考虑模型网格的精确碰撞。
 - 关卡事件编译在程序中，后续可迁移到 JSON 和可视化编辑器。
 - 尚未加入雷达；当前通过立方体网格、三轴参考线和近弹警告辅助空间判断。

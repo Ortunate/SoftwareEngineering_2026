@@ -24,10 +24,13 @@ public:
     float age;
     float health = 10.0F;
     float maxHealth = 10.0F;
+    float hitRadius = 0.55F;
     float speed = 1.0F;
     float fireTimer = 0.0F;
     float fireInterval = 1.5F;
     int scoreValue = 500;
+
+    [[nodiscard]] Vector3 MuzzlePosition(Vector3 playerPosition) const;
 
 protected:
     Enemy(EnemyKind kind, PathKind path, Vector3 position, float delay);
@@ -37,6 +40,14 @@ protected:
 class FairyEnemy final : public Enemy {
 public:
     FairyEnemy(PathKind path, Vector3 position, float delay = 0.0F);
+
+private:
+    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
+};
+
+class DarkFairyEnemy final : public Enemy {
+public:
+    DarkFairyEnemy(PathKind path, Vector3 position, float delay = 0.0F);
 
 private:
     void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;

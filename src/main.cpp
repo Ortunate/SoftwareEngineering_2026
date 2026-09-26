@@ -7,6 +7,19 @@
 #include <string>
 #include <string_view>
 
+namespace {
+
+bool ExportCapture(RenderTexture2D target, const std::string& path) {
+    Image image = LoadImageFromTexture(target.texture);
+    if (!IsImageValid(image)) return false;
+    ImageFlipVertical(&image);
+    const bool exported = ExportImage(image, path.c_str());
+    UnloadImage(image);
+    return exported;
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
     constexpr int screenWidth = 1100;
     constexpr int screenHeight = 760;
@@ -39,12 +52,27 @@ int main(int argc, char** argv) {
         }
     }
 
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+    unsigned int windowFlags = FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE;
+    if (captureFrame) {
+        windowFlags |= FLAG_WINDOW_HIDDEN | FLAG_WINDOW_UNFOCUSED |
+                       FLAG_WINDOW_ALWAYS_RUN;
+        SetTraceLogLevel(LOG_WARNING);
+    }
+    SetConfigFlags(windowFlags);
     InitWindow(screenWidth, screenHeight, "Red Mist 3D - Stage 1 Normal Demo");
     SetExitKey(KEY_NULL);
-    SetWindowMinSize(900, 620);
+    if (!captureFrame) SetWindowMinSize(900, 620);
     SetTargetFPS(60);
 
+    RenderTexture2D captureTarget{};
+    if (captureFrame) {
+        captureTarget = LoadRenderTexture(screenWidth, screenHeight);
+        if (!IsRenderTextureValid(captureTarget)) {
+            CloseWindow();
+            return 1;
+        }
+    }
+    bool captureSaved = !captureFrame;
     {
         redmist::Game game;
         if (captureStage) {
@@ -56,7 +84,7 @@ int main(int argc, char** argv) {
             }
             game.SetPreviewView(captureYaw, capturePitch);
         } else if (captureGameplay) {
-            game.Start();
+            game.Start(false);
             for (int frame = 0; frame < 360; ++frame) {
                 game.Update(1.0F / 60.0F);
             }
@@ -70,17 +98,20 @@ int main(int argc, char** argv) {
             if (captureStage) game.SetPreviewView(captureYaw, capturePitch);
 
             BeginDrawing();
+            if (captureFrame) BeginTextureMode(captureTarget);
             ClearBackground(Color{7, 9, 20, 255});
             game.Draw();
+            if (captureFrame) EndTextureMode();
             EndDrawing();
 
             if (captureFrame && ++renderedFrames >= 4) {
-                TakeScreenshot(capturePath.c_str());
+                captureSaved = ExportCapture(captureTarget, capturePath);
                 break;
             }
         }
     }
 
+    if (captureFrame) UnloadRenderTexture(captureTarget);
     CloseWindow();
-    return 0;
+    return captureSaved ? 0 : 1;
 }

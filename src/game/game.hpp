@@ -20,7 +20,7 @@ public:
     ~Game();
 
     void Reset();
-    void Start();
+    void Start(bool captureCursor = true);
     void StartPreview();
     void SetPreviewView(float yawDegrees, float pitchDegrees);
     void SetDebugDraw(bool enabled) { debugRender_ = enabled; }
@@ -37,7 +37,7 @@ private:
         KeyBindings,
     };
 
-    void StartRun();
+    void StartRun(bool captureCursor = true);
     void EnterMainMenu();
     void LoadSettings();
     void SaveSettings() const;

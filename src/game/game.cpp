@@ -107,16 +107,16 @@ Game::~Game() {
 }
 
 void Game::Reset() {
-    StartRun();
+    StartRun(false);
     EnterMainMenu();
 }
 
-void Game::Start() {
-    StartRun();
+void Game::Start(bool captureCursor) {
+    StartRun(captureCursor);
 }
 
 void Game::StartPreview() {
-    StartRun();
+    StartRun(false);
     player_.invulnerableTimer = 1000.0F;
 }
 
@@ -157,7 +157,7 @@ void Game::SaveSettings() const {
     }
 }
 
-void Game::StartRun() {
+void Game::StartRun(bool captureCursor) {
     state_ = RunState::Playing;
     player_ = Player{};
     boss_ = RumiaBoss{};
@@ -172,7 +172,7 @@ void Game::StartRun() {
     dialogueActive_ = false;
     shouldQuit_ = false;
     UpdateCamera();
-    DisableCursor();
+    if (captureCursor) DisableCursor();
     SetMessage("Stage 1  Mystic Flier  Normal", 3.0F);
 }
 

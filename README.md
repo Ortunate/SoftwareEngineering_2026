@@ -35,7 +35,7 @@ raylib 会在首次配置时通过 CMake FetchContent 下载。贴图位于 `ass
 
 弹体保留 `bullet_pearl.png` 与 `bullet_red.png` 原图；游戏使用裁去透明边并缩小到 512×512 的 `*_runtime.png`。重新生成时运行 `cmake --build build --target generate_sprite_assets`，然后运行 `./build/generate_sprite_assets assets`。构建游戏目标时会把贴图和着色器复制到可执行文件旁。
 
-需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets`。该程序在可见窗口分别测量空场景和 8192 发弹幕场景的平均帧时间；数值随机器和窗口状态变化。
+需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets`。该程序默认在隐藏窗口分别测量空场景和 8192 发弹幕场景的平均帧时间。需要测量实际可见窗口时，追加 `--visible`；两种模式的数值不可直接比较。
 
 ## macOS
 
@@ -104,6 +104,8 @@ ctest --test-dir build --output-on-failure
 ## 开发截图
 
 程序支持渲染一帧后自动退出，便于做视觉回归检查：
+
+所有 `--capture*` 命令都使用隐藏且不获焦的窗口和离屏渲染纹理，不会切换到游戏窗口；截图路径可使用相对或绝对路径。正常启动游戏仍显示窗口。
 
 ```bash
 ./build/red_mist_demo --capture red_mist_capture.png

@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <string_view>
 
 namespace {
 
@@ -28,8 +29,14 @@ double DrawFrames(redmist::SpriteRenderer& renderer,
 }  // namespace
 
 int main(int argc, char** argv) {
-    if (argc != 2) return 1;
+    if (argc != 2 && (argc != 3 ||
+                      std::string_view(argv[2]) != "--visible")) return 1;
+    const bool visible = argc == 3;
     SetTraceLogLevel(LOG_WARNING);
+    if (!visible) {
+        SetConfigFlags(FLAG_WINDOW_HIDDEN | FLAG_WINDOW_UNFOCUSED |
+                       FLAG_WINDOW_ALWAYS_RUN);
+    }
     InitWindow(1100, 760, "Sprite render benchmark");
     SetTargetFPS(0);
 
@@ -68,7 +75,8 @@ int main(int argc, char** argv) {
         }
         DrawFrames(renderer, bullets, assets, camera, 10);
         const double fullMs = DrawFrames(renderer, bullets, assets, camera, 60);
-        std::cout << "empty=" << emptyMs << " ms/frame, full=" << fullMs
+        std::cout << "mode=" << (visible ? "visible" : "hidden")
+                  << ", empty=" << emptyMs << " ms/frame, full=" << fullMs
                   << " ms/frame, bullets=" << bullets.Pool().ActiveCount()
                   << '\n';
     }

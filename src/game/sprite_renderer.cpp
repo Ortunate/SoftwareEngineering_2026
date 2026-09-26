@@ -40,6 +40,7 @@ Vector3 Normalized(Vector3 vector) {
 }
 
 Vector3 ScreenUp(const Camera3D& camera) {
+    // 从相机基向量求屏幕上方向，仰俯视时贴图仍完整朝向镜头。
     const Vector3 forward = Normalized(
         Subtract(camera.target, camera.position));
     const Vector3 right = Normalized(Cross(forward, camera.up));
@@ -53,6 +54,7 @@ void DrawSprite(const Camera3D& camera, Vector3 screenUp,
                         static_cast<float>(spec.texture.width) /
                         static_cast<float>(spec.texture.height);
     const Vector2 size{width, spec.worldHeight};
+    // 贴图锚点是判定中心在图片中的位置，而非图片外框的中心。
     const Vector2 origin{width * spec.pivotUv.x,
                          spec.worldHeight * (1.0F - spec.pivotUv.y)};
     DrawBillboardPro(camera, spec.texture,
@@ -153,7 +155,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                           const SpriteAssets& assets, bool debugHitboxes) const {
     const Vector3 screenUp = ScreenUp(camera);
 
-    // Solid bullets write depth like ordinary 3D geometry.
+    // 实体球弹幕与普通三维物体一样写入深度。
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
         if (bullet.visual == BulletVisualKind::SolidSphere) {
             DrawSphere(bullet.position, bullet.radius, bullet.color);
@@ -165,7 +167,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     const bool hasCutoutShader = IsShaderValid(cutoutShader_) &&
                                  cutoutShader_.id != rlGetShaderIdDefault();
     if (hasBulletShader) BeginShaderMode(bulletCoreShader_);
-    // Group by texture so raylib can batch neighbouring quads.
+    // 按贴图分组，便于 raylib 合并相邻的弹幕绘制调用。
     DrawBulletKind(camera, screenUp, bullets, BulletVisualKind::RedOrb,
                    assets.redBullet, 2.6F);
     DrawBulletKind(camera, screenUp, bullets, BulletVisualKind::BluePearl,
@@ -192,7 +194,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     }
     if (hasCutoutShader) EndShaderMode();
 
-    // Glow contributes light without placing transparent texels in the depth map.
+    // 光晕只做加色混合，不写入深度，避免透明区域挡住后方角色。
     rlDisableDepthMask();
     BeginBlendMode(BLEND_ADDITIVE);
     constexpr float glowDistanceSquared = 8.0F * 8.0F;

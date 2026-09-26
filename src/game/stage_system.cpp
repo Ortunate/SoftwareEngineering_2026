@@ -5,9 +5,7 @@
 namespace redmist {
 namespace {
 
-// Approximate gameplay times read from the local 187-second Normal capture.
-// The first seconds contain character selection, so event times are relative
-// to the start of play rather than the video timecode.
+// 时间以开始战斗为零点，参考 187 秒 Normal 录像近似编排；录像开头的选人时间不计入。
 constexpr std::array<StageEvent, 21> kNormalStageOneEvents{{
     {0.2F, StageEventKind::ShowMessage},
     {1.0F, StageEventKind::SpawnLine, EnemyKind::Fairy, 8,
@@ -50,6 +48,7 @@ void StageDirector::Reset() {
 
 void StageDirector::Update(float deltaTime, const EventHandler& handler) {
     elapsed_ += deltaTime;
+    // 一次更新可能跨越多个事件时间点，按表中顺序补发所有到期事件。
     while (nextEvent_ < kNormalStageOneEvents.size() &&
            kNormalStageOneEvents[nextEvent_].time <= elapsed_) {
         handler(kNormalStageOneEvents[nextEvent_]);

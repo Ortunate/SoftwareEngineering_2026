@@ -41,6 +41,7 @@ void BulletSystem::Reset() { bullets_.Clear(); }
 void BulletSystem::Update(float deltaTime) {
     bullets_.ForEachActive([deltaTime](Bullet& bullet) {
         bullet.age += deltaTime;
+        // 先更新速度，再按新速度推进位置；角速度使弹道在三维空间转弯。
         bullet.velocity = Add(bullet.velocity, Scale(bullet.acceleration, deltaTime));
         if (bullet.angularVelocity != 0.0F) {
             bullet.velocity = RotateAroundAxis(

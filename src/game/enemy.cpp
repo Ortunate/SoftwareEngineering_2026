@@ -16,6 +16,7 @@ Enemy::Enemy(EnemyKind enemyKind, PathKind enemyPath, Vector3 start, float delay
       age(-delay), fireTimer(0.8F + delay) {}
 
 Vector3 Enemy::MuzzlePosition(Vector3 playerPosition) const {
+    // 发弹点沿瞄准方向离开判定中心，避免弹体从立绘躯干内部出现。
     return pattern::Add(position,
         pattern::Scale(BulletSystem::DirectionTo(position, playerPosition),
                        hitRadius * 0.55F));

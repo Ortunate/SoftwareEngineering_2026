@@ -23,6 +23,33 @@
 - Windows/macOS 共用 CMake 工程
 - 核心弹幕数学测试
 
+## 项目结构
+
+```text
+.
+├── CMakeLists.txt / CMakePresets.json   # 构建目标与 VS Code CMake 预设
+├── src/
+│   ├── main.cpp                         # 游戏入口、窗口初始化与静默截图
+│   ├── core/fixed_pool.hpp              # 定长对象池
+│   └── game/
+│       ├── game.hpp/.cpp                # 主循环、输入、碰撞、界面及资源加载
+│       ├── game_types.hpp               # 玩家、弹幕和运行状态等基础类型
+│       ├── bullet_system.hpp/.cpp       # 弹幕创建、运动更新和对象池管理
+│       ├── bullet_patterns.hpp          # 球面与锥形弹幕方向计算
+│       ├── enemy.hpp/.cpp               # 小怪类型、移动和单技能释放
+│       ├── boss.hpp/.cpp                # 露米娅的阶段、技能与符卡
+│       ├── stage_system.hpp/.cpp        # 一面事件时间轴
+│       ├── sprite_renderer.hpp/.cpp     # 角色与弹幕贴图、光晕和判定调试绘制
+│       └── settings.hpp/.cpp            # FPS 和按键配置的读写
+├── assets/                              # 角色、弹体、天空盒贴图及 shaders/
+├── tools/                               # 天空盒/弹体素材生成器与渲染压力测试
+├── tests/core_tests.cpp                 # 弹幕、敌人、Boss、关卡和配置测试
+├── docs/                                # 设计说明与一面录像对照记录
+└── course_docs/                         # 课程报告参考资料
+```
+
+运行时生成的 `red_mist_settings.cfg` 位于启动目录，不属于源码。详细类关系和数据结构见 [设计文档](docs/DESIGN.md)。
+
 ## 构建要求
 
 - CMake 3.20 或更高版本

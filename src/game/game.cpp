@@ -459,6 +459,7 @@ void Game::UpdatePlayer(float deltaTime) {
 }
 
 void Game::UpdateCamera() {
+    // 摄像机与玩家共用同一位置，视点即碰撞判定中心。
     camera_.position = player_.position;
     camera_.target = Add(player_.position, Forward());
     camera_.up = {0.0F, 1.0F, 0.0F};
@@ -476,6 +477,7 @@ void Game::UpdateBoss(float deltaTime) {
 
 void Game::ResolveCollisions() {
     bool playerWasHit = false;
+    // 距离使用平方值比较，避免每颗弹幕都计算平方根。
     bullets_.Pool().ForEachActive([this, &playerWasHit](Bullet& bullet) {
         if (bullet.owner != BulletOwner::Enemy) return;
         const float distanceSquared = DistanceSquared(bullet.position, player_.position);
@@ -495,6 +497,7 @@ void Game::ResolveCollisions() {
     if (playerWasHit) DamagePlayer();
 
     enemies_.ForEachActive([this](Enemy& enemy) {
+        // 延迟入场的敌人尚未显示，也不应提前承受玩家弹幕。
         if (enemy.age < 0.0F) return;
         bullets_.Pool().ForEachActive([&enemy](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player) return;
@@ -814,6 +817,7 @@ void Game::Draw() const {
 void Game::DrawWorld() const {
     BeginMode3D(camera_);
     if (skyboxModel_.meshCount != 0) {
+        // 天空盒仅提供远景，不写入深度，确保战场和角色正常显示在前方。
         rlDisableBackfaceCulling();
         rlDisableDepthMask();
         DrawModel(skyboxModel_, {}, 1.0F, WHITE);
@@ -845,19 +849,19 @@ void Game::DrawArena() const {
 
     constexpr float step = 2.5F;
     for (float value = -h + step; value < h; value += step) {
-        // Floor and ceiling grids.
+        // 地面与天花板网格。
         DrawLine3D({-h, -h, value}, {h, -h, value}, grid);
         DrawLine3D({value, -h, -h}, {value, -h, h}, grid);
         DrawLine3D({-h, h, value}, {h, h, value}, grid);
         DrawLine3D({value, h, -h}, {value, h, h}, grid);
 
-        // Left and right wall grids.
+        // 左右墙面网格。
         DrawLine3D({-h, -h, value}, {-h, h, value}, grid);
         DrawLine3D({-h, value, -h}, {-h, value, h}, grid);
         DrawLine3D({h, -h, value}, {h, h, value}, grid);
         DrawLine3D({h, value, -h}, {h, value, h}, grid);
 
-        // Front and back wall grids.
+        // 前后墙面网格。
         DrawLine3D({-h, value, -h}, {h, value, -h}, grid);
         DrawLine3D({value, -h, -h}, {value, h, -h}, grid);
         DrawLine3D({-h, value, h}, {h, value, h}, grid);

@@ -12,6 +12,7 @@ namespace {
 bool ExportCapture(RenderTexture2D target, const std::string& path) {
     Image image = LoadImageFromTexture(target.texture);
     if (!IsImageValid(image)) return false;
+    // OpenGL 纹理读取方向与 PNG 行顺序相反，导出前翻转。
     ImageFlipVertical(&image);
     const bool exported = ExportImage(image, path.c_str());
     UnloadImage(image);
@@ -54,6 +55,7 @@ int main(int argc, char** argv) {
 
     unsigned int windowFlags = FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE;
     if (captureFrame) {
+        // 截图模式在创建窗口之前禁用显示和焦点，避免打断桌面操作。
         windowFlags |= FLAG_WINDOW_HIDDEN | FLAG_WINDOW_UNFOCUSED |
                        FLAG_WINDOW_ALWAYS_RUN;
         SetTraceLogLevel(LOG_WARNING);

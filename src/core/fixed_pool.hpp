@@ -6,13 +6,14 @@
 
 namespace redmist {
 
-// A deterministic, allocation-free pool. T must expose a public bool `active`.
+// 对象池使用定长数组管理槽位；T 需要公开的 active 标记。
 template <typename T, std::size_t Capacity>
 class FixedPool {
 public:
     T* Acquire() {
         for (T& item : items_) {
             if (!item.active) {
+                // 复用槽位时重置全部字段，避免沿用上一个对象的状态。
                 item = T{};
                 item.active = true;
                 return &item;

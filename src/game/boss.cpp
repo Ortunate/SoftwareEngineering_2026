@@ -55,6 +55,7 @@ bool RumiaBoss::Update(float deltaTime, Vector3 playerPosition,
     fireTimer -= deltaTime;
 
     if (encounter_ == Encounter::Midboss) {
+        // 道中战按五个水平停留点往返，smoothstep 减少转向时的突变。
         const float segment = std::min(moveClock / kMidbossStep, 4.0F);
         const int index = std::min(static_cast<int>(segment), 3);
         const float fraction = std::clamp(segment - static_cast<float>(index),
@@ -113,6 +114,7 @@ bool RumiaBoss::AdvancePhase() {
         case 4: health = maxHealth = 330.0F; break;
         default: break;
     }
+    // 符卡阶段先留出立绘与名称展示时间，再开始发弹。
     fireTimer = SpellName() != nullptr ? kCutInDuration : 0.8F;
     return true;
 }

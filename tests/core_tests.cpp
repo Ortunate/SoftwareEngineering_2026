@@ -6,11 +6,14 @@
 #include "game/stage_system.hpp"
 
 #include <cassert>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <string_view>
 #include <numbers>
+#include <stdexcept>
 #include <system_error>
+#include <vector>
 
 int main() {
     using redmist::BulletOwner;
@@ -164,31 +167,124 @@ int main() {
     assert(!boss.AdvancePhase());
     assert(!boss.active);
 
+    constexpr std::array<redmist::StageEvent, 5> relativeEvents{{
+        {.time = 1.0F, .kind = redmist::StageEventKind::ShowMessage,
+         .count = 1, .id = 10},
+        {.time = 2.0F, .kind = redmist::StageEventKind::ShowMessage,
+         .count = 2, .id = 20},
+        {.time = 1.0F, .kind = redmist::StageEventKind::ShowMessage,
+         .count = 3},
+        {.time = 3.0F, .kind = redmist::StageEventKind::ShowMessage,
+         .count = 4, .afterEndOf = 20},
+        {.time = 1.0F, .kind = redmist::StageEventKind::ShowMessage,
+         .count = 5},
+    }};
+    redmist::StageDirector relativeStage(relativeEvents);
+    std::vector<int> startedEvents;
+    auto recordRelative = [&](const redmist::StageEvent& event) {
+        startedEvents.push_back(event.count);
+        return event.count != 2;
+    };
+    relativeStage.Update(5.0F, recordRelative);
+    assert((startedEvents == std::vector<int>{1}));
+    relativeStage.Update(2.0F, recordRelative);
+    assert((startedEvents == std::vector<int>{1, 2}));
+    relativeStage.Update(1.0F, recordRelative);
+    assert((startedEvents == std::vector<int>{1, 2, 3}));
+    assert(!relativeStage.EndEvent(10));
+    assert(relativeStage.EndEvent(20));
+    assert(!relativeStage.EndEvent(20));
+    relativeStage.Update(2.9F, recordRelative);
+    assert(startedEvents.size() == 3);
+    relativeStage.Update(0.2F, recordRelative);
+    assert((startedEvents == std::vector<int>{1, 2, 3, 4}));
+    relativeStage.Update(1.1F, recordRelative);
+    assert((startedEvents == std::vector<int>{1, 2, 3, 4, 5}));
+    relativeStage.Reset();
+    assert(relativeStage.Elapsed() == 0.0F);
+    assert(!relativeStage.EndEvent(20));
+    startedEvents.clear();
+    relativeStage.Update(1.0F, recordRelative);
+    assert((startedEvents == std::vector<int>{1}));
+
+    constexpr std::array<redmist::StageEvent, 2> invalidEvents{{
+        {.time = 0.0F, .id = 1},
+        {.time = 1.0F, .afterEndOf = 2},
+    }};
+    constexpr std::array<redmist::StageEvent, 2> duplicateIds{{
+        {.time = 0.0F, .id = 1},
+        {.time = 1.0F, .id = 1},
+    }};
+    constexpr std::array<redmist::StageEvent, 1> negativeDelay{{
+        {.time = -1.0F},
+    }};
+    const auto rejectsEvents = [](const auto& events) {
+        try {
+            redmist::StageDirector candidate(events);
+        } catch (const std::invalid_argument&) {
+            return true;
+        }
+        return false;
+    };
+    assert(rejectsEvents(invalidEvents));
+    assert(rejectsEvents(duplicateIds));
+    assert(rejectsEvents(negativeDelay));
+
     redmist::StageDirector stage;
     int midbossEvents = 0;
     int dialogueEvents = 0;
     int finalBossEvents = 0;
     int enemyEvents = 0;
+    redmist::StageEventId midbossId = 0;
+    redmist::StageEventId dialogueId = 0;
     auto recordEvent = [&](const redmist::StageEvent& event) {
-        if (event.kind == redmist::StageEventKind::StartMidboss)
+        if (event.kind == redmist::StageEventKind::StartMidboss) {
             ++midbossEvents;
-        if (event.kind == redmist::StageEventKind::StartDialogue)
+            midbossId = *event.id;
+        }
+        if (event.kind == redmist::StageEventKind::StartDialogue) {
             ++dialogueEvents;
+            dialogueId = *event.id;
+        }
         if (event.kind == redmist::StageEventKind::StartFinalBoss)
             ++finalBossEvents;
         if (event.kind == redmist::StageEventKind::SpawnLine ||
             event.kind == redmist::StageEventKind::SpawnCrossingPair ||
             event.kind == redmist::StageEventKind::SpawnElite) ++enemyEvents;
+        return event.kind != redmist::StageEventKind::StartMidboss &&
+               event.kind != redmist::StageEventKind::StartDialogue &&
+               event.kind != redmist::StageEventKind::StartFinalBoss;
     };
-    stage.Update(30.0F, recordEvent);
+    for (int frame = 0; frame < 400; ++frame)
+        stage.Update(0.1F, recordEvent);
     assert(midbossEvents == 1 && dialogueEvents == 0 && finalBossEvents == 0);
     assert(enemyEvents == 8);
-    stage.Update(62.0F, recordEvent);
+    assert(stage.EndEvent(midbossId));
+    for (int frame = 0; frame < 29; ++frame)
+        stage.Update(0.1F, recordEvent);
+    assert(enemyEvents == 8);
+    for (int frame = 0; frame < 2; ++frame)
+        stage.Update(0.1F, recordEvent);
+    assert(enemyEvents == 9);
+    for (int frame = 0; frame < 600; ++frame)
+        stage.Update(0.1F, recordEvent);
     assert(dialogueEvents == 1 && finalBossEvents == 0);
     assert(enemyEvents == 17);
-    stage.Update(15.0F, recordEvent);
+    assert(stage.EndEvent(dialogueId));
+    stage.Update(0.0F, recordEvent);
     assert(finalBossEvents == 1);
     stage.Update(100.0F, recordEvent);
     assert(finalBossEvents == 1);
+
+    stage.Reset();
+    midbossEvents = dialogueEvents = finalBossEvents = enemyEvents = 0;
+    for (int frame = 0; frame < 600; ++frame)
+        stage.Update(0.1F, recordEvent);
+    assert(midbossEvents == 1 && enemyEvents == 8);
+    assert(dialogueEvents == 0 && finalBossEvents == 0);
+    assert(stage.EndEvent(midbossId));
+    for (int frame = 0; frame < 31; ++frame)
+        stage.Update(0.1F, recordEvent);
+    assert(enemyEvents == 9);
     return 0;
 }

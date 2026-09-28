@@ -3,7 +3,11 @@
 #include "game/game_types.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
+#include <optional>
+#include <span>
+#include <vector>
 
 namespace redmist {
 
@@ -19,9 +23,12 @@ enum class StageEventKind : std::uint8_t {
     ShowMessage
 };
 
+/// @brief 关卡事件的稳定标识；仅需要被引用或报告结束的事件必须设置。
+using StageEventId = std::uint32_t;
+
 /// @brief 一条关卡时间轴事件；不同 kind 只读取所需的生成参数。
 struct StageEvent {
-    /// @brief 自本局战斗开始算起的触发秒数。
+    /// @brief 无依赖时相对上一事件实际开始、存在依赖时相对依赖事件结束的延迟秒数。
     float time = 0.0F;
     /// @brief 事件类型，决定其余哪些参数生效。
     StageEventKind kind = StageEventKind::SpawnLine;
@@ -33,25 +40,53 @@ struct StageEvent {
     Vector3 center{0.0F, 0.0F, 8.5F};
     /// @brief 直线编队的相邻间距或星形编队的半径。
     float spacing = 1.0F;
+    /// @brief 本事件的可选标识，用于被后续事件引用和报告结束。
+    std::optional<StageEventId> id = std::nullopt;
+    /// @brief 可选的前序事件标识；设置后以其实际结束时间作为延迟起点。
+    std::optional<StageEventId> afterEndOf = std::nullopt;
 };
 
-/// @brief 顺序读取一面事件表并回调 Game，不直接创建敌人。
+/// @brief 顺序读取事件表，按实际开始或结束时间调度；不直接创建敌人。
 class StageDirector {
 public:
-    /// @brief 事件触发时接收对应记录的回调类型。
-    using EventHandler = std::function<void(const StageEvent&)>;
+    /// @brief 事件回调；返回 true 表示同步结束，false 表示稍后调用 EndEvent。
+    using EventHandler = std::function<bool(const StageEvent&)>;
 
-    /// @brief 将关卡时钟和下一条事件索引归零。
+    /// @brief 使用内置的第一面事件表。
+    StageDirector();
+    /// @brief 使用外部事件表，调用方须保证该表的生命周期长于调度器。
+    /// @param events 按预期触发顺序排列的事件表。
+    explicit StageDirector(std::span<const StageEvent> events);
+
+    /// @brief 将关卡时钟、事件索引及开始/结束记录归零。
     void Reset();
-    /// @brief 推进关卡时间并按顺序触发全部到期事件。
+    /// @brief 推进关卡时钟，并按顺序触发已满足延迟和依赖的事件。
     /// @param deltaTime 本帧经过的秒数。
-    /// @param handler 接收 StageEvent 的回调。
+    /// @param handler 执行事件并报告是否同步结束的回调。
     void Update(float deltaTime, const EventHandler& handler);
+    /// @brief 记录已启动的异步事件在当前关卡时钟结束。
+    /// @param id 事件表中的唯一标识。
+    /// @return 找到尚未结束的已启动事件时返回 true。
+    bool EndEvent(StageEventId id);
     /// @brief 查询开局至今的关卡时间。
     /// @return 已累计的秒数。
     [[nodiscard]] float Elapsed() const { return elapsed_; }
 
 private:
+    /// @brief 单条事件的实际时刻，以及构造时解析出的前序事件索引。
+    struct EventState {
+        std::optional<float> startedAt;
+        std::optional<float> endedAt;
+        std::optional<std::size_t> dependencyIndex;
+    };
+
+    /// @brief 按稳定 ID 查询事件表索引。
+    /// @param id 要查找的事件标识。
+    /// @return 找到时返回索引，否则返回空值。
+    [[nodiscard]] std::optional<std::size_t> FindEvent(StageEventId id) const;
+
+    std::span<const StageEvent> events_;
+    std::vector<EventState> states_;
     float elapsed_ = 0.0F;
     std::size_t nextEvent_ = 0;
 };

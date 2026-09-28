@@ -16,6 +16,8 @@ namespace {
 
 constexpr Color kPlayerBulletColor{90, 225, 255, 255};
 constexpr float kSpellCutInDuration = 2.6F;
+constexpr float kDialogueLineDuration = 2.5F;
+constexpr std::size_t kDialogueLineCount = 6;
 
 constexpr std::array<const char*, 10> kBindingNames{
     "FORWARD", "BACKWARD", "MOVE LEFT", "MOVE RIGHT", "ASCEND",
@@ -70,6 +72,9 @@ Vector3 Normalize(Vector3 vector) {
 }  // namespace
 
 Game::Game() {
+#ifdef RED_MIST_DEBUG_INVINCIBLE
+    debugInvincible_ = true;
+#endif
     camera_.up = {0.0F, 1.0F, 0.0F};
     camera_.fovy = 72.0F;
     camera_.projection = CAMERA_PERSPECTIVE;
@@ -189,6 +194,8 @@ void Game::StartRun(bool captureCursor) {
     spellCutInTimer_ = 0.0F;
     dialogueTimer_ = 0.0F;
     dialogueActive_ = false;
+    bossEventId_.reset();
+    dialogueEventId_.reset();
     shouldQuit_ = false;
     UpdateCamera();
     if (captureCursor) DisableCursor();
@@ -203,6 +210,8 @@ void Game::EnterMainMenu() {
     enemies_.Clear();
     boss_ = RumiaBoss{};
     dialogueActive_ = false;
+    bossEventId_.reset();
+    dialogueEventId_.reset();
     player_.position = {0.0F, 0.0F, -6.5F};
     player_.yaw = 0.0F;
     player_.pitch = 0.0F;
@@ -245,17 +254,33 @@ void Game::Update(float deltaTime) {
         }
         return;
     }
+#ifdef RED_MIST_DEBUG_INVINCIBLE
+    if (IsKeyPressed(KEY_F4)) debugInvincible_ = !debugInvincible_;
+#endif
 
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
     screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
     spellCutInTimer_ = std::max(0.0F, spellCutInTimer_ - deltaTime);
-    if (dialogueActive_) dialogueTimer_ += deltaTime;
     player_.invulnerableTimer =
         std::max(0.0F, player_.invulnerableTimer - deltaTime);
     player_.bombCooldown = std::max(0.0F, player_.bombCooldown - deltaTime);
 
+    const bool dialogueWasActive = dialogueActive_;
     stage_.Update(deltaTime,
-                  [this](const StageEvent& event) { HandleStageEvent(event); });
+                  [this](const StageEvent& event) {
+                      return HandleStageEvent(event);
+                  });
+    if (dialogueWasActive && dialogueActive_) {
+        dialogueTimer_ += deltaTime;
+        if (dialogueTimer_ >=
+            kDialogueLineDuration * static_cast<float>(kDialogueLineCount)) {
+            dialogueActive_ = false;
+            if (dialogueEventId_) {
+                stage_.EndEvent(*dialogueEventId_);
+                dialogueEventId_.reset();
+            }
+        }
+    }
     UpdatePlayer(deltaTime);
     UpdateEnemies(deltaTime);
     UpdateBoss(deltaTime);
@@ -503,7 +528,8 @@ void Game::ResolveCollisions() {
         const float hitDistance = bullet.radius + player_.hitRadius;
         if (distanceSquared <= hitDistance * hitDistance) {
             bullet.active = false;
-            if (player_.invulnerableTimer <= 0.0F) playerWasHit = true;
+            if (!debugInvincible_ && player_.invulnerableTimer <= 0.0F)
+                playerWasHit = true;
         } else {
             const float grazeDistance = bullet.radius + player_.grazeRadius;
             if (!bullet.grazed && distanceSquared <= grazeDistance * grazeDistance) {
@@ -548,7 +574,7 @@ void Game::ResolveCollisions() {
     }
 }
 
-void Game::HandleStageEvent(const StageEvent& event) {
+bool Game::HandleStageEvent(const StageEvent& event) {
     switch (event.kind) {
         case StageEventKind::SpawnLine: {
             const float middle = static_cast<float>(event.count - 1) * 0.5F;
@@ -595,22 +621,26 @@ void Game::HandleStageEvent(const StageEvent& event) {
             SpawnEnemy(EnemyKind::Elite, PathKind::Helix, event.center);
             break;
         case StageEventKind::StartMidboss:
+            bossEventId_ = event.id;
             StartMidboss();
-            break;
+            return false;
         case StageEventKind::StartDialogue:
             enemies_.Clear();
             bullets_.ClearEnemyBullets();
             dialogueActive_ = true;
             dialogueTimer_ = 0.0F;
+            dialogueEventId_ = event.id;
             messageTimer_ = 0.0F;
-            break;
+            return false;
         case StageEventKind::StartFinalBoss:
+            bossEventId_ = event.id;
             StartFinalBoss();
-            break;
+            return false;
         case StageEventKind::ShowMessage:
             SetMessage("Stage 1  Mystic Flier  Normal", 2.4F);
             break;
     }
+    return true;
 }
 
 void Game::SpawnEnemy(EnemyKind kind, PathKind path, Vector3 position,
@@ -682,7 +712,6 @@ void Game::StartMidboss() {
 }
 
 void Game::StartFinalBoss() {
-    dialogueActive_ = false;
     enemies_.Clear();
     bullets_.ClearEnemyBullets();
     boss_.StartFinalBoss();
@@ -695,7 +724,12 @@ void Game::AdvanceBossPhase() {
     const bool wasMidboss =
         boss_.CurrentEncounter() == RumiaBoss::Encounter::Midboss;
     const int completedPhase = boss_.phase;
-    if (boss_.AdvancePhase()) {
+    const bool hasNextPhase = boss_.AdvancePhase();
+    if (!hasNextPhase && bossEventId_) {
+        stage_.EndEvent(*bossEventId_);
+        bossEventId_.reset();
+    }
+    if (hasNextPhase) {
         score_ += completedPhase == 1 ? 15000 : 25000;
         spellCutInTimer_ = boss_.SpellName() != nullptr
                                ? kSpellCutInDuration : 0.0F;
@@ -963,6 +997,13 @@ void Game::DrawHud() const {
                  17, Color{255, 125, 145, 240});
     }
     DrawFPS(GetScreenWidth() - 90, 16);
+#ifdef RED_MIST_DEBUG_INVINCIBLE
+    DrawText(debugInvincible_ ? "DEBUG INVINCIBLE: ON  [F4]"
+                              : "DEBUG INVINCIBLE: OFF [F4]",
+             GetScreenWidth() - 280, 75, 17,
+             debugInvincible_ ? Color{125, 255, 200, 255}
+                              : Color{180, 190, 205, 255});
+#endif
     if (debugRender_) {
         DrawText("F3  HITBOX: yellow bullet / cyan body / magenta muzzle",
                  16, GetScreenHeight() - 57, 14,
@@ -1023,7 +1064,7 @@ void Game::DrawDialogue() const {
         const char* text;
         bool rumiaSpeaking;
     };
-    constexpr std::array<DialogueLine, 6> lines{{
+    constexpr std::array<DialogueLine, kDialogueLineCount> lines{{
         {"REIMU", "The mist is getting thicker...", false},
         {"REIMU", "Someone is hiding in the dark.", false},
         {"RUMIA", "You can see me from there?", true},
@@ -1031,7 +1072,7 @@ void Game::DrawDialogue() const {
         {"RUMIA", "Maybe. I like the darkness.", true},
         {"REIMU", "Then I'll clear a path through it!", false},
     }};
-    const int index = std::clamp(static_cast<int>(dialogueTimer_ / 2.5F),
+    const int index = std::clamp(static_cast<int>(dialogueTimer_ / kDialogueLineDuration),
                                   0, static_cast<int>(lines.size()) - 1);
     const DialogueLine& line = lines[index];
     const float screenW = static_cast<float>(GetScreenWidth());

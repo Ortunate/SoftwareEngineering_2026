@@ -10,6 +10,7 @@
 #include "raylib.h"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 
 namespace redmist {
@@ -90,7 +91,8 @@ private:
     void ResolveCollisions();
     /// @brief 将关卡事件转换为出怪、对话或 Boss 战操作。
     /// @param event 已到触发时刻的关卡事件。
-    void HandleStageEvent(const StageEvent& event);
+    /// @return 同步完成的事件返回 true；Boss 战和对话返回 false。
+    bool HandleStageEvent(const StageEvent& event);
 
     /// @brief 按类型构造具体敌人并加入敌人池。
     /// @param kind 敌人类型。
@@ -170,6 +172,8 @@ private:
     float spellCutInTimer_ = 0.0F;
     float dialogueTimer_ = 0.0F;
     bool dialogueActive_ = false;
+    std::optional<StageEventId> bossEventId_;
+    std::optional<StageEventId> dialogueEventId_;
     Texture2D spellPortrait_{};
     Texture2D reimuPortrait_{};
     Model skyboxModel_{};
@@ -189,6 +193,8 @@ private:
     bool waitingForBinding_ = false;
     bool shouldQuit_ = false;
     bool debugRender_ = false;
+    /// @brief Debug 构建默认启用，F4 可切换；重新开始时保留当前值。
+    bool debugInvincible_ = false;
 };
 
 }  // namespace redmist

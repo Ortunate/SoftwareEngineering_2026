@@ -38,6 +38,10 @@ add_executable(red_mist_demo
 
 target_include_directories(red_mist_demo PRIVATE src)
 target_link_libraries(red_mist_demo PRIVATE raylib)
+# 仅 Debug 配置默认启用可切换的玩家无敌模式。
+target_compile_definitions(red_mist_demo PRIVATE
+    $<$<CONFIG:Debug>:RED_MIST_DEBUG_INVINCIBLE>
+)
 
 # Rebuild the six-face strip only when its source artwork needs changing.
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)

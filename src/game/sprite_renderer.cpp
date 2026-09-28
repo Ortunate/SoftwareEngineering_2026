@@ -8,23 +8,36 @@
 namespace redmist {
 namespace {
 
+/// @brief 单张精灵的贴图、世界高度与归一化锚点。
 struct SpriteSpec {
     Texture2D texture;
     float worldHeight;
     Vector2 pivotUv;
 };
 
+/// @brief 计算两个三维向量的差。
+/// @param first 被减向量。
+/// @param second 减去的向量。
+/// @return first - second。
 Vector3 Subtract(Vector3 first, Vector3 second) {
     return {first.x - second.x, first.y - second.y,
             first.z - second.z};
 }
 
+/// @brief 计算叉积以构造朝向相机的正交基。
+/// @param first 第一个向量。
+/// @param second 第二个向量。
+/// @return 叉积向量。
 Vector3 Cross(Vector3 first, Vector3 second) {
     return {first.y * second.z - first.z * second.y,
             first.z * second.x - first.x * second.z,
             first.x * second.y - first.y * second.x};
 }
 
+/// @brief 计算两点的距离平方，避免绘制判断使用平方根。
+/// @param first 第一个位置。
+/// @param second 第二个位置。
+/// @return 距离平方。
 float DistanceSquared(Vector3 first, Vector3 second) {
     const Vector3 difference = Subtract(first, second);
     return difference.x * difference.x +
@@ -32,6 +45,9 @@ float DistanceSquared(Vector3 first, Vector3 second) {
            difference.z * difference.z;
 }
 
+/// @brief 归一化朝向向量，零长度时退化为正 Y 方向。
+/// @param vector 输入向量。
+/// @return 单位方向向量。
 Vector3 Normalized(Vector3 vector) {
     const float lengthSquared = DistanceSquared(vector, {});
     if (lengthSquared < 0.000001F) return {0.0F, 1.0F, 0.0F};
@@ -39,6 +55,9 @@ Vector3 Normalized(Vector3 vector) {
     return {vector.x * scale, vector.y * scale, vector.z * scale};
 }
 
+/// @brief 根据相机朝向计算公告板贴图的屏幕上方向。
+/// @param camera 当前相机。
+/// @return 与视线垂直的单位上向量。
 Vector3 ScreenUp(const Camera3D& camera) {
     // 从相机基向量求屏幕上方向，仰俯视时贴图仍完整朝向镜头。
     const Vector3 forward = Normalized(
@@ -47,6 +66,12 @@ Vector3 ScreenUp(const Camera3D& camera) {
     return Normalized(Cross(right, forward));
 }
 
+/// @brief 将一张贴图按世界尺寸和锚点放在指定位置。
+/// @param camera 当前相机。
+/// @param screenUp 贴图的屏幕上方向。
+/// @param spec 贴图、大小和锚点参数。
+/// @param position 锚点对应的世界坐标。
+/// @param tint 颜色与透明度调制值。
 void DrawSprite(const Camera3D& camera, Vector3 screenUp,
                 const SpriteSpec& spec, Vector3 position, Color tint = WHITE) {
     if (!IsTextureValid(spec.texture)) return;
@@ -63,6 +88,10 @@ void DrawSprite(const Camera3D& camera, Vector3 screenUp,
                      position, screenUp, size, origin, 0.0F, tint);
 }
 
+/// @brief 查询具体敌人应使用的贴图、高度和躯干锚点。
+/// @param enemy 待绘制敌人。
+/// @param assets 可用贴图集合。
+/// @return 敌人的绘制参数。
 SpriteSpec EnemySpec(const Enemy& enemy, const SpriteAssets& assets) {
     switch (enemy.kind) {
         case EnemyKind::Fairy:
@@ -78,6 +107,13 @@ SpriteSpec EnemySpec(const Enemy& enemy, const SpriteAssets& assets) {
     return {};
 }
 
+/// @brief 按外观类型批量绘制同一张弹幕贴图的实心部分。
+/// @param camera 当前相机。
+/// @param screenUp 贴图的屏幕上方向。
+/// @param bullets 弹幕系统。
+/// @param visual 要筛选的弹幕外观。
+/// @param texture 此类弹幕使用的贴图。
+/// @param diameterScale 判定半径到显示直径的比例。
 void DrawBulletKind(const Camera3D& camera, Vector3 screenUp,
                     const BulletSystem& bullets, BulletVisualKind visual,
                     Texture2D texture, float diameterScale) {
@@ -92,6 +128,11 @@ void DrawBulletKind(const Camera3D& camera, Vector3 screenUp,
     });
 }
 
+/// @brief 绘制弹幕、敌人和 Boss 的判定球及发弹点。
+/// @param bullets 弹幕系统。
+/// @param enemies 当前可见敌人。
+/// @param boss 当前 Boss 状态。
+/// @param playerPosition 计算发弹点所需的玩家位置。
 void DrawDebugGeometry(const BulletSystem& bullets,
                        std::span<const Enemy*> enemies, const RumiaBoss& boss,
                        Vector3 playerPosition) {

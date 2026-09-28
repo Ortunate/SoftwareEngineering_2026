@@ -6,12 +6,17 @@
 
 namespace redmist {
 
+/// @brief 战场立方体从中心到任一面的距离，单位为世界坐标。
 constexpr float kArenaHalfExtent = 10.0F;
+/// @brief 玩家移动边界内侧预留的距离。
 constexpr float kArenaPadding = 0.35F;
 
+/// @brief 区分玩家弹与敌弹，用于碰撞、清弹和计分。
 enum class BulletOwner : std::uint8_t { Player, Enemy };
+/// @brief 弹幕的渲染形态，与颜色分开存储。
 enum class BulletVisualKind : std::uint8_t { BluePearl, RedOrb, SolidSphere };
 
+/// @brief 对象池中的单颗弹幕，position 为球形判定中心。
 struct Bullet {
     bool active = false;
     bool grazed = false;
@@ -28,11 +33,14 @@ struct Bullet {
     Color color = WHITE;
 };
 
+/// @brief 小怪种类，决定生成的具体 Enemy 子类。
 enum class EnemyKind : std::uint8_t { Fairy, DarkFairy, Orb, Elite };
+/// @brief 小怪航线类型，由 Enemy::Update 解释。
 enum class PathKind : std::uint8_t { Straight, Helix, SweepLeft, SweepRight };
 
+/// @brief 玩家位置、移动、判定、资源与战斗计时状态。
 struct Player {
-    // Camera position and collision center are always identical.
+    // 摄像机位置与玩家判定球中心始终相同。
     Vector3 position{0.0F, 0.0F, -6.5F};
     float yaw = 0.0F;
     float pitch = 0.0F;
@@ -49,6 +57,7 @@ struct Player {
     int power = 1;
 };
 
+/// @brief 可由设置页面修改的战斗按键映射。
 struct KeyBindings {
     int forward = KEY_W;
     int backward = KEY_S;
@@ -62,6 +71,7 @@ struct KeyBindings {
     int pause = KEY_P;
 };
 
+/// @brief 游戏的菜单、战斗及结算状态。
 enum class RunState : std::uint8_t {
     MainMenu,
     Options,

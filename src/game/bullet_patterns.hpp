@@ -9,20 +9,35 @@
 
 namespace redmist::pattern {
 
+/// @brief 将三维向量按系数缩放。
+/// @param value 原向量。
+/// @param factor 缩放系数。
+/// @return 缩放后的向量。
 inline Vector3 Scale(Vector3 value, float factor) {
     return {value.x * factor, value.y * factor, value.z * factor};
 }
 
+/// @brief 对两个三维向量逐分量相加。
+/// @param a 第一个向量。
+/// @param b 第二个向量。
+/// @return 相加后的向量。
 inline Vector3 Add(Vector3 a, Vector3 b) {
     return {a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
+/// @brief 计算三维向量叉积。
+/// @param a 第一个向量。
+/// @param b 第二个向量。
+/// @return 垂直于 a、b 的向量。
 inline Vector3 Cross(Vector3 a, Vector3 b) {
     return {a.y * b.z - a.z * b.y,
             a.z * b.x - a.x * b.z,
             a.x * b.y - a.y * b.x};
 }
 
+/// @brief 将向量归一化，零长度时使用正 Z 方向。
+/// @param value 待归一化向量。
+/// @return 单位方向向量。
 inline Vector3 Normalize(Vector3 value) {
     const float length = std::sqrt(value.x * value.x + value.y * value.y +
                                    value.z * value.z);
@@ -30,8 +45,14 @@ inline Vector3 Normalize(Vector3 value) {
     return Scale(value, 1.0F / length);
 }
 
-// These helpers only calculate directions. The concrete enemy skill decides
-// which bullets to create and owns their speed, color and timing.
+/// @brief 枚举瞄准锥的中心方向与各环方向，不创建弹幕对象。
+/// @tparam Emit 接收 Vector3 方向的回调类型。
+/// @param axis 锥体中心轴。
+/// @param ringCount 环数。
+/// @param bulletsPerRing 每环方向数。
+/// @param coneAngle 最大张角（弧度）。
+/// @param roll 绕中心轴的旋转角（弧度）。
+/// @param emit 逐方向回调。
 template <typename Emit>
 void ForEachConeDirection(Vector3 axis, int ringCount, int bulletsPerRing,
                           float coneAngle, float roll, Emit&& emit) {
@@ -60,6 +81,11 @@ void ForEachConeDirection(Vector3 axis, int ringCount, int bulletsPerRing,
     }
 }
 
+/// @brief 用黄金角在单位球面上近似均匀枚举方向，不创建弹幕对象。
+/// @tparam Emit 接收 Vector3 方向的回调类型。
+/// @param count 方向数量。
+/// @param rotation 绕竖直轴的旋转角（弧度）。
+/// @param emit 逐方向回调。
 template <typename Emit>
 void ForEachSphereDirection(int count, float rotation, Emit&& emit) {
     if (count <= 0) return;

@@ -17,6 +17,9 @@ constexpr std::array<float, 5> kMidbossX{3.0F, 0.0F, -3.0F, 0.0F, 3.0F};
 constexpr float kMidbossStep = 3.8F;
 constexpr float kCutInDuration = 2.6F;
 
+/// @brief 查询关底 Boss 指定阶段的超时时长。
+/// @param phase 从 1 开始的阶段序号。
+/// @return 阶段时长，单位为秒。
 float PhaseDuration(int phase) {
     switch (phase) {
         case 1: return 14.0F;

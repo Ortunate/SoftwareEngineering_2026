@@ -9,6 +9,10 @@
 
 namespace {
 
+/// @brief 将离屏渲染纹理导出为图片。
+/// @param target 已渲染完成的目标纹理。
+/// @param path 输出文件路径。
+/// @return 图片读取和导出均成功时返回 true。
 bool ExportCapture(RenderTexture2D target, const std::string& path) {
     Image image = LoadImageFromTexture(target.texture);
     if (!IsImageValid(image)) return false;
@@ -21,10 +25,15 @@ bool ExportCapture(RenderTexture2D target, const std::string& path) {
 
 }  // namespace
 
+/// @brief 解析截图选项、运行游戏主循环并释放窗口资源。
+/// @param argc 命令行参数数量。
+/// @param argv 命令行参数数组。
+/// @return 运行成功返回 0，截图初始化或导出失败返回 1。
 int main(int argc, char** argv) {
     constexpr int screenWidth = 1100;
     constexpr int screenHeight = 760;
 
+    // 命令行截图入口复用同一套游戏逻辑，可指定关卡时间和观察角度。
     bool captureFrame = false;
     bool captureGameplay = false;
     bool captureOptions = false;
@@ -78,6 +87,7 @@ int main(int argc, char** argv) {
     {
         redmist::Game game;
         if (captureStage) {
+            // 以固定步长先推进关卡逻辑，再渲染目标时刻的画面。
             game.StartPreview();
             game.SetDebugDraw(captureDebug);
             for (float elapsed = 0.0F; elapsed < captureStageTime;
@@ -95,6 +105,7 @@ int main(int argc, char** argv) {
         }
         int renderedFrames = 0;
         while (!WindowShouldClose() && !game.ShouldQuit()) {
+            // 主循环每帧先更新状态，再绘制；截图模式改画到离屏纹理。
             const float deltaTime = std::min(GetFrameTime(), 1.0F / 20.0F);
             game.Update(deltaTime);
             if (captureStage) game.SetPreviewView(captureYaw, capturePitch);

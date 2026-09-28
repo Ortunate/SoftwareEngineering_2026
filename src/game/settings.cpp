@@ -11,6 +11,7 @@
 namespace redmist {
 namespace {
 
+/// @brief 将配置文件中的字段名映射到 KeyBindings 成员。
 struct BindingField {
     std::string_view name;
     int KeyBindings::*member;
@@ -29,6 +30,9 @@ constexpr std::array<BindingField, 10> kBindingFields{{
     {"pause", &KeyBindings::pause},
 }};
 
+/// @brief 去掉配置行首尾的空白字符。
+/// @param text 原始文本视图。
+/// @return 指向去空白后内容的视图。
 std::string_view Trim(std::string_view text) {
     const std::size_t first = text.find_first_not_of(" \t\r\n");
     if (first == std::string_view::npos) return {};
@@ -36,6 +40,9 @@ std::string_view Trim(std::string_view text) {
     return text.substr(first, last - first + 1);
 }
 
+/// @brief 严格解析十进制整数，不接受剩余非数字字符。
+/// @param text 待解析文本。
+/// @return 成功时返回整数，失败时返回空值。
 std::optional<int> ParseInteger(std::string_view text) {
     text = Trim(text);
     int value = 0;
@@ -47,11 +54,17 @@ std::optional<int> ParseInteger(std::string_view text) {
     return value;
 }
 
+/// @brief 检查 FPS 限制是否是界面提供的档位。
+/// @param value 候选帧率上限。
+/// @return 属于支持列表时返回 true。
 bool IsSupportedFpsLimit(int value) {
     return std::find(kSupportedFpsLimits.begin(), kSupportedFpsLimits.end(),
                      value) != kSupportedFpsLimits.end();
 }
 
+/// @brief 检查全部战斗按键有效且无重复。
+/// @param bindings 待检查的键位映射。
+/// @return 每个动作都有唯一有效键码时返回 true。
 bool HasUniqueBindings(const KeyBindings& bindings) {
     for (std::size_t left = 0; left < kBindingFields.size(); ++left) {
         const int leftKey = bindings.*(kBindingFields[left].member);

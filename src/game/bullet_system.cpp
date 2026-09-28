@@ -6,18 +6,34 @@
 namespace redmist {
 namespace {
 
+/// @brief 对两个三维向量逐分量相加。
+/// @param left 左操作数。
+/// @param right 右操作数。
+/// @return 相加后的向量。
 Vector3 Add(Vector3 left, Vector3 right) {
     return {left.x + right.x, left.y + right.y, left.z + right.z};
 }
 
+/// @brief 将三维向量乘以标量。
+/// @param vector 原向量。
+/// @param scale 缩放系数。
+/// @return 缩放后的向量。
 Vector3 Scale(Vector3 vector, float scale) {
     return {vector.x * scale, vector.y * scale, vector.z * scale};
 }
 
+/// @brief 计算两个向量的点积。
+/// @param left 第一个向量。
+/// @param right 第二个向量。
+/// @return 点积标量。
 float Dot(Vector3 left, Vector3 right) {
     return left.x * right.x + left.y * right.y + left.z * right.z;
 }
 
+/// @brief 计算两个向量的叉积。
+/// @param left 第一个向量。
+/// @param right 第二个向量。
+/// @return 右手系叉积向量。
 Vector3 Cross(Vector3 left, Vector3 right) {
     return {
         left.y * right.z - left.z * right.y,
@@ -26,6 +42,9 @@ Vector3 Cross(Vector3 left, Vector3 right) {
     };
 }
 
+/// @brief 将向量归一化，零向量退化为正 Z 方向。
+/// @param vector 原向量。
+/// @return 单位方向向量。
 Vector3 Normalize(Vector3 vector) {
     const float length = BulletSystem::Length(vector);
     if (length < 0.00001F) {

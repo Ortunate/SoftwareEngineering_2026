@@ -3,7 +3,7 @@
 #pragma once
 
 #include "core/fixed_pool.hpp"
-#include "gameplay/bullets/bullet_types.hpp"
+#include "gameplay/bullets/types.hpp"
 
 #include <cstddef>
 

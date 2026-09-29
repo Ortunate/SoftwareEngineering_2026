@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "stage/stage_content.hpp"
-#include "stages/stage1/stage1_ids.hpp"
+#include "stage/content.hpp"
+#include "stages/stage1/ids.hpp"
 
 namespace redmist::stage1 {
 

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "stage/stage_content.hpp"
+#include "stage/content.hpp"
 
 #include <cstdint>
 #include <memory>

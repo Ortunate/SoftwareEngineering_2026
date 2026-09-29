@@ -3,7 +3,7 @@
 #pragma once
 
 #include "gameplay/actors/boss.hpp"
-#include "gameplay/bullets/bullet_system.hpp"
+#include "gameplay/bullets/system.hpp"
 #include "gameplay/actors/enemy.hpp"
 #include "resources/loaded_assets.hpp"
 

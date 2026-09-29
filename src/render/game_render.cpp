@@ -1,8 +1,8 @@
 // 本文件负责三维世界、主菜单、HUD、对话和符卡界面的绘制。
 
 #include "app/game.hpp"
-#include "app/game_constants.hpp"
-#include "app/game_math.hpp"
+#include "app/constants.hpp"
+#include "app/math.hpp"
 #include "config/settings.hpp"
 
 #include <algorithm>

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "gameplay/bullets/bullet_system.hpp"
+#include "gameplay/bullets/system.hpp"
 
 namespace redmist {
 

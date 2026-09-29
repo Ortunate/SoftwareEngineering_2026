@@ -4,7 +4,7 @@
 
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/actors/enemy.hpp"
-#include "stage/stage_system.hpp"
+#include "stage/system.hpp"
 #include "resources/visual_assets.hpp"
 
 #include <cstdint>

@@ -1,15 +1,15 @@
 // 本文件负责验证默认键位、设置创建与持久化。
 
-#include "gameplay/bullets/bullet_system.hpp"
-#include "gameplay/bullets/bullet_patterns.hpp"
+#include "gameplay/bullets/system.hpp"
+#include "gameplay/bullets/patterns.hpp"
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/actors/enemy.hpp"
 #include "config/settings.hpp"
-#include "stage/stage_system.hpp"
-#include "stage/stage_catalog.hpp"
-#include "stages/stage1/stage1_content.hpp"
-#include "stages/stage1/stage1_enemies.hpp"
-#include "stages/stage1/stage1_boss.hpp"
+#include "stage/system.hpp"
+#include "stage/catalog.hpp"
+#include "stages/stage1/content.hpp"
+#include "stages/stage1/enemies.hpp"
+#include "stages/stage1/boss.hpp"
 
 #include <cassert>
 #include <array>

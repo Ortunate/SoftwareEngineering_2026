@@ -2,7 +2,7 @@
 
 #include "gameplay/actors/boss.hpp"
 
-#include "gameplay/bullets/bullet_patterns.hpp"
+#include "gameplay/bullets/patterns.hpp"
 
 namespace redmist {
 

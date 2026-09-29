@@ -1,6 +1,6 @@
 // 本文件负责实现支持相对延迟与事件结束依赖的关卡时间轴调度。
 
-#include "stage/stage_system.hpp"
+#include "stage/system.hpp"
 
 #include <cmath>
 #include <stdexcept>

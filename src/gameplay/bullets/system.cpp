@@ -1,7 +1,7 @@
 // 本文件负责实现单颗弹幕生成、运动更新与敌弹清除。
 
 #include "gameplay/arena.hpp"
-#include "gameplay/bullets/bullet_system.hpp"
+#include "gameplay/bullets/system.hpp"
 
 #include <algorithm>
 #include <cmath>

@@ -2,7 +2,7 @@
 
 #include "resources/asset_manager.hpp"
 #include "render/sprite_renderer.hpp"
-#include "stages/stage1/stage1_content.hpp"
+#include "stages/stage1/content.hpp"
 
 #include "raylib.h"
 

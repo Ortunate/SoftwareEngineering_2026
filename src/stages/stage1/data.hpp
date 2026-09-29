@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "stage/stage_content.hpp"
+#include "stage/content.hpp"
 
 namespace redmist::stage1 {
 [[nodiscard]] const StageAssetManifest& Stage1Manifest();

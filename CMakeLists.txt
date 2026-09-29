@@ -28,23 +28,23 @@ FetchContent_MakeAvailable(raylib)
 # 游戏实现只编译一次，所有目标共用同一份实现。
 add_library(red_mist_engine STATIC
     src/app/game.cpp
-    src/app/game_input.cpp
+    src/app/input.cpp
     src/config/settings.cpp
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
-    src/gameplay/bullets/bullet_system.cpp
-    src/gameplay/combat/game_combat.cpp
+    src/gameplay/bullets/system.cpp
+    src/gameplay/combat/combat.cpp
     src/render/game_render.cpp
     src/render/sprite_renderer.cpp
     src/resources/asset_manager.cpp
-    src/stage/stage_catalog.cpp
-    src/stage/stage_system.cpp
-    src/stages/stage1/stage1_boss.cpp
-    src/stages/stage1/stage1_content.cpp
-    src/stages/stage1/stage1_dialogue.cpp
-    src/stages/stage1/stage1_enemies.cpp
-    src/stages/stage1/stage1_manifest.cpp
-    src/stages/stage1/stage1_timeline.cpp
+    src/stage/catalog.cpp
+    src/stage/system.cpp
+    src/stages/stage1/boss.cpp
+    src/stages/stage1/content.cpp
+    src/stages/stage1/dialogue.cpp
+    src/stages/stage1/enemies.cpp
+    src/stages/stage1/manifest.cpp
+    src/stages/stage1/timeline.cpp
 )
 target_include_directories(red_mist_engine PUBLIC src)
 target_link_libraries(red_mist_engine PUBLIC raylib)

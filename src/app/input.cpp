@@ -1,8 +1,8 @@
 // 本文件负责菜单输入、按键设置以及玩家移动与相机方向。
 
 #include "app/game.hpp"
-#include "app/game_constants.hpp"
-#include "app/game_math.hpp"
+#include "app/constants.hpp"
+#include "app/math.hpp"
 #include "config/settings.hpp"
 
 #include <algorithm>

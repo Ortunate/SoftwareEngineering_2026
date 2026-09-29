@@ -1,7 +1,7 @@
 // 本文件负责第一面专用贴图、音乐和音效的素材清单。
 
-#include "stages/stage1/stage1_data.hpp"
-#include "stages/stage1/stage1_ids.hpp"
+#include "stages/stage1/data.hpp"
+#include "stages/stage1/ids.hpp"
 
 #include <array>
 

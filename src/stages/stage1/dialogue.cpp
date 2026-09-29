@@ -1,6 +1,6 @@
 // 本文件负责第一面的对话文本与说话角色。
 
-#include "stages/stage1/stage1_data.hpp"
+#include "stages/stage1/data.hpp"
 
 #include <array>
 

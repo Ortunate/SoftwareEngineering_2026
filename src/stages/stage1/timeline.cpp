@@ -1,7 +1,7 @@
 // 本文件负责第一面的出怪、道中 Boss、对话与关底 Boss 时间轴。
 
-#include "stages/stage1/stage1_data.hpp"
-#include "stages/stage1/stage1_ids.hpp"
+#include "stages/stage1/data.hpp"
+#include "stages/stage1/ids.hpp"
 
 #include <array>
 

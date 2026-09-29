@@ -3,7 +3,7 @@
 #include "gameplay/arena.hpp"
 #include "gameplay/actors/enemy.hpp"
 
-#include "gameplay/bullets/bullet_patterns.hpp"
+#include "gameplay/bullets/patterns.hpp"
 
 #include <cmath>
 

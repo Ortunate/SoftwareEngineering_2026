@@ -1,8 +1,8 @@
 // 本文件负责敌我碰撞、玩家射击、炸弹和 Boss 阶段推进。
 
 #include "app/game.hpp"
-#include "app/game_constants.hpp"
-#include "app/game_math.hpp"
+#include "app/constants.hpp"
+#include "app/math.hpp"
 
 #include <algorithm>
 #include <array>

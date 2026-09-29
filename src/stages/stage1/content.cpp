@@ -1,10 +1,10 @@
 // 本文件负责第一面的敌人与 Boss 工厂及时间轴事件处理。
 
-#include "stages/stage1/stage1_content.hpp"
-#include "stages/stage1/stage1_data.hpp"
+#include "stages/stage1/content.hpp"
+#include "stages/stage1/data.hpp"
 
-#include "stages/stage1/stage1_boss.hpp"
-#include "stages/stage1/stage1_enemies.hpp"
+#include "stages/stage1/boss.hpp"
+#include "stages/stage1/enemies.hpp"
 
 #include <cmath>
 #include <stdexcept>

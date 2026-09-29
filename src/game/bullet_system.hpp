@@ -29,7 +29,7 @@ public:
     /// @param acceleration 加速度，默认零向量。
     /// @return 新弹幕指针；容量耗尽时返回 nullptr。
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
-                  float radius, Color color, BulletVisualKind visual,
+                  float radius, Color color, VisualId visual,
                   Vector3 acceleration = {});
 
     /// @brief 清除敌方弹幕，保留玩家弹幕。

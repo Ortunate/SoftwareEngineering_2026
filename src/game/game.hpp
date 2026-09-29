@@ -1,26 +1,30 @@
 #pragma once
 
+#include "game/asset_manager.hpp"
 #include "game/boss.hpp"
 #include "game/bullet_system.hpp"
 #include "game/enemy.hpp"
 #include "game/game_types.hpp"
 #include "game/stage_system.hpp"
+#include "game/stage_content.hpp"
+#include "game/stage_catalog.hpp"
 #include "game/sprite_renderer.hpp"
 
 #include "raylib.h"
 
 #include <cstddef>
 #include <optional>
+#include <memory>
 #include <string>
 
 namespace redmist {
 
 /// @brief 游戏总控，协调输入、关卡、战斗、碰撞、资源和界面。
-class Game {
+class Game : private StageEventSink {
 public:
-    /// @brief 加载贴图、着色器与设置，并进入主菜单。
+    /// @brief 加载通用素材与设置，并进入主菜单。
     Game();
-    /// @brief 释放游戏持有的图形资源。
+    /// @brief 释放当前关卡及通用素材。
     ~Game();
 
     /// @brief 重置游戏并返回主菜单。
@@ -28,15 +32,19 @@ public:
     /// @brief 从第一面开头开始一局战斗。
     /// @param captureCursor 是否为交互游玩捕获鼠标；截图时传 false。
     void Start(bool captureCursor = true);
+    /// @brief 选择并启动已注册的关卡；重试沿用该关卡。
+    void StartStage(StageId id, bool captureCursor = true);
     /// @brief 进入不捕获鼠标、长时间无敌的关卡预览模式。
     void StartPreview();
     /// @brief 设置关卡预览的相机观察角度。
     /// @param yawDegrees 水平角（度）。
     /// @param pitchDegrees 仰俯角（度）。
     void SetPreviewView(float yawDegrees, float pitchDegrees);
+#ifdef RED_MIST_DEBUG_FEATURES
     /// @brief 设置是否绘制判定球与发弹点。
     /// @param enabled 为 true 时启用调试图层。
     void SetDebugDraw(bool enabled) { debugRender_ = enabled; }
+#endif
     /// @brief 进入设置菜单并显示鼠标。
     void OpenOptions();
     /// @brief 按当前状态更新输入、关卡与战斗逻辑。
@@ -63,6 +71,9 @@ private:
     void StartRun(bool captureCursor = true);
     /// @brief 切换主菜单并清除战斗中的临时状态。
     void EnterMainMenu();
+    /// @brief 结算关卡并卸载专属素材。
+    /// @param result 胜利或失败后的游戏状态。
+    void EndStage(RunState result);
     /// @brief 从本地文件读取 FPS 上限与战斗键位。
     void LoadSettings();
     /// @brief 将当前 FPS 上限与键位写入本地文件。
@@ -94,23 +105,22 @@ private:
     /// @return 同步完成的事件返回 true；Boss 战和对话返回 false。
     bool HandleStageEvent(const StageEvent& event);
 
-    /// @brief 按类型构造具体敌人并加入敌人池。
-    /// @param kind 敌人类型。
-    /// @param path 移动航线。
+    /// @brief 委托当前 Stage 工厂构造敌人并加入敌人池。
+    /// @param archetype Stage 局部敌人原型。
+    /// @param motion Stage 局部运动类型。
     /// @param position 生成位置。
     /// @param delay 入场延迟（秒）。
-    void SpawnEnemy(EnemyKind kind, PathKind path, Vector3 position,
-                    float delay = 0.0F);
+    void SpawnStageEnemy(std::uint16_t archetype, std::uint16_t motion,
+                         Vector3 position, float delay) override;
+    void BeginStageBoss(bool final, StageEventId id) override;
+    void BeginStageDialogue(StageEventId id) override;
+    void StageMessage(std::string_view message, float duration) override;
     /// @brief 从玩家视线前方发射一组玩家弹。
     void FirePlayerShot();
     /// @brief 消耗一个 Bomb，清弹并伤害场上敌人。
     void UseBomb();
     /// @brief 扣除残机、复位玩家并处理游戏失败。
     void DamagePlayer();
-    /// @brief 清理当前场面并开启露米娅道中战。
-    void StartMidboss();
-    /// @brief 清理当前场面并开启露米娅关底战。
-    void StartFinalBoss();
     /// @brief 结算当前 Boss 阶段并进入下一阶段或一面结算。
     void AdvanceBossPhase();
     /// @brief 设置屏幕提示文字及显示时间。
@@ -159,11 +169,14 @@ private:
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
     Player player_{};
-    RumiaBoss boss_{};
+    std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
     StageDirector stage_{};
+    std::unique_ptr<StageContent> stageContent_{};
+    StageId stageId_ = StageId::Stage1;
     KeyBindings bindings_{};
+    AssetManager assets_;
 
     long long score_ = 0;
     int graze_ = 0;
@@ -174,15 +187,6 @@ private:
     bool dialogueActive_ = false;
     std::optional<StageEventId> bossEventId_;
     std::optional<StageEventId> dialogueEventId_;
-    Texture2D spellPortrait_{};
-    Texture2D reimuPortrait_{};
-    Model skyboxModel_{};
-    TextureCubemap skyboxTexture_{};
-    Shader skyboxShader_{};
-    Texture2D fairyTexture_{};
-    Texture2D eliteTexture_{};
-    Texture2D bulletTexture_{};
-    Texture2D redBulletTexture_{};
     SpriteRenderer spriteRenderer_{};
     std::string message_;
     int selectedMenuItem_ = 0;
@@ -192,9 +196,11 @@ private:
     int fpsLimitIndex_ = 1;
     bool waitingForBinding_ = false;
     bool shouldQuit_ = false;
+#ifdef RED_MIST_DEBUG_FEATURES
     bool debugRender_ = false;
     /// @brief Debug 构建默认启用，F4 可切换；重新开始时保留当前值。
     bool debugInvincible_ = false;
+#endif
 };
 
 }  // namespace redmist

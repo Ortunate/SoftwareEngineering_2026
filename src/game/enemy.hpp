@@ -10,7 +10,7 @@
 
 namespace redmist {
 
-/// @brief 小怪抽象基类：按航线移动，计时到期时调用子类技能。
+/// @brief 小怪抽象基类：通用计时与判定由基类处理，移动和技能由 Stage 子类实现。
 class Enemy {
 public:
     /// @brief 通过基类指针安全销毁具体敌人。
@@ -23,8 +23,7 @@ public:
                         BulletSystem& bullets);
 
     bool active = true;
-    EnemyKind kind;
-    PathKind path;
+    VisualId visual = kInvalidVisualId;
     Vector3 position;
     Vector3 origin;
     float age;
@@ -42,80 +41,17 @@ public:
     [[nodiscard]] Vector3 MuzzlePosition(Vector3 playerPosition) const;
 
 protected:
-    /// @brief 初始化敌人类型、航线、出生位置和入场延迟。
-    /// @param kind 敌人类型。
-    /// @param path 运动航线。
+    /// @brief 初始化外观、出生位置和入场延迟。
+    /// @param visual 外观编号。
     /// @param position 出生位置。
     /// @param delay 入场延迟（秒）。
-    Enemy(EnemyKind kind, PathKind path, Vector3 position, float delay);
+    Enemy(VisualId visual, Vector3 position, float delay);
+    /// @brief Stage 子类按自身规则更新空间位置。
+    virtual void Move() = 0;
     /// @brief 由子类生成技能弹幕；调用时机由 Update 统一控制。
     /// @param bullets 接收生成弹幕的系统。
     /// @param playerPosition 技能瞄准所用的玩家位置。
     virtual void UseSkill(BulletSystem& bullets, Vector3 playerPosition) = 0;
-};
-
-/// @brief 普通妖精，技能为单发瞄准弹。
-class FairyEnemy final : public Enemy {
-public:
-    /// @brief 创建普通妖精。
-    /// @param path 运动航线。
-    /// @param position 出生位置。
-    /// @param delay 入场延迟（秒），默认立即入场。
-    FairyEnemy(PathKind path, Vector3 position, float delay = 0.0F);
-
-private:
-    /// @brief 向玩家发射单颗红色弹幕。
-    /// @param bullets 接收弹幕的系统。
-    /// @param playerPosition 玩家判定中心。
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
-};
-
-/// @brief 暗色妖精，技能为较快的单发瞄准弹。
-class DarkFairyEnemy final : public Enemy {
-public:
-    /// @brief 创建暗色妖精。
-    /// @param path 运动航线。
-    /// @param position 出生位置。
-    /// @param delay 入场延迟（秒），默认立即入场。
-    DarkFairyEnemy(PathKind path, Vector3 position, float delay = 0.0F);
-
-private:
-    /// @brief 向玩家发射较快的红色弹幕。
-    /// @param bullets 接收弹幕的系统。
-    /// @param playerPosition 玩家判定中心。
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
-};
-
-/// @brief 光球敌人，技能为朝向玩家的锥形弹幕。
-class OrbEnemy final : public Enemy {
-public:
-    /// @brief 创建光球敌人。
-    /// @param path 运动航线。
-    /// @param position 出生位置。
-    /// @param delay 入场延迟（秒），默认立即入场。
-    OrbEnemy(PathKind path, Vector3 position, float delay = 0.0F);
-
-private:
-    /// @brief 向玩家方向释放蓝色锥形弹幕。
-    /// @param bullets 接收弹幕的系统。
-    /// @param playerPosition 玩家判定中心。
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
-};
-
-/// @brief 精英妖精，技能叠加球面散射与锥形瞄准弹。
-class EliteEnemy final : public Enemy {
-public:
-    /// @brief 创建精英妖精。
-    /// @param path 运动航线。
-    /// @param position 出生位置。
-    /// @param delay 入场延迟（秒），默认立即入场。
-    EliteEnemy(PathKind path, Vector3 position, float delay = 0.0F);
-
-private:
-    /// @brief 同时释放球面与锥形两组弹幕。
-    /// @param bullets 接收弹幕的系统。
-    /// @param playerPosition 玩家判定中心。
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
 };
 
 /// @brief 用固定数量的槽位持有多态敌人并统计丢弃的生成请求。

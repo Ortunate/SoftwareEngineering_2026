@@ -1,6 +1,7 @@
 #pragma once
 
 #include "raylib.h"
+#include "game/visual_assets.hpp"
 
 #include <cstdint>
 
@@ -13,15 +14,12 @@ constexpr float kArenaPadding = 0.35F;
 
 /// @brief 区分玩家弹与敌弹，用于碰撞、清弹和计分。
 enum class BulletOwner : std::uint8_t { Player, Enemy };
-/// @brief 弹幕的渲染形态，与颜色分开存储。
-enum class BulletVisualKind : std::uint8_t { BluePearl, RedOrb, SolidSphere };
-
 /// @brief 对象池中的单颗弹幕，position 为球形判定中心。
 struct Bullet {
     bool active = false;
     bool grazed = false;
     BulletOwner owner = BulletOwner::Enemy;
-    BulletVisualKind visual = BulletVisualKind::SolidSphere;
+    VisualId visual = kInvalidVisualId;
     Vector3 position{};
     Vector3 velocity{};
     Vector3 acceleration{};
@@ -32,11 +30,6 @@ struct Bullet {
     float angularVelocity = 0.0F;
     Color color = WHITE;
 };
-
-/// @brief 小怪种类，决定生成的具体 Enemy 子类。
-enum class EnemyKind : std::uint8_t { Fairy, DarkFairy, Orb, Elite };
-/// @brief 小怪航线类型，由 Enemy::Update 解释。
-enum class PathKind : std::uint8_t { Straight, Helix, SweepLeft, SweepRight };
 
 /// @brief 玩家位置、移动、判定、资源与战斗计时状态。
 struct Player {

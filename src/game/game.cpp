@@ -16,8 +16,6 @@ namespace {
 
 constexpr Color kPlayerBulletColor{90, 225, 255, 255};
 constexpr float kSpellCutInDuration = 2.6F;
-constexpr float kDialogueLineDuration = 2.5F;
-constexpr std::size_t kDialogueLineCount = 6;
 
 constexpr std::array<const char*, 10> kBindingNames{
     "FORWARD", "BACKWARD", "MOVE LEFT", "MOVE RIGHT", "ASCEND",
@@ -71,71 +69,32 @@ Vector3 Normalize(Vector3 vector) {
 
 }  // namespace
 
-Game::Game() {
-#ifdef RED_MIST_DEBUG_INVINCIBLE
+Game::Game()
+    : assets_(std::filesystem::path(GetApplicationDirectory()) / "assets") {
+#ifdef RED_MIST_DEBUG_FEATURES
     debugInvincible_ = true;
 #endif
     camera_.up = {0.0F, 1.0F, 0.0F};
     camera_.fovy = 72.0F;
     camera_.projection = CAMERA_PERSPECTIVE;
-    const std::filesystem::path portraitPath =
-        std::filesystem::path(GetApplicationDirectory()) / "assets" /
-        "rumia_modern.png";
-    spellPortrait_ = LoadTexture(portraitPath.string().c_str());
-    const std::filesystem::path assetsPath =
-        std::filesystem::path(GetApplicationDirectory()) / "assets";
-    reimuPortrait_ = LoadTexture((assetsPath / "reimu_modern.png").string().c_str());
-    const std::filesystem::path skyboxPath = assetsPath / "crimson_mist_skybox.png";
-    Image skyboxImage = LoadImage(skyboxPath.string().c_str());
-    if (skyboxImage.data != nullptr &&
-        skyboxImage.width == skyboxImage.height * 6) {
-        skyboxTexture_ = LoadTextureCubemap(skyboxImage,
-                                            CUBEMAP_LAYOUT_LINE_HORIZONTAL);
-    }
-    if (skyboxImage.data != nullptr) UnloadImage(skyboxImage);
-    if (IsTextureValid(skyboxTexture_)) {
-        const std::filesystem::path shaderPath = assetsPath / "shaders";
-        skyboxShader_ = LoadShader((shaderPath / "skybox.vs").string().c_str(),
-                                   (shaderPath / "skybox.fs").string().c_str());
-        const int environmentLocation =
-            GetShaderLocation(skyboxShader_, "environmentMap");
-        if (IsShaderValid(skyboxShader_) && environmentLocation >= 0) {
-            const int textureUnit = MATERIAL_MAP_CUBEMAP;
-            SetShaderValue(skyboxShader_, environmentLocation, &textureUnit,
-                           SHADER_UNIFORM_INT);
-            skyboxModel_ = LoadModelFromMesh(GenMeshCube(1.0F, 1.0F, 1.0F));
-            skyboxModel_.materials[0].shader = skyboxShader_;
-            skyboxModel_.materials[0].maps[MATERIAL_MAP_CUBEMAP].texture =
-                skyboxTexture_;
-        }
-    }
-    fairyTexture_ = LoadTexture((assetsPath / "fairy_modern.png").string().c_str());
-    eliteTexture_ = LoadTexture((assetsPath / "elite_modern.png").string().c_str());
-    bulletTexture_ = LoadTexture((assetsPath / "bullet_pearl_runtime.png").string().c_str());
-    redBulletTexture_ = LoadTexture((assetsPath / "bullet_red_runtime.png").string().c_str());
-    spriteRenderer_.Load(assetsPath);
+    assets_.LoadCommon();
     LoadSettings();
     Reset();
 }
 
-Game::~Game() {
-    if (spellPortrait_.id != 0) UnloadTexture(spellPortrait_);
-    if (reimuPortrait_.id != 0) UnloadTexture(reimuPortrait_);
-    if (skyboxModel_.meshCount != 0) UnloadModel(skyboxModel_);
-    if (skyboxShader_.id != 0) UnloadShader(skyboxShader_);
-    if (skyboxTexture_.id != 0) UnloadTexture(skyboxTexture_);
-    if (fairyTexture_.id != 0) UnloadTexture(fairyTexture_);
-    if (eliteTexture_.id != 0) UnloadTexture(eliteTexture_);
-    if (bulletTexture_.id != 0) UnloadTexture(bulletTexture_);
-    if (redBulletTexture_.id != 0) UnloadTexture(redBulletTexture_);
-}
+Game::~Game() = default;
 
 void Game::Reset() {
-    StartRun(false);
     EnterMainMenu();
 }
 
 void Game::Start(bool captureCursor) {
+    stageId_ = StageId::Stage1;
+    StartRun(captureCursor);
+}
+
+void Game::StartStage(StageId id, bool captureCursor) {
+    stageId_ = id;
     StartRun(captureCursor);
 }
 
@@ -153,6 +112,7 @@ void Game::SetPreviewView(float yawDegrees, float pitchDegrees) {
 }
 
 void Game::OpenOptions() {
+    if (state_ != RunState::MainMenu) EnterMainMenu();
     state_ = RunState::Options;
     optionsPage_ = OptionsPage::General;
     selectedOption_ = 0;
@@ -182,9 +142,14 @@ void Game::SaveSettings() const {
 }
 
 void Game::StartRun(bool captureCursor) {
+    stage_ = StageDirector{};
+    stageContent_ = CreateStageContent(stageId_);
+    stage_ = StageDirector(stageContent_->Events());
+    assets_.LoadStage(stageContent_->Assets());
+    assets_.PlayStageMusic();
     state_ = RunState::Playing;
     player_ = Player{};
-    boss_ = RumiaBoss{};
+    boss_.reset();
     bullets_.Reset();
     enemies_.Clear();
     stage_.Reset();
@@ -199,16 +164,20 @@ void Game::StartRun(bool captureCursor) {
     shouldQuit_ = false;
     UpdateCamera();
     if (captureCursor) DisableCursor();
-    SetMessage("Stage 1  Mystic Flier  Normal", 3.0F);
+    SetMessage(stageContent_->StartTitle(), 3.0F);
 }
 
 void Game::EnterMainMenu() {
+    bullets_.Reset();
+    enemies_.Clear();
+    boss_.reset();
+    assets_.UnloadStage();
+    stage_ = StageDirector{};
+    stageContent_.reset();
+    assets_.PlayMenuMusic();
     state_ = RunState::MainMenu;
     selectedMenuItem_ = 0;
     messageTimer_ = 0.0F;
-    bullets_.Reset();
-    enemies_.Clear();
-    boss_ = RumiaBoss{};
     dialogueActive_ = false;
     bossEventId_.reset();
     dialogueEventId_.reset();
@@ -219,7 +188,18 @@ void Game::EnterMainMenu() {
     EnableCursor();
 }
 
+void Game::EndStage(RunState result) {
+    bullets_.Reset();
+    enemies_.Clear();
+    boss_.reset();
+    dialogueActive_ = false;
+    assets_.UnloadStage();
+    state_ = result;
+    EnableCursor();
+}
+
 void Game::Update(float deltaTime) {
+    assets_.UpdateAudio();
     if (state_ == RunState::MainMenu) {
         UpdateMainMenu();
         return;
@@ -228,7 +208,9 @@ void Game::Update(float deltaTime) {
         UpdateOptions();
         return;
     }
+#ifdef RED_MIST_DEBUG_FEATURES
     if (IsKeyPressed(KEY_F3)) debugRender_ = !debugRender_;
+#endif
 
     if (state_ == RunState::Won || state_ == RunState::GameOver) {
         if (IsKeyPressed(KEY_R)) {
@@ -242,9 +224,11 @@ void Game::Update(float deltaTime) {
     if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(bindings_.pause)) {
         if (state_ == RunState::Playing) {
             state_ = RunState::Paused;
+            assets_.PauseMusic();
             EnableCursor();
         } else if (state_ == RunState::Paused) {
             state_ = RunState::Playing;
+            assets_.ResumeMusic();
             DisableCursor();
         }
     }
@@ -254,7 +238,7 @@ void Game::Update(float deltaTime) {
         }
         return;
     }
-#ifdef RED_MIST_DEBUG_INVINCIBLE
+#ifdef RED_MIST_DEBUG_FEATURES
     if (IsKeyPressed(KEY_F4)) debugInvincible_ = !debugInvincible_;
 #endif
 
@@ -273,7 +257,8 @@ void Game::Update(float deltaTime) {
     if (dialogueWasActive && dialogueActive_) {
         dialogueTimer_ += deltaTime;
         if (dialogueTimer_ >=
-            kDialogueLineDuration * static_cast<float>(kDialogueLineCount)) {
+            stageContent_->DialogueLineDuration() *
+                static_cast<float>(stageContent_->Dialogue().size())) {
             dialogueActive_ = false;
             if (dialogueEventId_) {
                 stage_.EndEvent(*dialogueEventId_);
@@ -516,7 +501,8 @@ void Game::UpdateEnemies(float deltaTime) {
 }
 
 void Game::UpdateBoss(float deltaTime) {
-    if (boss_.Update(deltaTime, player_.position, bullets_)) AdvanceBossPhase();
+    if (boss_ && boss_->Update(deltaTime, player_.position, bullets_))
+        AdvanceBossPhase();
 }
 
 void Game::ResolveCollisions() {
@@ -528,7 +514,11 @@ void Game::ResolveCollisions() {
         const float hitDistance = bullet.radius + player_.hitRadius;
         if (distanceSquared <= hitDistance * hitDistance) {
             bullet.active = false;
-            if (!debugInvincible_ && player_.invulnerableTimer <= 0.0F)
+            bool canTakeDamage = player_.invulnerableTimer <= 0.0F;
+#ifdef RED_MIST_DEBUG_FEATURES
+            canTakeDamage = canTakeDamage && !debugInvincible_;
+#endif
+            if (canTakeDamage)
                 playerWasHit = true;
         } else {
             const float grazeDistance = bullet.radius + player_.grazeRadius;
@@ -559,106 +549,51 @@ void Game::ResolveCollisions() {
         }
     });
 
-    if (boss_.active) {
+    if (boss_ && boss_->active) {
         bullets_.Pool().ForEachActive([this](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player) return;
-            const float collisionDistance = bullet.radius + boss_.hitRadius;
-            if (DistanceSquared(bullet.position, boss_.position) <=
+            const float collisionDistance = bullet.radius + boss_->hitRadius;
+            if (DistanceSquared(bullet.position, boss_->position) <=
                 collisionDistance * collisionDistance) {
                 bullet.active = false;
-                boss_.health -= 1.6F;
+                boss_->health -= 1.6F;
                 score_ += 10;
             }
         });
-        if (boss_.health <= 0.0F) AdvanceBossPhase();
+        if (boss_->health <= 0.0F) AdvanceBossPhase();
     }
 }
 
 bool Game::HandleStageEvent(const StageEvent& event) {
-    switch (event.kind) {
-        case StageEventKind::SpawnLine: {
-            const float middle = static_cast<float>(event.count - 1) * 0.5F;
-            for (int index = 0; index < event.count; ++index) {
-                const float offset = static_cast<float>(index) - middle;
-                SpawnEnemy(event.enemy,
-                           index % 2 == 0 ? PathKind::Straight : PathKind::Helix,
-                           {event.center.x + offset * event.spacing,
-                            event.center.y + std::sin(offset) * 0.8F,
-                            event.center.z},
-                           static_cast<float>(index) * 0.1F);
-            }
-            break;
-        }
-        case StageEventKind::SpawnStarFormation: {
-            constexpr float goldenAngle = 2.39996322973F;
-            for (int index = 0; index < event.count; ++index) {
-                const float t = (static_cast<float>(index) + 0.5F) /
-                                static_cast<float>(event.count);
-                const float y = 1.0F - 2.0F * t;
-                const float radial = std::sqrt(std::max(0.0F, 1.0F - y * y));
-                const float azimuth = goldenAngle * static_cast<float>(index);
-                const Vector3 offset{
-                    radial * std::cos(azimuth) * event.spacing,
-                    y * event.spacing,
-                    radial * std::sin(azimuth) * event.spacing * 0.35F,
-                };
-                SpawnEnemy(event.enemy, PathKind::Helix,
-                           Add(event.center, offset), index * 0.08F);
-            }
-            break;
-        }
-        case StageEventKind::SpawnCrossingPair:
-            for (int index = 0; index < event.count / 2; ++index) {
-                const float y = -4.5F + static_cast<float>(index) * 2.6F;
-                const float z = 7.8F - static_cast<float>(index) * 0.45F;
-                SpawnEnemy(event.enemy, PathKind::SweepLeft,
-                           {-9.0F, y, z}, index * 0.18F);
-                SpawnEnemy(event.enemy, PathKind::SweepRight,
-                           {9.0F, -y * 0.7F, z}, index * 0.18F);
-            }
-            break;
-        case StageEventKind::SpawnElite:
-            SpawnEnemy(EnemyKind::Elite, PathKind::Helix, event.center);
-            break;
-        case StageEventKind::StartMidboss:
-            bossEventId_ = event.id;
-            StartMidboss();
-            return false;
-        case StageEventKind::StartDialogue:
-            enemies_.Clear();
-            bullets_.ClearEnemyBullets();
-            dialogueActive_ = true;
-            dialogueTimer_ = 0.0F;
-            dialogueEventId_ = event.id;
-            messageTimer_ = 0.0F;
-            return false;
-        case StageEventKind::StartFinalBoss:
-            bossEventId_ = event.id;
-            StartFinalBoss();
-            return false;
-        case StageEventKind::ShowMessage:
-            SetMessage("Stage 1  Mystic Flier  Normal", 2.4F);
-            break;
-    }
-    return true;
+    return stageContent_->HandleEvent(event, *this);
 }
 
-void Game::SpawnEnemy(EnemyKind kind, PathKind path, Vector3 position,
-                      float delay) {
-    switch (kind) {
-        case EnemyKind::Fairy:
-            enemies_.Add(std::make_unique<FairyEnemy>(path, position, delay));
-            break;
-        case EnemyKind::DarkFairy:
-            enemies_.Add(std::make_unique<DarkFairyEnemy>(path, position, delay));
-            break;
-        case EnemyKind::Orb:
-            enemies_.Add(std::make_unique<OrbEnemy>(path, position, delay));
-            break;
-        case EnemyKind::Elite:
-            enemies_.Add(std::make_unique<EliteEnemy>(path, position, delay));
-            break;
-    }
+void Game::SpawnStageEnemy(std::uint16_t archetype, std::uint16_t motion,
+                           Vector3 position, float delay) {
+    if (auto enemy = stageContent_->CreateEnemy(archetype, motion, position, delay))
+        enemies_.Add(std::move(enemy));
+}
+
+void Game::BeginStageBoss(bool final, StageEventId id) {
+    enemies_.Clear();
+    bullets_.ClearEnemyBullets();
+    bossEventId_ = id;
+    boss_ = stageContent_->CreateBoss(final);
+    if (final) assets_.PlayBossMusic();
+    SetMessage(stageContent_->BossStartMessage(final), 2.0F);
+}
+
+void Game::BeginStageDialogue(StageEventId id) {
+    enemies_.Clear();
+    bullets_.ClearEnemyBullets();
+    dialogueActive_ = true;
+    dialogueTimer_ = 0.0F;
+    dialogueEventId_ = id;
+    messageTimer_ = 0.0F;
+}
+
+void Game::StageMessage(std::string_view message, float duration) {
+    SetMessage(std::string(message), duration);
 }
 
 void Game::FirePlayerShot() {
@@ -668,10 +603,10 @@ void Game::FirePlayerShot() {
     const Vector3 velocity = Scale(forward, 20.0F);
     bullets_.Spawn(BulletOwner::Player, Add(muzzle, Scale(right, -0.11F)),
                    velocity, 0.09F, kPlayerBulletColor,
-                   BulletVisualKind::BluePearl);
+                   stageContent_->PlayerBulletVisual());
     bullets_.Spawn(BulletOwner::Player, Add(muzzle, Scale(right, 0.11F)),
                    velocity, 0.09F, kPlayerBulletColor,
-                   BulletVisualKind::BluePearl);
+                   stageContent_->PlayerBulletVisual());
 }
 
 void Game::UseBomb() {
@@ -682,7 +617,7 @@ void Game::UseBomb() {
     screenFlashTimer_ = 0.35F;
     bullets_.ClearEnemyBullets();
     enemies_.ForEachActive([](Enemy& enemy) { enemy.health -= 22.0F; });
-    if (boss_.active) boss_.health -= 35.0F;
+    if (boss_ && boss_->active) boss_->health -= 35.0F;
     SetMessage("Spatial Bomb", 0.7F);
 }
 
@@ -697,51 +632,35 @@ void Game::DamagePlayer() {
     screenFlashTimer_ = 0.22F;
     bullets_.ClearEnemyBullets();
     if (player_.lives < 0) {
-        state_ = RunState::GameOver;
-        EnableCursor();
+        EndStage(RunState::GameOver);
     } else {
         SetMessage("Miss  Camera hitbox restored", 0.9F);
     }
 }
 
-void Game::StartMidboss() {
-    enemies_.Clear();
-    bullets_.ClearEnemyBullets();
-    boss_.StartMidboss();
-    SetMessage("Rumia  Midboss", 2.0F);
-}
-
-void Game::StartFinalBoss() {
-    enemies_.Clear();
-    bullets_.ClearEnemyBullets();
-    boss_.StartFinalBoss();
-    SetMessage("Rumia  Stage 1 Boss", 2.0F);
-}
-
 void Game::AdvanceBossPhase() {
-    if (!boss_.active) return;
+    if (!boss_ || !boss_->active) return;
     bullets_.ClearEnemyBullets();
     const bool wasMidboss =
-        boss_.CurrentEncounter() == RumiaBoss::Encounter::Midboss;
-    const int completedPhase = boss_.phase;
-    const bool hasNextPhase = boss_.AdvancePhase();
+        boss_->IsMidboss();
+    const int completedPhase = boss_->phase;
+    const bool hasNextPhase = boss_->AdvancePhase();
     if (!hasNextPhase && bossEventId_) {
         stage_.EndEvent(*bossEventId_);
         bossEventId_.reset();
     }
     if (hasNextPhase) {
         score_ += completedPhase == 1 ? 15000 : 25000;
-        spellCutInTimer_ = boss_.SpellName() != nullptr
+        spellCutInTimer_ = boss_->SpellName() != nullptr
                                ? kSpellCutInDuration : 0.0F;
         messageTimer_ = 0.0F;
     } else if (wasMidboss) {
         score_ += 5000;
-        SetMessage("Rumia retreated", 1.6F);
+        SetMessage(stageContent_->MidbossEndMessage(), 1.6F);
     } else {
         score_ += 50000;
         messageTimer_ = 0.0F;
-        state_ = RunState::Won;
-        EnableCursor();
+        EndStage(RunState::Won);
     }
 }
 
@@ -869,11 +788,11 @@ void Game::Draw() const {
 
 void Game::DrawWorld() const {
     BeginMode3D(camera_);
-    if (skyboxModel_.meshCount != 0) {
+    if (assets_.Common().skyboxModel.meshCount != 0) {
         // 天空盒仅提供远景，不写入深度，确保战场和角色正常显示在前方。
         rlDisableBackfaceCulling();
         rlDisableDepthMask();
-        DrawModel(skyboxModel_, {}, 1.0F, WHITE);
+        DrawModel(assets_.Common().skyboxModel, {}, 1.0F, WHITE);
         rlDrawRenderBatchActive();
         rlEnableDepthMask();
         rlEnableBackfaceCulling();
@@ -885,11 +804,15 @@ void Game::DrawWorld() const {
     enemies_.ForEachActive([&](const Enemy& enemy) {
         if (enemy.age >= 0.0F) visibleEnemies[visibleCount++] = &enemy;
     });
-    spriteRenderer_.Draw(camera_, bullets_,
-                         std::span<const Enemy*>(visibleEnemies.data(), visibleCount),
-                         boss_, player_.position,
-                         {bulletTexture_, redBulletTexture_, fairyTexture_,
-                          eliteTexture_, spellPortrait_}, debugRender_);
+    const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
+    spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
+                         assets_.Stage().visuals, assets_.Stage().shaders);
+#ifdef RED_MIST_DEBUG_FEATURES
+    if (debugRender_) {
+        spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
+                                          player_.position);
+    }
+#endif
 
     EndMode3D();
 }
@@ -971,19 +894,17 @@ void Game::DrawHud() const {
                  centerY + 32, 18, reticle);
     }
 
-    if (boss_.active) {
+    if (boss_ && boss_->active) {
         const float width = std::min(540.0F, static_cast<float>(GetScreenWidth()) - 390.0F);
-        const float ratio = std::clamp(boss_.health / boss_.maxHealth, 0.0F, 1.0F);
+        const float ratio = std::clamp(boss_->health / boss_->maxHealth, 0.0F, 1.0F);
         const float left = (static_cast<float>(GetScreenWidth()) - width) * 0.5F;
         DrawRectangleRounded({left, 20.0F, width, 24.0F}, 0.5F, 12,
                              Color{20, 9, 26, 220});
         DrawRectangleRounded({left + 3.0F, 23.0F, (width - 6.0F) * ratio, 18.0F},
                              0.5F, 12,
-                             boss_.phase == 1 ? Color{255, 80, 110, 255}
+                             boss_->phase == 1 ? Color{255, 80, 110, 255}
                                               : Color{190, 80, 255, 255});
-        DrawText(boss_.CurrentEncounter() == RumiaBoss::Encounter::Midboss
-                     ? "RUMIA  MIDBOSS  NORMAL"
-                     : "RUMIA  STAGE BOSS  NORMAL",
+        DrawText(boss_->DisplayName(),
                  static_cast<int>(left), 48, 18, RAYWHITE);
     }
 
@@ -996,19 +917,19 @@ void Game::DrawHud() const {
         DrawText("CAMERA = HITBOX", GetScreenWidth() - 190, GetScreenHeight() - 56,
                  17, Color{255, 125, 145, 240});
     }
+#ifdef RED_MIST_DEBUG_FEATURES
     DrawFPS(GetScreenWidth() - 90, 16);
-#ifdef RED_MIST_DEBUG_INVINCIBLE
     DrawText(debugInvincible_ ? "DEBUG INVINCIBLE: ON  [F4]"
                               : "DEBUG INVINCIBLE: OFF [F4]",
              GetScreenWidth() - 280, 75, 17,
              debugInvincible_ ? Color{125, 255, 200, 255}
                               : Color{180, 190, 205, 255});
-#endif
     if (debugRender_) {
         DrawText("F3  HITBOX: yellow bullet / cyan body / magenta muzzle",
                  16, GetScreenHeight() - 57, 14,
                  Color{255, 225, 120, 255});
     }
+#endif
 }
 
 void Game::DrawOverlay() const {
@@ -1039,7 +960,7 @@ void Game::DrawOverlay() const {
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{0, 0, 0, 175});
-        const char* title = state_ == RunState::Won ? "STAGE 1 CLEAR" : "GAME OVER";
+        const char* title = state_ == RunState::Won ? stageContent_->ClearTitle() : "GAME OVER";
         DrawText(title, (GetScreenWidth() - MeasureText(title, 56)) / 2,
                  GetScreenHeight() / 2 - 75, 56,
                  state_ == RunState::Won ? GOLD : Color{255, 90, 110, 255});
@@ -1058,21 +979,12 @@ void Game::DrawOverlay() const {
 
 void Game::DrawDialogue() const {
     if (!dialogueActive_) return;
-    /// @brief 单句对话的说话人、文字及立绘高亮方。
-    struct DialogueLine {
-        const char* speaker;
-        const char* text;
-        bool rumiaSpeaking;
-    };
-    constexpr std::array<DialogueLine, kDialogueLineCount> lines{{
-        {"REIMU", "The mist is getting thicker...", false},
-        {"REIMU", "Someone is hiding in the dark.", false},
-        {"RUMIA", "You can see me from there?", true},
-        {"REIMU", "Are you behind this strange night?", false},
-        {"RUMIA", "Maybe. I like the darkness.", true},
-        {"REIMU", "Then I'll clear a path through it!", false},
-    }};
-    const int index = std::clamp(static_cast<int>(dialogueTimer_ / kDialogueLineDuration),
+    const Texture2D reimuPortrait = assets_.GetVisual(
+        stageContent_->HeroPortraitVisual()).texture;
+    const Texture2D rumiaPortrait = assets_.GetVisual(
+        stageContent_->BossPortraitVisual()).texture;
+    const auto lines = stageContent_->Dialogue();
+    const int index = std::clamp(static_cast<int>(dialogueTimer_ / stageContent_->DialogueLineDuration()),
                                   0, static_cast<int>(lines.size()) - 1);
     const DialogueLine& line = lines[index];
     const float screenW = static_cast<float>(GetScreenWidth());
@@ -1080,26 +992,26 @@ void Game::DrawDialogue() const {
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                   Color{10, 5, 22, 45});
     const float portraitH = screenH * 0.58F;
-    if (reimuPortrait_.id != 0) {
-        const float portraitW = portraitH * reimuPortrait_.width /
-                                reimuPortrait_.height;
-        DrawTexturePro(reimuPortrait_,
-                       {0.0F, 0.0F, static_cast<float>(reimuPortrait_.width),
-                        static_cast<float>(reimuPortrait_.height)},
+    if (reimuPortrait.id != 0) {
+        const float portraitW = portraitH * reimuPortrait.width /
+                                reimuPortrait.height;
+        DrawTexturePro(reimuPortrait,
+                       {0.0F, 0.0F, static_cast<float>(reimuPortrait.width),
+                        static_cast<float>(reimuPortrait.height)},
                        {12.0F, screenH - portraitH - 82.0F,
                         portraitW, portraitH}, {0.0F, 0.0F}, 0.0F,
-                       line.rumiaSpeaking ? Color{170, 170, 185, 165} : WHITE);
+                       line.bossSpeaking ? Color{170, 170, 185, 165} : WHITE);
     }
-    if (spellPortrait_.id != 0) {
-        const float portraitW = portraitH * spellPortrait_.width /
-                                spellPortrait_.height;
-        DrawTexturePro(spellPortrait_,
-                       {0.0F, 0.0F, static_cast<float>(spellPortrait_.width),
-                        static_cast<float>(spellPortrait_.height)},
+    if (rumiaPortrait.id != 0) {
+        const float portraitW = portraitH * rumiaPortrait.width /
+                                rumiaPortrait.height;
+        DrawTexturePro(rumiaPortrait,
+                       {0.0F, 0.0F, static_cast<float>(rumiaPortrait.width),
+                        static_cast<float>(rumiaPortrait.height)},
                        {screenW - portraitW - 12.0F,
                         screenH - portraitH - 82.0F, portraitW, portraitH},
                        {0.0F, 0.0F}, 0.0F,
-                       line.rumiaSpeaking ? WHITE : Color{170, 170, 185, 165});
+                       line.bossSpeaking ? WHITE : Color{170, 170, 185, 165});
     }
     const Rectangle panel{screenW * 0.15F, screenH - 118.0F,
                           screenW * 0.7F, 92.0F};
@@ -1113,8 +1025,8 @@ void Game::DrawDialogue() const {
 }
 
 void Game::DrawSpellCutIn() const {
-    if (spellCutInTimer_ <= 0.0F || !boss_.active ||
-        boss_.SpellName() == nullptr) return;
+    if (spellCutInTimer_ <= 0.0F || !boss_ || !boss_->active ||
+        boss_->SpellName() == nullptr) return;
 
     const float elapsed = kSpellCutInDuration - spellCutInTimer_;
     const float opacity = std::clamp(
@@ -1130,10 +1042,12 @@ void Game::DrawSpellCutIn() const {
     const float portraitWidth = portraitHeight * 2.0F / 3.0F;
     const Rectangle frame{24.0F, static_cast<float>(screenHeight) - portraitHeight - 22.0F,
                           portraitWidth, portraitHeight};
-    if (spellPortrait_.id != 0) {
-        DrawTexturePro(spellPortrait_,
-                       {0.0F, 0.0F, static_cast<float>(spellPortrait_.width),
-                        static_cast<float>(spellPortrait_.height)},
+    const Texture2D rumiaPortrait = assets_.GetVisual(
+        stageContent_->BossPortraitVisual()).texture;
+    if (rumiaPortrait.id != 0) {
+        DrawTexturePro(rumiaPortrait,
+                       {0.0F, 0.0F, static_cast<float>(rumiaPortrait.width),
+                        static_cast<float>(rumiaPortrait.height)},
                        frame, {0.0F, 0.0F}, 0.0F, Color{255, 255, 255, alpha});
     }
     DrawRectangleLinesEx(frame, 3.0F, Color{255, 115, 175, alpha});
@@ -1146,7 +1060,7 @@ void Game::DrawSpellCutIn() const {
     DrawLine(0, static_cast<int>(bannerY) + 146, screenWidth,
              static_cast<int>(bannerY) + 146, Color{255, 95, 155, alpha});
 
-    const std::string name = boss_.SpellName();
+    const std::string name = boss_->SpellName();
     const std::size_t separator = name.find("  -  ");
     const std::string sign = name.substr(0, separator);
     const std::string title = separator == std::string::npos

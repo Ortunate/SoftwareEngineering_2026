@@ -18,17 +18,26 @@
 │   ├── core/fixed_pool.hpp
 │   └── game/
 │       ├── game_types.hpp
+│       ├── visual_assets.hpp
+│       ├── stage_content.hpp
+│       ├── stage_catalog.hpp/.cpp
+│       ├── stages/stage1_ids.hpp
+│       ├── stages/stage1_content.hpp/.cpp
+│       ├── stages/stage1_enemies.hpp/.cpp
+│       ├── stages/stage1_boss.hpp/.cpp
 │       ├── bullet_system.hpp/.cpp
 │       ├── bullet_patterns.hpp
 │       ├── enemy.hpp/.cpp
 │       ├── boss.hpp/.cpp
 │       ├── settings.hpp/.cpp
 │       ├── stage_system.hpp/.cpp
+│       ├── asset_manager.hpp/.cpp
 │       ├── sprite_renderer.hpp/.cpp
 │       └── game.hpp/.cpp
 ├── assets/rumia_modern.png
 ├── assets/reimu_modern.png
 ├── assets/fairy_modern.png
+├── assets/dark_fairy_modern.png
 ├── assets/elite_modern.png
 ├── assets/bullet_pearl.png
 ├── assets/bullet_red.png
@@ -39,13 +48,16 @@
 ├── assets/shaders/skybox.vs/.fs
 ├── assets/shaders/sprite_cutout.fs
 ├── assets/shaders/bullet_core.fs
+├── assets/audio/bgm/*.mp3
 ├── tools/generate_skybox.cpp
 ├── tools/generate_sprite_assets.cpp
 ├── tools/sprite_benchmark.cpp
 └── tests/core_tests.cpp
 ```
 
-依赖方向为 `main -> Game -> StageDirector/Enemy/Boss/BulletSystem`。敌人和 Boss 子类控制技能释放，`bullet_patterns.hpp` 只计算弹幕方向，`BulletSystem` 管理单颗弹体及其定长对象池。raylib 提供窗口、输入、贴图和基础绘制。
+依赖方向为 `main -> Game -> StageContent/StageDirector/Enemy/Boss/BulletSystem/AssetManager`。`Stage1Content` 持有第一面的事件表、素材清单、敌人工厂和演出动作；`StageDirector` 仅处理时序。敌人和 Boss 子类控制技能释放，`bullet_patterns.hpp` 只计算弹幕方向，`BulletSystem` 管理单颗弹体及其定长对象池。`AssetManager` 独占图片、天空盒、着色器、流式 BGM 和音效句柄；`SpriteRenderer` 只借用句柄绘制。raylib 提供窗口、输入、音频与基础绘制。
+
+素材按生命周期分组：程序启动时加载通用天空盒和标题 BGM；Stage 1 开始时加载角色、弹幕、对话立绘、战斗着色器以及道中和 Boss BGM。胜利、失败或返回菜单时停止关卡 BGM 并释放专属素材，菜单素材在程序退出时释放。露米娅的世界精灵和立绘共享一张纹理。音效清单目前为空，新增音效时由同一模块按所属生命周期加载和释放。截图模式不初始化音频设备，因此只加载图形素材。
 
 ## 3 空间与第一人称摄像机
 
@@ -66,9 +78,9 @@ FPS 上限提供 30、60、120、144、240 和 Unlimited 六档，通过 raylib 
 
 红雾背景由六面 cubemap 和一个立方体模型绘制。顶点着色器从视图矩阵中去掉平移，只保留旋转，因此玩家移动时背景保持无限远、转动时显示固定世界方向。天空绘制时关闭背面剔除和深度写入，随后恢复这两项状态供敌人和弹幕使用。六面贴图由同一个方向采样函数生成，云、月亮和远山跨面连续；旧的 `crimson_mist_stage.png` 保留作原始画风参考，不参与运行时渲染。
 
-`position` 始终是三维判定球中心。`SpriteRenderer` 为各类敌人和 Boss 定义立绘的归一化躯干锚点及世界尺寸，用 `DrawBillboardPro` 将该锚点对齐到 `position`；屏幕上方向由摄像机朝向计算，因此高仰俯角下仍完整显示。敌人与 Boss 的发弹点从判定中心沿瞄准方向向前偏移，调试图层按 F3 显示判定球和发弹点。延迟入场的敌人在 `age < 0` 时不参与绘制或碰撞。
+`position` 始终是三维判定球中心。关卡素材清单为各类敌人和 Boss 定义立绘的归一化躯干锚点及世界尺寸；`SpriteRenderer` 用 `DrawBillboardPro` 将该锚点对齐到 `position`；屏幕上方向由摄像机朝向计算，因此高仰俯角下仍完整显示。敌人与 Boss 的发弹点从判定中心沿瞄准方向向前偏移，调试图层按 F3 显示判定球和发弹点。延迟入场的敌人在 `age < 0` 时不参与绘制或碰撞。
 
-弹体由明确的 `BulletVisualKind` 指定蓝珠、红弹或实体球，不再根据颜色猜贴图。两张运行时弹体贴图由原图裁去透明外边并缩小至 512×512；显示直径相对碰撞半径校准。绘制先用透明裁剪着色器写入弹体实心部分的深度，再绘制角色，最后在关闭深度写入后用加色混合绘制近处弹体光晕。渲染按弹体贴图分组，近镜头弹体只显示较淡的光晕，以免遮蔽视线。
+弹体由当前关卡的 `VisualId` 指定蓝珠、红弹或实体球；`VisualMode` 决定是公告板还是实体球。两张运行时弹体贴图由原图裁去透明外边并缩小至 512×512；显示直径相对碰撞半径校准。绘制先用透明裁剪着色器写入弹体实心部分的深度，再绘制角色，最后在关闭深度写入后用加色混合绘制近处弹体光晕。渲染按弹体贴图分组，近镜头弹体只显示较淡的光晕，以免遮蔽视线。
 
 ## 4 核心数据结构
 
@@ -79,7 +91,7 @@ struct Bullet {
     bool active;
     bool grazed;
     BulletOwner owner;
-    BulletVisualKind visual;
+    VisualId visual;
     Vector3 position;
     Vector3 velocity;
     Vector3 acceleration;
@@ -104,11 +116,11 @@ struct Bullet {
 
 ### 4.4 Enemy 与 Boss
 
-`Enemy` 是抽象基类；`FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy`、`EliteEnemy` 分别实现唯一的 `UseSkill`，由共用的 `Enemy::Update` 按计时器调用。敌人航线包括直线、三维螺旋和左右交叉。`Boss` 是独立抽象基类，`RumiaBoss` 区分道中与关底遭遇。道中只有普通攻击；关底依次包含普通攻击、「Night Bird」、第二段普通攻击和「Demarcation」。
+`Enemy` 是抽象基类；`stage1::FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy`、`EliteEnemy` 分别实现唯一的 `UseSkill`，由共用的 `Enemy::Update` 按计时器调用。敌人航线包括直线、三维螺旋和左右交叉。`Boss` 是独立抽象基类，`stage1::RumiaBoss` 区分道中与关底遭遇。道中只有普通攻击；关底依次包含普通攻击、「Night Bird」、第二段普通攻击和「Demarcation」。
 
 ### 4.5 StageEvent
 
-关卡由按顺序排列的事件表驱动。`StageEvent::time` 默认是相对上一事件实际开始时刻的延迟；首个事件相对开局。若设置 `afterEndOf`，则从指定事件实际结束时刻开始计时。可被依赖的事件用唯一 `id` 标识；即时事件由回调同步结束，Boss 战和对话在游戏逻辑完成时向 `StageDirector` 报告结束。事件表覆盖开场、道中 Boss、后半段编队、对话和关底 Boss。生成事件还包含三维中心坐标、敌人数、间距、敌人类型和队形类型。事件间隔是近似值，录像时间映射见 `docs/STAGE1_REFERENCE.md`。
+关卡由按顺序排列的事件表驱动；`StageDirector` 只调度时间，`StageContent` 根据关卡局部的 `action`、`archetype` 编号解释事件。`StageEvent::time` 默认是相对上一事件实际开始时刻的延迟；首个事件相对开局。若设置 `afterEndOf`，则从指定事件实际结束时刻开始计时。可被依赖的事件用唯一 `id` 标识；即时事件由回调同步结束，Boss 战和对话在游戏逻辑完成时向 `StageDirector` 报告结束。事件表覆盖开场、道中 Boss、后半段编队、对话和关底 Boss。生成事件还包含三维中心坐标、敌人数、间距、敌人类型和队形类型。事件间隔是近似值，录像时间映射见 `docs/STAGE1_REFERENCE.md`。
 
 ## 5 三维弹幕算法
 

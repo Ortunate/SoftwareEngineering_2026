@@ -41,7 +41,9 @@ int main(int argc, char** argv) {
     float captureStageTime = 0.0F;
     float captureYaw = 0.0F;
     float capturePitch = 0.0F;
+#ifdef RED_MIST_DEBUG_FEATURES
     bool captureDebug = false;
+#endif
     std::string capturePath = "red_mist_capture.png";
     if (argc >= 3 && std::string_view(argv[1]) == "--capture-stage") {
         captureFrame = true;
@@ -50,7 +52,9 @@ int main(int argc, char** argv) {
         if (argc >= 4) capturePath = argv[3];
         if (argc >= 5) captureYaw = std::strtof(argv[4], nullptr);
         if (argc >= 6) capturePitch = std::strtof(argv[5], nullptr);
+#ifdef RED_MIST_DEBUG_FEATURES
         if (argc >= 7) captureDebug = std::string_view(argv[6]) == "--debug-render";
+#endif
     } else if (argc >= 2 && (std::string_view(argv[1]) == "--capture" ||
                       std::string_view(argv[1]) == "--capture-gameplay" ||
                       std::string_view(argv[1]) == "--capture-options")) {
@@ -71,6 +75,7 @@ int main(int argc, char** argv) {
     }
     SetConfigFlags(windowFlags);
     InitWindow(screenWidth, screenHeight, "Red Mist 3D - Stage 1 Normal Demo");
+    if (!captureFrame) InitAudioDevice();
     SetExitKey(KEY_NULL);
     if (!captureFrame) SetWindowMinSize(900, 620);
     SetTargetFPS(60);
@@ -89,7 +94,9 @@ int main(int argc, char** argv) {
         if (captureStage) {
             // 以固定步长先推进关卡逻辑，再渲染目标时刻的画面。
             game.StartPreview();
+#ifdef RED_MIST_DEBUG_FEATURES
             game.SetDebugDraw(captureDebug);
+#endif
             for (float elapsed = 0.0F; elapsed < captureStageTime;
                  elapsed += 1.0F / 30.0F) {
                 game.Update(1.0F / 30.0F);
@@ -125,6 +132,7 @@ int main(int argc, char** argv) {
     }
 
     if (captureFrame) UnloadRenderTexture(captureTarget);
+    if (IsAudioDeviceReady()) CloseAudioDevice();
     CloseWindow();
     return captureSaved ? 0 : 1;
 }

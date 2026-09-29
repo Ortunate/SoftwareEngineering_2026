@@ -11,29 +11,17 @@
 
 namespace redmist {
 
-/// @brief 关卡时间轴可调度的出怪与演出事件种类。
-enum class StageEventKind : std::uint8_t {
-    SpawnLine,
-    SpawnStarFormation,
-    SpawnCrossingPair,
-    SpawnElite,
-    StartMidboss,
-    StartDialogue,
-    StartFinalBoss,
-    ShowMessage
-};
-
 /// @brief 关卡事件的稳定标识；仅需要被引用或报告结束的事件必须设置。
 using StageEventId = std::uint32_t;
 
-/// @brief 一条关卡时间轴事件；不同 kind 只读取所需的生成参数。
+/// @brief 一条通用时间轴事件；action 和 archetype 由 Stage 自行解释。
 struct StageEvent {
     /// @brief 无依赖时相对上一事件实际开始、存在依赖时相对依赖事件结束的延迟秒数。
     float time = 0.0F;
-    /// @brief 事件类型，决定其余哪些参数生效。
-    StageEventKind kind = StageEventKind::SpawnLine;
-    /// @brief 普通编队事件使用的敌人类型；SpawnElite 固定生成精英。
-    EnemyKind enemy = EnemyKind::Fairy;
+    /// @brief Stage 局部的动作编号。
+    std::uint16_t action = 0;
+    /// @brief Stage 局部的敌人原型编号。
+    std::uint16_t archetype = 0;
     /// @brief 编队敌人数；交叉编队每两个敌人组成一对。
     int count = 1;
     /// @brief 直线、星形与精英事件使用的生成中心。
@@ -52,7 +40,7 @@ public:
     /// @brief 事件回调；返回 true 表示同步结束，false 表示稍后调用 EndEvent。
     using EventHandler = std::function<bool(const StageEvent&)>;
 
-    /// @brief 使用内置的第一面事件表。
+    /// @brief 构造尚未绑定事件表的调度器。
     StageDirector();
     /// @brief 使用外部事件表，调用方须保证该表的生命周期长于调度器。
     /// @param events 按预期触发顺序排列的事件表。

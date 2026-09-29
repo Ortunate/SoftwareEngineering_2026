@@ -4,6 +4,10 @@
 #include "game/enemy.hpp"
 #include "game/settings.hpp"
 #include "game/stage_system.hpp"
+#include "game/stage_catalog.hpp"
+#include "game/stages/stage1_content.hpp"
+#include "game/stages/stage1_enemies.hpp"
+#include "game/stages/stage1_boss.hpp"
 
 #include <cassert>
 #include <array>
@@ -66,7 +70,7 @@ int main() {
         [&bullets](Vector3 direction) {
             bullets.Spawn(BulletOwner::Enemy, {},
                           redmist::pattern::Scale(direction, 2.5F), 0.16F, RED,
-                          redmist::BulletVisualKind::RedOrb);
+                          redmist::stage1::kRedBullet);
         });
     assert(bullets.Pool().ActiveCount() == 64);
 
@@ -77,7 +81,7 @@ int main() {
     bool hasPositiveZ = false;
     bool hasNegativeZ = false;
     bullets.Pool().ForEachActive([&](const redmist::Bullet& bullet) {
-        assert(bullet.visual == redmist::BulletVisualKind::RedOrb);
+        assert(bullet.visual == redmist::stage1::kRedBullet);
         assert(std::abs(BulletSystem::Length(bullet.velocity) - 2.5F) < 0.0002F);
         hasPositiveX = hasPositiveX || bullet.velocity.x > 0.2F;
         hasNegativeX = hasNegativeX || bullet.velocity.x < -0.2F;
@@ -94,45 +98,45 @@ int main() {
         2, 6, 0.45F, 0.0F, [&bullets](Vector3 direction) {
             bullets.Spawn(BulletOwner::Enemy, {},
                           redmist::pattern::Scale(direction, 3.0F), 0.16F, BLUE,
-                          redmist::BulletVisualKind::BluePearl);
+                          redmist::stage1::kBlueBullet);
         });
     assert(bullets.Pool().ActiveCount() == 13);
     bullets.Pool().ForEachActive([](const redmist::Bullet& bullet) {
-        assert(bullet.visual == redmist::BulletVisualKind::BluePearl);
+        assert(bullet.visual == redmist::stage1::kBlueBullet);
     });
 
     bullets.ClearEnemyBullets();
     assert(bullets.Pool().ActiveCount() == 0);
 
-    redmist::FairyEnemy fairy(redmist::PathKind::Straight, {0.0F, 0.0F, 5.0F});
+    redmist::stage1::FairyEnemy fairy(redmist::stage1::Path::Straight, {0.0F, 0.0F, 5.0F});
     const Vector3 fairyMuzzle = fairy.MuzzlePosition({0.0F, 0.0F, 0.0F});
     assert(std::abs(fairyMuzzle.z - (5.0F - fairy.hitRadius * 0.55F)) <
            0.0001F);
     fairy.Update(0.9F, {}, bullets);
     assert(bullets.Pool().ActiveCount() == 1);
     bullets.Pool().ForEachActive([](const redmist::Bullet& bullet) {
-        assert(bullet.visual == redmist::BulletVisualKind::RedOrb);
+        assert(bullet.visual == redmist::stage1::kRedBullet);
         assert(bullet.position.z < 5.0F);
     });
     bullets.Reset();
 
-    redmist::DarkFairyEnemy darkFairy(redmist::PathKind::Straight,
+    redmist::stage1::DarkFairyEnemy darkFairy(redmist::stage1::Path::Straight,
                                        {0.0F, 0.0F, 5.0F});
     darkFairy.Update(0.9F, {}, bullets);
     assert(bullets.Pool().ActiveCount() == 1);
     bullets.Reset();
 
-    redmist::OrbEnemy orb(redmist::PathKind::Straight, {0.0F, 0.0F, 5.0F});
+    redmist::stage1::OrbEnemy orb(redmist::stage1::Path::Straight, {0.0F, 0.0F, 5.0F});
     orb.Update(0.9F, {}, bullets);
     assert(bullets.Pool().ActiveCount() == 6);
     bullets.Reset();
 
-    redmist::EliteEnemy elite(redmist::PathKind::Straight, {0.0F, 0.0F, 5.0F});
+    redmist::stage1::EliteEnemy elite(redmist::stage1::Path::Straight, {0.0F, 0.0F, 5.0F});
     elite.Update(0.9F, {}, bullets);
     assert(bullets.Pool().ActiveCount() == 42);
     bullets.Reset();
 
-    redmist::RumiaBoss boss;
+    redmist::stage1::RumiaBoss boss;
     boss.StartMidboss();
     assert(boss.SpellName() == nullptr);
     assert(std::abs(boss.position.x - 3.0F) < 0.0001F);
@@ -148,7 +152,7 @@ int main() {
     assert(!boss.active);
 
     boss.StartFinalBoss();
-    assert(boss.CurrentEncounter() == redmist::RumiaBoss::Encounter::Final);
+    assert(boss.CurrentEncounter() == redmist::stage1::RumiaBoss::Encounter::Final);
     assert(boss.SpellName() == nullptr);
     assert(boss.AdvancePhase());
     assert(std::string_view(boss.SpellName()) ==
@@ -168,15 +172,15 @@ int main() {
     assert(!boss.active);
 
     constexpr std::array<redmist::StageEvent, 5> relativeEvents{{
-        {.time = 1.0F, .kind = redmist::StageEventKind::ShowMessage,
+        {.time = 1.0F, .action = 0,
          .count = 1, .id = 10},
-        {.time = 2.0F, .kind = redmist::StageEventKind::ShowMessage,
+        {.time = 2.0F, .action = 0,
          .count = 2, .id = 20},
-        {.time = 1.0F, .kind = redmist::StageEventKind::ShowMessage,
+        {.time = 1.0F, .action = 0,
          .count = 3},
-        {.time = 3.0F, .kind = redmist::StageEventKind::ShowMessage,
+        {.time = 3.0F, .action = 0,
          .count = 4, .afterEndOf = 20},
-        {.time = 1.0F, .kind = redmist::StageEventKind::ShowMessage,
+        {.time = 1.0F, .action = 0,
          .count = 5},
     }};
     redmist::StageDirector relativeStage(relativeEvents);
@@ -230,7 +234,8 @@ int main() {
     assert(rejectsEvents(duplicateIds));
     assert(rejectsEvents(negativeDelay));
 
-    redmist::StageDirector stage;
+    redmist::stage1::Stage1Content stageContent;
+    redmist::StageDirector stage(stageContent.Events());
     int midbossEvents = 0;
     int dialogueEvents = 0;
     int finalBossEvents = 0;
@@ -238,22 +243,22 @@ int main() {
     redmist::StageEventId midbossId = 0;
     redmist::StageEventId dialogueId = 0;
     auto recordEvent = [&](const redmist::StageEvent& event) {
-        if (event.kind == redmist::StageEventKind::StartMidboss) {
+        if (event.action == static_cast<std::uint16_t>(redmist::stage1::Action::StartMidboss)) {
             ++midbossEvents;
             midbossId = *event.id;
         }
-        if (event.kind == redmist::StageEventKind::StartDialogue) {
+        if (event.action == static_cast<std::uint16_t>(redmist::stage1::Action::StartDialogue)) {
             ++dialogueEvents;
             dialogueId = *event.id;
         }
-        if (event.kind == redmist::StageEventKind::StartFinalBoss)
+        if (event.action == static_cast<std::uint16_t>(redmist::stage1::Action::StartFinalBoss))
             ++finalBossEvents;
-        if (event.kind == redmist::StageEventKind::SpawnLine ||
-            event.kind == redmist::StageEventKind::SpawnCrossingPair ||
-            event.kind == redmist::StageEventKind::SpawnElite) ++enemyEvents;
-        return event.kind != redmist::StageEventKind::StartMidboss &&
-               event.kind != redmist::StageEventKind::StartDialogue &&
-               event.kind != redmist::StageEventKind::StartFinalBoss;
+        if (event.action == static_cast<std::uint16_t>(redmist::stage1::Action::SpawnLine) ||
+            event.action == static_cast<std::uint16_t>(redmist::stage1::Action::SpawnCrossingPair) ||
+            event.action == static_cast<std::uint16_t>(redmist::stage1::Action::SpawnElite)) ++enemyEvents;
+        return event.action != static_cast<std::uint16_t>(redmist::stage1::Action::StartMidboss) &&
+               event.action != static_cast<std::uint16_t>(redmist::stage1::Action::StartDialogue) &&
+               event.action != static_cast<std::uint16_t>(redmist::stage1::Action::StartFinalBoss);
     };
     for (int frame = 0; frame < 400; ++frame)
         stage.Update(0.1F, recordEvent);
@@ -286,5 +291,35 @@ int main() {
     for (int frame = 0; frame < 31; ++frame)
         stage.Update(0.1F, recordEvent);
     assert(enemyEvents == 9);
+    // 关卡内容拥有自己的外观 ID、敌人工厂与事件解释；通用调度器不识别这些编号。
+    const auto stageFromCatalog = redmist::CreateStageContent(redmist::StageId::Stage1);
+    assert(stageFromCatalog);
+    const auto& visuals = stageFromCatalog->Assets().visuals;
+    assert(visuals[redmist::stage1::kFairy].path == "fairy_modern.png");
+    assert(visuals[redmist::stage1::kDarkFairy].path == "dark_fairy_modern.png");
+    assert(visuals[redmist::stage1::kGreenSphere].mode == redmist::VisualMode::Sphere);
+    const auto newFairy = stageFromCatalog->CreateEnemy(
+        static_cast<std::uint16_t>(redmist::stage1::EnemyType::Fairy),
+        static_cast<std::uint16_t>(redmist::stage1::Path::Helix), {}, 0.0F);
+    assert(newFairy && newFairy->visual == redmist::stage1::kFairy);
+    assert(!stageFromCatalog->CreateEnemy(999, 0, {}, 0.0F));
+    const auto finalBoss = stageFromCatalog->CreateBoss(true);
+    assert(finalBoss && finalBoss->active && !finalBoss->IsMidboss());
+
+    struct EventProbe final : redmist::StageEventSink {
+        int spawned = 0;
+        int bosses = 0;
+        int dialogues = 0;
+        int messages = 0;
+        void SpawnStageEnemy(std::uint16_t, std::uint16_t,
+                             Vector3, float) override { ++spawned; }
+        void BeginStageBoss(bool, redmist::StageEventId) override { ++bosses; }
+        void BeginStageDialogue(redmist::StageEventId) override { ++dialogues; }
+        void StageMessage(std::string_view, float) override { ++messages; }
+    } probe;
+    assert(stageFromCatalog->HandleEvent(stageFromCatalog->Events()[1], probe));
+    assert(probe.spawned == 8);
+    assert(!stageFromCatalog->HandleEvent(stageFromCatalog->Events()[9], probe));
+    assert(probe.bosses == 1);
     return 0;
 }

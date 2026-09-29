@@ -1,59 +1,10 @@
 #include "game/stage_system.hpp"
 
-#include <array>
 #include <cmath>
 #include <stdexcept>
 
 namespace redmist {
-namespace {
-
-constexpr StageEventId kMidbossEventId = 1;
-constexpr StageEventId kDialogueEventId = 2;
-constexpr StageEventId kFinalBossEventId = 3;
-
-// 普通波次的 time 相对上一事件实际开始；Boss 和对话后的波次等待相应事件结束。
-// 参考 187 秒 Normal 录像近似编排；录像开头的选人时间不计入。
-constexpr std::array<StageEvent, 21> kNormalStageOneEvents{{
-    {0.2F, StageEventKind::ShowMessage},
-    {0.8F, StageEventKind::SpawnLine, EnemyKind::Fairy, 8,
-     {0.0F, 1.2F, 8.8F}, 1.15F},
-    {3.5F, StageEventKind::SpawnCrossingPair, EnemyKind::Fairy, 8},
-    {3.5F, StageEventKind::SpawnLine, EnemyKind::DarkFairy, 6,
-     {0.0F, 2.0F, 8.8F}, 1.5F},
-    {3.5F, StageEventKind::SpawnCrossingPair, EnemyKind::DarkFairy, 6},
-    {3.5F, StageEventKind::SpawnLine, EnemyKind::Fairy, 8,
-     {0.0F, -0.5F, 8.8F}, 1.2F},
-    {3.5F, StageEventKind::SpawnCrossingPair, EnemyKind::Fairy, 8},
-    {3.5F, StageEventKind::SpawnLine, EnemyKind::Fairy, 10,
-     {0.0F, 1.5F, 8.8F}, 1.0F},
-    {4.0F, StageEventKind::SpawnCrossingPair, EnemyKind::Fairy, 10},
-    {.time = 4.0F, .kind = StageEventKind::StartMidboss,
-     .id = kMidbossEventId},
-    {.time = 3.0F, .kind = StageEventKind::SpawnLine,
-     .enemy = EnemyKind::DarkFairy, .count = 6,
-     .center = {0.0F, 1.2F, 8.7F}, .spacing = 1.5F,
-     .afterEndOf = kMidbossEventId},
-    {4.0F, StageEventKind::SpawnCrossingPair, EnemyKind::DarkFairy, 8},
-    {4.0F, StageEventKind::SpawnLine, EnemyKind::DarkFairy, 7,
-     {0.0F, -0.8F, 8.8F}, 1.25F},
-    {4.0F, StageEventKind::SpawnCrossingPair, EnemyKind::DarkFairy, 8},
-    {5.0F, StageEventKind::SpawnLine, EnemyKind::Fairy, 10,
-     {0.0F, 1.2F, 8.8F}, 1.0F},
-    {4.0F, StageEventKind::SpawnCrossingPair, EnemyKind::Fairy, 10},
-    {4.0F, StageEventKind::SpawnLine, EnemyKind::Fairy, 10,
-     {0.0F, -1.0F, 8.8F}, 1.0F},
-    {4.0F, StageEventKind::SpawnCrossingPair, EnemyKind::Fairy, 10},
-    {4.0F, StageEventKind::SpawnLine, EnemyKind::Fairy, 8,
-     {0.0F, 1.2F, 8.8F}, 1.2F},
-    {.time = 4.0F, .kind = StageEventKind::StartDialogue,
-     .id = kDialogueEventId},
-    {.time = 0.0F, .kind = StageEventKind::StartFinalBoss,
-     .id = kFinalBossEventId, .afterEndOf = kDialogueEventId},
-}};
-
-}  // namespace
-
-StageDirector::StageDirector() : StageDirector(kNormalStageOneEvents) {}
+StageDirector::StageDirector() : StageDirector(std::span<const StageEvent>{}) {}
 
 StageDirector::StageDirector(std::span<const StageEvent> events)
     : events_(events), states_(events.size()) {

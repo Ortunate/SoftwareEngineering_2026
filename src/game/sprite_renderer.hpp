@@ -1,3 +1,5 @@
+// 本文件负责声明按外观资源绘制战斗对象的渲染接口。
+
 #pragma once
 
 #include "game/boss.hpp"

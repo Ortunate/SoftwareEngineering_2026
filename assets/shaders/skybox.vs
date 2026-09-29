@@ -1,3 +1,5 @@
+// 本文件负责移除相机平移，只用视角旋转定位天空盒。
+
 #version 330
 
 in vec3 vertexPosition;

@@ -1,3 +1,5 @@
+// 本文件负责声明弹幕对象池及弹幕生成和方向计算接口。
+
 #pragma once
 
 #include "core/fixed_pool.hpp"

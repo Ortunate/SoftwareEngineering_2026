@@ -1,3 +1,5 @@
+// 本文件负责生成六面连续的红雾天空盒贴图。
+
 #include "raylib.h"
 
 #include <algorithm>

@@ -1,3 +1,5 @@
+// 本文件负责实现游戏主循环，协调输入、关卡事件、战斗、碰撞和界面绘制。
+
 #include "game/game.hpp"
 #include "game/settings.hpp"
 

@@ -1,3 +1,5 @@
+// 本文件负责实现 FPS 与按键设置文件的读取、校验和保存。
+
 #include "game/settings.hpp"
 
 #include <algorithm>

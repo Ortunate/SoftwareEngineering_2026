@@ -1,3 +1,5 @@
+// 本文件负责定义 Boss 的抽象接口及血量、阶段等公共状态。
+
 #pragma once
 
 #include "game/bullet_system.hpp"

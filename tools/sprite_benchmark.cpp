@@ -1,3 +1,5 @@
+// 本文件负责测量空场景与高弹量场景的精灵渲染帧时间。
+
 #include "game/asset_manager.hpp"
 #include "game/sprite_renderer.hpp"
 #include "game/stages/stage1_content.hpp"

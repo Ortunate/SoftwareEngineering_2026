@@ -1,3 +1,5 @@
+// 本文件负责裁剪并缩放弹幕原图，生成运行时使用的贴图。
+
 #include "raylib.h"
 
 #include <array>

@@ -1,3 +1,5 @@
+// 本文件负责提供固定容量对象池，复用槽位并统计溢出生成请求。
+
 #pragma once
 
 #include <array>

@@ -1,3 +1,5 @@
+// 本文件负责声明游戏总控类、运行状态及各系统的协作入口。
+
 #pragma once
 
 #include "game/asset_manager.hpp"

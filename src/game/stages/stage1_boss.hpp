@@ -1,3 +1,5 @@
+// 本文件负责声明第一面露米娅 Boss 的遭遇状态与技能接口。
+
 #pragma once
 
 #include "game/boss.hpp"

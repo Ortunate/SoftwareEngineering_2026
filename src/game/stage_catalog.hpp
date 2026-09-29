@@ -1,3 +1,5 @@
+// 本文件负责声明关卡编号和关卡内容工厂接口。
+
 #pragma once
 
 #include "game/stage_content.hpp"

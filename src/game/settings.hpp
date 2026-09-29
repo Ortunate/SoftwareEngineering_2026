@@ -1,3 +1,5 @@
+// 本文件负责声明可持久化的游戏设置及其读写接口。
+
 #pragma once
 
 #include "game/game_types.hpp"

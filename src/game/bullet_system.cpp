@@ -1,3 +1,5 @@
+// 本文件负责实现单颗弹幕生成、运动更新与敌弹清除。
+
 #include "game/bullet_system.hpp"
 
 #include <algorithm>

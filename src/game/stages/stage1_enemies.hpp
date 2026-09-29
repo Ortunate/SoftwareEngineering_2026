@@ -1,3 +1,5 @@
+// 本文件负责声明第一面普通妖精、暗色妖精和光球敌人。
+
 #pragma once
 
 #include "game/stage_content.hpp"

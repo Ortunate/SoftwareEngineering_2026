@@ -1,3 +1,5 @@
+// 本文件负责实现第一面各类敌人的移动轨迹、技能计时和弹幕释放。
+
 #include "game/stages/stage1_enemies.hpp"
 
 #include "game/bullet_patterns.hpp"

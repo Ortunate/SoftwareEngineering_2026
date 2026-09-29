@@ -1,3 +1,5 @@
+// 本文件负责裁剪角色贴图的透明区域，保留可见像素。
+
 #version 330
 
 in vec2 fragTexCoord;

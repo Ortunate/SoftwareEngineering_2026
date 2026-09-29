@@ -1,3 +1,5 @@
+// 本文件负责注册并构造可供游戏总控选择的关卡内容。
+
 #include "game/stage_catalog.hpp"
 
 #include "game/stages/stage1_content.hpp"

@@ -1,3 +1,5 @@
+// 本文件负责实现 Boss 共用的发弹点计算。
+
 #include "game/boss.hpp"
 
 #include "game/bullet_patterns.hpp"

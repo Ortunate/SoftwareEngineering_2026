@@ -1,3 +1,5 @@
+// 本文件负责定义第一面局部使用的外观、敌人、编队和事件编号。
+
 #pragma once
 
 #include "game/visual_assets.hpp"

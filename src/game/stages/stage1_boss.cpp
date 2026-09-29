@@ -1,3 +1,5 @@
+// 本文件负责实现第一面露米娅道中与关底战的移动、阶段和弹幕技能。
+
 #include "game/stages/stage1_boss.hpp"
 #include "game/stages/stage1_ids.hpp"
 

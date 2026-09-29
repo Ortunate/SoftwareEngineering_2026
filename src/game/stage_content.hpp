@@ -1,3 +1,5 @@
+// 本文件负责定义关卡素材、事件、敌人工厂和演出请求的抽象接口。
+
 #pragma once
 
 #include "game/boss.hpp"

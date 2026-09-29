@@ -1,3 +1,5 @@
+// 本文件负责验证弹幕算法、敌人和 Boss 行为、关卡调度及设置读写。
+
 #include "game/bullet_system.hpp"
 #include "game/bullet_patterns.hpp"
 #include "game/boss.hpp"

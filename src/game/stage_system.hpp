@@ -1,3 +1,5 @@
+// 本文件负责定义关卡事件数据与通用时间轴调度器接口。
+
 #pragma once
 
 #include "game/game_types.hpp"

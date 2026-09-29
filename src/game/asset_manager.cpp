@@ -1,3 +1,5 @@
+// 本文件负责实现通用与关卡素材的加载、音频播放和资源卸载。
+
 #include "game/asset_manager.hpp"
 
 #include "rlgl.h"

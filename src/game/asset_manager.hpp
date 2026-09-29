@@ -1,3 +1,5 @@
+// 本文件负责声明图片、着色器、BGM 和音效的统一资源管理接口。
+
 #pragma once
 
 #include "game/sprite_renderer.hpp"

@@ -1,3 +1,5 @@
+// 本文件负责实现敌人入场计时、边界检查和发弹点计算，并调用子类行为。
+
 #include "game/enemy.hpp"
 
 #include "game/bullet_patterns.hpp"

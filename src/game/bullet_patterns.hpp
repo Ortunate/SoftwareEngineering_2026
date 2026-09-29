@@ -1,3 +1,5 @@
+// 本文件负责提供三维弹幕所需的向量运算、球面与锥面方向生成算法。
+
 #pragma once
 
 #include "raylib.h"

@@ -1,3 +1,5 @@
+// 本文件负责定义第一面的素材清单、出怪时间轴、对话及事件处理。
+
 #include "game/stages/stage1_content.hpp"
 
 #include "game/stages/stage1_boss.hpp"

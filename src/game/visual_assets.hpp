@@ -1,3 +1,5 @@
+// 本文件负责定义关卡外观 ID、绘制参数和音频素材清单。
+
 #pragma once
 
 #include "raylib.h"

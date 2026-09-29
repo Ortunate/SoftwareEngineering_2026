@@ -1,3 +1,5 @@
+// 本文件负责裁剪弹幕贴图的透明区域并输出写入深度的实心部分。
+
 #version 330
 
 in vec2 fragTexCoord;

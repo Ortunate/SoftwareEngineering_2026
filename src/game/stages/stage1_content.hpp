@@ -1,3 +1,5 @@
+// 本文件负责声明第一面关卡内容和敌人、Boss 工厂。
+
 #pragma once
 
 #include "game/stage_content.hpp"

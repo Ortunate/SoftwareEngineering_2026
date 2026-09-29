@@ -1,3 +1,5 @@
+// 本文件负责定义敌人抽象基类及持有多态敌人的固定槽位池。
+
 #pragma once
 
 #include "game/bullet_system.hpp"

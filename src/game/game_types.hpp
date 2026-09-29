@@ -1,3 +1,5 @@
+// 本文件负责定义玩家、弹幕、按键映射和游戏状态等共享数据类型。
+
 #pragma once
 
 #include "raylib.h"

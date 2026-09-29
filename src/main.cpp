@@ -1,3 +1,5 @@
+// 本文件负责初始化窗口与游戏循环，并处理静默截图等启动参数。
+
 #include "game/game.hpp"
 
 #include "raylib.h"

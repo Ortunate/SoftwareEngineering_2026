@@ -1,3 +1,5 @@
+// 本文件负责实现敌人、Boss 和弹幕的公告板绘制、光晕及调试图层。
+
 #include "game/sprite_renderer.hpp"
 
 #include "rlgl.h"

@@ -1,3 +1,5 @@
+// 本文件负责实现支持相对延迟与事件结束依赖的关卡时间轴调度。
+
 #include "game/stage_system.hpp"
 
 #include <cmath>

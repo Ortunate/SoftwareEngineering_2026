@@ -38,7 +38,6 @@
 ├── assets/reimu_modern.png
 ├── assets/fairy_modern.png
 ├── assets/dark_fairy_modern.png
-├── assets/elite_modern.png
 ├── assets/bullet_pearl.png
 ├── assets/bullet_red.png
 ├── assets/bullet_pearl_runtime.png
@@ -116,7 +115,7 @@ struct Bullet {
 
 ### 4.4 Enemy 与 Boss
 
-`Enemy` 是抽象基类；`stage1::FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy`、`EliteEnemy` 分别实现唯一的 `UseSkill`，由共用的 `Enemy::Update` 按计时器调用。敌人航线包括直线、三维螺旋和左右交叉。`Boss` 是独立抽象基类，`stage1::RumiaBoss` 区分道中与关底遭遇。道中只有普通攻击；关底依次包含普通攻击、「Night Bird」、第二段普通攻击和「Demarcation」。
+`Enemy` 是抽象基类，只推进入场年龄并检查边界。`stage1::FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy` 各自实现 `Move` 与 `UpdateSkills`，在类内选择运动状态并持有技能计时器。每个具体敌人类固定一种外观，同类实例可因编队上下文选择不同轨迹。时间轴传递的 `EnemySpawn` 只描述出生位置、延迟、编队和槽位，不指定通用路径。`Boss` 是独立抽象基类，`stage1::RumiaBoss` 区分道中与关底遭遇。道中只有普通攻击；关底依次包含普通攻击、「Night Bird」、第二段普通攻击和「Demarcation」。
 
 ### 4.5 StageEvent
 

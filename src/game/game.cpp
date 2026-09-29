@@ -568,9 +568,8 @@ bool Game::HandleStageEvent(const StageEvent& event) {
     return stageContent_->HandleEvent(event, *this);
 }
 
-void Game::SpawnStageEnemy(std::uint16_t archetype, std::uint16_t motion,
-                           Vector3 position, float delay) {
-    if (auto enemy = stageContent_->CreateEnemy(archetype, motion, position, delay))
+void Game::SpawnStageEnemy(std::uint16_t archetype, const EnemySpawn& spawn) {
+    if (auto enemy = stageContent_->CreateEnemy(archetype, spawn))
         enemies_.Add(std::move(enemy));
 }
 

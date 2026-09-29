@@ -1,51 +1,59 @@
 #pragma once
 
-#include "game/enemy.hpp"
+#include "game/stage_content.hpp"
 #include "game/stages/stage1_ids.hpp"
 
 namespace redmist::stage1 {
 
-/// @brief Stage 1 敌人共用的四种航线，其他 Stage 可完全自行实现移动。
-class Stage1Enemy : public Enemy {
+/// @brief 普通妖精固定使用蓝衣外观，自行选择直行、绕行或交叉入场。
+class FairyEnemy final : public Enemy {
 public:
-    /// @brief 初始化 Stage 1 外观与航线。
-    Stage1Enemy(VisualId visual, Path path, Vector3 position, float delay);
+    /// @brief 按出生编队选择本妖精内部的移动状态。
+    explicit FairyEnemy(const EnemySpawn& spawn);
 
 private:
-    void Move() override;
-    Path path_;
+    enum class Movement { Straight, Helix, CrossFromLeft, CrossFromRight };
+    void Move(float deltaTime) override;
+    void UpdateSkills(float deltaTime, Vector3 playerPosition,
+                      BulletSystem& bullets) override;
+    void FireAimedShot(BulletSystem& bullets, Vector3 playerPosition);
+
+    Movement movement_;
+    float shotTimer_;
 };
 
-/// @brief Stage 1 普通妖精。
-class FairyEnemy final : public Stage1Enemy {
+/// @brief 暗色妖精固定使用紫衣外观，并拥有自己的漂移与交叉轨迹。
+class DarkFairyEnemy final : public Enemy {
 public:
-    FairyEnemy(Path path, Vector3 position, float delay = 0.0F);
+    /// @brief 按出生编队选择暗色妖精内部的移动状态。
+    explicit DarkFairyEnemy(const EnemySpawn& spawn);
+
 private:
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
+    enum class Movement { Drift, Corkscrew, CrossFromLeft, CrossFromRight };
+    void Move(float deltaTime) override;
+    void UpdateSkills(float deltaTime, Vector3 playerPosition,
+                      BulletSystem& bullets) override;
+    void FireAimedShot(BulletSystem& bullets, Vector3 playerPosition);
+
+    Movement movement_;
+    float shotTimer_;
 };
 
-/// @brief Stage 1 暗色妖精。
-class DarkFairyEnemy final : public Stage1Enemy {
+/// @brief 光球敌人固定使用蓝珠外观，在前进中上下浮动并释放锥形弹幕。
+class OrbEnemy final : public Enemy {
 public:
-    DarkFairyEnemy(Path path, Vector3 position, float delay = 0.0F);
-private:
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
-};
+    /// @brief 根据编队上下文初始化光球运动。
+    explicit OrbEnemy(const EnemySpawn& spawn);
 
-/// @brief Stage 1 光球敌人。
-class OrbEnemy final : public Stage1Enemy {
-public:
-    OrbEnemy(Path path, Vector3 position, float delay = 0.0F);
 private:
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
-};
+    enum class Movement { FloatForward, OrbitForward, CrossArena };
+    void Move(float deltaTime) override;
+    void UpdateSkills(float deltaTime, Vector3 playerPosition,
+                      BulletSystem& bullets) override;
+    void FireCone(BulletSystem& bullets, Vector3 playerPosition);
 
-/// @brief Stage 1 精英妖精。
-class EliteEnemy final : public Stage1Enemy {
-public:
-    EliteEnemy(Path path, Vector3 position, float delay = 0.0F);
-private:
-    void UseSkill(BulletSystem& bullets, Vector3 playerPosition) override;
+    Movement movement_;
+    float shotTimer_;
 };
 
 }  // namespace redmist::stage1

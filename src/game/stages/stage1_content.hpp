@@ -11,8 +11,7 @@ public:
     [[nodiscard]] const StageAssetManifest& Assets() const override;
     [[nodiscard]] std::span<const StageEvent> Events() const override;
     [[nodiscard]] std::unique_ptr<Enemy> CreateEnemy(
-        std::uint16_t archetype, std::uint16_t motion, Vector3 position,
-        float delay) const override;
+        std::uint16_t archetype, const EnemySpawn& spawn) const override;
     [[nodiscard]] std::unique_ptr<Boss> CreateBoss(bool final) const override;
     bool HandleEvent(const StageEvent& event, StageEventSink& sink) const override;
     [[nodiscard]] std::span<const DialogueLine> Dialogue() const override;

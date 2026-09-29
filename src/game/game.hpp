@@ -107,11 +107,9 @@ private:
 
     /// @brief 委托当前 Stage 工厂构造敌人并加入敌人池。
     /// @param archetype Stage 局部敌人原型。
-    /// @param motion Stage 局部运动类型。
-    /// @param position 生成位置。
-    /// @param delay 入场延迟（秒）。
-    void SpawnStageEnemy(std::uint16_t archetype, std::uint16_t motion,
-                         Vector3 position, float delay) override;
+    /// @param spawn 出生位置、延迟与编队上下文。
+    void SpawnStageEnemy(std::uint16_t archetype,
+                         const EnemySpawn& spawn) override;
     void BeginStageBoss(bool final, StageEventId id) override;
     void BeginStageDialogue(StageEventId id) override;
     void StageMessage(std::string_view message, float duration) override;

@@ -13,18 +13,17 @@ constexpr VisualId kGreenSphere = 2;
 constexpr VisualId kFairy = 3;
 constexpr VisualId kDarkFairy = 4;
 constexpr VisualId kOrb = 5;
-constexpr VisualId kElite = 6;
-constexpr VisualId kRumia = 7;
-constexpr VisualId kReimuPortrait = 8;
+constexpr VisualId kRumia = 6;
+constexpr VisualId kReimuPortrait = 7;
 
-enum class EnemyType : std::uint16_t { Fairy, DarkFairy, Orb, Elite };
-enum class Path : std::uint16_t { Straight, Helix, SweepLeft, SweepRight };
+enum class EnemyType : std::uint16_t { Fairy, DarkFairy, Orb };
+/// @brief 关卡编队形状；具体敌人内部决定如何沿该编队移动。
+enum class Formation : std::uint16_t { Line, Star, CrossingPair };
 enum class Action : std::uint16_t {
     ShowMessage,
     SpawnLine,
     SpawnStarFormation,
     SpawnCrossingPair,
-    SpawnElite,
     StartMidboss,
     StartDialogue,
     StartFinalBoss,

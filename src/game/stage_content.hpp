@@ -12,13 +12,21 @@
 
 namespace redmist {
 
+/// @brief 关卡编队提供的出生上下文；formation 和 slot 不指定运动轨迹。
+struct EnemySpawn {
+    Vector3 position{};
+    float delay = 0.0F;
+    std::uint16_t formation = 0;
+    int slot = 0;
+};
+
 /// @brief Stage 对游戏总控提出的生成与演出请求。
 class StageEventSink {
 public:
     virtual ~StageEventSink() = default;
     /// @brief 请求游戏总控生成一个当前关卡的敌人。
-    virtual void SpawnStageEnemy(std::uint16_t archetype, std::uint16_t motion,
-                                 Vector3 position, float delay) = 0;
+    virtual void SpawnStageEnemy(std::uint16_t archetype,
+                                 const EnemySpawn& spawn) = 0;
     /// @brief 请求开始道中或关底 Boss，并登记异步事件编号。
     virtual void BeginStageBoss(bool final, StageEventId id) = 0;
     /// @brief 请求开始对话并登记异步事件编号。
@@ -42,10 +50,9 @@ public:
     [[nodiscard]] virtual const StageAssetManifest& Assets() const = 0;
     /// @brief 返回按触发顺序排列的时间轴事件。
     [[nodiscard]] virtual std::span<const StageEvent> Events() const = 0;
-    /// @brief 根据关卡局部原型与运动编号构造敌人。
+    /// @brief 根据关卡局部原型与编队上下文构造敌人；运动由具体类选择。
     [[nodiscard]] virtual std::unique_ptr<Enemy> CreateEnemy(
-        std::uint16_t archetype, std::uint16_t motion, Vector3 position,
-        float delay) const = 0;
+        std::uint16_t archetype, const EnemySpawn& spawn) const = 0;
     /// @brief 构造道中或关底 Boss 并初始化遭遇状态。
     [[nodiscard]] virtual std::unique_ptr<Boss> CreateBoss(bool final) const = 0;
     /// @brief 解释一个关卡事件；异步事件返回 false。

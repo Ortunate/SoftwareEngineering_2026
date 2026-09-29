@@ -139,13 +139,13 @@ ctest --test-dir build --output-on-failure
 
 ## 扩展关卡
 
-每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂、事件处理和对话。第一面的实现集中在 `src/game/stages/stage1_*`；通用 `Enemy` 只负责入场、移动调用和开火计时，具体航线与技能在关卡子类中。`StageEvent::action`、`archetype` 和敌人的运动编号只在该关卡内解释。新增关卡时创建自己的内容模块并在 `stage_catalog.cpp` 注册，`Game`、`StageDirector`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。
+每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂、事件处理和对话。第一面的实现集中在 `src/game/stages/stage1_*`；通用 `Enemy` 只负责入场、边界检查和调用子类；各具体敌人类自行选择移动状态、推进技能计时并发弹。同一敌人类固定一种外观，可拥有多条轨迹与多个技能。时间轴只传出生位置、延迟和编队上下文，不指定通用运动路径。`StageEvent::action` 与 `archetype` 仅由所属关卡解释。新增关卡时创建自己的内容模块并在 `stage_catalog.cpp` 注册，`Game`、`StageDirector`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。
 
 弹幕、敌人与 Boss 记录 `VisualId`。关卡清单将该 ID 映射到图片路径、绘制方式、世界尺寸、锚点及光晕参数。`AssetManager` 在关卡开始时按清单加载，在结束时卸载；相同路径的角色贴图与立绘共享同一纹理。`SpriteRenderer` 按外观 ID 分组弹幕，每帧遍历弹池一次，避免随外观种类增加而重复扫描。
 
 ## 弹幕与关卡结构
 
-`BulletSystem` 只创建单颗弹体，并负责对象池、运动更新和清除；它不决定弹幕图案。各敌人子类实现 `UseSkill`，由 `Enemy::Update` 按开火计时器调用。`RumiaBoss` 分别处理道中和关底遭遇，并在关底阶段调用两种普通攻击与两张符卡技能函数。道中露米娅没有符卡；关底符卡开始时清除旧弹幕，展示立绘与名称，再释放弹幕。
+`BulletSystem` 只创建单颗弹体，并负责对象池、运动更新和清除；它不决定弹幕图案。各敌人子类实现 `Move` 和 `UpdateSkills`，由 `Enemy::Update` 在入场后调用；具体技能与各自的计时器由子类持有。`RumiaBoss` 分别处理道中和关底遭遇，并在关底阶段调用两种普通攻击与两张符卡技能函数。道中露米娅没有符卡；关底符卡开始时清除旧弹幕，展示立绘与名称，再释放弹幕。
 
 第一面的事件表由 `Stage1Content` 提供，`StageDirector` 只按顺序调度。`StageEvent::time` 默认表示距上一事件实际开始的秒数；设置 `afterEndOf` 后，表示距指定事件实际结束的秒数。道中 Boss 退场后才开始计算后续出怪的延迟，对话播放完毕后才触发关底 Boss。
 

@@ -10,12 +10,12 @@
 
 namespace redmist {
 
-/// @brief 小怪抽象基类：通用计时与判定由基类处理，移动和技能由 Stage 子类实现。
+/// @brief 小怪抽象基类：仅处理入场与边界，移动和技能计时由具体敌人实现。
 class Enemy {
 public:
     /// @brief 通过基类指针安全销毁具体敌人。
     virtual ~Enemy() = default;
-    /// @brief 更新入场延迟、航线和开火计时；age 为负时尚未入场。
+    /// @brief 更新入场延迟，并委托子类执行移动和各技能计时。
     /// @param deltaTime 本帧经过的秒数。
     /// @param playerPosition 玩家判定中心，用于瞄准。
     /// @param bullets 接收技能生成的弹幕。
@@ -23,16 +23,13 @@ public:
                         BulletSystem& bullets);
 
     bool active = true;
-    VisualId visual = kInvalidVisualId;
+    const VisualId visual;
     Vector3 position;
     Vector3 origin;
     float age;
     float health = 10.0F;
     float maxHealth = 10.0F;
     float hitRadius = 0.55F;
-    float speed = 1.0F;
-    float fireTimer = 0.0F;
-    float fireInterval = 1.5F;
     int scoreValue = 500;
 
     /// @brief 沿玩家方向从自身判定中心向前取发弹位置。
@@ -47,11 +44,10 @@ protected:
     /// @param delay 入场延迟（秒）。
     Enemy(VisualId visual, Vector3 position, float delay);
     /// @brief Stage 子类按自身规则更新空间位置。
-    virtual void Move() = 0;
-    /// @brief 由子类生成技能弹幕；调用时机由 Update 统一控制。
-    /// @param bullets 接收生成弹幕的系统。
-    /// @param playerPosition 技能瞄准所用的玩家位置。
-    virtual void UseSkill(BulletSystem& bullets, Vector3 playerPosition) = 0;
+    virtual void Move(float deltaTime) = 0;
+    /// @brief 子类自行推进任意数量的技能计时器并释放弹幕。
+    virtual void UpdateSkills(float deltaTime, Vector3 playerPosition,
+                              BulletSystem& bullets) = 0;
 };
 
 /// @brief 用固定数量的槽位持有多态敌人并统计丢弃的生成请求。

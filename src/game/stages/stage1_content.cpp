@@ -11,7 +11,9 @@ namespace redmist::stage1 {
 namespace {
 constexpr std::uint16_t A(Action action) { return static_cast<std::uint16_t>(action); }
 constexpr std::uint16_t E(EnemyType enemy) { return static_cast<std::uint16_t>(enemy); }
-constexpr std::uint16_t P(Path path) { return static_cast<std::uint16_t>(path); }
+constexpr std::uint16_t F(Formation formation) {
+    return static_cast<std::uint16_t>(formation);
+}
 
 constexpr StageEventId kMidbossEventId = 1;
 constexpr StageEventId kDialogueEventId = 2;
@@ -54,7 +56,7 @@ constexpr std::array<StageEvent, 21> kEvents{{
      .id = kFinalBossEventId, .afterEndOf = kDialogueEventId},
 }};
 
-constexpr std::array<VisualDefinition, 9> kVisuals{{
+constexpr std::array<VisualDefinition, 8> kVisuals{{
     {kBlueBullet, "bullet_pearl_runtime.png", VisualMode::Bullet, 1.0F,
      {0.5F, 0.5F}, 2.6F, true},
     {kRedBullet, "bullet_red_runtime.png", VisualMode::Bullet, 1.0F,
@@ -65,8 +67,6 @@ constexpr std::array<VisualDefinition, 9> kVisuals{{
     {kDarkFairy, "dark_fairy_modern.png", VisualMode::Character, 1.8F,
      {0.50F, 0.45F}},
     {kOrb, "bullet_pearl_runtime.png", VisualMode::Character, 1.488F},
-    {kElite, "elite_modern.png", VisualMode::Character, 3.06F,
-     {0.50F, 0.35F}},
     {kRumia, "rumia_modern.png", VisualMode::Character, 3.2F,
      {0.50F, 0.36F}},
     {kReimuPortrait, "reimu_modern.png", VisualMode::Character},
@@ -90,15 +90,12 @@ std::span<const StageEvent> Stage1Content::Events() const { return kEvents; }
 std::span<const DialogueLine> Stage1Content::Dialogue() const { return kDialogue; }
 
 std::unique_ptr<Enemy> Stage1Content::CreateEnemy(
-    std::uint16_t archetype, std::uint16_t motion, Vector3 position,
-    float delay) const {
-    if (motion > P(Path::SweepRight)) return nullptr;
-    const Path path = static_cast<Path>(motion);
+    std::uint16_t archetype, const EnemySpawn& spawn) const {
+    if (spawn.formation > F(Formation::CrossingPair)) return nullptr;
     switch (static_cast<EnemyType>(archetype)) {
-        case EnemyType::Fairy: return std::make_unique<FairyEnemy>(path, position, delay);
-        case EnemyType::DarkFairy: return std::make_unique<DarkFairyEnemy>(path, position, delay);
-        case EnemyType::Orb: return std::make_unique<OrbEnemy>(path, position, delay);
-        case EnemyType::Elite: return std::make_unique<EliteEnemy>(path, position, delay);
+        case EnemyType::Fairy: return std::make_unique<FairyEnemy>(spawn);
+        case EnemyType::DarkFairy: return std::make_unique<DarkFairyEnemy>(spawn);
+        case EnemyType::Orb: return std::make_unique<OrbEnemy>(spawn);
     }
     return nullptr;
 }
@@ -122,10 +119,11 @@ bool Stage1Content::HandleEvent(const StageEvent& event, StageEventSink& sink) c
             for (int index = 0; index < event.count; ++index) {
                 const float offset = static_cast<float>(index) - middle;
                 sink.SpawnStageEnemy(event.archetype,
-                    index % 2 == 0 ? P(Path::Straight) : P(Path::Helix),
-                    {event.center.x + offset * event.spacing,
-                     event.center.y + std::sin(offset) * 0.8F, event.center.z},
-                    static_cast<float>(index) * 0.1F);
+                    {{event.center.x + offset * event.spacing,
+                      event.center.y + std::sin(offset) * 0.8F,
+                      event.center.z},
+                     static_cast<float>(index) * 0.1F,
+                     F(Formation::Line), index});
             }
             break;
         }
@@ -137,11 +135,11 @@ bool Stage1Content::HandleEvent(const StageEvent& event, StageEventSink& sink) c
                 const float y = 1.0F - 2.0F * t;
                 const float radial = std::sqrt(std::max(0.0F, 1.0F - y * y));
                 const float azimuth = goldenAngle * static_cast<float>(index);
-                sink.SpawnStageEnemy(event.archetype, P(Path::Helix),
-                    {event.center.x + radial * std::cos(azimuth) * event.spacing,
-                     event.center.y + y * event.spacing,
-                     event.center.z + radial * std::sin(azimuth) * event.spacing * 0.35F},
-                    index * 0.08F);
+                sink.SpawnStageEnemy(event.archetype,
+                    {{event.center.x + radial * std::cos(azimuth) * event.spacing,
+                      event.center.y + y * event.spacing,
+                      event.center.z + radial * std::sin(azimuth) * event.spacing * 0.35F},
+                     index * 0.08F, F(Formation::Star), index});
             }
             break;
         }
@@ -149,15 +147,13 @@ bool Stage1Content::HandleEvent(const StageEvent& event, StageEventSink& sink) c
             for (int index = 0; index < event.count / 2; ++index) {
                 const float y = -4.5F + static_cast<float>(index) * 2.6F;
                 const float z = 7.8F - static_cast<float>(index) * 0.45F;
-                sink.SpawnStageEnemy(event.archetype, P(Path::SweepLeft),
-                                     {-9.0F, y, z}, index * 0.18F);
-                sink.SpawnStageEnemy(event.archetype, P(Path::SweepRight),
-                                     {9.0F, -y * 0.7F, z}, index * 0.18F);
+                sink.SpawnStageEnemy(event.archetype,
+                    {{-9.0F, y, z}, index * 0.18F,
+                     F(Formation::CrossingPair), index * 2});
+                sink.SpawnStageEnemy(event.archetype,
+                    {{9.0F, -y * 0.7F, z}, index * 0.18F,
+                     F(Formation::CrossingPair), index * 2 + 1});
             }
-            break;
-        case Action::SpawnElite:
-            sink.SpawnStageEnemy(E(EnemyType::Elite), P(Path::Helix),
-                                 event.center, 0.0F);
             break;
         case Action::StartMidboss:
             sink.BeginStageBoss(false, *event.id);

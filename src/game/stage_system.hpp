@@ -24,7 +24,7 @@ struct StageEvent {
     std::uint16_t archetype = 0;
     /// @brief 编队敌人数；交叉编队每两个敌人组成一对。
     int count = 1;
-    /// @brief 直线、星形与精英事件使用的生成中心。
+    /// @brief 编队事件使用的生成中心。
     Vector3 center{0.0F, 0.0F, 8.5F};
     /// @brief 直线编队的相邻间距或星形编队的半径。
     float spacing = 1.0F;

@@ -25,28 +25,36 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
-add_executable(red_mist_demo
-    src/main.cpp
-    src/game/bullet_system.cpp
-    src/game/enemy.cpp
-    src/game/boss.cpp
-    src/game/stages/stage1_enemies.cpp
-    src/game/stages/stage1_boss.cpp
-    src/game/stages/stage1_content.cpp
-    src/game/settings.cpp
-    src/game/stage_system.cpp
-    src/game/stage_catalog.cpp
-    src/game/asset_manager.cpp
-    src/game/sprite_renderer.cpp
-    src/game/game.cpp
+# 游戏实现只编译一次，所有目标共用同一份实现。
+add_library(red_mist_engine STATIC
+    src/app/game.cpp
+    src/app/game_input.cpp
+    src/config/settings.cpp
+    src/gameplay/actors/boss.cpp
+    src/gameplay/actors/enemy.cpp
+    src/gameplay/bullets/bullet_system.cpp
+    src/gameplay/combat/game_combat.cpp
+    src/render/game_render.cpp
+    src/render/sprite_renderer.cpp
+    src/resources/asset_manager.cpp
+    src/stage/stage_catalog.cpp
+    src/stage/stage_system.cpp
+    src/stages/stage1/stage1_boss.cpp
+    src/stages/stage1/stage1_content.cpp
+    src/stages/stage1/stage1_dialogue.cpp
+    src/stages/stage1/stage1_enemies.cpp
+    src/stages/stage1/stage1_manifest.cpp
+    src/stages/stage1/stage1_timeline.cpp
 )
-
-target_include_directories(red_mist_demo PRIVATE src)
-target_link_libraries(red_mist_demo PRIVATE raylib)
-# 仅 Debug 配置编译判定可视化与可切换的玩家无敌模式。
-target_compile_definitions(red_mist_demo PRIVATE
+target_include_directories(red_mist_engine PUBLIC src)
+target_link_libraries(red_mist_engine PUBLIC raylib)
+# Game 的条件成员需要所有使用方采用相同的类布局。
+target_compile_definitions(red_mist_engine PUBLIC
     $<$<CONFIG:Debug>:RED_MIST_DEBUG_FEATURES>
 )
+
+add_executable(red_mist_demo src/main.cpp)
+target_link_libraries(red_mist_demo PRIVATE red_mist_engine)
 
 # Rebuild the six-face strip only when its source artwork needs changing.
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
@@ -56,32 +64,24 @@ add_executable(generate_sprite_assets EXCLUDE_FROM_ALL
     tools/generate_sprite_assets.cpp)
 target_link_libraries(generate_sprite_assets PRIVATE raylib)
 
-add_executable(sprite_benchmark EXCLUDE_FROM_ALL
-    tools/sprite_benchmark.cpp
-    src/game/asset_manager.cpp
-    src/game/sprite_renderer.cpp
-    src/game/bullet_system.cpp
-    src/game/enemy.cpp
-    src/game/boss.cpp
-    src/game/stages/stage1_enemies.cpp
-    src/game/stages/stage1_boss.cpp
-    src/game/stages/stage1_content.cpp
-)
-target_include_directories(sprite_benchmark PRIVATE src)
-target_link_libraries(sprite_benchmark PRIVATE raylib)
+add_executable(sprite_benchmark EXCLUDE_FROM_ALL tools/sprite_benchmark.cpp)
+target_link_libraries(sprite_benchmark PRIVATE red_mist_engine)
 
 add_custom_target(copy_assets
+    COMMAND ${CMAKE_COMMAND} -E rm -rf
+            $<TARGET_FILE_DIR:red_mist_demo>/assets
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime
             $<TARGET_FILE_DIR:red_mist_demo>/assets
     VERBATIM
 )
 add_dependencies(red_mist_demo copy_assets)
 
 if(MSVC)
+    target_compile_options(red_mist_engine PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(red_mist_demo PRIVATE /W4 /permissive- /utf-8)
-    target_compile_options(sprite_benchmark PRIVATE /utf-8)
 else()
+    target_compile_options(red_mist_engine PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(red_mist_demo PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
@@ -89,17 +89,15 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(red_mist_tests
         tests/core_tests.cpp
-        src/game/stage_catalog.cpp
-        src/game/bullet_system.cpp
-        src/game/enemy.cpp
-        src/game/boss.cpp
-    src/game/stages/stage1_enemies.cpp
-    src/game/stages/stage1_boss.cpp
-    src/game/stages/stage1_content.cpp
-        src/game/settings.cpp
-        src/game/stage_system.cpp
-    )
-    target_include_directories(red_mist_tests PRIVATE src)
-    target_link_libraries(red_mist_tests PRIVATE raylib)
+        tests/gameplay_tests.cpp
+        tests/settings_tests.cpp
+        tests/stage_tests.cpp)
+    target_link_libraries(red_mist_tests PRIVATE red_mist_engine)
+    # assert 在 Release 中仍需执行，否则测试主体会被 NDEBUG 跳过。
+    if(MSVC)
+        target_compile_options(red_mist_tests PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(red_mist_tests PRIVATE -UNDEBUG)
+    endif()
     add_test(NAME red_mist_core_tests COMMAND red_mist_tests)
 endif()

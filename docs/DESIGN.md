@@ -15,46 +15,25 @@
 │   └── DESIGN.md
 ├── src/
 │   ├── main.cpp
-│   ├── core/fixed_pool.hpp
-│   └── game/
-│       ├── game_types.hpp
-│       ├── visual_assets.hpp
-│       ├── stage_content.hpp
-│       ├── stage_catalog.hpp/.cpp
-│       ├── stages/stage1_ids.hpp
-│       ├── stages/stage1_content.hpp/.cpp
-│       ├── stages/stage1_enemies.hpp/.cpp
-│       ├── stages/stage1_boss.hpp/.cpp
-│       ├── bullet_system.hpp/.cpp
-│       ├── bullet_patterns.hpp
-│       ├── enemy.hpp/.cpp
-│       ├── boss.hpp/.cpp
-│       ├── settings.hpp/.cpp
-│       ├── stage_system.hpp/.cpp
-│       ├── asset_manager.hpp/.cpp
-│       ├── sprite_renderer.hpp/.cpp
-│       └── game.hpp/.cpp
-├── assets/rumia_modern.png
-├── assets/reimu_modern.png
-├── assets/fairy_modern.png
-├── assets/dark_fairy_modern.png
-├── assets/bullet_pearl.png
-├── assets/bullet_red.png
-├── assets/bullet_pearl_runtime.png
-├── assets/bullet_red_runtime.png
-├── assets/crimson_mist_stage.png
-├── assets/crimson_mist_skybox.png
-├── assets/shaders/skybox.vs/.fs
-├── assets/shaders/sprite_cutout.fs
-├── assets/shaders/bullet_core.fs
-├── assets/audio/bgm/*.mp3
-├── tools/generate_skybox.cpp
-├── tools/generate_sprite_assets.cpp
-├── tools/sprite_benchmark.cpp
-└── tests/core_tests.cpp
+│   ├── app/                     # Game 主循环、输入与状态
+│   ├── config/                  # 设置与键位
+│   ├── core/                    # 定长对象池
+│   ├── gameplay/actors/         # 玩家、敌人与 Boss
+│   ├── gameplay/bullets/        # 弹幕类型、弹池与方向算法
+│   ├── gameplay/combat/         # 碰撞、射击与阶段推进
+│   ├── render/                  # 世界、精灵与 UI 绘制
+│   ├── resources/               # 素材清单、加载资源与所有权
+│   ├── stage/                   # 关卡接口、注册与时间轴
+│   └── stages/stage1/           # 第一面专用时间轴、素材、对话、敌人、Boss
+├── assets/runtime/common/      # 天空盒、着色器、标题 BGM
+├── assets/runtime/stages/stage1/ # 第一面贴图与音乐
+├── assets/source/              # 原始素材和旧背景参考
+├── assets/library/bgm/         # 尚未接入的音乐
+├── tools/                      # 资源生成与性能测量
+└── tests/                      # 设置、玩法、关卡测试
 ```
 
-依赖方向为 `main -> Game -> StageContent/StageDirector/Enemy/Boss/BulletSystem/AssetManager`。`Stage1Content` 持有第一面的事件表、素材清单、敌人工厂和演出动作；`StageDirector` 仅处理时序。敌人和 Boss 子类控制技能释放，`bullet_patterns.hpp` 只计算弹幕方向，`BulletSystem` 管理单颗弹体及其定长对象池。`AssetManager` 独占图片、天空盒、着色器、流式 BGM 和音效句柄；`SpriteRenderer` 只借用句柄绘制。raylib 提供窗口、输入、音频与基础绘制。
+依赖方向为 `main -> Game -> StageContent/StageDirector/Enemy/Boss/BulletSystem/AssetManager`。`Stage1Content` 负责第一面敌人工厂和事件解释，时间轴、素材清单及对话分别定义在独立文件中；`StageDirector` 仅处理时序。敌人和 Boss 子类控制技能释放，`bullet_patterns.hpp` 只计算弹幕方向，`BulletSystem` 管理单颗弹体及其定长对象池。`AssetManager` 独占图片、天空盒、着色器、流式 BGM 和音效句柄；`SpriteRenderer` 只借用句柄绘制。raylib 提供窗口、输入、音频与基础绘制。
 
 素材按生命周期分组：程序启动时加载通用天空盒和标题 BGM；Stage 1 开始时加载角色、弹幕、对话立绘、战斗着色器以及道中和 Boss BGM。胜利、失败或返回菜单时停止关卡 BGM 并释放专属素材，菜单素材在程序退出时释放。露米娅的世界精灵和立绘共享一张纹理。音效清单目前为空，新增音效时由同一模块按所属生命周期加载和释放。截图模式不初始化音频设备，因此只加载图形素材。
 

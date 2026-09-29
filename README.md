@@ -14,7 +14,7 @@
 - Fibonacci 球面星状散射与三维锥形瞄准弹
 - 擦弹、残机、Bomb、分数和暂停
 - 事件驱动的道中编队
-- Fairy、DarkFairy、Orb、Elite 敌人子类分别定义并释放自己的弹幕技能
+- Fairy、DarkFairy、Orb 敌人子类分别定义并释放自己的弹幕技能
 - 道中露米娅普通攻击、后续妖精编队、灵梦与露米娅对话、关底四阶段及一面结算
 - 关底阶段按普通攻击 →「夜符 Night Bird」→ 普通攻击 →「境符 Demarcation」推进，两张符卡展示立绘与名称
 - 程序生成的红雾天空盒，以及新绘制的灵梦和露米娅立绘、两类妖精与红蓝弹体贴图
@@ -29,33 +29,28 @@
 
 ```text
 .
-├── CMakeLists.txt / CMakePresets.json   # 构建目标与 VS Code CMake 预设
+├── CMakeLists.txt / CMakePresets.json   # 构建配置；引擎代码只编译一次
 ├── src/
-│   ├── main.cpp                         # 游戏入口、窗口初始化与静默截图
-│   ├── core/fixed_pool.hpp              # 定长对象池
-│   └── game/
-│       ├── game.hpp/.cpp                # 主循环、输入、碰撞与界面
-│       ├── asset_manager.hpp/.cpp       # 图片、着色器、BGM 与音效的分组加载和释放
-│       ├── game_types.hpp               # 玩家、弹幕和运行状态等基础类型
-│       ├── visual_assets.hpp            # 外观 ID 与 Stage 素材清单
-│       ├── stage_content.hpp            # 关卡内容与事件操作接口
-│       ├── stage_catalog.hpp/.cpp       # 关卡注册与构造
-│       ├── bullet_system.hpp/.cpp       # 弹幕创建、运动更新和对象池管理
-│       ├── bullet_patterns.hpp          # 球面与锥形弹幕方向计算
-│       ├── enemy.hpp/.cpp               # 小怪基类、计时和通用生命周期
-│       ├── boss.hpp/.cpp                # Boss 抽象基类与发弹点
-│       ├── stage_system.hpp/.cpp        # 通用事件时间轴调度器
-│       ├── stages/stage1_content.hpp/.cpp  # 第一面事件、素材和工厂
-│       ├── stages/stage1_enemies.hpp/.cpp  # 第一面敌人移动与攻击
-│       ├── stages/stage1_boss.hpp/.cpp    # 露米娅阶段、技能和符卡
-│       ├── stages/stage1_ids.hpp         # 第一面局部编号
-│       ├── sprite_renderer.hpp/.cpp     # 角色与弹幕贴图、光晕和判定调试绘制
-│       └── settings.hpp/.cpp            # FPS 和按键配置的读写
-├── assets/                              # 角色、弹体、天空盒贴图、shaders/ 与 audio/bgm/
-├── tools/                               # 天空盒/弹体素材生成器与渲染压力测试
-├── tests/core_tests.cpp                 # 弹幕、敌人、Boss、关卡和配置测试
-├── docs/                                # 设计说明与一面录像对照记录
-└── course_docs/                         # 课程报告参考资料
+│   ├── main.cpp                         # 窗口初始化与静默截图入口
+│   ├── app/                             # Game 生命周期、调度与输入
+│   ├── config/                          # 设置文件和按键配置
+│   ├── core/                            # 定长对象池
+│   ├── gameplay/
+│   │   ├── actors/                      # 玩家、敌人和 Boss 基类
+│   │   ├── bullets/                     # 弹幕对象池与方向算法
+│   │   └── combat/                      # 命中、炸弹与阶段结算
+│   ├── render/                          # 世界、精灵、HUD 和菜单绘制
+│   ├── resources/                       # 素材清单、GPU 资源与 AssetManager
+│   ├── stage/                           # 关卡接口、注册和通用时间轴
+│   └── stages/stage1/                  # 第一面的时间轴、素材、对话、敌人和露米娅
+├── assets/
+│   ├── runtime/common/                 # 启动时加载的天空盒、着色器和标题 BGM
+│   ├── runtime/stages/stage1/          # 第一面贴图及道中、Boss BGM
+│   ├── source/                         # 原始弹体图与旧背景参考图
+│   └── library/bgm/                    # 尚未在当前关卡使用的 BGM
+├── tools/                               # 素材生成器与渲染压力测试
+├── tests/                               # 按设置、玩法、关卡拆分的测试
+└── docs/                                # 设计说明与录像对照记录
 ```
 
 运行时生成的 `red_mist_settings.cfg` 位于启动目录，不属于源码。详细类关系和数据结构见 [设计文档](docs/DESIGN.md)。
@@ -66,15 +61,15 @@
 - 支持 C++20 的编译器
 - Git，用于 CMake 首次下载 raylib 5.5
 
-raylib 会在首次配置时通过 CMake FetchContent 下载。图片、着色器和音频位于 `assets` 目录，构建时会自动复制到可执行文件旁。
+raylib 会在首次配置时通过 CMake FetchContent 下载。仅 `assets/runtime` 会在构建时复制到可执行文件旁的 `assets` 目录；原图和备用音乐不进入运行包。
 
-`AssetManager` 在程序启动时加载菜单与关卡共用的天空盒和标题 BGM；开始 Stage 1 时加载角色、弹幕、对话立绘、着色器、道中 BGM 和 Boss BGM；一面结算、游戏失败或返回菜单时释放 Stage 1 资源。露米娅的世界贴图与演出立绘共用同一纹理。BGM 以流式方式播放，暂停游戏时暂停，静默截图模式不初始化音频设备。当前 `assets` 中没有音效文件；以后可在 `Stage1Content::Assets()` 的关卡清单或通用音效清单登记文件，再通过 `PlaySoundEffect` 播放。
+`AssetManager` 在程序启动时加载菜单与关卡共用的天空盒和标题 BGM；开始 Stage 1 时加载角色、弹幕、对话立绘、着色器、道中 BGM 和 Boss BGM；一面结算、游戏失败或返回菜单时释放 Stage 1 资源。露米娅的世界贴图与演出立绘共用同一纹理。BGM 以流式方式播放，暂停游戏时暂停，静默截图模式不初始化音频设备。当前运行时素材中没有音效文件；以后可在 `Stage1Content::Assets()` 的关卡清单或通用音效清单登记文件，再通过 `PlaySoundEffect` 播放。
 
-天空盒素材是 `assets/crimson_mist_skybox.png`，按 OpenGL 的 +X、-X、+Y、-Y、+Z、-Z 顺序横向排列。六面由同一个方向采样函数生成；如需重绘，在项目根目录运行 `cmake --build build --target generate_skybox`，然后运行 `./build/generate_skybox assets/crimson_mist_skybox.png`（Windows 下使用对应的可执行文件路径）。常规构建只加载现成贴图，不在启动时生成纹理。
+天空盒素材是 `assets/runtime/common/crimson_mist_skybox.png`，按 OpenGL 的 +X、-X、+Y、-Y、+Z、-Z 顺序横向排列。六面由同一个方向采样函数生成；如需重绘，在项目根目录运行 `cmake --build build --target generate_skybox`，然后运行 `./build/generate_skybox assets/runtime/common/crimson_mist_skybox.png`（Windows 下使用对应的可执行文件路径）。常规构建只加载现成贴图，不在启动时生成纹理。
 
-弹体保留 `bullet_pearl.png` 与 `bullet_red.png` 原图；游戏使用裁去透明边并缩小到 512×512 的 `*_runtime.png`。重新生成时运行 `cmake --build build --target generate_sprite_assets`，然后运行 `./build/generate_sprite_assets assets`。构建游戏目标时会把贴图和着色器复制到可执行文件旁。
+`assets/source` 保留 `bullet_pearl.png` 与 `bullet_red.png` 原图；游戏使用裁去透明边并缩小到 512×512 的 `*_runtime.png`。重新生成时运行 `cmake --build build --target generate_sprite_assets`，然后运行 `./build/generate_sprite_assets assets/source assets/runtime/stages/stage1`。构建游戏目标时会把贴图和着色器复制到可执行文件旁。
 
-需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets`。该程序默认在隐藏窗口分别测量空场景和 8192 发弹幕场景的平均帧时间。需要测量实际可见窗口时，追加 `--visible`；两种模式的数值不可直接比较。
+需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets/runtime`。该程序默认在隐藏窗口分别测量空场景和 8192 发弹幕场景的平均帧时间。需要测量实际可见窗口时，追加 `--visible`；两种模式的数值不可直接比较。
 
 ## macOS
 
@@ -139,7 +134,7 @@ ctest --test-dir build --output-on-failure
 
 ## 扩展关卡
 
-每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂、事件处理和对话。第一面的实现集中在 `src/game/stages/stage1_*`；通用 `Enemy` 只负责入场、边界检查和调用子类；各具体敌人类自行选择移动状态、推进技能计时并发弹。同一敌人类固定一种外观，可拥有多条轨迹与多个技能。时间轴只传出生位置、延迟和编队上下文，不指定通用运动路径。`StageEvent::action` 与 `archetype` 仅由所属关卡解释。新增关卡时创建自己的内容模块并在 `stage_catalog.cpp` 注册，`Game`、`StageDirector`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。
+每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂、事件处理和对话。第一面的实现集中在 `src/stages/stage1/`；通用 `Enemy` 只负责入场、边界检查和调用子类；各具体敌人类自行选择移动状态、推进技能计时并发弹。同一敌人类固定一种外观，可拥有多条轨迹与多个技能。时间轴只传出生位置、延迟和编队上下文，不指定通用运动路径。`StageEvent::action` 与 `archetype` 仅由所属关卡解释。新增关卡时创建自己的内容模块并在 `stage_catalog.cpp` 注册，`Game`、`StageDirector`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。
 
 弹幕、敌人与 Boss 记录 `VisualId`。关卡清单将该 ID 映射到图片路径、绘制方式、世界尺寸、锚点及光晕参数。`AssetManager` 在关卡开始时按清单加载，在结束时卸载；相同路径的角色贴图与立绘共享同一纹理。`SpriteRenderer` 按外观 ID 分组弹幕，每帧遍历弹池一次，避免随外观种类增加而重复扫描。
 

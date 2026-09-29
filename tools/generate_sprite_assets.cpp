@@ -6,8 +6,10 @@
 #include <filesystem>
 
 int main(int argc, char** argv) {
-    if (argc != 2) return 1;
-    const std::filesystem::path assets = argv[1];
+    if (argc != 3) return 1;
+    const std::filesystem::path sourceRoot = argv[1];
+    const std::filesystem::path outputRoot = argv[2];
+    std::filesystem::create_directories(outputRoot);
     struct SpriteSource {
         const char* input;
         const char* output;
@@ -21,12 +23,12 @@ int main(int argc, char** argv) {
     }};
 
     for (const SpriteSource& source : sources) {
-        Image image = LoadImage((assets / source.input).string().c_str());
+        Image image = LoadImage((sourceRoot / source.input).string().c_str());
         if (!IsImageValid(image)) return 1;
         ImageCrop(&image, source.crop);
         ImageResize(&image, 512, 512);
         const bool exported = ExportImage(image,
-                                          (assets / source.output).string().c_str());
+                                          (outputRoot / source.output).string().c_str());
         UnloadImage(image);
         if (!exported) return 1;
     }

@@ -16,6 +16,12 @@ constexpr float kFocusSpeed = 2.8F;
 constexpr float kMouseSensitivity = 0.0024F;
 constexpr float kHitRadius = 0.18F;
 constexpr float kGrazeRadius = 0.72F;
+// 符卡直径约为 0.6 世界单位；两侧出射让最近处的贴图也避开准星。
+constexpr float kMuzzleForward = 1.2F;
+constexpr float kStraightSide = 0.62F;
+constexpr float kHomingSide = 0.78F;
+constexpr float kLaneSpacing = 0.11F;
+constexpr float kAimDistance = 10.0F;
 /// @brief 使用原作式火力成长门槛；弹数按三维战场调整，直射和追踪各有独立通道。
 struct ShotLevel {
     int threshold;
@@ -26,6 +32,13 @@ constexpr std::array<ShotLevel, 9> kShotLevels{{
     {0, 2, 0}, {8, 2, 2}, {16, 3, 2}, {32, 3, 3}, {48, 4, 3},
     {64, 4, 4}, {80, 5, 4}, {96, 5, 5}, {128, 6, 6},
 }};
+
+/// @brief 按左右成对排列射击通道；奇数发多出的外侧弹随轮次换边。
+float ShotSideOffset(int index, bool alternateSides, float firstLane) {
+    const float side = (index + static_cast<int>(alternateSides)) % 2 == 0
+                           ? -1.0F : 1.0F;
+    return side * (firstLane + static_cast<float>(index / 2) * kLaneSpacing);
+}
 }  // namespace
 
 void Player::Reset() { *this = Player{}; }
@@ -134,43 +147,44 @@ Vector3 Player::Right() const {
 }
 
 void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
-                  VisualId homingVisual) const {
+                  VisualId homingVisual) {
     const Vector3 forward = Forward();
     const Vector3 right = Right();
     const Vector3 muzzle = game_math::Add(position_,
-                                          game_math::Scale(forward, 0.55F));
+                                          game_math::Scale(forward, kMuzzleForward));
+    const Vector3 aimPoint = game_math::Add(position_,
+                                           game_math::Scale(forward, kAimDistance));
     const ShotLevel* level = &kShotLevels.front();
     for (const ShotLevel& candidate : kShotLevels) {
         if (power_ < candidate.threshold) break;
         level = &candidate;
     }
     for (int index = 0; index < level->straightCount; ++index) {
-        const float offset = (static_cast<float>(index) -
-                              static_cast<float>(level->straightCount - 1) * 0.5F) *
-                             0.16F;
+        const float offset = ShotSideOffset(index, alternateShotSide_,
+                                            kStraightSide);
         const Vector3 origin = game_math::Add(muzzle,
                                               game_math::Scale(right, offset));
+        // 从侧面向远处准星汇聚，兼顾近景视线和正前方目标的命中率。
         Bullet* bullet = bullets.Spawn(BulletOwner::Player, origin,
-            game_math::Scale(forward, 20.0F), 0.09F,
+            game_math::Scale(BulletSystem::DirectionTo(origin, aimPoint), 20.0F),
+            0.09F,
             Color{255, 255, 255, 185}, bulletVisual);
         if (bullet) bullet->damage = 2.0F;
     }
     for (int index = 0; index < level->homingCount; ++index) {
-        const float offset = (static_cast<float>(index) -
-                              static_cast<float>(level->homingCount - 1) * 0.5F) *
-                             0.22F;
+        const float offset = ShotSideOffset(index, !alternateShotSide_,
+                                            kHomingSide);
         const Vector3 origin = game_math::Add(muzzle,
                                               game_math::Scale(right, offset));
-        const Vector3 spread = game_math::Add(forward,
-                                              game_math::Scale(right, offset * 0.3F));
         Bullet* bullet = bullets.Spawn(BulletOwner::Player, origin,
-            game_math::Scale(BulletSystem::DirectionTo({}, spread), 14.0F),
+            game_math::Scale(forward, 14.0F),
             0.10F, Color{255, 255, 255, 165}, homingVisual);
         if (bullet) {
             bullet->damage = 1.0F;
             bullet->homingTurnRate = 5.5F;
         }
     }
+    alternateShotSide_ = !alternateShotSide_;
 }
 
 bool Player::TryUseBomb() {

@@ -49,7 +49,11 @@ void RunPlayerTests() {
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
         assert(bullet.owner == BulletOwner::Player);
         assert(bullet.visual == redmist::stage1::kPlayerGoldCard);
-        assert(std::abs(bullet.velocity.z - 20.0F) < 0.0001F);
+        assert(std::abs(bullet.position.x) >= 0.62F);
+        assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
+        assert(bullet.position.x * bullet.velocity.x < 0.0F);
+        const float timeToAim = (3.5F - bullet.position.z) / bullet.velocity.z;
+        assert(std::abs(bullet.position.x + bullet.velocity.x * timeToAim) < 0.0001F);
     });
     player.Update(0.01F, firing, bullets, redmist::stage1::kPlayerGoldCard,
                   redmist::stage1::kPlayerCyanCard, true);
@@ -79,10 +83,28 @@ void RunPlayerTests() {
             } else {
                 assert(bullet.visual == redmist::stage1::kPlayerGoldCard);
             }
+            assert(std::abs(bullet.position.x) >= 0.62F);
             assert(bullet.color.a < 255);
         });
         assert(homingCount > 0);
     }
+    Player alternating;
+    BulletSystem alternatingBullets;
+    alternating.AdjustPower(16);
+    alternating.Update(0.0F, firing, alternatingBullets,
+                       redmist::stage1::kPlayerGoldCard,
+                       redmist::stage1::kPlayerCyanCard, true);
+    alternating.Update(0.09F, firing, alternatingBullets,
+                       redmist::stage1::kPlayerGoldCard,
+                       redmist::stage1::kPlayerCyanCard, true);
+    int leftShots = 0;
+    int rightShots = 0;
+    alternatingBullets.Pool().ForEachActive([&](const Bullet& bullet) {
+        if (bullet.visual != redmist::stage1::kPlayerGoldCard) return;
+        if (bullet.position.x < 0.0F) ++leftShots;
+        else ++rightShots;
+    });
+    assert(leftShots == 3 && rightShots == 3);
     player.AdjustPower(999);
     assert(player.Power() == Player::kMaxPower);
     player.AdjustPower(-999);

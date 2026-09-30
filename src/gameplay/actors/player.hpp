@@ -77,9 +77,9 @@ private:
     [[nodiscard]] Vector3 Forward() const;
     /// @brief 与当前水平朝向垂直的单位右向量。
     [[nodiscard]] Vector3 Right() const;
-    /// @brief 按当前 Power 档位从视线前方生成直射弹与追踪弹。
+    /// @brief 按当前 Power 档位从视线两侧生成直射弹与追踪弹。
     void Fire(BulletSystem& bullets, VisualId bulletVisual,
-              VisualId homingVisual) const;
+              VisualId homingVisual);
     /// @brief 在库存和冷却允许时消耗 Bomb，并设置冷却与无敌时间。
     [[nodiscard]] bool TryUseBomb();
 
@@ -89,6 +89,8 @@ private:
     float fireTimer_ = 0.0F;
     float invulnerableTimer_ = 1.5F;
     float bombCooldown_ = 0.0F;
+    // 奇数发火力档位的额外弹轮流从左右两侧出射，避免持续射击偏向单侧。
+    bool alternateShotSide_ = false;
     // lives_ 是额外残机数；初始值 3 对应 HUD 的 4 条命，降至 -1 时游戏结束。
     int lives_ = 3;
     int bombs_ = 3;

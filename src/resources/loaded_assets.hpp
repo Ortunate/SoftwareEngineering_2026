@@ -5,7 +5,7 @@
 #include "resources/visual_assets.hpp"
 
 namespace redmist {
-/// @brief 加载后的外观，纹理所有权仅属于 AssetManager。
+/// @brief 加载后的外观，纹理所有权仅属于 AssetManager；尺寸与锚点沿用 VisualDefinition 的单位。
 struct VisualResource {
     Texture2D texture{};
     VisualMode mode = VisualMode::Character;

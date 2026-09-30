@@ -21,6 +21,7 @@
 #include <system_error>
 #include <vector>
 
+/// @brief 验证设置默认值、持久化和无效输入回退；断言失败时终止进程。
 void RunSettingsTests() {
     using redmist::GameSettings;
     using redmist::KeyBindings;

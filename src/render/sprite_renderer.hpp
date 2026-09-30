@@ -14,15 +14,15 @@
 
 namespace redmist {
 
-/// @brief 绘制角色贴图、弹幕本体和光晕。
+/// @brief 绘制角色贴图、弹幕本体和光晕；不持有传入的战斗对象或 GPU 资源。
 class SpriteRenderer {
 public:
     /// @brief 绘制一个战斗帧的空间精灵并恢复深度状态。
     /// @param camera 当前 3D 相机。
     /// @param bullets 全部活动弹幕。
-    /// @param enemies 当前可见敌人指针序列。
+    /// @param enemies 当前可见敌人指针序列；调用期间所有指针须有效。
     /// @param boss 当前 Boss 状态。
-    /// @param visuals 当前 Stage 的稠密外观资源表。
+    /// @param visuals 当前 Stage 的稠密外观资源表，索引即 VisualId。
     /// @param shaders 不持有的弹幕与角色着色器集合。
     void Draw(const Camera3D& camera, const BulletSystem& bullets,
               std::span<const Enemy*> enemies, const Boss* boss,

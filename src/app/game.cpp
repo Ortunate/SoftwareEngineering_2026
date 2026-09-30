@@ -200,6 +200,7 @@ void Game::Update(float deltaTime) {
                   [this](const StageEvent& event) {
                       return HandleStageEvent(event);
                   });
+    // 本帧由时间轴刚启动的对话从下一帧计时，避免第一句少显示一个 deltaTime。
     if (dialogueWasActive && dialogueActive_) {
         dialogueTimer_ += deltaTime;
         if (dialogueTimer_ >=

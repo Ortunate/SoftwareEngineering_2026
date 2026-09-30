@@ -21,6 +21,7 @@
 #include <system_error>
 #include <vector>
 
+/// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
     using redmist::BulletOwner;
     using redmist::BulletSystem;

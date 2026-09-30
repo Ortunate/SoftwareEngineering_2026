@@ -13,12 +13,15 @@ namespace redmist {
 
 /// @brief 仅在当前 Stage 的素材清单内有效的稠密外观编号。
 using VisualId = std::uint16_t;
+/// @brief 不指向任何外观资源的哨兵值，不得用作清单项 ID。
 constexpr VisualId kInvalidVisualId = std::numeric_limits<VisualId>::max();
 
 /// @brief 角色公告板、弹幕公告板或三维球体的通用绘制方式。
 enum class VisualMode : std::uint8_t { Character, Bullet, Sphere };
 
-/// @brief Stage 提供的外观定义；路径相对 assets 根目录。
+/// @brief Stage 提供的外观定义；路径相对 assets 根目录，字符串由 Stage 保持有效。
+/// worldHeight 为世界单位，pivot 是贴图中判定中心的归一化坐标。
+/// bulletDiameterScale 将弹幕判定半径换算为公告板直径的倍数。
 struct VisualDefinition {
     VisualId id = kInvalidVisualId;
     std::string_view path;
@@ -29,13 +32,13 @@ struct VisualDefinition {
     bool glow = false;
 };
 
-/// @brief 声音清单项，路径相对 assets 根目录。
+/// @brief 声音清单项，路径相对 assets 根目录；name 是播放时使用的查找键。
 struct SoundDefinition {
     std::string_view name;
     std::string_view path;
 };
 
-/// @brief 一个 Stage 的图片、音乐、音效与着色器清单。
+/// @brief 一个 Stage 的图片、音乐与音效清单；所有 span 与字符串在 LoadStage 调用期间须有效。
 struct StageAssetManifest {
     std::span<const VisualDefinition> visuals;
     std::string_view stageBgm;

@@ -21,6 +21,7 @@
 #include <system_error>
 #include <vector>
 
+/// @brief 验证时间轴依赖、异步结束及第一面内容；断言失败时终止进程。
 void RunStageTests() {
     constexpr auto line = static_cast<std::uint16_t>(redmist::stage1::Formation::Line);
     constexpr std::array<redmist::StageEvent, 5> relativeEvents{{

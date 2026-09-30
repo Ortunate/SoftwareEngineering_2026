@@ -134,6 +134,7 @@ void AssetManager::LoadCommon() {
                 const int textureUnit = MATERIAL_MAP_CUBEMAP;
                 SetShaderValue(common_.skyboxShader, environmentLocation,
                                &textureUnit, SHADER_UNIFORM_INT);
+                // Model 材质借用着色器和立方体贴图；卸载时须先释放 Model。
                 common_.skyboxModel = LoadModelFromMesh(
                     GenMeshCube(1.0F, 1.0F, 1.0F));
                 common_.skyboxModel.materials[0].shader = common_.skyboxShader;
@@ -157,6 +158,7 @@ void AssetManager::LoadStage(const StageAssetManifest& manifest) {
         Texture2D texture{};
         if (!definition.path.empty()) {
             const std::string path(definition.path);
+            // 多个外观可以共用一张贴图，实际所有权由路径缓存统一管理。
             auto [it, inserted] = stageTextures_.try_emplace(path);
             if (inserted) it->second = LoadTextureAsset(root_ / path);
             texture = it->second;

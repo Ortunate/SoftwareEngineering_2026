@@ -13,10 +13,10 @@
 
 namespace redmist {
 
-/// @brief 关卡事件的稳定标识；仅需要被引用或报告结束的事件必须设置。
+/// @brief 关卡事件的稳定标识；编号只在单张事件表内有效，仅需要被引用或报告结束的事件必须设置。
 using StageEventId = std::uint32_t;
 
-/// @brief 一条通用时间轴事件；action 和 archetype 由 Stage 自行解释。
+/// @brief 一条通用时间轴事件；位置使用 raylib 世界坐标，action 和 archetype 由 Stage 自行解释。
 struct StageEvent {
     /// @brief 无依赖时相对上一事件实际开始、存在依赖时相对依赖事件结束的延迟秒数。
     float time = 0.0F;
@@ -44,15 +44,17 @@ public:
 
     /// @brief 构造尚未绑定事件表的调度器。
     StageDirector();
-    /// @brief 使用外部事件表，调用方须保证该表的生命周期长于调度器。
-    /// @param events 按预期触发顺序排列的事件表。
+    /// @brief 借用外部事件表；调用方须保证其内容不变且生命周期长于调度器。
+    /// @param events 按预期触发顺序排列的事件表，依赖只能引用更早的事件。
+    /// @throws std::invalid_argument 延迟非法、ID 重复或依赖未指向更早的 ID。
     explicit StageDirector(std::span<const StageEvent> events);
 
     /// @brief 将关卡时钟、事件索引及开始/结束记录归零。
     void Reset();
     /// @brief 推进关卡时钟，并按顺序触发已满足延迟和依赖的事件。
-    /// @param deltaTime 本帧经过的秒数。
+    /// @param deltaTime 本帧经过的非负有限秒数。
     /// @param handler 执行事件并报告是否同步结束的回调。
+    /// @throws std::invalid_argument deltaTime 为负数或非有限值。
     void Update(float deltaTime, const EventHandler& handler);
     /// @brief 记录已启动的异步事件在当前关卡时钟结束。
     /// @param id 事件表中的唯一标识。

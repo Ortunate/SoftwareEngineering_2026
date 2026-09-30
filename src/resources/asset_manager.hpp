@@ -42,16 +42,17 @@ public:
     /// @brief 程序启动时加载通用素材；重复调用不重复加载。
     void LoadCommon();
     /// @brief 关卡开始时加载其专属素材；已有的关卡资源会先释放。
-    /// @param manifest 由 Stage 内容模块提供的资源清单。
+    /// @param manifest 由 Stage 内容模块提供的资源清单，仅在调用期间借用。
     void LoadStage(const StageAssetManifest& manifest);
     /// @brief 关卡结束或离开时停止其音乐并释放专属素材。
     void UnloadStage();
 
-    /// @brief 取得不转移所有权的通用图形素材。
+    /// @brief 取得不转移所有权的通用图形素材；引用在管理器销毁前有效。
     [[nodiscard]] const CommonAssets& Common() const { return common_; }
-    /// @brief 取得不转移所有权的当前关卡图形素材。
+    /// @brief 取得不转移所有权的当前关卡图形素材；下次 LoadStage 或 UnloadStage 后失效。
     [[nodiscard]] const StageAssets& Stage() const { return stage_; }
-    /// @brief 按当前关卡的外观 ID 查询；无效 ID 返回空资源。
+    /// @brief 按当前关卡的外观 ID 查询；无效 ID 返回空资源，不转移纹理所有权。
+    /// @return 资源引用；下次 LoadStage 或 UnloadStage 后不得继续使用有效外观引用。
     [[nodiscard]] const VisualResource& GetVisual(VisualId id) const;
     /// @brief 查询当前是否持有关卡专属素材。
     [[nodiscard]] bool HasStage() const { return stageLoaded_; }

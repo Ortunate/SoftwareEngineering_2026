@@ -10,6 +10,7 @@
 
 namespace {
 
+/// @brief 每个立方体贴图面的边长，单位为像素；输出图横向拼接六个面。
 constexpr int kFaceSize = 1024;
 
 struct Vec3 {
@@ -102,9 +103,12 @@ Vec3 Normalize(Vec3 p) {
     return {p.x * scale, p.y * scale, p.z * scale};
 }
 
+/// @brief 将贴图面内坐标转为采样方向；各面必须采用 OpenGL 立方体贴图顺序和朝向以保持接缝连续。
+/// @param face 面编号，依次为 +X、-X、+Y、-Y、+Z、-Z。
+/// @param x 面内横坐标，范围 [-1, 1]，向右递增。
+/// @param y 面内纵坐标，范围 [-1, 1]，向下递增。
+/// @return 单位采样方向。
 Vec3 FaceDirection(int face, float x, float y) {
-    // OpenGL cubemap order: +X, -X, +Y, -Y, +Z, -Z.
-    // x and y increase to the right and down in the output image.
     switch (face) {
         case 0: return Normalize({ 1.0F, -y, -x});
         case 1: return Normalize({-1.0F, -y,  x});
@@ -143,6 +147,7 @@ float TreeLine(float longitude) {
                         treeCount / (2.0F * std::numbers::pi_v<float>);
     const int tree = static_cast<int>(std::floor(index));
     float crown = -1.0F;
+    // 接缝两侧使用同一组周期树编号；邻近三棵树足以覆盖当前经度。
     for (int i = tree - 1; i <= tree + 1; ++i) {
         const int wrapped = (i + static_cast<int>(treeCount)) %
                             static_cast<int>(treeCount);
@@ -157,6 +162,7 @@ float TreeLine(float longitude) {
 }
 
 Color Sample(Vec3 direction) {
+    // 经纬角由世界方向直接计算，跨贴图面时保持同一噪声和地平线形状。
     const float elevation = std::asin(std::clamp(direction.y, -1.0F, 1.0F));
     const float longitude = std::atan2(direction.x, direction.z);
     const Rgb nearHorizon{105.0F, 27.0F, 58.0F};

@@ -12,6 +12,11 @@ constexpr Color kEnemyRed{255, 70, 105, 255};
 constexpr Color kEnemyBlue{75, 145, 255, 255};
 
 /// @brief 仅封装倒计时运算；每种技能的计时器由具体敌人自己持有。
+/// @param timer 技能剩余秒数，触发后重置为 interval。
+/// @param interval 两次触发之间的秒数。
+/// @param deltaTime 本帧经过的秒数。
+/// @param age 从入场起算的秒数；初始保护期内不发弹。
+/// @return 保护期已过且计时器到期时返回 true。
 bool SkillReady(float& timer, float interval, float deltaTime, float age) {
     timer -= deltaTime;
     if (age <= 0.55F || timer > 0.0F) return false;
@@ -19,6 +24,7 @@ bool SkillReady(float& timer, float interval, float deltaTime, float age) {
     return true;
 }
 
+/// @brief 把已由 Stage1Content 校验的关卡局部编队编号还原为枚举。
 Formation SpawnFormation(const EnemySpawn& spawn) {
     return static_cast<Formation>(spawn.formation);
 }

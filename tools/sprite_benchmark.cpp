@@ -12,6 +12,7 @@
 
 namespace {
 
+/// @brief 对给定场景连续绘帧，返回每帧平均耗时（毫秒）；frames 须为正数。
 double DrawFrames(redmist::SpriteRenderer& renderer,
                   const redmist::BulletSystem& bullets,
                   std::span<const redmist::VisualResource> visuals,

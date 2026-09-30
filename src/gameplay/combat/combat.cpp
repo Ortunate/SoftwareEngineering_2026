@@ -26,6 +26,7 @@ void Game::UpdateBoss(float deltaTime) {
 
 void Game::ResolveCollisions() {
     bool playerWasHit = false;
+    // 本帧可能同时接触多颗敌弹；先统一标记受击，再只扣一次残机。
     // 距离使用平方值比较，避免每颗弹幕都计算平方根。
     bullets_.Pool().ForEachActive([this, &playerWasHit](Bullet& bullet) {
         if (bullet.owner != BulletOwner::Enemy) return;
@@ -132,6 +133,7 @@ void Game::AdvanceBossPhase() {
         boss_->IsMidboss();
     const int completedPhase = boss_->phase;
     const bool hasNextPhase = boss_->AdvancePhase();
+    // 仅整场遭遇结束时通知时间轴；阶段切换仍属于同一异步事件。
     if (!hasNextPhase && bossEventId_) {
         stage_.EndEvent(*bossEventId_);
         bossEventId_.reset();

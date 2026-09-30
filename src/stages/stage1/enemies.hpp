@@ -11,6 +11,7 @@ namespace redmist::stage1 {
 class FairyEnemy final : public Enemy {
 public:
     /// @brief 按出生编队选择本妖精内部的移动状态。
+    /// @param spawn 第一面有效的编队与非负入场延迟。
     explicit FairyEnemy(const EnemySpawn& spawn);
 
 private:
@@ -28,6 +29,7 @@ private:
 class DarkFairyEnemy final : public Enemy {
 public:
     /// @brief 按出生编队选择暗色妖精内部的移动状态。
+    /// @param spawn 第一面有效的编队与非负入场延迟。
     explicit DarkFairyEnemy(const EnemySpawn& spawn);
 
 private:
@@ -45,6 +47,7 @@ private:
 class OrbEnemy final : public Enemy {
 public:
     /// @brief 根据编队上下文初始化光球运动。
+    /// @param spawn 第一面有效的编队与非负入场延迟。
     explicit OrbEnemy(const EnemySpawn& spawn);
 
 private:

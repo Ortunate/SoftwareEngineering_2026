@@ -9,8 +9,11 @@ namespace redmist::stage1 {
 /// @brief Stage 1 的露米娅道中战与关底四阶段。
 class RumiaBoss final : public Boss {
 public:
+    /// @brief 同一 Boss 实现的道中战和关底战，两种遭遇各自初始化阶段状态。
     enum class Encounter { Midboss, Final };
+    /// @brief 初始化道中遭遇，从第一阶段开始并重置计时器和血量。
     void StartMidboss();
+    /// @brief 初始化关底遭遇，从第一阶段开始并重置计时器和血量。
     void StartFinalBoss();
     bool Update(float deltaTime, Vector3 playerPosition,
                 BulletSystem& bullets) override;
@@ -23,6 +26,7 @@ public:
         return IsMidboss() ? "RUMIA  MIDBOSS  NORMAL"
                            : "RUMIA  STAGE BOSS  NORMAL";
     }
+    /// @brief 查询最近一次启动的遭遇类型。
     [[nodiscard]] Encounter CurrentEncounter() const { return encounter_; }
 
 private:

@@ -28,6 +28,7 @@ public:
     const VisualId visual;
     Vector3 position;
     Vector3 origin;
+    /// @brief 从实际入场起算的秒数；延迟期间为负，达到零后才移动和发弹。
     float age;
     float health = 10.0F;
     float maxHealth = 10.0F;
@@ -43,7 +44,7 @@ protected:
     /// @brief 初始化外观、出生位置和入场延迟。
     /// @param visual 外观编号。
     /// @param position 出生位置。
-    /// @param delay 入场延迟（秒）。
+    /// @param delay 非负入场延迟（秒）。
     Enemy(VisualId visual, Vector3 position, float delay);
     /// @brief Stage 子类按自身规则更新空间位置。
     virtual void Move(float deltaTime) = 0;

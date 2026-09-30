@@ -18,9 +18,11 @@ constexpr VisualId kOrb = 5;
 constexpr VisualId kRumia = 6;
 constexpr VisualId kReimuPortrait = 7;
 
+/// @brief 传给 Stage1Content::CreateEnemy 的第一面局部敌人原型编号。
 enum class EnemyType : std::uint16_t { Fairy, DarkFairy, Orb };
 /// @brief 关卡编队形状；具体敌人内部决定如何沿该编队移动。
 enum class Formation : std::uint16_t { Line, Star, CrossingPair };
+/// @brief Stage1Content::HandleEvent 解释的第一面局部动作编号。
 enum class Action : std::uint16_t {
     ShowMessage,
     SpawnLine,

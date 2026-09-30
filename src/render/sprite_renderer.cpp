@@ -157,7 +157,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     }
     if (hasCutoutShader) EndShaderMode();
 
-    // 光晕不写入深度，且每种外观限制最多 2048 个近景光晕。
+    // 光晕只做视觉叠加，不写深度以免遮挡后续透明层；每种外观最多绘制 2048 个近景光晕。
     rlDisableDepthMask();
     BeginBlendMode(BLEND_ADDITIVE);
     constexpr float glowDistanceSquared = 8.0F * 8.0F;

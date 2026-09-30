@@ -35,10 +35,12 @@ public:
     float health = 0.0F;
     float maxHealth = 0.0F;
     float hitRadius = 0.95F;
+    /// @brief 当前阶段已运行秒数；换阶段时归零，超时由具体 Boss 决定。
     float phaseTimer = 0.0F;
     float fireTimer = 0.0F;
     float moveClock = 0.0F;
     float starRotation = 0.0F;
+    /// @brief 当前阶段编号；0 表示未开始或已退场，正数由具体 Boss 定义。
     int phase = 0;
 
     /// @brief 沿瞄准方向求 Boss 的发弹点。

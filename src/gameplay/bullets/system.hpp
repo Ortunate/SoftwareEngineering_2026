@@ -25,11 +25,11 @@ public:
     /// @param owner 弹幕所属阵营。
     /// @param position 初始判定中心。
     /// @param velocity 初始速度。
-    /// @param radius 球形判定半径。
+    /// @param radius 球形判定半径，单位为世界坐标。
     /// @param color 渲染颜色。
-    /// @param visual 渲染形态。
+    /// @param visual 当前关卡素材表中的外观 ID。
     /// @param acceleration 加速度，默认零向量。
-    /// @return 新弹幕指针；容量耗尽时返回 nullptr。
+    /// @return 系统持有的新弹幕指针；容量耗尽时返回 nullptr，指针仅在槽位复用或 Reset 前有效。
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
                   float radius, Color color, VisualId visual,
                   Vector3 acceleration = {});

@@ -76,6 +76,7 @@ bool Stage1Content::HandleEvent(const StageEvent& event, StageEventSink& sink) c
             break;
         }
         case Action::SpawnCrossingPair:
+            // slot 的奇偶位分别留给左右入场者；敌人据此选择对应轨迹。
             for (int index = 0; index < event.count / 2; ++index) {
                 const float y = -4.5F + static_cast<float>(index) * 2.6F;
                 const float z = 7.8F - static_cast<float>(index) * 0.45F;

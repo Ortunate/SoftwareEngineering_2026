@@ -14,7 +14,8 @@
 
 namespace redmist {
 
-/// @brief 关卡编队提供的出生上下文；formation 和 slot 不指定运动轨迹。
+/// @brief 关卡编队提供的出生上下文；position 为世界坐标，delay 为入场延迟秒数。
+/// formation 是关卡局部编号，slot 是本次编队内编号；具体运动轨迹由敌人决定。
 struct EnemySpawn {
     Vector3 position{};
     float delay = 0.0F;
@@ -26,18 +27,18 @@ struct EnemySpawn {
 class StageEventSink {
 public:
     virtual ~StageEventSink() = default;
-    /// @brief 请求游戏总控生成一个当前关卡的敌人。
+    /// @brief 请求游戏总控生成一个当前关卡的敌人；原型编号由当前 Stage 解释。
     virtual void SpawnStageEnemy(std::uint16_t archetype,
                                  const EnemySpawn& spawn) = 0;
-    /// @brief 请求开始道中或关底 Boss，并登记异步事件编号。
+    /// @brief 请求开始道中或关底 Boss，并登记等待战斗结束的异步事件编号。
     virtual void BeginStageBoss(bool final, StageEventId id) = 0;
     /// @brief 请求开始对话并登记异步事件编号。
     virtual void BeginStageDialogue(StageEventId id) = 0;
-    /// @brief 请求显示一条持续指定秒数的提示。
+    /// @brief 请求显示一条持续指定秒数的提示；接收方须复制需要留存的文本。
     virtual void StageMessage(std::string_view message, float duration) = 0;
 };
 
-/// @brief 关卡对话中的一条台词与说话人信息。
+/// @brief 关卡对话中的一条台词与说话人信息；两个字符串指针须在对话结束前有效。
 struct DialogueLine {
     const char* speaker;
     const char* text;
@@ -48,18 +49,19 @@ struct DialogueLine {
 class StageContent {
 public:
     virtual ~StageContent() = default;
-    /// @brief 返回本关卡的图片与音频清单。
+    /// @brief 返回本关卡的图片与音频清单；返回的引用由 Stage 持有，调用方不得释放。
     [[nodiscard]] virtual const StageAssetManifest& Assets() const = 0;
-    /// @brief 返回按触发顺序排列的时间轴事件。
+    /// @brief 返回按触发顺序排列的时间轴事件；底层存储须覆盖 StageDirector 的生命周期。
     [[nodiscard]] virtual std::span<const StageEvent> Events() const = 0;
     /// @brief 根据关卡局部原型与编队上下文构造敌人；运动由具体类选择。
+    /// @return 所有权交给调用方；不支持的原型或编队返回 nullptr。
     [[nodiscard]] virtual std::unique_ptr<Enemy> CreateEnemy(
         std::uint16_t archetype, const EnemySpawn& spawn) const = 0;
-    /// @brief 构造道中或关底 Boss 并初始化遭遇状态。
+    /// @brief 构造道中或关底 Boss 并初始化遭遇状态，所有权交给调用方。
     [[nodiscard]] virtual std::unique_ptr<Boss> CreateBoss(bool final) const = 0;
-    /// @brief 解释一个关卡事件；异步事件返回 false。
+    /// @brief 解释一个关卡事件；异步事件返回 false，结束后须通过 StageDirector::EndEvent 报告。
     virtual bool HandleEvent(const StageEvent& event, StageEventSink& sink) const = 0;
-    /// @brief 返回本关卡的对话台词。
+    /// @brief 返回本关卡的对话台词；底层存储须在展示期间有效。
     [[nodiscard]] virtual std::span<const DialogueLine> Dialogue() const = 0;
     /// @brief 返回单句台词的展示秒数。
     [[nodiscard]] virtual float DialogueLineDuration() const = 0;

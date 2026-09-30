@@ -7,7 +7,7 @@
 
 namespace redmist::stage1 {
 namespace {
-constexpr std::array<VisualDefinition, 8> kVisuals{{
+constexpr std::array<VisualDefinition, 11> kVisuals{{
     {kBlueBullet, "stages/stage1/bullet_pearl_runtime.png", VisualMode::Bullet, 1.0F,
      {0.5F, 0.5F}, 2.6F, true},
     {kRedBullet, "stages/stage1/bullet_red_runtime.png", VisualMode::Bullet, 1.0F,
@@ -21,6 +21,12 @@ constexpr std::array<VisualDefinition, 8> kVisuals{{
     {kRumia, "stages/stage1/rumia_modern.png", VisualMode::Character, 3.2F,
      {0.50F, 0.36F}},
     {kReimuPortrait, "stages/stage1/reimu_modern.png", VisualMode::Character},
+    {kPlayerGoldCard, "stages/stage1/spell_card_gold.png", VisualMode::Bullet,
+     1.0F, {0.5F, 0.5F}, 6.0F},
+    {kPlayerCyanCard, "stages/stage1/spell_card_cyan.png", VisualMode::Bullet,
+     1.0F, {0.5F, 0.5F}, 6.0F},
+    {kPowerPoint, "stages/stage1/power_point.png", VisualMode::Character,
+     0.75F},
 }};
 constexpr std::array<SoundDefinition, 0> kSounds{};
 const StageAssetManifest kAssets{

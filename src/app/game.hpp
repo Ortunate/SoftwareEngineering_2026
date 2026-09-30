@@ -64,6 +64,16 @@ public:
 private:
     /// @brief 同时可保有的最多敌人数。
     static constexpr std::size_t kEnemyCapacity = 128;
+    /// @brief 场上同时保留的 Power 道具数量上限。
+    static constexpr std::size_t kPowerPickupCapacity = 256;
+
+    /// @brief 敌人死亡后留下的 Power 道具；位置使用世界坐标，age 为存活秒数。
+    struct PowerPickup {
+        bool active = false;
+        Vector3 position{};
+        int amount = 1;
+        float age = 0.0F;
+    };
 
     /// @brief 设置界面的普通设置页与按键设置页。
     enum class OptionsPage {
@@ -92,17 +102,19 @@ private:
     /// @brief 在支持的 FPS 档位之间循环切换并保存。
     /// @param offset 档位变化量，通常为 -1 或 1。
     void AdjustFpsLimit(int offset);
-    /// @brief 更新玩家视角、移动、射击与 Bomb 输入。
+    /// @brief 采集玩家输入，委托 Player 更新，并处理 Bomb 对战场的影响。
     /// @param deltaTime 本帧经过的秒数。
     void UpdatePlayer(float deltaTime);
-    /// @brief 使摄像机位置与玩家判定中心保持一致。
-    void UpdateCamera();
     /// @brief 推进全部活动敌人的航线及技能计时器。
     /// @param deltaTime 本帧经过的秒数。
     void UpdateEnemies(float deltaTime);
     /// @brief 推进 Boss 当前阶段，超时则请求阶段切换。
     /// @param deltaTime 本帧经过的秒数。
     void UpdateBoss(float deltaTime);
+    /// @brief 推进 Power 道具并在玩家接近时收集。
+    void UpdatePowerPickups(float deltaTime);
+    /// @brief 在指定位置生成 Power 道具；池满时丢弃此次掉落。
+    void SpawnPowerPickup(Vector3 position, int amount);
     /// @brief 处理玩家命中/擦弹及敌人、Boss 的受击判定。
     void ResolveCollisions();
     /// @brief 将关卡事件转换为出怪、对话或 Boss 战操作。
@@ -118,12 +130,10 @@ private:
     void BeginStageBoss(bool final, StageEventId id) override;
     void BeginStageDialogue(StageEventId id) override;
     void StageMessage(std::string_view message, float duration) override;
-    /// @brief 从玩家视线前方发射一组玩家弹。
-    void FirePlayerShot();
-    /// @brief 消耗一个 Bomb，清弹并伤害场上敌人。
-    void UseBomb();
-    /// @brief 扣除残机、复位玩家并处理游戏失败。
-    void DamagePlayer();
+    /// @brief 玩家已消耗 Bomb 后清弹、伤害敌人并展示反馈。
+    void ApplyBombEffect();
+    /// @brief 玩家命中后更新场景反馈，并按剩余残机处理游戏失败。
+    void HandlePlayerHit();
     /// @brief 结算当前 Boss 阶段并进入下一阶段或一面结算。
     void AdvanceBossPhase();
     /// @brief 设置屏幕提示文字及显示时间。
@@ -131,12 +141,6 @@ private:
     /// @param duration 持续秒数。
     void SetMessage(std::string message, float duration);
 
-    /// @brief 将玩家 yaw/pitch 转换为视线方向。
-    /// @return 单位前向向量。
-    [[nodiscard]] Vector3 Forward() const;
-    /// @brief 根据玩家 yaw 求水平右向量。
-    /// @return 用于横移和双发射击的右向量。
-    [[nodiscard]] Vector3 Right() const;
     /// @brief 按设置菜单索引读取对应按键。
     /// @param index 按键绑定列表中的索引。
     /// @return raylib 键码；索引无效时返回 KEY_NULL。
@@ -168,6 +172,10 @@ private:
     void DrawOptions() const;
     /// @brief 绘制可重新绑定的战斗按键列表。
     void DrawKeyBindings() const;
+#ifdef RED_MIST_DEBUG_FEATURES
+    /// @brief 进入禁用关卡时间轴、只有固定靶怪的射击调试场地。
+    void StartShotTest();
+#endif
 
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
@@ -175,6 +183,7 @@ private:
     std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
+    FixedPool<PowerPickup, kPowerPickupCapacity> powerPickups_{};
     StageDirector stage_{};
     std::unique_ptr<StageContent> stageContent_{};
     StageId stageId_ = StageId::Stage1;
@@ -200,6 +209,7 @@ private:
     bool waitingForBinding_ = false;
     bool shouldQuit_ = false;
 #ifdef RED_MIST_DEBUG_FEATURES
+    bool shotTestActive_ = false;
     bool debugRender_ = false;
     /// @brief Debug 构建默认启用，F4 可切换；重新开始时保留当前值。
     bool debugInvincible_ = false;

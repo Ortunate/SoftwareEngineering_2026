@@ -32,6 +32,7 @@ add_library(red_mist_engine STATIC
     src/config/settings.cpp
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
+    src/gameplay/actors/player.cpp
     src/gameplay/bullets/system.cpp
     src/gameplay/combat/combat.cpp
     src/render/game_render.cpp
@@ -90,6 +91,7 @@ if(BUILD_TESTING)
     add_executable(red_mist_tests
         tests/core_tests.cpp
         tests/gameplay_tests.cpp
+        tests/player_tests.cpp
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
     target_link_libraries(red_mist_tests PRIVATE red_mist_engine)

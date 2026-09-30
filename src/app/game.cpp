@@ -2,6 +2,7 @@
 
 #include "app/game.hpp"
 #include "config/settings.hpp"
+#include "stages/stage1/ids.hpp"
 
 #include "rlgl.h"
 
@@ -14,6 +15,24 @@
 #include <utility>
 
 namespace redmist {
+#ifdef RED_MIST_DEBUG_FEATURES
+namespace {
+/// @brief 射击调试场地中的固定靶怪；不移动、不攻击，由 Game 在血量耗尽时复原。
+class ShotTestEnemy final : public Enemy {
+public:
+    ShotTestEnemy() : Enemy(stage1::kDarkFairy, {0.0F, 0.0F, 4.0F}, 0.0F) {
+        health = maxHealth = 240.0F;
+        hitRadius = 1.0F;
+        scoreValue = 0;
+        powerDrop = 0;
+    }
+
+private:
+    void Move(float) override {}
+    void UpdateSkills(float, Vector3, BulletSystem&) override {}
+};
+}  // namespace
+#endif
 
 Game::Game()
     : assets_(std::filesystem::path(GetApplicationDirectory()) / "assets") {
@@ -46,15 +65,14 @@ void Game::StartStage(StageId id, bool captureCursor) {
 
 void Game::StartPreview() {
     StartRun(false);
-    player_.invulnerableTimer = 1000.0F;
+    player_.SetInvulnerability(1000.0F);
 }
 
 void Game::SetPreviewView(float yawDegrees, float pitchDegrees) {
     constexpr float degreesToRadians = std::numbers::pi_v<float> / 180.0F;
-    player_.yaw = yawDegrees * degreesToRadians;
-    player_.pitch = std::clamp(pitchDegrees * degreesToRadians,
-                               -1.45F, 1.45F);
-    UpdateCamera();
+    player_.SetView(yawDegrees * degreesToRadians,
+                    pitchDegrees * degreesToRadians);
+    player_.SyncCamera(camera_);
 }
 
 void Game::OpenOptions() {
@@ -94,10 +112,11 @@ void Game::StartRun(bool captureCursor) {
     assets_.LoadStage(stageContent_->Assets());
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
-    player_ = Player{};
+    player_.Reset();
     boss_.reset();
     bullets_.Reset();
     enemies_.Clear();
+    powerPickups_.Clear();
     stage_.Reset();
     score_ = 0;
     graze_ = 0;
@@ -108,7 +127,10 @@ void Game::StartRun(bool captureCursor) {
     bossEventId_.reset();
     dialogueEventId_.reset();
     shouldQuit_ = false;
-    UpdateCamera();
+#ifdef RED_MIST_DEBUG_FEATURES
+    shotTestActive_ = false;
+#endif
+    player_.SyncCamera(camera_);
     if (captureCursor) DisableCursor();
     SetMessage(stageContent_->StartTitle(), 3.0F);
 }
@@ -116,27 +138,30 @@ void Game::StartRun(bool captureCursor) {
 void Game::EnterMainMenu() {
     bullets_.Reset();
     enemies_.Clear();
+    powerPickups_.Clear();
     boss_.reset();
     assets_.UnloadStage();
     stage_ = StageDirector{};
     stageContent_.reset();
     assets_.PlayMenuMusic();
     state_ = RunState::MainMenu;
+#ifdef RED_MIST_DEBUG_FEATURES
+    shotTestActive_ = false;
+#endif
     selectedMenuItem_ = 0;
     messageTimer_ = 0.0F;
     dialogueActive_ = false;
     bossEventId_.reset();
     dialogueEventId_.reset();
-    player_.position = {0.0F, 0.0F, -6.5F};
-    player_.yaw = 0.0F;
-    player_.pitch = 0.0F;
-    UpdateCamera();
+    player_.ResetPose();
+    player_.SyncCamera(camera_);
     EnableCursor();
 }
 
 void Game::EndStage(RunState result) {
     bullets_.Reset();
     enemies_.Clear();
+    powerPickups_.Clear();
     boss_.reset();
     dialogueActive_ = false;
     assets_.UnloadStage();
@@ -186,14 +211,15 @@ void Game::Update(float deltaTime) {
     }
 #ifdef RED_MIST_DEBUG_FEATURES
     if (IsKeyPressed(KEY_F4)) debugInvincible_ = !debugInvincible_;
+    if (shotTestActive_) {
+        if (IsKeyPressed(KEY_F5)) player_.AdjustPower(-8);
+        if (IsKeyPressed(KEY_F6)) player_.AdjustPower(8);
+    }
 #endif
 
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
     screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
     spellCutInTimer_ = std::max(0.0F, spellCutInTimer_ - deltaTime);
-    player_.invulnerableTimer =
-        std::max(0.0F, player_.invulnerableTimer - deltaTime);
-    player_.bombCooldown = std::max(0.0F, player_.bombCooldown - deltaTime);
 
     const bool dialogueWasActive = dialogueActive_;
     stage_.Update(deltaTime,
@@ -216,9 +242,29 @@ void Game::Update(float deltaTime) {
     UpdatePlayer(deltaTime);
     UpdateEnemies(deltaTime);
     UpdateBoss(deltaTime);
-    bullets_.Update(deltaTime);
+    std::array<Vector3, kEnemyCapacity + 1> targets{};
+    std::size_t targetCount = 0;
+    enemies_.ForEachActive([&](const Enemy& enemy) {
+        if (enemy.age >= 0.0F) targets[targetCount++] = enemy.position;
+    });
+    if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
+    bullets_.Update(deltaTime, {targets.data(), targetCount});
     ResolveCollisions();
+    if (state_ == RunState::Playing) UpdatePowerPickups(deltaTime);
 }
+
+#ifdef RED_MIST_DEBUG_FEATURES
+void Game::StartShotTest() {
+    stageId_ = StageId::Stage1;
+    StartRun();
+    // 保留 Stage 1 素材和战场，清空调度器以确保不会触发出怪或对话。
+    stage_ = StageDirector{};
+    enemies_.Clear();
+    enemies_.Add(std::make_unique<ShotTestEnemy>());
+    shotTestActive_ = true;
+    SetMessage("SHOT TEST  F5: POWER -8  F6: POWER +8", 3.0F);
+}
+#endif
 
 bool Game::HandleStageEvent(const StageEvent& event) {
     return stageContent_->HandleEvent(event, *this);

@@ -6,6 +6,7 @@
 #include "gameplay/bullets/types.hpp"
 
 #include <cstddef>
+#include <span>
 
 namespace redmist {
 
@@ -17,9 +18,10 @@ public:
 
     /// @brief 清空弹幕池及丢弃计数。
     void Reset();
-    /// @brief 按速度、加速度与角速度推进弹幕并清除过期或越界者。
+    /// @brief 按速度、加速度与角速度推进弹幕，追踪弹朝最近目标转向，并清除过期或越界者。
     /// @param deltaTime 本帧经过的秒数。
-    void Update(float deltaTime);
+    /// @param targets 当前可攻击目标的世界坐标；仅在本次调用期间借用。
+    void Update(float deltaTime, std::span<const Vector3> targets = {});
 
     /// @brief 从定长池申请并初始化单颗弹幕。
     /// @param owner 弹幕所属阵营。

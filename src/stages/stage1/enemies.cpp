@@ -146,6 +146,7 @@ OrbEnemy::OrbEnemy(const EnemySpawn& spawn)
       shotTimer_(0.8F + spawn.delay) {
     health = maxHealth = 18.0F;
     scoreValue = 900;
+    powerDrop = 8;
     hitRadius = 0.62F;
 }
 

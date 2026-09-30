@@ -60,8 +60,8 @@ Vector3 Normalize(Vector3 vector) {
 
 void BulletSystem::Reset() { bullets_.Clear(); }
 
-void BulletSystem::Update(float deltaTime) {
-    bullets_.ForEachActive([deltaTime](Bullet& bullet) {
+void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets) {
+    bullets_.ForEachActive([deltaTime, targets](Bullet& bullet) {
         bullet.age += deltaTime;
         // 先更新速度，再按新速度推进位置；角速度使弹道在三维空间转弯。
         bullet.velocity = Add(bullet.velocity, Scale(bullet.acceleration, deltaTime));
@@ -69,6 +69,42 @@ void BulletSystem::Update(float deltaTime) {
             bullet.velocity = RotateAroundAxis(
                 bullet.velocity, bullet.rotationAxis,
                 bullet.angularVelocity * deltaTime);
+        }
+        if (bullet.homingTurnRate > 0.0F && !targets.empty()) {
+            const Vector3* nearest = nullptr;
+            float nearestDistanceSquared = 0.0F;
+            for (const Vector3& target : targets) {
+                const Vector3 difference{target.x - bullet.position.x,
+                                          target.y - bullet.position.y,
+                                          target.z - bullet.position.z};
+                const float distanceSquared = Dot(difference, difference);
+                if (!nearest || distanceSquared < nearestDistanceSquared) {
+                    nearest = &target;
+                    nearestDistanceSquared = distanceSquared;
+                }
+            }
+            if (nearest && nearestDistanceSquared > 0.0001F) {
+                const float speed = Length(bullet.velocity);
+                if (speed > 0.0001F) {
+                    const Vector3 current = Scale(bullet.velocity, 1.0F / speed);
+                    const Vector3 desired = DirectionTo(bullet.position, *nearest);
+                    const float angle = std::acos(std::clamp(Dot(current, desired),
+                                                              -1.0F, 1.0F));
+                    if (angle > 0.0001F) {
+                        Vector3 axis = Cross(current, desired);
+                        // 反向目标的叉积接近零，改用固定垂直轴避免转向停滞。
+                        if (Length(axis) < 0.0001F) {
+                            axis = Cross(current, {0.0F, 1.0F, 0.0F});
+                            if (Length(axis) < 0.0001F)
+                                axis = Cross(current, {1.0F, 0.0F, 0.0F});
+                        }
+                        const float turn = std::min(angle,
+                            bullet.homingTurnRate * deltaTime);
+                        bullet.velocity = Scale(RotateAroundAxis(current, axis,
+                                                                   turn), speed);
+                    }
+                }
+            }
         }
         bullet.position = Add(bullet.position, Scale(bullet.velocity, deltaTime));
 

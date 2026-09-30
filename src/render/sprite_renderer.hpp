@@ -41,6 +41,8 @@ public:
 private:
     /// @brief 按外观分组，避免每种弹幕都重新扫描固定容量弹池。
     mutable std::vector<std::vector<const Bullet*>> bulletGroups_;
+    /// @brief 玩家半透明弹按距离从远到近绘制，避免重叠时混合顺序错误。
+    mutable std::vector<const Bullet*> translucentPlayerBullets_;
 };
 
 }  // namespace redmist

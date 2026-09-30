@@ -110,9 +110,14 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     const Vector3 screenUp = ScreenUp(camera);
     bulletGroups_.resize(visuals.size());
     for (auto& group : bulletGroups_) group.clear();
+    translucentPlayerBullets_.clear();
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
-        if (bullet.visual < bulletGroups_.size())
+        if (bullet.visual < bulletGroups_.size()) {
             bulletGroups_[bullet.visual].push_back(&bullet);
+            if (bullet.owner == BulletOwner::Player &&
+                visuals[bullet.visual].mode == VisualMode::Bullet)
+                translucentPlayerBullets_.push_back(&bullet);
+        }
     });
 
     // 球体先写入深度；公告板按照外观分组以合并贴图调用。
@@ -131,6 +136,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         if (visual.mode != VisualMode::Bullet ||
             !IsTextureValid(visual.texture)) continue;
         for (const Bullet* bullet : bulletGroups_[id]) {
+            if (bullet->owner == BulletOwner::Player) continue;
             if (DistanceSquared(bullet->position, camera.position) < 1.1F * 1.1F)
                 continue;
             DrawSprite(camera, screenUp,
@@ -156,6 +162,28 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         else DrawSphere(boss->position, boss->hitRadius, RED);
     }
     if (hasCutoutShader) EndShaderMode();
+
+    // 玩家符卡保留贴图及 tint 的透明度；从远到近混合且不写入深度。
+    std::sort(translucentPlayerBullets_.begin(), translucentPlayerBullets_.end(),
+              [&camera](const Bullet* left, const Bullet* right) {
+                  return DistanceSquared(left->position, camera.position) >
+                         DistanceSquared(right->position, camera.position);
+              });
+    rlDrawRenderBatchActive();
+    rlDisableDepthMask();
+    BeginBlendMode(BLEND_ALPHA);
+    for (const Bullet* bullet : translucentPlayerBullets_) {
+        const VisualResource& visual = visuals[bullet->visual];
+        if (!IsTextureValid(visual.texture) ||
+            DistanceSquared(bullet->position, camera.position) < 0.7F * 0.7F)
+            continue;
+        DrawSprite(camera, screenUp,
+                   Spec(visual, bullet->radius * visual.bulletDiameterScale),
+                   bullet->position, Color{255, 255, 255, bullet->color.a});
+    }
+    EndBlendMode();
+    rlDrawRenderBatchActive();
+    rlEnableDepthMask();
 
     // 光晕只做视觉叠加，不写深度以免遮挡后续透明层；每种外观最多绘制 2048 个近景光晕。
     rlDisableDepthMask();

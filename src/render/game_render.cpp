@@ -40,7 +40,6 @@ void Game::DrawWorld() const {
         rlEnableBackfaceCulling();
     }
     DrawArena();
-
     std::array<const Enemy*, kEnemyCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
     enemies_.ForEachActive([&](const Enemy& enemy) {
@@ -49,10 +48,25 @@ void Game::DrawWorld() const {
     const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
                          assets_.Stage().visuals, assets_.Stage().shaders);
+    if (stageContent_) {
+        const Texture2D powerTexture = assets_.GetVisual(
+            stageContent_->PowerPickupVisual()).texture;
+        // 道具贴图有透明背景；保留深度检测但不写深度，以免空白像素遮挡后续图层。
+        rlDisableDepthMask();
+        powerPickups_.ForEachActive([this, powerTexture](const PowerPickup& pickup) {
+            const float size = pickup.amount >= 8 ? 0.95F : 0.68F;
+            if (IsTextureValid(powerTexture))
+                DrawBillboard(camera_, powerTexture, pickup.position, size, WHITE);
+            else
+                DrawSphere(pickup.position, size * 0.35F, RED);
+        });
+        rlDrawRenderBatchActive();
+        rlEnableDepthMask();
+    }
 #ifdef RED_MIST_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
-                                          player_.position);
+                                          player_.Position());
     }
 #endif
 
@@ -97,25 +111,29 @@ void Game::DrawHud() const {
     DrawRectangleLinesEx({16.0F, 14.0F, 292.0F, 168.0F}, 1.0F,
                          Color{95, 165, 210, 200});
     DrawText(TextFormat("SCORE  %09lld", score_), 30, 27, 21, RAYWHITE);
-    DrawText(TextFormat("LIVES  %d", std::max(0, player_.lives + 1)),
+    DrawText(TextFormat("LIVES  %d", player_.RemainingLives()),
              30, 57, 19, Color{255, 120, 140, 255});
-    DrawText(TextFormat("BOMBS  %d", player_.bombs), 162, 57, 19,
+    DrawText(TextFormat("BOMBS  %d", player_.Bombs()), 162, 57, 19,
              Color{110, 190, 255, 255});
-    DrawText(TextFormat("GRAZE  %05d", graze_), 30, 86, 19,
+    DrawText(player_.Power() == Player::kMaxPower
+                 ? "POWER  MAX" : TextFormat("POWER  %03d", player_.Power()),
+             30, 86, 19, Color{255, 205, 125, 255});
+    DrawText(TextFormat("GRAZE %05d", graze_), 165, 86, 17,
              Color{230, 210, 120, 255});
-    DrawText(TextFormat("XYZ  %+.1f  %+.1f  %+.1f", player_.position.x,
-                        player_.position.y, player_.position.z),
+    const Vector3 playerPosition = player_.Position();
+    DrawText(TextFormat("XYZ  %+.1f  %+.1f  %+.1f", playerPosition.x,
+                        playerPosition.y, playerPosition.z),
              30, 116, 17, Color{160, 190, 210, 255});
     DrawText(TextFormat("BULLETS  %04d",
                         static_cast<int>(bullets_.Pool().ActiveCount())),
              30, 143, 17, Color{160, 190, 210, 255});
 
     float nearestEnemyBullet = 999.0F;
-    bullets_.Pool().ForEachActive([this, &nearestEnemyBullet](const Bullet& bullet) {
+    bullets_.Pool().ForEachActive([playerPosition, &nearestEnemyBullet](const Bullet& bullet) {
         if (bullet.owner == BulletOwner::Enemy) {
             nearestEnemyBullet = std::min(
                 nearestEnemyBullet,
-                std::sqrt(DistanceSquared(bullet.position, player_.position)));
+                std::sqrt(DistanceSquared(bullet.position, playerPosition)));
         }
     });
     const bool danger = nearestEnemyBullet < 1.15F;
@@ -166,6 +184,15 @@ void Game::DrawHud() const {
              GetScreenWidth() - 280, 75, 17,
              debugInvincible_ ? Color{125, 255, 200, 255}
                               : Color{180, 190, 205, 255});
+    if (shotTestActive_) {
+        float dummyHealth = 0.0F;
+        enemies_.ForEachActive([&dummyHealth](const Enemy& enemy) {
+            dummyHealth = enemy.health;
+        });
+        DrawText(TextFormat("SHOT TEST  F5 -8  F6 +8  DUMMY HP %.0f", dummyHealth),
+                 GetScreenWidth() - 465, 104, 17,
+                 Color{180, 230, 255, 255});
+    }
     if (debugRender_) {
         DrawText("F3  HITBOX: yellow bullet / cyan body / magenta muzzle",
                  16, GetScreenHeight() - 57, 14,
@@ -335,9 +362,19 @@ void Game::DrawMainMenu() const {
              220, 18, Color{175, 195, 210, 255});
 
     const float centerX = static_cast<float>(screenWidth) * 0.5F;
+#ifdef RED_MIST_DEBUG_FEATURES
+    const float startY = static_cast<float>(screenHeight) * 0.5F + 10.0F;
+#else
     const float startY = static_cast<float>(screenHeight) * 0.5F + 50.0F;
+#endif
+#ifdef RED_MIST_DEBUG_FEATURES
+    const char* labels[4] = {"START GAME", "OPTIONS", "SHOT TEST", "QUIT"};
+    constexpr int itemCount = 4;
+#else
     const char* labels[3] = {"START GAME", "OPTIONS", "QUIT"};
-    for (int index = 0; index < 3; ++index) {
+    constexpr int itemCount = 3;
+#endif
+    for (int index = 0; index < itemCount; ++index) {
         const Rectangle button{centerX - 170.0F,
                                startY + static_cast<float>(index) * 70.0F,
                                340.0F, 52.0F};
@@ -357,8 +394,8 @@ void Game::DrawMainMenu() const {
     const char* hint = "W/S or Arrow Keys to select     Enter or Mouse to confirm";
     DrawText(hint, (screenWidth - MeasureText(hint, 18)) / 2,
              screenHeight - 68, 18, Color{160, 180, 200, 230});
-    DrawText("No original game assets are included",
-             (screenWidth - MeasureText("No original game assets are included", 16)) / 2,
+    DrawText("Fan project for study",
+             (screenWidth - MeasureText("Fan project for study", 16)) / 2,
              screenHeight - 38, 16, Color{105, 125, 145, 220});
 }
 

@@ -2,12 +2,9 @@
 
 #pragma once
 
-#include "raylib.h"
-
 #include <array>
 
 namespace redmist {
-inline constexpr Color kPlayerBulletColor{90, 225, 255, 255};
 inline constexpr float kSpellCutInDuration = 2.6F;
 inline constexpr std::array<const char*, 10> kBindingNames{
     "FORWARD", "BACKWARD", "MOVE LEFT", "MOVE RIGHT", "ASCEND",

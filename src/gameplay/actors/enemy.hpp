@@ -34,6 +34,8 @@ public:
     float maxHealth = 10.0F;
     float hitRadius = 0.55F;
     int scoreValue = 500;
+    /// @brief 击败后掉落的 Power 点数；零表示不掉落。
+    int powerDrop = 1;
 
     /// @brief 沿玩家方向从自身判定中心向前取发弹位置。
     /// @param playerPosition 玩家判定中心。

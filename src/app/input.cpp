@@ -1,21 +1,21 @@
-// 本文件负责菜单输入、按键设置以及玩家移动与相机方向。
+// 本文件负责菜单输入、按键设置以及将玩家按键采集为输入快照。
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
-#include "app/math.hpp"
 #include "config/settings.hpp"
 
 #include <algorithm>
 #include <array>
-#include <cmath>
-#include <numbers>
 #include <utility>
 
 namespace redmist {
-using namespace game_math;
 
 void Game::UpdateMainMenu() {
+#ifdef RED_MIST_DEBUG_FEATURES
+    constexpr int itemCount = 4;
+#else
     constexpr int itemCount = 3;
+#endif
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
         selectedMenuItem_ = (selectedMenuItem_ + itemCount - 1) % itemCount;
     }
@@ -24,7 +24,11 @@ void Game::UpdateMainMenu() {
     }
 
     const float centerX = static_cast<float>(GetScreenWidth()) * 0.5F;
+#ifdef RED_MIST_DEBUG_FEATURES
+    const float startY = static_cast<float>(GetScreenHeight()) * 0.5F + 10.0F;
+#else
     const float startY = static_cast<float>(GetScreenHeight()) * 0.5F + 50.0F;
+#endif
     const Vector2 mouse = GetMousePosition();
     bool hoveringItem = false;
     for (int index = 0; index < itemCount; ++index) {
@@ -45,7 +49,13 @@ void Game::UpdateMainMenu() {
         StartRun();
     } else if (confirmed && selectedMenuItem_ == 1) {
         OpenOptions();
+#ifdef RED_MIST_DEBUG_FEATURES
     } else if (confirmed && selectedMenuItem_ == 2) {
+        StartShotTest();
+    } else if (confirmed && selectedMenuItem_ == 3) {
+#else
+    } else if (confirmed && selectedMenuItem_ == 2) {
+#endif
         shouldQuit_ = true;
     }
 }
@@ -190,57 +200,25 @@ void Game::AdjustFpsLimit(int offset) {
 }
 
 void Game::UpdatePlayer(float deltaTime) {
-    const Vector2 mouseDelta = GetMouseDelta();
-    player_.yaw -= mouseDelta.x * player_.mouseSensitivity;
-    player_.pitch -= mouseDelta.y * player_.mouseSensitivity;
-    player_.pitch = std::clamp(player_.pitch, -1.45F, 1.45F);
-
-    const Vector3 forward = Forward();
-    const Vector3 right = Right();
-    Vector3 movement{};
-    if (IsKeyDown(bindings_.forward)) movement = Add(movement, forward);
-    if (IsKeyDown(bindings_.backward)) movement = Subtract(movement, forward);
-    if (IsKeyDown(bindings_.moveRight)) movement = Add(movement, right);
-    if (IsKeyDown(bindings_.moveLeft)) movement = Subtract(movement, right);
-    if (IsKeyDown(bindings_.ascend)) movement.y += 1.0F;
-    if (IsKeyDown(bindings_.descend)) movement.y -= 1.0F;
-
-    movement = Normalize(movement);
-    const bool focused = IsKeyDown(bindings_.focus);
-    const float speed = focused ? player_.focusSpeed : player_.speed;
-    player_.position = Add(player_.position, Scale(movement, speed * deltaTime));
-
-    const float limit = kArenaHalfExtent - kArenaPadding;
-    player_.position.x = std::clamp(player_.position.x, -limit, limit);
-    player_.position.y = std::clamp(player_.position.y, -limit, limit);
-    player_.position.z = std::clamp(player_.position.z, -limit, limit);
-    UpdateCamera();
-
-    player_.fireTimer -= deltaTime;
-    if (!dialogueActive_ &&
-        (IsKeyDown(bindings_.fire) || IsMouseButtonDown(MOUSE_BUTTON_LEFT)) &&
-        player_.fireTimer <= 0.0F) {
-        FirePlayerShot();
-        player_.fireTimer = focused ? 0.075F : 0.09F;
+    const PlayerInput input{
+        .mouseDelta = GetMouseDelta(),
+        .forward = IsKeyDown(bindings_.forward),
+        .backward = IsKeyDown(bindings_.backward),
+        .moveLeft = IsKeyDown(bindings_.moveLeft),
+        .moveRight = IsKeyDown(bindings_.moveRight),
+        .ascend = IsKeyDown(bindings_.ascend),
+        .descend = IsKeyDown(bindings_.descend),
+        .focus = IsKeyDown(bindings_.focus),
+        .fire = IsKeyDown(bindings_.fire) || IsMouseButtonDown(MOUSE_BUTTON_LEFT),
+        .bomb = IsKeyPressed(bindings_.bomb) ||
+                IsMouseButtonPressed(MOUSE_BUTTON_RIGHT),
+    };
+    if (player_.Update(deltaTime, input, bullets_,
+                       stageContent_->PlayerBulletVisual(),
+                       stageContent_->PlayerHomingVisual(), !dialogueActive_)) {
+        ApplyBombEffect();
     }
-    if (IsKeyPressed(bindings_.bomb) || IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-        UseBomb();
-    }
-}
-
-void Game::UpdateCamera() {
-    // 摄像机与玩家共用同一位置，视点即碰撞判定中心。
-    camera_.position = player_.position;
-    camera_.target = Add(player_.position, Forward());
-    camera_.up = {0.0F, 1.0F, 0.0F};
-}
-
-Vector3 Game::Forward() const {
-    return BulletSystem::DirectionFromYawPitch(player_.yaw, player_.pitch);
-}
-
-Vector3 Game::Right() const {
-    return {-std::cos(player_.yaw), 0.0F, std::sin(player_.yaw)};
+    player_.SyncCamera(camera_);
 }
 
 int Game::BindingAt(int index) const {

@@ -65,8 +65,12 @@ public:
     [[nodiscard]] virtual std::span<const DialogueLine> Dialogue() const = 0;
     /// @brief 返回单句台词的展示秒数。
     [[nodiscard]] virtual float DialogueLineDuration() const = 0;
-    /// @brief 返回玩家弹幕的外观 ID。
+    /// @brief 返回玩家直射弹的外观 ID。
     [[nodiscard]] virtual VisualId PlayerBulletVisual() const = 0;
+    /// @brief 返回玩家追踪弹的外观 ID。
+    [[nodiscard]] virtual VisualId PlayerHomingVisual() const = 0;
+    /// @brief 返回 Power 道具的外观 ID，贴图由当前 Stage 的素材清单持有。
+    [[nodiscard]] virtual VisualId PowerPickupVisual() const = 0;
     /// @brief 返回对话中玩家侧立绘的外观 ID。
     [[nodiscard]] virtual VisualId HeroPortraitVisual() const = 0;
     /// @brief 返回对话与符卡中 Boss 立绘的外观 ID。

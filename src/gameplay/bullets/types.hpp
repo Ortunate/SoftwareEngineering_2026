@@ -13,6 +13,7 @@ enum class BulletOwner : std::uint8_t { Player, Enemy };
 /// @brief 对象池中的单颗弹幕；位置和半径采用世界单位，速度为世界单位/秒，加速度为世界单位/秒²。
 /// position 为球形判定中心；active 为 false 后槽位可被下次 Spawn 复用。
 /// age 和 maxAge 为秒；rotationAxis 是旋转轴，angularVelocity 为弧度/秒。
+/// homingTurnRate 为追踪转向上限（弧度/秒），零表示不追踪；damage 是单次命中伤害。
 struct Bullet {
     bool active = false;
     bool grazed = false;
@@ -26,6 +27,8 @@ struct Bullet {
     float age = 0.0F;
     float maxAge = 12.0F;
     float angularVelocity = 0.0F;
+    float homingTurnRate = 0.0F;
+    float damage = 2.0F;
     Color color = WHITE;
 };
 

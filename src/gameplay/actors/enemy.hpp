@@ -3,11 +3,13 @@
 #pragma once
 
 #include "gameplay/bullets/system.hpp"
+#include "gameplay/items/drop_table.hpp"
 
 
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <utility>
 
 namespace redmist {
@@ -34,8 +36,11 @@ public:
     float maxHealth = 10.0F;
     float hitRadius = 0.55F;
     int scoreValue = 500;
-    /// @brief 击败后掉落的 Power 点数；零表示不掉落。
-    int powerDrop = 1;
+    /// @brief 返回本类敌人的两类道具联合分布；表由具体敌人静态持有。
+    /// @return 仅在敌人生命周期内借用的只读表，空表表示不掉落。
+    [[nodiscard]] std::span<const DropOutcome> DropDistribution() const {
+        return dropDistribution_;
+    }
 
     /// @brief 沿玩家方向从自身判定中心向前取发弹位置。
     /// @param playerPosition 玩家判定中心。
@@ -47,12 +52,17 @@ protected:
     /// @param visual 外观编号。
     /// @param position 出生位置。
     /// @param delay 非负入场延迟（秒）。
-    Enemy(VisualId visual, Vector3 position, float delay);
+    /// @param drops 本类敌人的静态掉落结果表；存储须覆盖敌人生命周期。
+    Enemy(VisualId visual, Vector3 position, float delay,
+          std::span<const DropOutcome> drops);
     /// @brief Stage 子类按自身规则更新空间位置。
     virtual void Move(float deltaTime) = 0;
     /// @brief 子类自行推进任意数量的技能计时器并释放弹幕。
     virtual void UpdateSkills(float deltaTime, Vector3 playerPosition,
                               BulletSystem& bullets) = 0;
+
+private:
+    std::span<const DropOutcome> dropDistribution_;
 };
 
 /// @brief 用固定数量的槽位持有多态敌人并统计丢弃的生成请求。

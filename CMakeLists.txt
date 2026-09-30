@@ -35,6 +35,7 @@ add_library(red_mist_engine STATIC
     src/gameplay/actors/player.cpp
     src/gameplay/bullets/system.cpp
     src/gameplay/combat/combat.cpp
+    src/gameplay/items/drop_system.cpp
     src/render/game_render.cpp
     src/render/sprite_renderer.cpp
     src/resources/asset_manager.cpp
@@ -90,6 +91,7 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(red_mist_tests
         tests/core_tests.cpp
+        tests/drop_tests.cpp
         tests/gameplay_tests.cpp
         tests/player_tests.cpp
         tests/settings_tests.cpp

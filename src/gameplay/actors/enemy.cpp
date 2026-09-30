@@ -9,8 +9,10 @@
 
 namespace redmist {
 
-Enemy::Enemy(VisualId appearance, Vector3 start, float delay)
-    : visual(appearance), position(start), origin(start), age(-delay) {}
+Enemy::Enemy(VisualId appearance, Vector3 start, float delay,
+             std::span<const DropOutcome> drops)
+    : visual(appearance), position(start), origin(start), age(-delay),
+      dropDistribution_(drops) {}
 
 Vector3 Enemy::MuzzlePosition(Vector3 playerPosition) const {
     return pattern::Add(position,

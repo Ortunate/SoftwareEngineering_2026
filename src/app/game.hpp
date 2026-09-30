@@ -9,6 +9,7 @@
 #include "app/run_state.hpp"
 #include "config/key_bindings.hpp"
 #include "gameplay/actors/player.hpp"
+#include "gameplay/items/drop_system.hpp"
 #include "gameplay/arena.hpp"
 #include "stage/system.hpp"
 #include "stage/content.hpp"
@@ -64,17 +65,6 @@ public:
 private:
     /// @brief 同时可保有的最多敌人数。
     static constexpr std::size_t kEnemyCapacity = 128;
-    /// @brief 场上同时保留的 Power 道具数量上限。
-    static constexpr std::size_t kPowerPickupCapacity = 256;
-
-    /// @brief 敌人死亡后留下的 Power 道具；位置使用世界坐标，age 为存活秒数。
-    struct PowerPickup {
-        bool active = false;
-        Vector3 position{};
-        int amount = 1;
-        float age = 0.0F;
-    };
-
     /// @brief 设置界面的普通设置页与按键设置页。
     enum class OptionsPage {
         General,
@@ -111,10 +101,8 @@ private:
     /// @brief 推进 Boss 当前阶段，超时则请求阶段切换。
     /// @param deltaTime 本帧经过的秒数。
     void UpdateBoss(float deltaTime);
-    /// @brief 推进 Power 道具并在玩家接近时收集。
-    void UpdatePowerPickups(float deltaTime);
-    /// @brief 在指定位置生成 Power 道具；池满时丢弃此次掉落。
-    void SpawnPowerPickup(Vector3 position, int amount);
+    /// @brief 推进两类掉落物并将拾取结果计入玩家 Power 与分数。
+    void UpdatePickups(float deltaTime);
     /// @brief 处理玩家命中/擦弹及敌人、Boss 的受击判定。
     void ResolveCollisions();
     /// @brief 将关卡事件转换为出怪、对话或 Boss 战操作。
@@ -183,7 +171,7 @@ private:
     std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
-    FixedPool<PowerPickup, kPowerPickupCapacity> powerPickups_{};
+    DropSystem drops_{};
     StageDirector stage_{};
     std::unique_ptr<StageContent> stageContent_{};
     StageId stageId_ = StageId::Stage1;

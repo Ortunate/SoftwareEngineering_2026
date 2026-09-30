@@ -4,12 +4,23 @@
 
 #include "gameplay/bullets/patterns.hpp"
 
+#include <array>
 #include <cmath>
 
 namespace redmist::stage1 {
 namespace {
 constexpr Color kEnemyRed{255, 70, 105, 255};
 constexpr Color kEnemyBlue{75, 145, 255, 255};
+// 权重仅定义同类敌人死亡时的两种点数量；生成位置和拾取由 DropSystem 统一处理。
+constexpr std::array<DropOutcome, 2> kFairyDrops{{
+    {1, 0, 3}, {0, 1, 1},
+}};
+constexpr std::array<DropOutcome, 3> kDarkFairyDrops{{
+    {1, 1, 2}, {2, 0, 1}, {0, 2, 1},
+}};
+constexpr std::array<DropOutcome, 2> kOrbDrops{{
+    {8, 2, 3}, {4, 4, 1},
+}};
 
 /// @brief 仅封装倒计时运算；每种技能的计时器由具体敌人自己持有。
 /// @param timer 技能剩余秒数，触发后重置为 interval。
@@ -31,7 +42,7 @@ Formation SpawnFormation(const EnemySpawn& spawn) {
 }  // namespace
 
 FairyEnemy::FairyEnemy(const EnemySpawn& spawn)
-    : Enemy(kFairy, spawn.position, spawn.delay),
+    : Enemy(kFairy, spawn.position, spawn.delay, kFairyDrops),
       movement_(SpawnFormation(spawn) == Formation::CrossingPair
                     ? (spawn.position.x < 0.0F ? Movement::CrossFromLeft
                                                : Movement::CrossFromRight)
@@ -83,7 +94,7 @@ void FairyEnemy::FireAimedShot(BulletSystem& bullets, Vector3 playerPosition) {
 }
 
 DarkFairyEnemy::DarkFairyEnemy(const EnemySpawn& spawn)
-    : Enemy(kDarkFairy, spawn.position, spawn.delay),
+    : Enemy(kDarkFairy, spawn.position, spawn.delay, kDarkFairyDrops),
       movement_(SpawnFormation(spawn) == Formation::CrossingPair
                     ? (spawn.position.x < 0.0F ? Movement::CrossFromLeft
                                                : Movement::CrossFromRight)
@@ -138,7 +149,7 @@ void DarkFairyEnemy::FireAimedShot(BulletSystem& bullets,
 }
 
 OrbEnemy::OrbEnemy(const EnemySpawn& spawn)
-    : Enemy(kOrb, spawn.position, spawn.delay),
+    : Enemy(kOrb, spawn.position, spawn.delay, kOrbDrops),
       movement_(SpawnFormation(spawn) == Formation::CrossingPair
                     ? Movement::CrossArena
                     : (SpawnFormation(spawn) == Formation::Star
@@ -146,7 +157,6 @@ OrbEnemy::OrbEnemy(const EnemySpawn& spawn)
       shotTimer_(0.8F + spawn.delay) {
     health = maxHealth = 18.0F;
     scoreValue = 900;
-    powerDrop = 8;
     hitRadius = 0.62F;
 }
 

@@ -21,6 +21,7 @@ public:
     [[nodiscard]] VisualId PlayerBulletVisual() const override { return kPlayerGoldCard; }
     [[nodiscard]] VisualId PlayerHomingVisual() const override { return kPlayerCyanCard; }
     [[nodiscard]] VisualId PowerPickupVisual() const override { return kPowerPoint; }
+    [[nodiscard]] VisualId ScorePickupVisual() const override { return kScorePoint; }
     [[nodiscard]] VisualId HeroPortraitVisual() const override { return kReimuPortrait; }
     [[nodiscard]] VisualId BossPortraitVisual() const override { return kRumia; }
     [[nodiscard]] const char* StartTitle() const override {

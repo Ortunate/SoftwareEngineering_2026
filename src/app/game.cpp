@@ -20,11 +20,11 @@ namespace {
 /// @brief 射击调试场地中的固定靶怪；不移动、不攻击，由 Game 在血量耗尽时复原。
 class ShotTestEnemy final : public Enemy {
 public:
-    ShotTestEnemy() : Enemy(stage1::kDarkFairy, {0.0F, 0.0F, 4.0F}, 0.0F) {
+    ShotTestEnemy() : Enemy(stage1::kDarkFairy, {0.0F, 0.0F, 4.0F}, 0.0F,
+                            {}) {
         health = maxHealth = 240.0F;
         hitRadius = 1.0F;
         scoreValue = 0;
-        powerDrop = 0;
     }
 
 private:
@@ -116,7 +116,7 @@ void Game::StartRun(bool captureCursor) {
     boss_.reset();
     bullets_.Reset();
     enemies_.Clear();
-    powerPickups_.Clear();
+    drops_.Clear();
     stage_.Reset();
     score_ = 0;
     graze_ = 0;
@@ -138,7 +138,7 @@ void Game::StartRun(bool captureCursor) {
 void Game::EnterMainMenu() {
     bullets_.Reset();
     enemies_.Clear();
-    powerPickups_.Clear();
+    drops_.Clear();
     boss_.reset();
     assets_.UnloadStage();
     stage_ = StageDirector{};
@@ -161,7 +161,7 @@ void Game::EnterMainMenu() {
 void Game::EndStage(RunState result) {
     bullets_.Reset();
     enemies_.Clear();
-    powerPickups_.Clear();
+    drops_.Clear();
     boss_.reset();
     dialogueActive_ = false;
     assets_.UnloadStage();
@@ -250,7 +250,7 @@ void Game::Update(float deltaTime) {
     if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
     bullets_.Update(deltaTime, {targets.data(), targetCount});
     ResolveCollisions();
-    if (state_ == RunState::Playing) UpdatePowerPickups(deltaTime);
+    if (state_ == RunState::Playing) UpdatePickups(deltaTime);
 }
 
 #ifdef RED_MIST_DEBUG_FEATURES

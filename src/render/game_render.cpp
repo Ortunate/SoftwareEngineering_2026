@@ -46,12 +46,15 @@ void Game::DrawWorld() const {
         if (enemy.age >= 0.0F) visibleEnemies[visibleCount++] = &enemy;
     });
     const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
-    std::array<PickupSprite, kPowerPickupCapacity> visiblePickups{};
+    std::array<PickupSprite, DropSystem::kCapacity> visiblePickups{};
     std::size_t pickupCount = 0;
     if (stageContent_) {
-        const VisualId visual = stageContent_->PowerPickupVisual();
-        powerPickups_.ForEachActive([&](const PowerPickup& pickup) {
-            const float scale = pickup.amount >= 8 ? 1.25F : 0.9F;
+        drops_.ForEachActive([&](const Pickup& pickup) {
+            const VisualId visual = pickup.kind == PickupKind::Power
+                                        ? stageContent_->PowerPickupVisual()
+                                        : stageContent_->ScorePickupVisual();
+            const float scale = pickup.kind == PickupKind::Power &&
+                                        pickup.value >= 8 ? 1.25F : 0.9F;
             visiblePickups[pickupCount++] = {pickup.position, visual, scale};
         });
     }

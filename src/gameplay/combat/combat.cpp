@@ -68,7 +68,7 @@ void Game::ResolveCollisions() {
 #endif
             enemy.active = false;
             score_ += enemy.scoreValue;
-            SpawnPowerPickup(enemy.position, enemy.powerDrop);
+            drops_.SpawnEnemyDrops(enemy.position, enemy.DropDistribution());
         }
     });
 
@@ -87,41 +87,14 @@ void Game::ResolveCollisions() {
     }
 }
 
-void Game::SpawnPowerPickup(Vector3 position, int amount) {
-    if (amount <= 0) return;
-    if (PowerPickup* pickup = powerPickups_.Acquire()) {
-        pickup->position = position;
-        pickup->amount = amount;
-    }
-}
-
-void Game::UpdatePowerPickups(float deltaTime) {
-    const Vector3 playerPosition = player_.Position();
-    powerPickups_.ForEachActive([this, deltaTime, playerPosition](PowerPickup& pickup) {
-        pickup.age += deltaTime;
-        if (pickup.age > 15.0F) {
-            pickup.active = false;
-            return;
-        }
-        const Vector3 toPlayer = Subtract(playerPosition, pickup.position);
-        const float distance = std::sqrt(DistanceSquared(playerPosition,
-                                                         pickup.position));
-        // 掉落物始终缓慢靠近玩家，近处加速；步长不得越过玩家，否则低帧率下会来回穿梭。
-        if (distance > 0.0001F) {
-            const float speed = distance < 2.5F ? 8.0F : 2.5F;
-            pickup.position = Add(pickup.position, Scale(toPlayer,
-                std::min(speed * deltaTime, distance) / distance));
-        }
-        if (DistanceSquared(playerPosition, pickup.position) < 0.6F * 0.6F) {
-            const int previousPower = player_.Power();
-            player_.AdjustPower(pickup.amount);
-            pickup.active = false;
-            if (previousPower < Player::kMaxPower &&
-                player_.Power() == Player::kMaxPower) {
-                bullets_.ClearEnemyBullets();
-            }
-        }
-    });
+void Game::UpdatePickups(float deltaTime) {
+    const PickupReward reward = drops_.Update(deltaTime, player_.Position());
+    const int previousPower = player_.Power();
+    player_.AdjustPower(reward.power);
+    score_ += reward.score;
+    if (previousPower < Player::kMaxPower &&
+        player_.Power() == Player::kMaxPower)
+        bullets_.ClearEnemyBullets();
 }
 
 void Game::ApplyBombEffect() {
@@ -163,7 +136,8 @@ void Game::AdvanceBossPhase() {
         messageTimer_ = 0.0F;
     } else if (wasMidboss) {
         score_ += 5000;
-        SpawnPowerPickup(boss_->position, 8);
+        // Boss 的专属概率规则尚未实现，暂时保留原有的固定大 P 点奖励。
+        drops_.SpawnFixedPower(boss_->position, 8);
         SetMessage(stageContent_->MidbossEndMessage(), 1.6F);
     } else {
         score_ += 50000;

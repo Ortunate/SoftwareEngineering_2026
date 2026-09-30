@@ -46,23 +46,18 @@ void Game::DrawWorld() const {
         if (enemy.age >= 0.0F) visibleEnemies[visibleCount++] = &enemy;
     });
     const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
-    spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
-                         assets_.Stage().visuals, assets_.Stage().shaders);
+    std::array<PickupSprite, kPowerPickupCapacity> visiblePickups{};
+    std::size_t pickupCount = 0;
     if (stageContent_) {
-        const Texture2D powerTexture = assets_.GetVisual(
-            stageContent_->PowerPickupVisual()).texture;
-        // 道具贴图有透明背景；保留深度检测但不写深度，以免空白像素遮挡后续图层。
-        rlDisableDepthMask();
-        powerPickups_.ForEachActive([this, powerTexture](const PowerPickup& pickup) {
-            const float size = pickup.amount >= 8 ? 0.95F : 0.68F;
-            if (IsTextureValid(powerTexture))
-                DrawBillboard(camera_, powerTexture, pickup.position, size, WHITE);
-            else
-                DrawSphere(pickup.position, size * 0.35F, RED);
+        const VisualId visual = stageContent_->PowerPickupVisual();
+        powerPickups_.ForEachActive([&](const PowerPickup& pickup) {
+            const float scale = pickup.amount >= 8 ? 1.25F : 0.9F;
+            visiblePickups[pickupCount++] = {pickup.position, visual, scale};
         });
-        rlDrawRenderBatchActive();
-        rlEnableDepthMask();
     }
+    spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
+                         {visiblePickups.data(), pickupCount},
+                         assets_.Stage().visuals, assets_.Stage().shaders);
 #ifdef RED_MIST_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),

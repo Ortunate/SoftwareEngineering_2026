@@ -1,4 +1,4 @@
-// 本文件负责实现敌人、Boss 和弹幕的公告板绘制、光晕及调试图层。
+// 本文件负责实现敌人、Boss、弹幕与道具的公告板绘制、光晕及调试图层。
 
 #include "render/sprite_renderer.hpp"
 
@@ -105,6 +105,7 @@ const VisualResource& FindVisual(std::span<const VisualResource> visuals,
 
 void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                           std::span<const Enemy*> enemies, const Boss* boss,
+                          std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
                           const SpriteShaders& shaders) const {
     const Vector3 screenUp = ScreenUp(camera);
@@ -160,6 +161,13 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             DrawSprite(camera, screenUp, Spec(visual, visual.worldHeight),
                        boss->position);
         else DrawSphere(boss->position, boss->hitRadius, RED);
+    }
+    for (const PickupSprite& pickup : pickups) {
+        const VisualResource& visual = FindVisual(visuals, pickup.visual);
+        const float height = visual.worldHeight * pickup.heightScale;
+        if (IsTextureValid(visual.texture))
+            DrawSprite(camera, screenUp, Spec(visual, height), pickup.position);
+        else DrawSphere(pickup.position, height * 0.35F, RED);
     }
     if (hasCutoutShader) EndShaderMode();
 

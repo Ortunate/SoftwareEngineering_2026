@@ -1,4 +1,4 @@
-// 本文件负责声明按外观资源绘制战斗对象的渲染接口。
+// 本文件负责声明按外观资源绘制弹幕、角色与道具的渲染接口。
 
 #pragma once
 
@@ -14,7 +14,15 @@
 
 namespace redmist {
 
-/// @brief 绘制角色贴图、弹幕本体和光晕；不持有传入的战斗对象或 GPU 资源。
+/// @brief 单个道具的临时绘制数据；position 为世界坐标，heightScale 乘以外观的世界高度。
+/// visual 是当前 Stage 的外观 ID；渲染器只在本帧借用此数据。
+struct PickupSprite {
+    Vector3 position{};
+    VisualId visual = kInvalidVisualId;
+    float heightScale = 1.0F;
+};
+
+/// @brief 绘制角色、弹幕和道具的公告板与光晕；不持有传入的战斗对象或 GPU 资源。
 class SpriteRenderer {
 public:
     /// @brief 绘制一个战斗帧的空间精灵并恢复深度状态。
@@ -22,10 +30,12 @@ public:
     /// @param bullets 全部活动弹幕。
     /// @param enemies 当前可见敌人指针序列；调用期间所有指针须有效。
     /// @param boss 当前 Boss 状态。
+    /// @param pickups 当前活动道具的临时绘制数据；调用期间 span 须有效。
     /// @param visuals 当前 Stage 的稠密外观资源表，索引即 VisualId。
     /// @param shaders 不持有的弹幕与角色着色器集合。
     void Draw(const Camera3D& camera, const BulletSystem& bullets,
               std::span<const Enemy*> enemies, const Boss* boss,
+              std::span<const PickupSprite> pickups,
               std::span<const VisualResource> visuals,
               const SpriteShaders& shaders) const;
 #ifdef RED_MIST_DEBUG_FEATURES

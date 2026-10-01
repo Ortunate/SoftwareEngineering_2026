@@ -168,9 +168,13 @@ void Game::DrawHud() const {
 
     if (!dialogueActive_ && state_ != RunState::Won &&
         state_ != RunState::GameOver) {
-        const char* controls =
-            "Mouse Look  WASD Move  Space Up  LShift Down  C Focus  LMB/Z Fire  RMB/X Bomb";
-        DrawText(controls, 16, GetScreenHeight() - 29, 17,
+        const std::string controls = "Focus: " + KeyLabel(bindings_.focus) +
+            "   Fire: " + KeyLabel(bindings_.fire) + " / " + KeyLabel(bindings_.fireAlt) +
+            "   Bomb: " + KeyLabel(bindings_.bomb) + " / " + KeyLabel(bindings_.bombAlt);
+        int controlsSize = 17;
+        while (controlsSize > 10 && MeasureText(controls.c_str(), controlsSize) > GetScreenWidth() - 32)
+            --controlsSize;
+        DrawText(controls.c_str(), 16, GetScreenHeight() - 29, controlsSize,
                  Color{185, 205, 220, 235});
         DrawText("CAMERA = HITBOX", GetScreenWidth() - 190, GetScreenHeight() - 56,
                  17, Color{255, 125, 145, 240});
@@ -221,8 +225,8 @@ void Game::DrawOverlay() const {
         const char* text = "PAUSED";
         DrawText(text, (GetScreenWidth() - MeasureText(text, 52)) / 2,
                  GetScreenHeight() / 2 - 50, 52, RAYWHITE);
-        const char* hint = "Esc / P Resume     M Main Menu";
-        DrawText(hint, (GetScreenWidth() - MeasureText(hint, 20)) / 2,
+        const std::string hint = "Esc / " + KeyLabel(bindings_.pause) + " Resume     M Main Menu";
+        DrawText(hint.c_str(), (GetScreenWidth() - MeasureText(hint.c_str(), 20)) / 2,
                  GetScreenHeight() / 2 + 20, 20, Color{185, 205, 220, 255});
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
@@ -411,18 +415,18 @@ void Game::DrawOptions() const {
     const char* title = "OPTIONS";
     DrawText(title, (screenWidth - MeasureText(title, 48)) / 2,
              70, 48, RAYWHITE);
-    const char* instruction = "Display and control settings";
+    const char* instruction = "Audio, mouse and display settings";
     DrawText(instruction, (screenWidth - MeasureText(instruction, 19)) / 2,
              132, 19, Color{155, 190, 215, 255});
 
-    constexpr int itemCount = 3;
-    constexpr float startY = 238.0F;
-    constexpr float rowSpacing = 74.0F;
-    const char* labels[itemCount] = {"FPS LIMIT", "KEY BINDINGS", "BACK"};
+    constexpr int itemCount = 5;
+    constexpr float startY = kOptionsTop;
+    constexpr float rowSpacing = kOptionsSpacing;
+    const char* labels[itemCount] = {"FPS LIMIT", "MUSIC VOLUME", "MOUSE SENSITIVITY", "KEY BINDINGS", "BACK"};
     for (int index = 0; index < itemCount; ++index) {
         const Rectangle row{centerX - 270.0F,
                             startY + static_cast<float>(index) * rowSpacing,
-                            540.0F, 54.0F};
+                            540.0F, 50.0F};
         const bool selected = selectedOption_ == index;
         DrawRectangleRounded(row, 0.16F, 8,
                              selected ? Color{90, 24, 50, 235}
@@ -435,17 +439,29 @@ void Game::DrawOptions() const {
                  static_cast<int>(row.y + 16.0F), 22,
                  selected ? RAYWHITE : Color{175, 195, 210, 255});
 
-        if (index == 0) {
-            const int fpsLimit = kSupportedFpsLimits[fpsLimitIndex_];
-            const char* fpsLabel = fpsLimit == 0 ? "<  UNLIMITED  >"
-                                                 : TextFormat("<  %d  >", fpsLimit);
-            DrawText(fpsLabel,
-                     static_cast<int>(row.x + row.width - 18.0F) -
-                         MeasureText(fpsLabel, 22),
-                     static_cast<int>(row.y + 16.0F), 22,
-                     selected ? Color{120, 215, 255, 255}
-                              : Color{110, 160, 195, 255});
-        } else if (index == 1) {
+        if (index < kBindingsOptionIndex) {
+            const int fps = kSupportedFpsLimits[fpsLimitIndex_];
+            const char* value = index == 0 ? (fps == 0 ? "UNLIMITED" : TextFormat("%d", fps))
+                : index == 1 ? TextFormat("%d%%", musicVolume_)
+                : TextFormat("%.1fx", mouseSensitivity_ / 100.0F);
+            DrawText(value, static_cast<int>(centerX + 153.0F) - MeasureText(value, 20) / 2,
+                     static_cast<int>(row.y + 16.0F), 20, Color{120, 215, 255, 255});
+            for (const int direction : {-1, 1}) {
+                const Rectangle button = OptionArrowBounds(centerX, index, direction);
+                const bool atBoundary = index == 0 ? (direction < 0 ? fpsLimitIndex_ == 0 : fps == 0)
+                    : index == 1 ? (direction < 0 ? musicVolume_ == 0 : musicVolume_ == 100)
+                    : (direction < 0 ? mouseSensitivity_ == kMinMouseSensitivity
+                                    : mouseSensitivity_ == kMaxMouseSensitivity);
+                const bool hovered = !atBoundary && CheckCollisionPointRec(GetMousePosition(), button);
+                DrawRectangleRec(button, hovered ? Color{52, 80, 108, 255} : Color{14, 24, 42, 255});
+                DrawRectangleLinesEx(button, 1.0F, atBoundary ? Color{42, 55, 70, 255}
+                    : hovered ? Color{150, 230, 255, 255} : Color{80, 135, 165, 255});
+                const char* arrow = direction < 0 ? "<" : ">";
+                DrawText(arrow, static_cast<int>(button.x + button.width / 2) - MeasureText(arrow, 22) / 2,
+                         static_cast<int>(button.y + 5), 22,
+                         atBoundary ? Color{65, 80, 95, 255} : Color{150, 230, 255, 255});
+            }
+        } else if (index == kBindingsOptionIndex) {
             const char* arrow = ">";
             DrawText(arrow,
                      static_cast<int>(row.x + row.width - 30.0F),
@@ -457,7 +473,7 @@ void Game::DrawOptions() const {
 
     const char* currentFps = TextFormat("CURRENT FPS  %d", GetFPS());
     DrawText(currentFps, (screenWidth - MeasureText(currentFps, 18)) / 2,
-             474, 18, Color{120, 175, 205, 235});
+             510, 18, Color{120, 175, 205, 235});
     const char* footer =
         "Up / Down: Select     Left / Right: Adjust     Enter: Confirm     Esc: Back";
     DrawText(footer, (screenWidth - MeasureText(footer, 17)) / 2,
@@ -474,14 +490,14 @@ void Game::DrawKeyBindings() const {
     DrawText(title, (screenWidth - MeasureText(title, 42)) / 2,
              45, 42, RAYWHITE);
     const char* instruction =
-        "Select an action and press Enter, then press the new key";
+        "Select an action, then press a key or mouse button";
     DrawText(instruction, (screenWidth - MeasureText(instruction, 18)) / 2,
              101, 18, Color{155, 190, 215, 255});
 
     for (int index = 0; index < static_cast<int>(kBindingNames.size()); ++index) {
         const Rectangle row{centerX - 270.0F,
-                            142.0F + static_cast<float>(index) * 34.0F,
-                            540.0F, 29.0F};
+                            kBindingsTop + static_cast<float>(index) * kBindingsSpacing,
+                            540.0F, kBindingsHeight};
         const bool selected = selectedBinding_ == index;
         DrawRectangleRounded(row, 0.16F, 8,
                              selected ? Color{90, 24, 50, 235}
@@ -535,14 +551,14 @@ void Game::DrawKeyBindings() const {
         DrawRectangleRounded(modal, 0.16F, 10, Color{12, 18, 36, 250});
         DrawRectangleRoundedLinesEx(modal, 0.16F, 10, 2.0F,
                                     Color{255, 110, 145, 255});
-        const char* prompt = "PRESS A NEW KEY";
-        DrawText(prompt, (screenWidth - MeasureText(prompt, 30)) / 2,
-                 static_cast<int>(modal.y + 32.0F), 30, RAYWHITE);
+        const char* prompt = "PRESS KEY / MOUSE BUTTON";
+        DrawText(prompt, (screenWidth - MeasureText(prompt, 24)) / 2,
+                 static_cast<int>(modal.y + 32.0F), 24, RAYWHITE);
         DrawText(kBindingNames[selectedBinding_],
                  (screenWidth - MeasureText(kBindingNames[selectedBinding_], 20)) / 2,
                  static_cast<int>(modal.y + 78.0F), 20,
                  Color{120, 215, 255, 255});
-        const char* cancel = "Esc to cancel";
+        const char* cancel = "Esc: cancel   F3-F6: reserved   Release, then press";
         DrawText(cancel, (screenWidth - MeasureText(cancel, 16)) / 2,
                  static_cast<int>(modal.y + 120.0F), 16,
                  Color{145, 165, 185, 255});

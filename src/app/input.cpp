@@ -66,58 +66,51 @@ void Game::UpdateOptions() {
         return;
     }
 
-    constexpr int itemCount = 3;
-    constexpr int fpsIndex = 0;
-    constexpr int bindingsIndex = 1;
-    constexpr int backIndex = 2;
-
+    constexpr int itemCount = 5;
     if (IsKeyPressed(KEY_ESCAPE)) {
         state_ = RunState::MainMenu;
         selectedMenuItem_ = 1;
         return;
     }
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
+    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
         selectedOption_ = (selectedOption_ + itemCount - 1) % itemCount;
-    }
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
         selectedOption_ = (selectedOption_ + 1) % itemCount;
-    }
 
-    const float centerX = static_cast<float>(GetScreenWidth()) * 0.5F;
-    constexpr float startY = 238.0F;
-    constexpr float rowSpacing = 74.0F;
+    const float centerX = GetScreenWidth() * 0.5F;
     const Vector2 mouse = GetMousePosition();
+    const Vector2 movement = GetMouseDelta();
     bool hoveringItem = false;
+    // 鼠标静止时不抢回键盘选择；点击仍可以直接选择当前指向的行。
     for (int index = 0; index < itemCount; ++index) {
-        const Rectangle row{centerX - 270.0F,
-                            startY + static_cast<float>(index) * rowSpacing,
-                            540.0F, 54.0F};
+        Rectangle row{centerX - 270.0F, kOptionsTop + index * kOptionsSpacing, 540.0F, 50.0F};
         if (CheckCollisionPointRec(mouse, row)) {
-            selectedOption_ = index;
             hoveringItem = true;
+            if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                selectedOption_ = index;
         }
     }
-
-    if (selectedOption_ == fpsIndex) {
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) {
-            AdjustFpsLimit(-1);
-        } else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) {
-            AdjustFpsLimit(1);
-        }
+    if (selectedOption_ < kBindingsOptionIndex) {
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) AdjustOption(-1);
+        else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) AdjustOption(1);
     }
-
-    const bool mouseConfirmed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                                hoveringItem;
-    const bool confirmed = IsKeyPressed(KEY_ENTER) || mouseConfirmed;
-    if (!confirmed) return;
-
-    if (selectedOption_ == fpsIndex) {
-        AdjustFpsLimit(1);
-    } else if (selectedOption_ == bindingsIndex) {
+    const bool mouseConfirmed = hoveringItem && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    if (!IsKeyPressed(KEY_ENTER) && !mouseConfirmed) return;
+    if (selectedOption_ < kBindingsOptionIndex) {
+        // 绘制与命中测试共用按钮矩形；点击标签、数值或行内空白只选择，不调整。
+        if (mouseConfirmed) {
+            for (const int direction : {-1, 1}) {
+                if (CheckCollisionPointRec(mouse, OptionArrowBounds(centerX, selectedOption_, direction)))
+                    AdjustOption(direction);
+            }
+        } else {
+            AdjustOption(1);
+        }
+    } else if (selectedOption_ == kBindingsOptionIndex) {
         optionsPage_ = OptionsPage::KeyBindings;
         selectedBinding_ = 0;
         waitingForBinding_ = false;
-    } else if (selectedOption_ == backIndex) {
+    } else {
         state_ = RunState::MainMenu;
         selectedMenuItem_ = 1;
     }
@@ -130,13 +123,22 @@ void Game::UpdateKeyBindings() {
     constexpr int itemCount = bindingCount + 2;
 
     if (waitingForBinding_) {
-        if (IsKeyPressed(KEY_ESCAPE)) {
-            waitingForBinding_ = false;
+        if (IsKeyPressed(KEY_ESCAPE)) { waitingForBinding_ = false; return; }
+        if (!bindingCaptureReady_) {
+            // 清空进入弹窗时的旧键盘队列，所有鼠标键释放后才开始收集新输入。
+            while (GetKeyPressed() != KEY_NULL) {}
+            bool held = IsKeyDown(KEY_ENTER);
+            for (int button = MOUSE_BUTTON_LEFT; button <= MOUSE_BUTTON_BACK; ++button)
+                held = held || IsMouseButtonDown(button);
+            bindingCaptureReady_ = !held;
             return;
         }
-        const int key = GetKeyPressed();
-        if (key > 0 && key != KEY_ESCAPE) {
-            SetBinding(selectedBinding_, key);
+        int code = GetKeyPressed();
+        for (int button = MOUSE_BUTTON_LEFT; button <= MOUSE_BUTTON_BACK; ++button) {
+            if (IsMouseButtonPressed(button)) { code = MouseBinding(button); break; }
+        }
+        if (IsValidBinding(code)) {
+            SetBinding(selectedBinding_, code);
             waitingForBinding_ = false;
         }
         return;
@@ -144,7 +146,7 @@ void Game::UpdateKeyBindings() {
 
     if (IsKeyPressed(KEY_ESCAPE)) {
         optionsPage_ = OptionsPage::General;
-        selectedOption_ = 1;
+        selectedOption_ = kBindingsOptionIndex;
         return;
     }
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
@@ -159,20 +161,23 @@ void Game::UpdateKeyBindings() {
     bool hoveringItem = false;
     for (int index = 0; index < bindingCount; ++index) {
         const Rectangle row{centerX - 270.0F,
-                            142.0F + static_cast<float>(index) * 34.0F,
-                            540.0F, 29.0F};
+                            kBindingsTop + static_cast<float>(index) * kBindingsSpacing,
+                            540.0F, kBindingsHeight};
         if (CheckCollisionPointRec(mouse, row)) {
-            selectedBinding_ = index;
+            if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                selectedBinding_ = index;
             hoveringItem = true;
         }
     }
     const Rectangle resetButton{centerX - 270.0F, 500.0F, 260.0F, 42.0F};
     const Rectangle backButton{centerX + 10.0F, 500.0F, 260.0F, 42.0F};
     if (CheckCollisionPointRec(mouse, resetButton)) {
-        selectedBinding_ = resetIndex;
+        if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            selectedBinding_ = resetIndex;
         hoveringItem = true;
     } else if (CheckCollisionPointRec(mouse, backButton)) {
-        selectedBinding_ = backIndex;
+        if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            selectedBinding_ = backIndex;
         hoveringItem = true;
     }
 
@@ -183,35 +188,48 @@ void Game::UpdateKeyBindings() {
 
     if (selectedBinding_ < bindingCount) {
         waitingForBinding_ = true;
+        bindingCaptureReady_ = false;
     } else if (selectedBinding_ == resetIndex) {
         bindings_ = KeyBindings{};
         SaveSettings();
     } else {
         optionsPage_ = OptionsPage::General;
-        selectedOption_ = 1;
+        selectedOption_ = kBindingsOptionIndex;
     }
 }
 
 void Game::AdjustFpsLimit(int offset) {
     const int count = static_cast<int>(kSupportedFpsLimits.size());
-    fpsLimitIndex_ = (fpsLimitIndex_ + offset + count) % count;
+    fpsLimitIndex_ = std::clamp(fpsLimitIndex_ + offset, 0, count - 1);
     SetTargetFPS(kSupportedFpsLimits[fpsLimitIndex_]);
+    SaveSettings();
+}
+
+void Game::AdjustOption(int offset) {
+    if (selectedOption_ == 0) { AdjustFpsLimit(offset); return; }
+    if (selectedOption_ == 1) {
+        musicVolume_ = std::clamp(musicVolume_ + offset * 5, 0, 100);
+        assets_.SetMusicVolumePercent(musicVolume_);
+    } else if (selectedOption_ == 2) {
+        mouseSensitivity_ = std::clamp(mouseSensitivity_ + offset * 10,
+                                     kMinMouseSensitivity, kMaxMouseSensitivity);
+    }
     SaveSettings();
 }
 
 void Game::UpdatePlayer(float deltaTime) {
     const PlayerInput input{
         .mouseDelta = GetMouseDelta(),
-        .forward = IsKeyDown(bindings_.forward),
-        .backward = IsKeyDown(bindings_.backward),
-        .moveLeft = IsKeyDown(bindings_.moveLeft),
-        .moveRight = IsKeyDown(bindings_.moveRight),
-        .ascend = IsKeyDown(bindings_.ascend),
-        .descend = IsKeyDown(bindings_.descend),
-        .focus = IsKeyDown(bindings_.focus),
-        .fire = IsKeyDown(bindings_.fire) || IsMouseButtonDown(MOUSE_BUTTON_LEFT),
-        .bomb = IsKeyPressed(bindings_.bomb) ||
-                IsMouseButtonPressed(MOUSE_BUTTON_RIGHT),
+        .mouseSensitivityScale = mouseSensitivity_ / 100.0F,
+        .forward = BindingDown(bindings_.forward),
+        .backward = BindingDown(bindings_.backward),
+        .moveLeft = BindingDown(bindings_.moveLeft),
+        .moveRight = BindingDown(bindings_.moveRight),
+        .ascend = BindingDown(bindings_.ascend),
+        .descend = BindingDown(bindings_.descend),
+        .focus = BindingDown(bindings_.focus),
+        .fire = BindingDown(bindings_.fire) || BindingDown(bindings_.fireAlt),
+        .bomb = BindingPressed(bindings_.bomb) || BindingPressed(bindings_.bombAlt),
     };
     if (player_.Update(deltaTime, input, bullets_,
                        stageContent_->PlayerBulletVisual(),
@@ -222,54 +240,21 @@ void Game::UpdatePlayer(float deltaTime) {
 }
 
 int Game::BindingAt(int index) const {
-    switch (index) {
-        case 0: return bindings_.forward;
-        case 1: return bindings_.backward;
-        case 2: return bindings_.moveLeft;
-        case 3: return bindings_.moveRight;
-        case 4: return bindings_.ascend;
-        case 5: return bindings_.descend;
-        case 6: return bindings_.focus;
-        case 7: return bindings_.fire;
-        case 8: return bindings_.bomb;
-        case 9: return bindings_.pause;
-        default: return KEY_NULL;
-    }
+    return index >= 0 && index < static_cast<int>(kBindingMembers.size())
+        ? bindings_.*kBindingMembers[index] : KEY_NULL;
 }
 
 void Game::SetBinding(int index, int key) {
-    auto bindingPointer = [this](int bindingIndex) -> int* {
-        switch (bindingIndex) {
-            case 0: return &bindings_.forward;
-            case 1: return &bindings_.backward;
-            case 2: return &bindings_.moveLeft;
-            case 3: return &bindings_.moveRight;
-            case 4: return &bindings_.ascend;
-            case 5: return &bindings_.descend;
-            case 6: return &bindings_.focus;
-            case 7: return &bindings_.fire;
-            case 8: return &bindings_.bomb;
-            case 9: return &bindings_.pause;
-            default: return nullptr;
-        }
-    };
-
-    int* target = bindingPointer(index);
-    if (target == nullptr || key == KEY_NULL) return;
-    const int previousKey = *target;
-    for (int other = 0; other < static_cast<int>(kBindingNames.size()); ++other) {
-        if (other == index) continue;
-        int* otherBinding = bindingPointer(other);
-        if (*otherBinding == key) {
-            *otherBinding = previousKey;
-            break;
-        }
-    }
-    *target = key;
-    SaveSettings();
+    if (Rebind(bindings_, index, key)) SaveSettings();
 }
 
 std::string Game::KeyLabel(int key) {
+    if (IsMouseBinding(key)) {
+        constexpr std::array<const char*, 7> labels{
+            "MOUSE LEFT", "MOUSE RIGHT", "MOUSE MIDDLE", "MOUSE 4 / SIDE 1",
+            "MOUSE 5 / SIDE 2", "MOUSE 6", "MOUSE 7"};
+        return labels[key - kMouseBindingBase];
+    }
     if (key >= KEY_A && key <= KEY_Z) {
         return std::string(1, static_cast<char>('A' + key - KEY_A));
     }

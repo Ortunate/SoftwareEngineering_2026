@@ -8,8 +8,8 @@
 - 第一人称 6DoF 视角，摄像机位置就是球形判定点
 - 支持键盘和鼠标操作的开始界面
 - WASD 前后左右、Space 上升、Left Shift 下降、鼠标观察
-- OPTIONS 界面支持 FPS 上限调节，并通过 KEY BINDINGS 二级页面修改战斗键位
-- FPS 和按键设置自动保存到本地配置文件，并在下次启动时加载
+- OPTIONS 界面支持 FPS 上限、BGM 音量和鼠标灵敏度调节；KEY BINDINGS 支持键盘和鼠标按钮
+- FPS、BGM 音量、鼠标灵敏度和键鼠绑定即时保存，下次启动时自动加载
 - 8192 容量的三维弹幕对象池
 - Fibonacci 球面星状散射与三维锥形瞄准弹
 - 擦弹、残机、Bomb、分数和暂停
@@ -90,16 +90,22 @@ Apple Silicon 与 Intel Mac 均使用相同命令。首次启动时，系统可�
 
 ## Windows Visual Studio
 
+本次验证环境为 VS 2026、CMake 4.4.3、raylib 6.0。默认依赖仍为 raylib 5.5；VS 2022 用户将生成器改为 `Visual Studio 17 2022`。VS 2026 需要支持该生成器的 CMake 4.2+。
+
 在 Developer PowerShell 中执行：
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 .\build\Release\red_mist_demo.exe
 ```
 
-也可以使用 CMake GUI 打开项目根目录并选择 Visual Studio 生成器。
+若 GitHub 下载失败，配置命令末尾追加 `-DFETCHCONTENT_SOURCE_DIR_RAYLIB="D:/Libraries/raylib-5.5"`（改为实际 raylib 源码目录，不是游戏项目）。
+
+Windows/MSVC 构建自动嵌入 UTF-8 应用清单，保留中文音乐名；无需修改系统全局 UTF-8 设置，也无需每次手工修补 exe。
+
+也可以使用 CMake GUI 打开项目根目录并选择对应的 Visual Studio 生成器。
 
 ## Windows MinGW
 
@@ -120,7 +126,7 @@ ctest --test-dir build --output-on-failure
 | Space | 上升 |
 | Left Shift | 下降 |
 | 鼠标左键 / Z | 射击 |
-| C | 低速移动 |
+| Mouse 4 / 第一颗侧键（可改键） | Focus / 低速移动 |
 | 鼠标右键 / X | Bomb |
 | Esc / P | 暂停或继续 |
 | R | 胜利或失败后重新开始 |
@@ -135,9 +141,16 @@ Power 从 0 开始，最大为 128。小怪死亡时按自身的联合概率表�
 
 Debug 构建的主菜单增加 `SHOT TEST`。进入后关卡时间轴停止，场中只有一只不会移动或攻击的靶怪；击空血量后会立即复原。使用 F5/F6 每次降低或增加 8 点 Power，HUD 显示当前数值和靶怪血量；按 Esc 暂停，再按 M 返回主菜单。Release 构建不显示这个入口。
 
-开始界面的 `OPTIONS` 提供 30、60、120、144、240 和 Unlimited 六档 FPS 上限，使用左右方向键调节并立即生效。进入 `KEY BINDINGS` 二级页面后，可以修改前进、后退、左右移动、上升、下降、低速、射击、Bomb 和暂停键。将一个动作绑定到已使用的按键时，系统会自动交换两个动作的原按键。
+开始界面的 `OPTIONS` 提供以下设置，修改立即生效并自动保存：
 
-程序启动时会在当前运行目录中查找 `red_mist_settings.cfg`。如果文件不存在，程序会加载默认设置并自动创建该文件；FPS 或按键发生变化时会立即写回。无效的 FPS、按键值或重复按键会回退为安全的默认值。
+- `FPS LIMIT`：30、60、120、144、240 和 Unlimited。
+- `MUSIC VOLUME`：0～100%，步进 5%，默认 50%；0 为静音，菜单、道中和 Boss 音乐统一使用该设置，不改变音效音量。
+- `MOUSE SENSITIVITY`：0.1～3.0 倍，步进 0.1，默认 1.0 倍（原来的 0.0024 弧度/像素）。重开和切换关卡保持设置，不额外乘帧时间。
+- `KEY BINDINGS`：键盘和鼠标左/右/中键、Mouse 4～7；Focus 默认 Mouse 4（第一颗侧键）。滚轮滚动不属于按钮。无侧键鼠标可改回 C。
+
+上下键选择项目，左右键调整数值；也可以点击独立的左/右箭头按钮进行减小/增大；点击标签、数值及空白不会调整。数值到达边界后停止，帧率不循环跳档。选择改键行后，先松开用于确认的按键，再按新的键盘键或鼠标按钮；Esc 取消，F3～F6 留给调试功能。冲突时交换绑定。`FIRE (ALTERNATE)` / `BOMB (ALTERNATE)` 分别是可编辑的第二个射击/Bomb 入口，默认左键/右键；不存在额外硬编码鼠标快捷键。`RESET DEFAULTS` 只重置绑定，不改变音量、灵敏度和 FPS。
+
+程序启动时会在当前运行目录中查找 `red_mist_settings.cfg`。如果文件不存在，程序会加载默认设置并自动创建该文件；FPS、音量、灵敏度或按键发生变化时会立即写回。无效的 FPS、音量、灵敏度、按键值或重复按键会回退为安全默认值。配置格式升级为 version=2；旧版的默认 Focus=C 会迁移为 Mouse 4，旧版其他自定义 Focus 键与 FPS 会保留。新版自行绑定 C 后不会在下次启动被迁移。
 
 详细架构和数据结构见 `docs/DESIGN.md`。
 

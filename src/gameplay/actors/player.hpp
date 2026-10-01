@@ -9,6 +9,8 @@ namespace redmist {
 /// @brief 单帧玩家输入快照；mouseDelta 为鼠标像素位移，按键值表示当前按下状态，bomb 表示本帧新按下。
 struct PlayerInput {
     Vector2 mouseDelta{};
+    /// @brief 鼠标位移到视角的灵敏度倍率，设置层保证 0.1～3.0；默认 1.0 沿用原速度。
+    float mouseSensitivityScale = 1.0F;
     bool forward = false;
     bool backward = false;
     bool moveLeft = false;

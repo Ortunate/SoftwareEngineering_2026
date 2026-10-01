@@ -57,6 +57,10 @@ target_compile_definitions(red_mist_engine PUBLIC
 
 add_executable(red_mist_demo src/main.cpp)
 target_link_libraries(red_mist_demo PRIVATE red_mist_engine)
+# Windows 每次构建均嵌入 UTF-8 清单，避免重新编译后中文音乐路径再次闪退。
+if(MSVC)
+    target_sources(red_mist_demo PRIVATE src/windows_utf8.manifest)
+endif()
 
 # Rebuild the six-face strip only when its source artwork needs changing.
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
@@ -97,11 +101,25 @@ if(BUILD_TESTING)
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
     target_link_libraries(red_mist_tests PRIVATE red_mist_engine)
+    if(MSVC)
+        target_sources(red_mist_tests PRIVATE src/windows_utf8.manifest)
+    endif()
     # assert 在 Release 中仍需执行，否则测试主体会被 NDEBUG 跳过。
     if(MSVC)
-        target_compile_options(red_mist_tests PRIVATE /UNDEBUG)
+        target_compile_options(red_mist_tests PRIVATE /UNDEBUG /utf-8)
     else()
         target_compile_options(red_mist_tests PRIVATE -UNDEBUG)
     endif()
     add_test(NAME red_mist_core_tests COMMAND red_mist_tests)
+endif()
+
+# 隐藏窗口交互测试需 OpenGL/音频环境，按需构建，不影响无图形环境的核心测试。
+if(BUILD_TESTING)
+    add_executable(red_mist_settings_ui_tests EXCLUDE_FROM_ALL tests/settings_ui_tests.cpp)
+    target_link_libraries(red_mist_settings_ui_tests PRIVATE red_mist_engine)
+    add_dependencies(red_mist_settings_ui_tests copy_assets)
+    if(MSVC)
+        target_compile_options(red_mist_settings_ui_tests PRIVATE /utf-8)
+        target_sources(red_mist_settings_ui_tests PRIVATE src/windows_utf8.manifest)
+    endif()
 endif()

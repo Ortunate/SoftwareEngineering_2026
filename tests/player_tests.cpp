@@ -6,6 +6,7 @@
 #include <cassert>
 #include <array>
 #include <cmath>
+#include <memory>
 
 /// @brief 运行玩家行为回归用例；断言失败时终止进程。
 void RunPlayerTests() {
@@ -17,7 +18,9 @@ void RunPlayerTests() {
     using redmist::PlayerInput;
 
     Player player;
-    BulletSystem bullets;
+    // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
+    auto bulletsStorage = std::make_unique<BulletSystem>();
+    BulletSystem& bullets = *bulletsStorage;
     assert(player.RemainingLives() == 4);
     assert(player.Bombs() == 3);
     assert(player.Power() == 0);
@@ -26,6 +29,21 @@ void RunPlayerTests() {
     player.SyncCamera(camera);
     assert(std::abs(camera.position.z + 6.5F) < 0.0001F);
     assert(std::abs(camera.target.z + 5.5F) < 0.0001F);
+
+    // 相同鼠标位移按倍率改变视角；重置玩家后继续使用输入倍率，不影响火力系统。
+    for (float scale : {0.1F, 1.0F, 3.0F}) {
+        player.Reset();
+        PlayerInput look{};
+        look.mouseDelta = {10.0F, 0.0F};
+        look.mouseSensitivityScale = scale;
+        player.Update(1.0F / 60.0F, look, bullets, redmist::stage1::kPlayerGoldCard,
+                      redmist::stage1::kPlayerCyanCard, false);
+        player.SyncCamera(camera);
+        const float yaw = std::atan2(camera.target.x - camera.position.x,
+                                     camera.target.z - camera.position.z);
+        assert(std::abs(yaw + 10.0F * 0.0024F * scale) < 0.0001F);
+    }
+    player.Reset();
 
     PlayerInput movement{};
     movement.forward = true;
@@ -67,7 +85,9 @@ void RunPlayerTests() {
     constexpr std::array<std::size_t, 8> shotCounts{4, 5, 6, 7, 8, 9, 10, 12};
     for (std::size_t index = 0; index < thresholds.size(); ++index) {
         Player upgraded;
-        BulletSystem volley;
+        // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
+        auto volleyStorage = std::make_unique<BulletSystem>();
+        BulletSystem& volley = *volleyStorage;
         upgraded.AdjustPower(thresholds[index]);
         assert(upgraded.Power() == thresholds[index]);
         upgraded.Update(0.0F, firing, volley,
@@ -89,7 +109,9 @@ void RunPlayerTests() {
         assert(homingCount > 0);
     }
     Player alternating;
-    BulletSystem alternatingBullets;
+    // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
+    auto alternatingBulletsStorage = std::make_unique<BulletSystem>();
+    BulletSystem& alternatingBullets = *alternatingBulletsStorage;
     alternating.AdjustPower(16);
     alternating.Update(0.0F, firing, alternatingBullets,
                        redmist::stage1::kPlayerGoldCard,
@@ -152,7 +174,9 @@ void RunPlayerTests() {
     assert(player.TakeHit());
     assert(player.Power() == 112);
 
-    BulletSystem tracking;
+    // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
+    auto trackingStorage = std::make_unique<BulletSystem>();
+    BulletSystem& tracking = *trackingStorage;
     Bullet* guided = tracking.Spawn(BulletOwner::Player, {},
         {0.0F, 0.0F, 10.0F}, 0.1F, WHITE,
         redmist::stage1::kPlayerCyanCard);

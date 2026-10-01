@@ -13,8 +13,11 @@ namespace redmist {
 namespace {
 constexpr int kMaxCountPerKind = 32;
 constexpr float kLifetime = 15.0F;
-constexpr float kMagnetDistance = 2.5F;
+constexpr float kFallSpeed = 2.5F;
+constexpr float kAutoCollectSpeed = 20.0F;
 constexpr float kCollectDistance = 0.6F;
+// 战场 Z 范围为 [-halfExtent, +halfExtent]，靠近 +Z 边界的五分之一区域从 +0.6 倍半径开始。
+constexpr float kAutoCollectZ = kArenaHalfExtent * 0.6F;
 constexpr float kSpiralAngle = 2.3999632F;
 }
 
@@ -90,26 +93,31 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
             pickup.active = false;
             return;
         }
-        const Vector3 toPlayer{
-            playerPosition.x - pickup.position.x,
-            playerPosition.y - pickup.position.y,
-            playerPosition.z - pickup.position.z,
-        };
-        const float distanceSquared = toPlayer.x * toPlayer.x +
-                                      toPlayer.y * toPlayer.y +
-                                      toPlayer.z * toPlayer.z;
-        const float distance = std::sqrt(distanceSquared);
-        float remainingDistance = distance;
-        if (distance > 0.0001F) {
-            const float speed = distance < kMagnetDistance ? 8.0F : 2.5F;
-            const float step = std::min(speed * deltaTime, distance);
-            const float ratio = step / distance;
-            pickup.position.x += toPlayer.x * ratio;
-            pickup.position.y += toPlayer.y * ratio;
-            pickup.position.z += toPlayer.z * ratio;
-            remainingDistance -= step;
+        // 吸取状态属于单个道具；玩家离开触发区域不会取消已有道具的追踪。
+        if (playerPosition.z >= kAutoCollectZ) pickup.homing = true;
+        if (pickup.homing) {
+            const Vector3 toPlayer{
+                playerPosition.x - pickup.position.x,
+                playerPosition.y - pickup.position.y,
+                playerPosition.z - pickup.position.z,
+            };
+            const float distance = std::sqrt(toPlayer.x * toPlayer.x +
+                                             toPlayer.y * toPlayer.y +
+                                             toPlayer.z * toPlayer.z);
+            if (distance > 0.0001F) {
+                // 限制单帧位移，避免越过玩家后反复折返。
+                const float ratio = std::min(kAutoCollectSpeed * deltaTime / distance, 1.0F);
+                pickup.position.x += toPlayer.x * ratio;
+                pickup.position.y += toPlayer.y * ratio;
+                pickup.position.z += toPlayer.z * ratio;
+            }
+        } else {
+            pickup.position.z -= kFallSpeed * deltaTime;
         }
-        if (remainingDistance < kCollectDistance) {
+        const float dx = playerPosition.x - pickup.position.x;
+        const float dy = playerPosition.y - pickup.position.y;
+        const float dz = playerPosition.z - pickup.position.z;
+        if (dx * dx + dy * dy + dz * dz < kCollectDistance * kCollectDistance) {
             if (pickup.kind == PickupKind::Power)
                 reward.power += pickup.value;
             else

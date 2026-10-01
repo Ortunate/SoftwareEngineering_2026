@@ -1,2 +1,12 @@
 # Microsoft Office temporary lock files
 ~$*
+
+# Local build products and editor metadata
+.DS_Store
+.vscode/
+build/
+build-*/
+cmake-build-*/
+
+# Runtime-local settings
+red_mist_settings.cfg

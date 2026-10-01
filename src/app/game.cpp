@@ -88,6 +88,10 @@ void Game::OpenOptions() {
 void Game::LoadSettings() {
     const GameSettings settings = LoadOrCreateSettings(kSettingsFilename);
     bindings_ = settings.bindings;
+    musicVolume_ = settings.musicVolume;
+    mouseSensitivity_ = settings.mouseSensitivity;
+    assets_.SetMusicVolumePercent(musicVolume_);
+
     const auto fpsLimit = std::find(kSupportedFpsLimits.begin(),
                                     kSupportedFpsLimits.end(),
                                     settings.fpsLimit);
@@ -99,7 +103,7 @@ void Game::LoadSettings() {
 }
 
 void Game::SaveSettings() const {
-    const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_]};
+    const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_], musicVolume_, mouseSensitivity_};
     if (!SaveSettingsFile(kSettingsFilename, settings)) {
         TraceLog(LOG_WARNING, "SETTINGS: Failed to save %s", kSettingsFilename);
     }
@@ -192,7 +196,7 @@ void Game::Update(float deltaTime) {
         return;
     }
 
-    if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(bindings_.pause)) {
+    if (IsKeyPressed(KEY_ESCAPE) || BindingPressed(bindings_.pause)) {
         if (state_ == RunState::Playing) {
             state_ = RunState::Paused;
             assets_.PauseMusic();

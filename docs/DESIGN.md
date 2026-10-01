@@ -47,11 +47,11 @@
 - W/S 沿观察方向移动，A/D 横移，Space 上升，Left Shift 下降。
 - 玩家不能越过立方体六个表面。
 
-所有战斗键位都保存在 `KeyBindings` 中。主菜单的 OPTIONS 一级页面负责 FPS 上限调节，并通过 KEY BINDINGS 进入按键配置二级页面。按键发生重复时交换两个动作的原按键，确保一个按键不会同时触发两个动作。低速移动默认使用 C，避免与默认下降键 Left Shift 冲突。
+所有战斗键位都保存在 `KeyBindings` 中。OPTIONS 一级页面调节 FPS、BGM 音量、鼠标灵敏度，KEY BINDINGS 二级页面编辑绑定。键盘沿用 raylib 键码，鼠标使用 1000+按钮编号（0～6）避免编码冲突。12 个入口包含原有十个动作与射击/Bomb 的第二绑定，所有入口统一参与冲突交换；Focus 默认 Mouse 4。Esc 和 F3～F6 保留，录入需先释放激活弹窗的按钮，避免误录。
 
 FPS 上限提供 30、60、120、144、240 和 Unlimited 六档，通过 raylib 的 `SetTargetFPS` 即时应用。窗口未强制启用垂直同步，因此各档位不会被 VSync 设置覆盖。
 
-设置持久化由独立的 `settings` 模块负责。程序启动时先使用 `std::filesystem::exists` 检查当前运行目录中的 `red_mist_settings.cfg`：文件不存在时构造默认 `GameSettings` 并创建文件；文件存在时逐项读取 FPS 和 `KeyBindings`。修改 FPS、完成改键或恢复默认键位后立即保存。读取过程中会校验 FPS 档位、按键有效性和键位唯一性，损坏的数据会回退并重写为有效设置。
+设置持久化由独立的 `settings` 模块负责。程序启动时先使用 `std::filesystem::exists` 检查当前运行目录中的 `red_mist_settings.cfg`：文件不存在时构造默认 `GameSettings` 并创建文件；文件存在时逐项读取 FPS、BGM 音量（0～100）、灵敏度（10～300，100 为原速度）和 `KeyBindings`。修改后立即保存 version=2 配置，校验数值范围及键位唯一性。旧版默认 C 迁移为 Mouse 4，其他自定义值保留。AssetManager 把音量同步到菜单、道中、Boss 已有音乐流，并在加载新流后重新应用；静音不停止流的计时。Game 保存灵敏度设置，每帧通过 PlayerInput 的倍率传入 Player，玩家重置不会丢失设置。
 
 立方体六个表面绘制空间网格，中央绘制红、绿、蓝三条坐标轴，帮助玩家判断深度、速度和朝向。
 

@@ -79,19 +79,21 @@ private:
     /// @brief 结算关卡并卸载专属素材。
     /// @param result 胜利或失败后的游戏状态。
     void EndStage(RunState result);
-    /// @brief 从本地文件读取 FPS 上限与战斗键位。
+    /// @brief 从本地文件读取全部设置并应用音量、灵敏度。
     void LoadSettings();
-    /// @brief 将当前 FPS 上限与键位写入本地文件。
+    /// @brief 将当前 FPS、音量、灵敏度和绑定写入本地文件。
     void SaveSettings() const;
     /// @brief 处理主菜单的移动、点击与确认输入。
     void UpdateMainMenu();
-    /// @brief 处理 FPS 与设置菜单页面的输入。
+    /// @brief 处理 FPS、音量、灵敏度与设置菜单页面的输入。
     void UpdateOptions();
     /// @brief 处理按键绑定列表与新按键录入。
     void UpdateKeyBindings();
-    /// @brief 在支持的 FPS 档位之间循环切换并保存。
+    /// @brief 按大小切换 FPS 档位并保存；30 为下限，Unlimited 为上限，到边界不循环。
     /// @param offset 档位变化量，通常为 -1 或 1。
     void AdjustFpsLimit(int offset);
+    /// @brief 调节当前数值项并立即保存；offset 正负控制方向，音量步进 5%，灵敏度步进 10%。
+    void AdjustOption(int offset);
     /// @brief 采集玩家输入，委托 Player 更新，并处理 Bomb 对战场的影响。
     /// @param deltaTime 本帧经过的秒数。
     void UpdatePlayer(float deltaTime);
@@ -131,14 +133,14 @@ private:
 
     /// @brief 按设置菜单索引读取对应按键。
     /// @param index 按键绑定列表中的索引。
-    /// @return raylib 键码；索引无效时返回 KEY_NULL。
+    /// @return 统一键盘/鼠标编码；索引无效时返回 KEY_NULL。
     [[nodiscard]] int BindingAt(int index) const;
     /// @brief 修改指定动作的键码并处理键位冲突。
     /// @param index 动作索引。
-    /// @param key 新 raylib 键码。
+    /// @param key 新统一键盘/鼠标编码。
     void SetBinding(int index, int key);
-    /// @brief 将 raylib 键码转换为界面可读文字。
-    /// @param key raylib 键码。
+    /// @brief 将统一键盘/鼠标编码转换为界面可读文字。
+    /// @param key 统一键盘/鼠标编码。
     /// @return 用于设置界面的键名。
     [[nodiscard]] static std::string KeyLabel(int key);
 
@@ -156,7 +158,7 @@ private:
     void DrawDialogue() const;
     /// @brief 绘制开始菜单。
     void DrawMainMenu() const;
-    /// @brief 绘制 FPS 和按键设置入口。
+    /// @brief 绘制 FPS、音量、灵敏度和按键设置入口。
     void DrawOptions() const;
     /// @brief 绘制可重新绑定的战斗按键列表。
     void DrawKeyBindings() const;
@@ -194,7 +196,11 @@ private:
     int selectedOption_ = 0;
     int selectedBinding_ = 0;
     int fpsLimitIndex_ = 1;
+    int musicVolume_ = 50;
+    int mouseSensitivity_ = 100;
     bool waitingForBinding_ = false;
+    /// @brief 激活录入后须先释放确认键/鼠标按钮，避免把打开弹窗的点击录入为绑定。
+    bool bindingCaptureReady_ = false;
     bool shouldQuit_ = false;
 #ifdef RED_MIST_DEBUG_FEATURES
     bool shotTestActive_ = false;

@@ -1,4 +1,4 @@
-// 本文件负责实现 FPS 与按键设置文件的读取、校验和保存。
+// 本文件负责实现 FPS、音量、鼠标灵敏度与统一绑定设置文件的读取、校验和保存。
 
 #include "config/settings.hpp"
 
@@ -19,7 +19,7 @@ struct BindingField {
     int KeyBindings::*member;
 };
 
-constexpr std::array<BindingField, 10> kBindingFields{{
+constexpr std::array<BindingField, 12> kBindingFields{{
     {"forward", &KeyBindings::forward},
     {"backward", &KeyBindings::backward},
     {"move_left", &KeyBindings::moveLeft},
@@ -30,6 +30,8 @@ constexpr std::array<BindingField, 10> kBindingFields{{
     {"fire", &KeyBindings::fire},
     {"bomb", &KeyBindings::bomb},
     {"pause", &KeyBindings::pause},
+    {"fire_alt", &KeyBindings::fireAlt},
+    {"bomb_alt", &KeyBindings::bombAlt},
 }};
 
 /// @brief 去掉配置行首尾的空白字符。
@@ -70,7 +72,7 @@ bool IsSupportedFpsLimit(int value) {
 bool HasUniqueBindings(const KeyBindings& bindings) {
     for (std::size_t left = 0; left < kBindingFields.size(); ++left) {
         const int leftKey = bindings.*(kBindingFields[left].member);
-        if (leftKey <= KEY_NULL) return false;
+        if (!IsValidBinding(leftKey)) return false;
         for (std::size_t right = left + 1; right < kBindingFields.size(); ++right) {
             if (leftKey == bindings.*(kBindingFields[right].member)) return false;
         }
@@ -92,6 +94,7 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
     if (!input) return settings;
 
     bool shouldRewrite = false;
+    int version = 1;
     std::string line;
     while (std::getline(input, line)) {
         const std::string_view trimmed = Trim(line);
@@ -111,7 +114,15 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         }
 
         if (name == "version") {
-            shouldRewrite = shouldRewrite || *value != 1;
+            version = *value;
+            shouldRewrite = shouldRewrite || version != 2;
+        } else if (name == "music_volume") {
+            if (*value >= 0 && *value <= 100) settings.musicVolume = *value;
+            else shouldRewrite = true;
+        } else if (name == "mouse_sensitivity") {
+            if (*value >= kMinMouseSensitivity && *value <= kMaxMouseSensitivity)
+                settings.mouseSensitivity = *value;
+            else shouldRewrite = true;
         } else if (name == "fps_limit") {
             if (IsSupportedFpsLimit(*value)) {
                 settings.fpsLimit = *value;
@@ -124,7 +135,7 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
                 [name](const BindingField& candidate) {
                     return candidate.name == name;
                 });
-            if (field != kBindingFields.end() && *value > KEY_NULL) {
+            if (field != kBindingFields.end() && IsValidBinding(*value)) {
                 settings.bindings.*(field->member) = *value;
             } else if (field != kBindingFields.end()) {
                 shouldRewrite = true;
@@ -132,6 +143,12 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         }
     }
 
+    // 升级旧默认 C；旧配置中的其他自定义 Focus 键原样保留。
+    if (version == 1) {
+        if (settings.bindings.focus == KEY_C)
+            settings.bindings.focus = MouseBinding(MOUSE_BUTTON_SIDE);
+        shouldRewrite = true;
+    }
     if (!HasUniqueBindings(settings.bindings)) {
         settings.bindings = KeyBindings{};
         shouldRewrite = true;
@@ -146,8 +163,10 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     if (!output) return false;
 
     output << "# Red Mist 3D local settings\n";
-    output << "version=1\n";
+    output << "version=2\n";
     output << "fps_limit=" << settings.fpsLimit << '\n';
+    output << "music_volume=" << settings.musicVolume << '\n';
+    output << "mouse_sensitivity=" << settings.mouseSensitivity << '\n';
     for (const BindingField& field : kBindingFields) {
         output << field.name << '=' << settings.bindings.*(field.member) << '\n';
     }

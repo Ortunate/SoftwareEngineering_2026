@@ -65,8 +65,8 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
     bombCooldown_ = std::max(0.0F, bombCooldown_ - deltaTime);
     fireTimer_ -= deltaTime;
 
-    SetView(yaw_ - input.mouseDelta.x * kMouseSensitivity,
-            pitch_ - input.mouseDelta.y * kMouseSensitivity);
+    SetView(yaw_ - input.mouseDelta.x * kMouseSensitivity * input.mouseSensitivityScale,
+            pitch_ - input.mouseDelta.y * kMouseSensitivity * input.mouseSensitivityScale);
 
     Vector3 movement{};
     const Vector3 forward = Forward();

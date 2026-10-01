@@ -69,6 +69,8 @@ public:
     void ResumeMusic();
     /// @brief 每帧更新流式 BGM，维持持续播放。
     void UpdateAudio();
+    /// @brief 设置全部已加载/未来加载的 BGM 音量；percent 限定到 0～100，不影响音效。
+    void SetMusicVolumePercent(int percent);
     /// @brief 按清单中的名字播放通用或当前关卡的音效。
     /// @param name 音效资源名；未配置时不播放。
     void PlaySoundEffect(std::string_view name) const;
@@ -93,6 +95,7 @@ private:
     std::unordered_map<std::string, Sound> stageSounds_;
     std::unordered_map<std::string, Texture2D> stageTextures_;
     MusicSlot activeMusic_ = MusicSlot::None;
+    int musicVolumePercent_ = 50;
     bool commonLoaded_ = false;
     bool stageLoaded_ = false;
 };

@@ -4,6 +4,7 @@
 
 #include "rlgl.h"
 
+#include <algorithm>
 #include <array>
 #include <span>
 #include <utility>
@@ -146,6 +147,7 @@ void AssetManager::LoadCommon() {
 
     menuMusic_ = LoadMusicAsset(root_ / "common" /
                                 "比赤色更鲜红的梦.mp3");
+    SetMusicVolumePercent(musicVolumePercent_);
     LoadSounds(commonSounds_, root_, kCommonSounds);
 }
 
@@ -174,6 +176,7 @@ void AssetManager::LoadStage(const StageAssetManifest& manifest) {
         stageMusic_ = LoadMusicAsset(root_ / std::string(manifest.stageBgm));
     if (!manifest.bossBgm.empty())
         bossMusic_ = LoadMusicAsset(root_ / std::string(manifest.bossBgm));
+    SetMusicVolumePercent(musicVolumePercent_);
     LoadSounds(stageSounds_, root_, manifest.sounds);
     stageLoaded_ = true;
 }
@@ -251,6 +254,13 @@ void AssetManager::ResumeMusic() {
     if (Music* music = MusicFor(activeMusic_);
         music != nullptr && IsMusicValid(*music)) {
         ResumeMusicStream(*music);
+    }
+}
+
+void AssetManager::SetMusicVolumePercent(int percent) {
+    musicVolumePercent_ = std::clamp(percent, 0, 100);
+    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_}) {
+        if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F);
     }
 }
 

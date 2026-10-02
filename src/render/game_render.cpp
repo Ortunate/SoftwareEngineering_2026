@@ -195,6 +195,9 @@ void Game::DrawHud() const {
         DrawText(TextFormat("SHOT TEST  F5 -8  F6 +8  DUMMY HP %.0f", dummyHealth),
                  GetScreenWidth() - 465, 104, 17,
                  Color{180, 230, 255, 255});
+    } else {
+        DrawText("POWER  F5: -8  F6: +8", GetScreenWidth() - 280, 104, 17,
+                 Color{180, 230, 255, 255});
     }
     if (debugRender_) {
         DrawText("F3  HITBOX: yellow bullet / cyan body / magenta muzzle",

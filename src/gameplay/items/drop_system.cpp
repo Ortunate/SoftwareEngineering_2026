@@ -13,6 +13,9 @@ namespace redmist {
 namespace {
 constexpr int kMaxCountPerKind = 32;
 constexpr float kLifetime = 15.0F;
+// 速度单位为世界单位/秒，加速度为世界单位/秒²；0.5 秒到达比生成点高 1 单位的顶点。
+constexpr float kLaunchSpeed = 4.0F;
+constexpr float kFallAcceleration = 8.0F;
 constexpr float kFallSpeed = 2.5F;
 constexpr float kAutoCollectSpeed = 20.0F;
 constexpr float kCollectDistance = 0.6F;
@@ -33,6 +36,7 @@ void DropSystem::Spawn(PickupKind kind, Vector3 position, int value) {
         pickup->kind = kind;
         pickup->position = position;
         pickup->value = value;
+        pickup->velocityZ = kLaunchSpeed;
     }
 }
 
@@ -112,7 +116,15 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
                 pickup.position.z += toPlayer.z * ratio;
             }
         } else {
-            pickup.position.z -= kFallSpeed * deltaTime;
+            // 按达到速度上限的时刻拆分本帧，并精确积分加速段；跨越顶点或限速点时，
+            // 位移仍须与分成多个小帧的结果一致，不能用帧末速度代替整帧速度。
+            const float accelerationTime = std::min(
+                deltaTime, (pickup.velocityZ + kFallSpeed) / kFallAcceleration);
+            pickup.position.z += pickup.velocityZ * accelerationTime -
+                                 0.5F * kFallAcceleration * accelerationTime * accelerationTime -
+                                 kFallSpeed * (deltaTime - accelerationTime);
+            pickup.velocityZ = std::max(
+                -kFallSpeed, pickup.velocityZ - kFallAcceleration * accelerationTime);
         }
         const float dx = playerPosition.x - pickup.position.x;
         const float dy = playerPosition.y - pickup.position.y;

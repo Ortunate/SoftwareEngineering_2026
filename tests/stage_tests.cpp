@@ -147,7 +147,7 @@ void RunStageTests() {
     const auto stageFromCatalog = redmist::CreateStageContent(redmist::StageId::Stage1);
     assert(stageFromCatalog);
     const auto& visuals = stageFromCatalog->Assets().visuals;
-    assert(visuals.size() == 12);
+    assert(visuals.size() == 13);
     assert(visuals[redmist::stage1::kFairy].path == "stages/stage1/fairy_modern.png");
     assert(visuals[redmist::stage1::kDarkFairy].path == "stages/stage1/dark_fairy_modern.png");
     assert(visuals[redmist::stage1::kRumia].path == "stages/stage1/rumia_modern.png");
@@ -156,6 +156,7 @@ void RunStageTests() {
     assert(stageFromCatalog->PlayerHomingVisual() == redmist::stage1::kPlayerCyanCard);
     assert(stageFromCatalog->PowerPickupVisual() == redmist::stage1::kPowerPoint);
     assert(stageFromCatalog->ScorePickupVisual() == redmist::stage1::kScorePoint);
+    assert(stageFromCatalog->StarPickupVisual() == redmist::stage1::kStarPoint);
     assert(visuals[redmist::stage1::kPlayerGoldCard].path ==
            "stages/stage1/spell_card_gold.png");
     assert(visuals[redmist::stage1::kPlayerCyanCard].path ==
@@ -164,6 +165,8 @@ void RunStageTests() {
            "stages/stage1/power_point.png");
     assert(visuals[redmist::stage1::kScorePoint].path ==
            "stages/stage1/score_point.png");
+    assert(visuals[redmist::stage1::kStarPoint].path ==
+           "stages/stage1/star_point.png");
     const auto newFairy = stageFromCatalog->CreateEnemy(
         static_cast<std::uint16_t>(redmist::stage1::EnemyType::Fairy),
         {{}, 0.0F, line, 1});

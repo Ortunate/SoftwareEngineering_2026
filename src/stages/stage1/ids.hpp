@@ -24,6 +24,8 @@ constexpr VisualId kPlayerCyanCard = 9;
 constexpr VisualId kPowerPoint = 10;
 /// @brief 分数道具的公告板贴图编号。
 constexpr VisualId kScorePoint = 11;
+/// @brief 满火力清弹产生的星点公告板贴图编号。
+constexpr VisualId kStarPoint = 12;
 
 /// @brief 传给 Stage1Content::CreateEnemy 的第一面局部敌人原型编号。
 enum class EnemyType : std::uint16_t { Fairy, DarkFairy, Orb };

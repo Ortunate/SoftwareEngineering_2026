@@ -127,10 +127,17 @@ void RunPlayerTests() {
         else ++rightShots;
     });
     assert(leftShots == 3 && rightShots == 3);
-    player.AdjustPower(999);
+    // 升满只报告一次；继续收集不重复报告，降级后再次达到上限可重新报告。
+    assert(player.AdjustPower(999));
     assert(player.Power() == Player::kMaxPower);
-    player.AdjustPower(-999);
+    assert(!player.AdjustPower(1));
+    assert(!player.AdjustPower(0));
+    assert(!player.AdjustPower(-999));
     assert(player.Power() == 0);
+    assert(!player.AdjustPower(Player::kMaxPower - 1));
+    assert(player.AdjustPower(1));
+    assert(!player.AdjustPower(8));
+    assert(!player.AdjustPower(-Player::kMaxPower));
 
     PlayerInput bombInput{};
     bombInput.bomb = true;
@@ -173,6 +180,7 @@ void RunPlayerTests() {
     player.AdjustPower(128);
     assert(player.TakeHit());
     assert(player.Power() == 112);
+    assert(player.AdjustPower(16));
 
     // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
     auto trackingStorage = std::make_unique<BulletSystem>();

@@ -1,8 +1,9 @@
-// 本文件负责按敌人概率表生成 P 点与分数点，并处理道具移动和拾取。
+// 本文件负责敌人掉落和清弹星点生成，并统一处理道具移动和拾取。
 
 #include "gameplay/items/drop_system.hpp"
 
 #include "gameplay/arena.hpp"
+#include "gameplay/bullets/system.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -28,7 +29,10 @@ DropSystem::DropSystem() : DropSystem(std::random_device{}()) {}
 
 DropSystem::DropSystem(std::uint32_t seed) : random_(seed) {}
 
-void DropSystem::Clear() { pickups_.Clear(); }
+void DropSystem::Clear() {
+    pickups_.Clear();
+    stars_.clear();
+}
 
 void DropSystem::Spawn(PickupKind kind, Vector3 position, int value) {
     if (value <= 0) return;
@@ -89,9 +93,25 @@ void DropSystem::SpawnFixedPower(Vector3 position, int power) {
     Spawn(PickupKind::Power, position, power);
 }
 
+void DropSystem::ConvertEnemyBulletsToStars(BulletSystem& bullets) {
+    // 先预留空间，再停用敌弹，避免生成中途扩容；连续升满时保留上一批尚未吸收的星点。
+    stars_.reserve(stars_.size() + bullets.Pool().ActiveCount());
+    bullets.Pool().ForEachActive([this](Bullet& bullet) {
+        if (bullet.owner != BulletOwner::Enemy) return;
+        Pickup star{};
+        star.active = true;
+        star.homing = true;
+        star.kind = PickupKind::Star;
+        star.position = bullet.position;
+        star.value = kStarPointValue;
+        stars_.push_back(star);
+        bullet.active = false;
+    });
+}
+
 PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
     PickupReward reward{};
-    pickups_.ForEachActive([&](Pickup& pickup) {
+    const auto updatePickup = [&](Pickup& pickup) {
         pickup.age += deltaTime;
         if (pickup.age > kLifetime) {
             pickup.active = false;
@@ -136,7 +156,10 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
                 reward.score += pickup.value;
             pickup.active = false;
         }
-    });
+    };
+    pickups_.ForEachActive(updatePickup);
+    for (Pickup& star : stars_) updatePickup(star);
+    std::erase_if(stars_, [](const Pickup& star) { return !star.active; });
     return reward;
 }
 

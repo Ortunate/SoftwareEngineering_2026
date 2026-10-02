@@ -46,20 +46,21 @@ void Game::DrawWorld() const {
         if (enemy.age >= 0.0F) visibleEnemies[visibleCount++] = &enemy;
     });
     const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
-    std::array<PickupSprite, DropSystem::kCapacity> visiblePickups{};
-    std::size_t pickupCount = 0;
+    pickupSprites_.clear();
     if (stageContent_) {
         drops_.ForEachActive([&](const Pickup& pickup) {
-            const VisualId visual = pickup.kind == PickupKind::Power
-                                        ? stageContent_->PowerPickupVisual()
-                                        : stageContent_->ScorePickupVisual();
+            VisualId visual = stageContent_->ScorePickupVisual();
+            if (pickup.kind == PickupKind::Power)
+                visual = stageContent_->PowerPickupVisual();
+            else if (pickup.kind == PickupKind::Star)
+                visual = stageContent_->StarPickupVisual();
             const float scale = pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
-            visiblePickups[pickupCount++] = {pickup.position, visual, scale};
+            pickupSprites_.push_back({pickup.position, visual, scale});
         });
     }
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
-                         {visiblePickups.data(), pickupCount},
+                         pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders);
 #ifdef RED_MIST_DEBUG_FEATURES
     if (debugRender_) {

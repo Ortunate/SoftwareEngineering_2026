@@ -216,8 +216,8 @@ void Game::Update(float deltaTime) {
 #ifdef RED_MIST_DEBUG_FEATURES
     if (IsKeyPressed(KEY_F4)) debugInvincible_ = !debugInvincible_;
     if (shotTestActive_) {
-        if (IsKeyPressed(KEY_F5)) player_.AdjustPower(-8);
-        if (IsKeyPressed(KEY_F6)) player_.AdjustPower(8);
+        if (IsKeyPressed(KEY_F5)) AdjustPlayerPower(-8);
+        if (IsKeyPressed(KEY_F6)) AdjustPlayerPower(8);
     }
 #endif
 

@@ -1,11 +1,13 @@
-// 本文件负责验证敌人掉落表抽取、上抛与加速下落、自动吸取与拾取结算。
+// 本文件负责验证敌人掉落、道具运动、满火力清弹星点与拾取结算。
 
 #include "gameplay/arena.hpp"
 #include "gameplay/items/drop_system.hpp"
+#include "gameplay/bullets/system.hpp"
 
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <memory>
 
 namespace {
 // 测试场景须恰有一个活动道具；返回副本，避免在后续推进时借用池内对象。
@@ -70,11 +72,86 @@ void TestPickupMotion() {
     const auto reused = SinglePickup(drops);
     assert(!reused.homing && reused.age == 0.0F && reused.velocityZ == 4.0F);
 }
+
+void TestBulletStars() {
+    using redmist::BulletOwner;
+    using redmist::BulletSystem;
+    using redmist::DropSystem;
+    using redmist::Pickup;
+    using redmist::PickupKind;
+    // 弹幕池较大，置于堆上，避免 Windows 默认栈容量不足。
+    auto bullets = std::make_unique<BulletSystem>();
+    DropSystem drops(1234);
+    constexpr Vector3 origin{5.0F, 0.0F, 0.0F};
+    constexpr Vector3 player{-5.0F, 0.0F, 0.0F};
+    auto* enemy = bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0);
+    assert(enemy);
+    enemy->age = 14.0F;
+    auto* playerBullet = bullets->Spawn(BulletOwner::Player, {}, {}, 0.1F, WHITE, 0);
+    assert(playerBullet);
+    auto* inactive = bullets->Spawn(BulletOwner::Enemy, {}, {}, 0.1F, WHITE, 0);
+    assert(inactive);
+    inactive->active = false;
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    assert(!enemy->active && playerBullet->active);
+    assert(bullets->Pool().ActiveCount() == 1);
+    const auto star = SinglePickup(drops);
+    assert(star.kind == PickupKind::Star && star.homing);
+    assert(star.position.x == origin.x && star.position.z == origin.z);
+    assert(star.age == 0.0F && star.value == DropSystem::kStarPointValue);
+    // 转换瞬间不计分；即使玩家在自动吸取线之外，仍以 20 世界单位/秒追踪。
+    const auto moving = drops.Update(0.1F, player);
+    assert(moving.power == 0 && moving.score == 0);
+    assert(std::abs(SinglePickup(drops).position.x - 3.0F) < 0.0001F);
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    assert(SinglePickup(drops).kind == PickupKind::Star);
+    const auto collected = drops.Update(1.0F, {-5.0F, 2.0F, -6.5F});
+    assert(collected.power == 0 && collected.score == DropSystem::kStarPointValue);
+    assert(drops.Update(1.0F, player).score == 0);
+
+    // 普通道具池和弹幕池同时满时，所有敌弹仍须产生星点；普通 P 点保留。
+    drops.Clear();
+    bullets->Reset();
+    for (std::size_t index = 0; index < DropSystem::kCapacity; ++index)
+        drops.SpawnFixedPower(origin, 1);
+    for (std::size_t index = 0; index < BulletSystem::kCapacity; ++index)
+        assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    assert(bullets->Pool().ActiveCount() == 0);
+    int starCount = 0;
+    int powerCount = 0;
+    drops.ForEachActive([&](const Pickup& pickup) {
+        if (pickup.kind == PickupKind::Star) ++starCount;
+        if (pickup.kind == PickupKind::Power) ++powerCount;
+    });
+    assert(starCount == static_cast<int>(BulletSystem::kCapacity));
+    assert(powerCount == static_cast<int>(DropSystem::kCapacity));
+    // 再次清弹不能覆盖还在飞行的星点，新敌弹只有转换后才产生额外得分。
+    assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    const auto crowdedReward = drops.Update(1.0F, player);
+    assert(crowdedReward.power == 0);
+    assert(crowdedReward.score ==
+           static_cast<long long>(BulletSystem::kCapacity + 1) * DropSystem::kStarPointValue);
+
+    drops.Clear();
+    assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    drops.Clear();
+    assert(drops.Update(1.0F, player).score == 0);
+    assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    assert(drops.Update(15.1F, player).score == 0);
+    int remaining = 0;
+    drops.ForEachActive([&](const Pickup&) { ++remaining; });
+    assert(remaining == 0);
+}
 }  // namespace
 
-/// @brief 验证两类道具按权重生成、上抛与限速下落，以及自动吸取状态的持续性。
+/// @brief 验证普通道具掉落与运动、吸取状态持续性，以及清弹星点的转换和计分。
 void RunDropTests() {
     TestPickupMotion();
+    TestBulletStars();
     using redmist::DropOutcome;
     using redmist::DropSystem;
     using redmist::Pickup;

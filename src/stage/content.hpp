@@ -73,6 +73,8 @@ public:
     [[nodiscard]] virtual VisualId PowerPickupVisual() const = 0;
     /// @brief 返回分数道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId ScorePickupVisual() const = 0;
+    /// @brief 返回清弹星点的外观 ID，贴图由当前 Stage 的素材清单持有。
+    [[nodiscard]] virtual VisualId StarPickupVisual() const = 0;
     /// @brief 返回对话中玩家侧立绘的外观 ID。
     [[nodiscard]] virtual VisualId HeroPortraitVisual() const = 0;
     /// @brief 返回对话与符卡中 Boss 立绘的外观 ID。

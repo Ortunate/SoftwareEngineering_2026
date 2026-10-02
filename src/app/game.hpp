@@ -22,6 +22,7 @@
 #include <optional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace redmist {
 
@@ -103,8 +104,11 @@ private:
     /// @brief 推进 Boss 当前阶段，超时则请求阶段切换。
     /// @param deltaTime 本帧经过的秒数。
     void UpdateBoss(float deltaTime);
-    /// @brief 推进两类掉落物并将拾取结果计入玩家 Power 与分数。
+    /// @brief 推进普通道具与星点，将拾取结果计入玩家 Power 与分数，并处理升满奖励。
     void UpdatePickups(float deltaTime);
+    /// @brief 增减玩家 Power，首次升满时显示提示并将当前敌弹转成自动吸取的星点。
+    /// @param delta Power 点数，可为负；下降后再次升满可重新触发。
+    void AdjustPlayerPower(int delta);
     /// @brief 处理玩家命中/擦弹及敌人、Boss 的受击判定。
     void ResolveCollisions();
     /// @brief 将关卡事件转换为出怪、对话或 Boss 战操作。
@@ -190,6 +194,8 @@ private:
     std::optional<StageEventId> bossEventId_;
     std::optional<StageEventId> dialogueEventId_;
     SpriteRenderer spriteRenderer_{};
+    // 绘制时复用空间；星点可超过普通道具池容量，不能沿用固定长度的道具绘制数组。
+    mutable std::vector<PickupSprite> pickupSprites_;
     std::string message_;
     int selectedMenuItem_ = 0;
     OptionsPage optionsPage_ = OptionsPage::General;

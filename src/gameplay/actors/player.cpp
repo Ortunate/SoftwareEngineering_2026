@@ -95,10 +95,12 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
     return input.bomb && TryUseBomb();
 }
 
-void Player::AdjustPower(int delta) {
+bool Player::AdjustPower(int delta) {
+    const int previousPower = power_;
     const long long updated = static_cast<long long>(power_) + delta;
     power_ = static_cast<int>(std::clamp(updated, 0LL,
                                          static_cast<long long>(kMaxPower)));
+    return previousPower < kMaxPower && power_ == kMaxPower;
 }
 
 PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {

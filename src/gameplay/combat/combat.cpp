@@ -1,4 +1,4 @@
-// 本文件负责敌我碰撞结算、玩家 Bomb 的场景效果和 Boss 阶段推进。
+// 本文件负责敌我碰撞、道具计分、满火力与 Bomb 场景效果及 Boss 阶段推进。
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
@@ -89,12 +89,14 @@ void Game::ResolveCollisions() {
 
 void Game::UpdatePickups(float deltaTime) {
     const PickupReward reward = drops_.Update(deltaTime, player_.Position());
-    const int previousPower = player_.Power();
-    player_.AdjustPower(reward.power);
+    AdjustPlayerPower(reward.power);
     score_ += reward.score;
-    if (previousPower < Player::kMaxPower &&
-        player_.Power() == Player::kMaxPower)
-        bullets_.ClearEnemyBullets();
+}
+
+void Game::AdjustPlayerPower(int delta) {
+    if (!player_.AdjustPower(delta)) return;
+    drops_.ConvertEnemyBulletsToStars(bullets_);
+    SetMessage("Full Power", 2.0F);
 }
 
 void Game::ApplyBombEffect() {

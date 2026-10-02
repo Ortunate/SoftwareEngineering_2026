@@ -53,7 +53,8 @@ public:
 
     /// @brief 增减 Power 并钳制在 0 到 128；收集道具和 Debug 按键共用此入口。
     /// @param delta 正数增加，负数降低，单位为 Power 点。
-    void AdjustPower(int delta);
+    /// @return 仅从未满升到满级时返回 true，调用方负责提示和清弹奖励。
+    bool AdjustPower(int delta);
 
     /// @brief 处理单颗活动敌弹的命中与擦弹标记；命中时清除该弹。
     /// @param bullet 由弹幕池持有的敌弹，玩家只修改 active 或 grazed。

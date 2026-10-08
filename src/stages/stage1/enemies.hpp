@@ -8,7 +8,7 @@
 
 namespace redmist::stage1 {
 
-/// @brief 普通妖精固定使用蓝衣外观，按显式参数直行、绕行或交叉入场。
+/// @brief 普通妖精使用蓝衣外观并按显式轨迹移动；不攻击，当前玩家任一子弹命中即可击破。
 class FairyEnemy final : public Enemy {
 public:
     /// @brief 复制普通妖精的出生位置与显式轨迹；生成后立即活动。
@@ -20,10 +20,8 @@ private:
     void Move(float deltaTime) override;
     void UpdateSkills(float deltaTime, Vector3 playerPosition,
                       BulletSystem& bullets) override;
-    void FireAimedShot(BulletSystem& bullets, Vector3 playerPosition);
 
     Movement movement_;
-    float shotTimer_;
 };
 
 /// @brief 暗色妖精固定使用紫衣外观，并拥有自己的漂移与交叉轨迹。

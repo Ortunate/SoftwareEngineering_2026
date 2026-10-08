@@ -4,6 +4,7 @@
 #include "gameplay/bullets/patterns.hpp"
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/player.hpp"
 #include "config/settings.hpp"
 #include "stage/system.hpp"
 #include "stage/catalog.hpp"
@@ -118,11 +119,24 @@ void RunGameplayTests() {
     assert(std::abs(fairyMuzzle.z - (5.0F - fairy.hitRadius * 0.55F)) <
            0.0001F);
     fairy.Update(0.9F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 1);
-    bullets.Pool().ForEachActive([](const redmist::Bullet& bullet) {
-        assert(bullet.visual == redmist::stage1::kRedBullet);
-        assert(bullet.position.z < 5.0F);
-    });
+    assert(bullets.Pool().ActiveCount() == 0);
+    // 覆盖旧首次攻击和后续攻击时刻，避免仅延后首发而未移除攻击。
+    for (int frame = 0; frame < 8; ++frame) fairy.Update(0.5F, {}, bullets);
+    assert(bullets.Pool().ActiveCount() == 0);
+    assert(fairy.health > 0.0F && fairy.health == fairy.maxHealth);
+    // 使用真实玩家射击验证低火力直射弹与满火力追踪弹均能一发耗尽妖精血量。
+    for (int power : {0, redmist::Player::kMaxPower}) {
+        redmist::Player player;
+        player.AdjustPower(power);
+        player.Update(0.0F, {.fire = true}, bullets,
+                      redmist::stage1::kPlayerGoldCard,
+                      redmist::stage1::kPlayerCyanCard, true);
+        assert(bullets.Pool().ActiveCount() > 0);
+        bullets.Pool().ForEachActive([&fairy](const redmist::Bullet& bullet) {
+            assert(bullet.damage >= fairy.health);
+        });
+        bullets.Reset();
+    }
     bullets.Reset();
 
     redmist::stage1::DarkFairyEnemy darkFairy(
@@ -136,12 +150,14 @@ void RunGameplayTests() {
         {{0.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::Helix});
     helixFairy.Update(0.9F, {}, bullets);
     assert(helixFairy.position.x != fairy.position.x);
+    assert(bullets.Pool().ActiveCount() == 0);
     bullets.Reset();
     redmist::stage1::FairyEnemy crossingFairy(
         {{-9.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::CrossFromLeft});
     crossingFairy.Update(0.9F, {}, bullets);
     assert(crossingFairy.position.x > -9.0F);
     assert(crossingFairy.visual == fairy.visual);
+    assert(bullets.Pool().ActiveCount() == 0);
     bullets.Reset();
 
     redmist::stage1::OrbEnemy orb({{0.0F, 0.0F, 5.0F}});

@@ -17,7 +17,7 @@
 - Power 道具收集、0–128 火力成长与 Miss 后减少 16 Power
 - 金色直射符卡、青蓝追踪符卡，以及 Debug 射击测试场地
 - 事件驱动的道中连续出怪
-- Fairy、DarkFairy、Orb 敌人子类分别定义并释放自己的弹幕技能
+- 普通 Fairy 不攻击且一发击破，DarkFairy 与 Orb 分别定义并释放自己的弹幕技能
 - 道中露米娅普通攻击、后续妖精波次、灵梦与露米娅对话、关底四阶段及一面结算
 - 关底阶段按普通攻击 →「夜符 Night Bird」→ 普通攻击 →「境符 Demarcation」推进，两张符卡展示立绘与名称
 - 程序生成的红雾天空盒，以及新绘制的灵梦和露米娅立绘、两类妖精与红蓝弹体贴图
@@ -156,7 +156,7 @@ Debug 构建的主菜单增加 `SHOT TEST`。进入后关卡时间轴停止，�
 
 ## 扩展关卡
 
-每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂和对话。第一面的实现集中在 `src/stages/stage1/`；通用 `Enemy` 负责出生后的年龄、边界检查和调用子类，各具体敌人类持有自己的运动状态与技能计时器。同一类固定一种外观，轨迹由 `FairyParams`、`DarkFairyParams`、`OrbParams` 显式指定。`EnemySpec` 使用 `std::variant` 保存对应类型的参数，不再通过原型编号、编队或槽位选择敌人行为。新增关卡时在 `src/stage/catalog.cpp` 注册内容，并在 `src/stage/enemy_spec.hpp` 登记其参数类型、扩展配置校验；`Game`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。公共事件由 `StageContent::HandleEvent` 统一执行。
+每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂和对话。第一面的实现集中在 `src/stages/stage1/`；通用 `Enemy` 负责出生后的年龄、边界检查和调用子类，各具体敌人类持有自己的运动状态，有攻击能力的敌人自行管理技能计时器。同一类固定一种外观，轨迹由 `FairyParams`、`DarkFairyParams`、`OrbParams` 显式指定。`EnemySpec` 使用 `std::variant` 保存对应类型的参数，不再通过原型编号、编队或槽位选择敌人行为。新增关卡时在 `src/stage/catalog.cpp` 注册内容，并在 `src/stage/enemy_spec.hpp` 登记其参数类型、扩展配置校验；`Game`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。公共事件由 `StageContent::HandleEvent` 统一执行。
 
 弹幕、敌人与 Boss 记录 `VisualId`。关卡清单将该 ID 映射到图片路径、绘制方式、世界尺寸、锚点及光晕参数。`AssetManager` 在关卡开始时按清单加载，在结束时卸载；相同路径的角色贴图与立绘共享同一纹理。`SpriteRenderer` 按外观 ID 分组弹幕，每帧遍历弹池一次，避免随外观种类增加而重复扫描。
 

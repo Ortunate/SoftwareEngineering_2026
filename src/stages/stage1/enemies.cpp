@@ -38,8 +38,9 @@ bool SkillReady(float& timer, float interval, float deltaTime, float age) {
 
 FairyEnemy::FairyEnemy(const FairyParams& params)
     : Enemy(kFairy, params.position, kFairyDrops),
-      movement_(params.movement), shotTimer_(0.8F) {
-    health = maxHealth = 10.0F;
+      movement_(params.movement) {
+    // 当前玩家追踪弹单发伤害最低为 1；保持血量为 1，使两种玩家弹都能一发击破。
+    health = maxHealth = 1.0F;
     scoreValue = 500;
 }
 
@@ -69,18 +70,7 @@ void FairyEnemy::Move(float) {
     }
 }
 
-void FairyEnemy::UpdateSkills(float deltaTime, Vector3 playerPosition,
-                              BulletSystem& bullets) {
-    if (SkillReady(shotTimer_, 1.8F, deltaTime, age))
-        FireAimedShot(bullets, playerPosition);
-}
-
-void FairyEnemy::FireAimedShot(BulletSystem& bullets, Vector3 playerPosition) {
-    const Vector3 muzzle = MuzzlePosition(playerPosition);
-    const Vector3 direction = BulletSystem::DirectionTo(muzzle, playerPosition);
-    bullets.Spawn(BulletOwner::Enemy, muzzle, pattern::Scale(direction, 3.3F),
-                  0.16F, kEnemyRed, kRedBullet);
-}
+void FairyEnemy::UpdateSkills(float, Vector3, BulletSystem&) {}
 
 DarkFairyEnemy::DarkFairyEnemy(const DarkFairyParams& params)
     : Enemy(kDarkFairy, params.position, kDarkFairyDrops),

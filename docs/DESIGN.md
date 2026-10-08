@@ -97,7 +97,7 @@ struct Bullet {
 
 ### 4.4 Enemy 与 Boss
 
-`Enemy` 是抽象基类，从实例出生开始推进非负 `age` 并检查边界，不承担入场等待。`stage1::FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy` 各自实现 `Move` 与 `UpdateSkills`，持有运动状态和技能计时器。每个具体敌人类固定一种外观，对应的 `FairyParams`、`DarkFairyParams`、`OrbParams` 显式携带有限的世界坐标与该类支持的移动枚举。`EnemySpec` 是这些参数类型的 `std::variant`，类型直接决定工厂创建的敌人，不再存在编队、槽位或局部原型编号。`Stage1Content::CreateEnemy` 拒绝非法配置；新增关卡敌人需要登记参数类型并扩展配置校验和关卡工厂。技能计时从实例出生开始，首次攻击不再叠加入场等待时间。`Boss` 是独立抽象基类，`stage1::RumiaBoss` 区分道中与关底遭遇。道中只有普通攻击；关底依次包含普通攻击、「Night Bird」、第二段普通攻击和「Demarcation」。
+`Enemy` 是抽象基类，从实例出生开始推进非负 `age` 并检查边界，不承担入场等待。`stage1::FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy` 各自实现 `Move` 与 `UpdateSkills`，持有运动状态；暗色妖精与光球另有自己的技能计时器。普通 `FairyEnemy` 不攻击，初始血量与最大血量均为 1，当前直射弹伤害 2、追踪弹伤害 1，因此任一玩家弹命中即可击破。每个具体敌人类固定一种外观，对应的 `FairyParams`、`DarkFairyParams`、`OrbParams` 显式携带有限的世界坐标与该类支持的移动枚举。`EnemySpec` 是这些参数类型的 `std::variant`，类型直接决定工厂创建的敌人，不再存在编队、槽位或局部原型编号。`Stage1Content::CreateEnemy` 拒绝非法配置；新增关卡敌人需要登记参数类型并扩展配置校验和关卡工厂。技能计时从实例出生开始，首次攻击不再叠加入场等待时间。`Boss` 是独立抽象基类，`stage1::RumiaBoss` 区分道中与关底遭遇。道中只有普通攻击；关底依次包含普通攻击、「Night Bird」、第二段普通攻击和「Demarcation」。
 
 ### 4.5 StageEvent
 

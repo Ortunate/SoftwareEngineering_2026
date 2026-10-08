@@ -5,6 +5,7 @@
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/actors/enemy.hpp"
 #include "gameplay/actors/player.hpp"
+#include "gameplay/arena.hpp"
 #include "config/settings.hpp"
 #include "stage/system.hpp"
 #include "stage/catalog.hpp"
@@ -16,11 +17,102 @@
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <memory>
 #include <string_view>
 #include <numbers>
 #include <stdexcept>
 #include <system_error>
 #include <vector>
+
+namespace {
+/// @brief 验证暗色妖精的 Z 轴往返、单次稀疏球面散射以及跨帧阶段切换。
+void TestDarkFairyBehavior() {
+    using redmist::Bullet;
+    using redmist::BulletOwner;
+    using redmist::BulletSystem;
+    using redmist::stage1::DarkFairyEnemy;
+    const Vector3 start{2.0F, -1.0F, 8.0F};
+    const float travelDistance = redmist::kArenaHalfExtents.z * 2.0F / 5.0F;
+    const float approachTime = travelDistance / 1.7F;
+    const Vector3 turn{start.x, start.y, start.z - travelDistance};
+    auto storage = std::make_unique<BulletSystem>();
+    BulletSystem& bullets = *storage;
+    DarkFairyEnemy fairy({start});
+
+    fairy.Update(approachTime - 0.01F, {}, bullets);
+    assert(fairy.active && fairy.position.x == start.x && fairy.position.y == start.y);
+    assert(fairy.position.z > turn.z && fairy.position.z < start.z);
+    assert(bullets.Pool().ActiveCount() == 0);
+    fairy.Update(0.02F, {}, bullets);
+    assert(fairy.active && std::abs(fairy.position.z - turn.z) < 0.0001F);
+    assert(bullets.Pool().ActiveCount() == 18);
+
+    std::vector<Vector3> directions;
+    Vector3 velocitySum{};
+    std::array<bool, 6> axisSigns{};
+    int planarDirections = 0;
+    bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+        assert(bullet.owner == BulletOwner::Enemy && bullet.visual == redmist::stage1::kRedBullet);
+        assert(bullet.position.x == turn.x && bullet.position.y == turn.y);
+        assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
+        assert(std::abs(BulletSystem::Length(bullet.velocity) - 3.5F) < 0.0001F);
+        const Vector3 direction = redmist::pattern::Normalize(bullet.velocity);
+        // 图中疏散环的三维扩展须无重叠方向，不能退化为平面环或密集同向弹束。
+        for (Vector3 previous : directions) {
+            const float dot = direction.x * previous.x + direction.y * previous.y +
+                              direction.z * previous.z;
+            assert(dot <= std::cos(std::numbers::pi_v<float> / 4.0F) + 0.0001F);
+        }
+        directions.push_back(direction);
+        if (std::abs(direction.z) < 0.0001F) ++planarDirections;
+        velocitySum = redmist::pattern::Add(velocitySum, bullet.velocity);
+        if (direction.x > 0.1F) axisSigns[0] = true;
+        if (direction.x < -0.1F) axisSigns[1] = true;
+        if (direction.y > 0.1F) axisSigns[2] = true;
+        if (direction.y < -0.1F) axisSigns[3] = true;
+        if (direction.z > 0.1F) axisSigns[4] = true;
+        if (direction.z < -0.1F) axisSigns[5] = true;
+    });
+    for (bool populated : axisSigns) assert(populated);
+    assert(planarDirections == 8);
+    assert(BulletSystem::Length(velocitySum) < 0.0001F);
+
+    fairy.Update(0.5F, {}, bullets);
+    assert(fairy.position.z == turn.z && fairy.active);
+    fairy.Update(0.5F, {}, bullets);
+    assert(fairy.position.z > turn.z && fairy.position.z < start.z);
+    assert(fairy.position.x == start.x && fairy.position.y == start.y);
+    assert(bullets.Pool().ActiveCount() == 18);
+    fairy.Update(approachTime, {}, bullets);
+    assert(!fairy.active && fairy.position.x == start.x && fairy.position.y == start.y);
+    assert(fairy.position.z == start.z && bullets.Pool().ActiveCount() == 18);
+
+    // 单帧跨过前进、停留和返回时仍只发射一次，发弹点不能错误地落在已返回的位置。
+    bullets.Reset();
+    DarkFairyEnemy coarse({start});
+    coarse.Update(approachTime * 2.0F + 2.0F, {9.0F, 9.0F, 9.0F}, bullets);
+    assert(!coarse.active && coarse.position.z == start.z);
+    assert(bullets.Pool().ActiveCount() == 18);
+    std::size_t directionIndex = 0;
+    bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+        assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
+        const Vector3 direction = redmist::pattern::Normalize(bullet.velocity);
+        const Vector3 expected = directions[directionIndex++];
+        assert(std::abs(direction.x - expected.x) < 0.0001F);
+        assert(std::abs(direction.y - expected.y) < 0.0001F);
+        assert(std::abs(direction.z - expected.z) < 0.0001F);
+    });
+
+    // 等待时间属于实例配置，零等待仍在转折点发射一次，然后立即开始返回。
+    bullets.Reset();
+    DarkFairyEnemy immediate({start, 0.0F});
+    immediate.Update(approachTime + 0.5F, {}, bullets);
+    assert(immediate.active && immediate.position.z > turn.z);
+    assert(bullets.Pool().ActiveCount() == 18);
+    immediate.Update(approachTime, {}, bullets);
+    assert(!immediate.active && bullets.Pool().ActiveCount() == 18);
+}
+}  // namespace
 
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
@@ -139,12 +231,7 @@ void RunGameplayTests() {
     }
     bullets.Reset();
 
-    redmist::stage1::DarkFairyEnemy darkFairy(
-        {{0.0F, 0.0F, 5.0F}});
-    darkFairy.Update(0.9F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 1);
-    assert(darkFairy.position.x != fairy.position.x);
-    bullets.Reset();
+    TestDarkFairyBehavior();
 
     redmist::stage1::FairyEnemy helixFairy(
         {{0.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::Helix});

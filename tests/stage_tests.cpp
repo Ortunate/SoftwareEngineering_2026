@@ -186,6 +186,7 @@ void TestInvalidEvents() {
     for (float value : {-1.0F, infinity, nan}) {
         assert(rejects({.delay = value}));
         assert(rejects({.action = SpawnEnemies{stage1::FairyParams{}, 2, value}}));
+        assert(rejects({.action = SpawnEnemies{stage1::DarkFairyParams{{}, value}}}));
         assert(rejects({.action = ShowMessage{"bad", value}}));
         if (value != -1.0F) {
             assert(rejects({.action = SpawnEnemies{stage1::FairyParams{{value, 0.0F, 0.0F}}}}));

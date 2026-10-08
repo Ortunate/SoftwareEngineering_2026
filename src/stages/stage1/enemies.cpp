@@ -2,15 +2,22 @@
 
 #include "stages/stage1/enemies.hpp"
 
+#include "gameplay/arena.hpp"
 #include "gameplay/bullets/patterns.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 
 namespace redmist::stage1 {
 namespace {
 constexpr Color kEnemyRed{255, 70, 105, 255};
 constexpr Color kEnemyBlue{75, 145, 255, 255};
+// kArenaHalfExtents 是半长，前进距离必须取 Z 全长的五分之一，当前为 4.6 世界单位。
+constexpr float kDarkFairyTravelDistance = kArenaHalfExtents.z * 2.0F / 5.0F;
+constexpr float kDarkFairyMoveSpeed = 1.7F;
+constexpr float kDarkFairyApproachTime = kDarkFairyTravelDistance / kDarkFairyMoveSpeed;
 // 权重仅定义同类敌人死亡时的两种点数量；生成位置和拾取由 DropSystem 统一处理。
 constexpr std::array<DropOutcome, 2> kFairyDrops{{
     {1, 0, 3}, {0, 1, 1},
@@ -74,51 +81,55 @@ void FairyEnemy::UpdateSkills(float, Vector3, BulletSystem&) {}
 
 DarkFairyEnemy::DarkFairyEnemy(const DarkFairyParams& params)
     : Enemy(kDarkFairy, params.position, kDarkFairyDrops),
-      movement_(params.movement), shotTimer_(0.8F) {
+      retreatDelay_(params.retreatDelay) {
     health = maxHealth = 12.0F;
     scoreValue = 650;
 }
 
 void DarkFairyEnemy::Move(float) {
-    constexpr float speed = 1.7F;
-    switch (movement_) {
-        case Movement::Drift:
-            position = {origin.x + std::sin(age * 1.4F) * 0.3F,
-                        origin.y + std::sin(age * 1.8F) * 0.35F,
-                        origin.z - speed * age};
-            break;
-        case Movement::Corkscrew: {
-            const float angle = age * 2.5F + origin.x * 0.35F;
-            position = {origin.x + std::cos(angle) * 1.15F,
-                        origin.y + std::sin(angle) * 1.45F,
-                        origin.z - speed * age};
-            break;
-        }
-        case Movement::CrossFromLeft:
-            position = {origin.x + speed * age,
-                        origin.y + std::sin(age * 2.0F) * 0.6F,
-                        origin.z - speed * 0.55F * age};
-            break;
-        case Movement::CrossFromRight:
-            position = {origin.x - speed * age,
-                        origin.y + std::cos(age * 2.0F) * 0.6F,
-                        origin.z - speed * 0.55F * age};
-            break;
+    // 用出生年龄分段求位置，避免一帧跨过转折或返回时丢失剩余时间、越过目标位置。
+    float distance = std::min(age * kDarkFairyMoveSpeed, kDarkFairyTravelDistance);
+    const float retreatAge = age - kDarkFairyApproachTime - retreatDelay_;
+    if (retreatAge > 0.0F) {
+        distance = std::max(0.0F, kDarkFairyTravelDistance - retreatAge * kDarkFairyMoveSpeed);
+    }
+    position = {origin.x, origin.y, origin.z - distance};
+    if (age >= kDarkFairyApproachTime * 2.0F + retreatDelay_) {
+        position = origin;
+        active = false;
     }
 }
 
-void DarkFairyEnemy::UpdateSkills(float deltaTime, Vector3 playerPosition,
-                                  BulletSystem& bullets) {
-    if (SkillReady(shotTimer_, 1.55F, deltaTime, age))
-        FireAimedShot(bullets, playerPosition);
+void DarkFairyEnemy::UpdateSkills(float, Vector3, BulletSystem& bullets) {
+    if (!hasFired_ && age >= kDarkFairyApproachTime) {
+        hasFired_ = true;
+        FireRadialBurst(bullets);
+    }
 }
 
-void DarkFairyEnemy::FireAimedShot(BulletSystem& bullets,
-                                   Vector3 playerPosition) {
-    const Vector3 muzzle = MuzzlePosition(playerPosition);
-    const Vector3 direction = BulletSystem::DirectionTo(muzzle, playerPosition);
-    bullets.Spawn(BulletOwner::Enemy, muzzle, pattern::Scale(direction, 3.5F),
-                  0.17F, kEnemyRed, kRedBullet);
+void DarkFairyEnemy::FireRadialBurst(BulletSystem& bullets) {
+    // Move 先于技能执行，低帧率下 position 可能已返回；发弹原点始终取前进终点。
+    const Vector3 center{origin.x, origin.y, origin.z - kDarkFairyTravelDistance};
+    const auto emit = [&bullets, center](Vector3 direction) {
+        bullets.Spawn(BulletOwner::Enemy, center, pattern::Scale(direction, 3.5F),
+                      0.17F, kEnemyRed, kRedBullet);
+    };
+    // 保留参考图 X/Y 平面约 45° 的八向疏散环，再沿 Z 轴补前后纬圈各 4 向及两极。
+    // 纬圈错开半个环间隔，保证三维相邻方向最小夹角约 45°，每个方向只发一颗。
+    constexpr float pi = std::numbers::pi_v<float>;
+    for (int index = 0; index < 8; ++index) {
+        const float azimuth = index * pi / 4.0F;
+        emit({std::cos(azimuth), std::sin(azimuth), 0.0F});
+    }
+    const float diagonal = std::sqrt(0.5F);
+    for (float side : {-1.0F, 1.0F}) {
+        for (int index = 0; index < 4; ++index) {
+            const float azimuth = pi / 8.0F + index * pi / 2.0F;
+            emit({diagonal * std::cos(azimuth), diagonal * std::sin(azimuth),
+                  side * diagonal});
+        }
+        emit({0.0F, 0.0F, side});
+    }
 }
 
 OrbEnemy::OrbEnemy(const OrbParams& params)

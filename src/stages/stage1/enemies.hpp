@@ -24,22 +24,24 @@ private:
     Movement movement_;
 };
 
-/// @brief 暗色妖精固定使用紫衣外观，并拥有自己的漂移与交叉轨迹。
+/// @brief 暗色妖精沿 -Z 前进战场全长的五分之一，停下发射一次球面弹幕，再沿 +Z 原路退场。
+/// 往返速度均为 1.7 世界单位/秒；退场在出生位置失活，不触发击破分数或掉落。
 class DarkFairyEnemy final : public Enemy {
 public:
-    /// @brief 复制暗色妖精的出生位置与显式轨迹；生成后立即活动。
-    /// @param params 有限的世界坐标与对应敌人支持的移动枚举。
+    /// @brief 复制出生位置与发弹后等待时间；每个实例只发射一次弹幕。
+    /// @param params 有限的世界坐标及非负有限的退场等待秒数。
     explicit DarkFairyEnemy(const DarkFairyParams& params);
 
 private:
-    using Movement = DarkFairyParams::Movement;
     void Move(float deltaTime) override;
     void UpdateSkills(float deltaTime, Vector3 playerPosition,
                       BulletSystem& bullets) override;
-    void FireAimedShot(BulletSystem& bullets, Vector3 playerPosition);
+    /// @brief 从固定转折点向 18 个稀疏球面方向各生成一颗红弹，不随玩家位置转向。
+    void FireRadialBurst(BulletSystem& bullets);
 
-    Movement movement_;
-    float shotTimer_;
+    float retreatDelay_;
+    // 年龄可在一帧内跨越多个行为阶段；此标记保证跨越或停留期间均只发射一次。
+    bool hasFired_ = false;
 };
 
 /// @brief 光球敌人固定使用蓝珠外观，在前进中上下浮动并释放锥形弹幕。

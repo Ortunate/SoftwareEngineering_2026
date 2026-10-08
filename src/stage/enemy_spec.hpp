@@ -13,7 +13,7 @@ namespace redmist {
 using EnemySpec = std::variant<stage1::FairyParams, stage1::DarkFairyParams,
                                stage1::OrbParams>;
 
-/// @brief 校验出生坐标是否有限、移动枚举是否受对应敌人支持。
+/// @brief 校验出生坐标、对应敌人的移动枚举或退场等待时间是否有效。
 /// @return 配置可用于创建敌人时返回 true；不创建对象或修改配置。
 [[nodiscard]] bool IsValidEnemySpec(const EnemySpec& spec);
 

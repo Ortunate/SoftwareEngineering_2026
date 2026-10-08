@@ -1,4 +1,4 @@
-// 本文件负责检查带参敌人配置的坐标与移动枚举约束。
+// 本文件负责检查带参敌人配置的坐标、移动枚举与退场等待时间约束。
 
 #include "stage/enemy_spec.hpp"
 
@@ -17,10 +17,11 @@ bool IsValidEnemySpec(const EnemySpec& spec) {
         if constexpr (std::is_same_v<Params, stage1::OrbParams>) {
             return static_cast<unsigned>(params.movement) <=
                    static_cast<unsigned>(Params::Movement::CrossArena);
-        } else if constexpr (std::is_same_v<Params, stage1::FairyParams> ||
-                             std::is_same_v<Params, stage1::DarkFairyParams>) {
+        } else if constexpr (std::is_same_v<Params, stage1::FairyParams>) {
             return static_cast<unsigned>(params.movement) <=
                    static_cast<unsigned>(Params::Movement::CrossFromRight);
+        } else if constexpr (std::is_same_v<Params, stage1::DarkFairyParams>) {
+            return std::isfinite(params.retreatDelay) && params.retreatDelay >= 0.0F;
         } else {
             static_assert(std::is_same_v<Params, void>, "New EnemySpec requires validation");
         }

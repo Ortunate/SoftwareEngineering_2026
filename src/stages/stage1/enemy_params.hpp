@@ -14,11 +14,11 @@ struct FairyParams {
     Movement movement = Movement::Straight;
 };
 
-/// @brief 暗色妖精参数；position 为有限的世界坐标，movement 必须为有效枚举值。
+/// @brief 暗色妖精参数；position 为有限的世界坐标，仅沿 Z 轴往返并发射一次球面弹幕。
 struct DarkFairyParams {
-    enum class Movement { Drift, Corkscrew, CrossFromLeft, CrossFromRight };
     Vector3 position{0.0F, 0.0F, 8.5F};
-    Movement movement = Movement::Drift;
+    /// @brief 发弹后原地等待的非负有限秒数；之后沿 +Z 返回出生位置并退场。
+    float retreatDelay = 1.0F;
 };
 
 /// @brief 光球参数；position 为有限的世界坐标，movement 必须为有效枚举值。

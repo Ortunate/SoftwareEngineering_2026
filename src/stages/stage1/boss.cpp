@@ -34,6 +34,7 @@ float PhaseDuration(int phase) {
 }
 
 void RumiaBoss::StartMidboss() {
+    presentation.Reset(ActorKind::Boss);
     visual = kRumia;
     encounter_ = Encounter::Midboss;
     active = true;
@@ -45,6 +46,7 @@ void RumiaBoss::StartMidboss() {
 }
 
 void RumiaBoss::StartFinalBoss() {
+    presentation.Reset(ActorKind::Boss);
     visual = kRumia;
     encounter_ = Encounter::Final;
     active = true;
@@ -58,6 +60,7 @@ void RumiaBoss::StartFinalBoss() {
 bool RumiaBoss::Update(float deltaTime, Vector3 playerPosition,
                        BulletSystem& bullets) {
     if (!active) return false;
+    presentation.Update(deltaTime);
     phaseTimer += deltaTime;
     moveClock += deltaTime;
     fireTimer -= deltaTime;

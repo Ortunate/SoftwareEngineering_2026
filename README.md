@@ -18,6 +18,7 @@
 - 金色直射符卡、青蓝追踪符卡，以及 Debug 射击测试场地
 - 事件驱动的道中连续出怪
 - 普通 Fairy 不攻击且一发击破；DarkFairy 前进后发射一次稀疏球面弹幕并原路退场，Orb 释放锥形弹幕
+- 所有小怪与 Boss 共用淡入光环、收缩退场和三维击破粒子；暂停冻结效果，关底退场完毕后结算
 - 道中露米娅普通攻击、后续妖精波次、灵梦与露米娅对话、关底四阶段及一面结算
 - 关底阶段按普通攻击 →「夜符 Night Bird」→ 普通攻击 →「境符 Demarcation」推进，两张符卡展示立绘与名称
 - 程序生成的红雾天空盒，以及新绘制的灵梦和露米娅立绘、两类妖精与红蓝弹体贴图
@@ -74,6 +75,15 @@ raylib 会在首次配置时通过 CMake FetchContent 下载。仅 `assets/runti
 `assets/source` 保留 `bullet_pearl.png` 与 `bullet_red.png` 原图；游戏使用裁去透明边并缩小到 512×512 的 `*_runtime.png`。重新生成时运行 `cmake --build build --target generate_sprite_assets`，然后运行 `./build/generate_sprite_assets assets/source assets/runtime/stages/stage1`。构建游戏目标时会把贴图和着色器复制到可执行文件旁。
 
 需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets/runtime`。该程序默认在隐藏窗口分别测量空场景和 8192 发弹幕场景的平均帧时间。需要测量实际可见窗口时，追加 `--visible`；两种模式的数值不可直接比较。
+
+角色表现的无窗口测试随 `ctest` 运行。具有桌面图形会话时，还可构建 `red_mist_lifecycle_tests` 并运行该程序，在隐藏窗口验证击破奖励、清场、Boss 换阶段、暂停和关卡素材释放。可选首个参数是截图路径前缀，例如 macOS Debug：
+
+```bash
+cmake --build --preset macos-debug --target red_mist_lifecycle_tests
+./build/macos-debug/red_mist_lifecycle_tests /tmp/actor-effects
+```
+
+测试不初始化音频，并会像游戏一样在当前目录读取或创建设置文件。
 
 ## macOS
 

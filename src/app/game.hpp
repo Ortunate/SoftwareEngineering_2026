@@ -64,6 +64,8 @@ public:
     [[nodiscard]] bool ShouldQuit() const { return shouldQuit_; }
 
 private:
+    // 独立离屏集成测试通过此探针检查生命周期，正式程序不暴露可修改的战斗状态。
+    friend struct GameLifecycleProbe;
     /// @brief 同时可保有的最多敌人数。
     static constexpr std::size_t kEnemyCapacity = 128;
     /// @brief 设置界面的普通设置页与按键设置页。
@@ -77,9 +79,13 @@ private:
     void StartRun(bool captureCursor = true);
     /// @brief 切换主菜单并清除战斗中的临时状态。
     void EnterMainMenu();
-    /// @brief 结算关卡并卸载专属素材。
+    /// @brief 停止战斗并播放剩余退场效果；池空后才结算、卸载专属素材。
     /// @param result 胜利或失败后的游戏状态。
     void EndStage(RunState result);
+    /// @brief 在 Playing/Finishing 与 Paused 间切换，并同步音乐和鼠标状态。
+    void TogglePause();
+    /// @brief 立即取消全部小怪并生成清场快照，不给予击破奖励。
+    void ClearEnemiesWithEffects();
     /// @brief 从本地文件读取全部设置并应用音量、灵敏度。
     void LoadSettings();
     /// @brief 将当前 FPS、音量、灵敏度和绑定写入本地文件。
@@ -171,10 +177,16 @@ private:
 
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
+    // 暂停要记住战斗或收尾，不能一律恢复 Playing；finishResult_ 仅在收尾结束时应用。
+    RunState pausedState_ = RunState::Playing;
+    RunState finishResult_ = RunState::Won;
+    // 当前一局是否捕获鼠标，预览和离屏测试在恢复暂停时仍不捕获。
+    bool captureCursor_ = true;
     Player player_{};
     std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
+    ActorEffectSystem actorEffects_{};
     DropSystem drops_{};
     StageDirector stage_{};
     std::unique_ptr<StageContent> stageContent_{};

@@ -94,6 +94,8 @@ void DarkFairyEnemy::Move(float) {
         distance = std::max(0.0F, kDarkFairyTravelDistance - retreatAge * kDarkFairyMoveSpeed);
     }
     position = {origin.x, origin.y, origin.z - distance};
+    // 返回终点已知，预先淡出而不改变原路返回或战斗回收时刻。
+    presentation.PrepareExit(kDarkFairyApproachTime * 2.0F + retreatDelay_ - age);
     if (age >= kDarkFairyApproachTime * 2.0F + retreatDelay_) {
         position = origin;
         active = false;

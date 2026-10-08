@@ -4,6 +4,7 @@
 
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/items/drop_table.hpp"
+#include "gameplay/effects/actor_effects.hpp"
 
 
 #include <array>
@@ -14,12 +15,13 @@
 
 namespace redmist {
 
-/// @brief 小怪抽象基类：处理出生后的年龄与边界，移动和技能计时由具体敌人实现。
+/// @brief 小怪抽象基类：处理出生年龄、独立视觉时钟与边界，移动和技能由具体敌人实现。
 class Enemy {
 public:
     /// @brief 通过基类指针安全销毁具体敌人。
     virtual ~Enemy() = default;
-    /// @brief 更新出生后的年龄，并委托子类执行移动和各技能计时。
+    /// @brief 更新出生年龄与视觉时钟，委托子类执行移动和技能；自然退场只设置 active=false。
+    /// 调用方须在失活的当帧保存退场快照，然后停止更新；效果不承担战斗对象所有权。
     /// @param deltaTime 本帧经过的秒数。
     /// @param playerPosition 玩家判定中心，用于瞄准。
     /// @param bullets 接收技能生成的弹幕。
@@ -36,6 +38,8 @@ public:
     float maxHealth = 10.0F;
     float hitRadius = 0.55F;
     int scoreValue = 500;
+    /// @brief 独立视觉状态；不决定活动标记、判定或技能时钟。
+    ActorPresentation presentation;
     /// @brief 返回本类敌人的两类道具联合分布；表由具体敌人静态持有。
     /// @return 仅在敌人生命周期内借用的只读表，空表表示不掉落。
     [[nodiscard]] std::span<const DropOutcome> DropDistribution() const {

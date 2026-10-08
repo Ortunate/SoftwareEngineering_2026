@@ -3,6 +3,7 @@
 #pragma once
 
 #include "gameplay/bullets/system.hpp"
+#include "gameplay/effects/actor_effects.hpp"
 
 namespace redmist {
 
@@ -12,6 +13,7 @@ public:
     /// @brief 通过基类指针安全销毁具体 Boss。
     virtual ~Boss() = default;
     /// @brief 推进当前阶段的移动与攻击。
+    /// 子类同时推进 presentation；只在整场遭遇启动时重置视觉时钟。
     /// @param deltaTime 本帧经过的秒数。
     /// @param playerPosition 玩家判定中心。
     /// @param bullets 接收技能弹幕的系统。
@@ -30,6 +32,8 @@ public:
     [[nodiscard]] virtual const char* DisplayName() const = 0;
 
     bool active = false;
+    /// @brief 整场遭遇的视觉时钟；阶段切换不能重置入场。
+    ActorPresentation presentation{ActorKind::Boss};
     VisualId visual = kInvalidVisualId;
     Vector3 position{0.0F, 2.0F, 7.2F};
     float health = 0.0F;

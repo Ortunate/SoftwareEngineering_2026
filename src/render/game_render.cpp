@@ -61,7 +61,8 @@ void Game::DrawWorld() const {
     }
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
                          pickupSprites_,
-                         assets_.Stage().visuals, assets_.Stage().shaders);
+                         assets_.Stage().visuals, assets_.Stage().shaders,
+                         actorEffects_);
 #ifdef RED_MIST_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),

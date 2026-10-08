@@ -10,6 +10,8 @@ void RunDropTests();
 void RunPlayerTests();
 /// @brief 运行时间轴及关卡内容用例，断言失败时终止进程。
 void RunStageTests();
+/// @brief 运行入退场曲线、快照与回收用例，断言失败时终止进程。
+void RunActorEffectTests();
 
 int main() {
     RunSettingsTests();
@@ -17,5 +19,6 @@ int main() {
     RunDropTests();
     RunPlayerTests();
     RunStageTests();
+    RunActorEffectTests();
     return 0;
 }

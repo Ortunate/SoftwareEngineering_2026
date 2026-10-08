@@ -16,6 +16,10 @@ using namespace game_math;
 void Game::UpdateEnemies(float deltaTime) {
     enemies_.ForEachActive([this, deltaTime](Enemy& enemy) {
         enemy.Update(deltaTime, player_.Position(), bullets_);
+        // 只处理本帧仍活动到失活的跃迁，快照不延长 Enemy 的槽位寿命。
+        if (!enemy.active)
+            actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
+                                enemy.presentation, ActorExitReason::Retreat);
     });
 }
 
@@ -46,6 +50,7 @@ void Game::ResolveCollisions() {
         }
     });
     if (playerWasHit) HandlePlayerHit();
+    if (state_ != RunState::Playing) return;
 
     enemies_.ForEachActive([this](Enemy& enemy) {
         bullets_.Pool().ForEachActive([&enemy](Bullet& bullet) {
@@ -65,6 +70,8 @@ void Game::ResolveCollisions() {
             }
 #endif
             enemy.active = false;
+            actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
+                                enemy.presentation, ActorExitReason::Defeated);
             score_ += enemy.scoreValue;
             drops_.SpawnEnemyDrops(enemy.position, enemy.DropDistribution());
         }
@@ -123,7 +130,12 @@ void Game::AdvanceBossPhase() {
     const bool wasMidboss =
         boss_->IsMidboss();
     const int completedPhase = boss_->phase;
+    const ActorExitReason exitReason = boss_->health <= 0.0F
+        ? ActorExitReason::Defeated : ActorExitReason::Retreat;
     const bool hasNextPhase = boss_->AdvancePhase();
+    if (!hasNextPhase)
+        actorEffects_.Spawn(boss_->visual, boss_->position, boss_->hitRadius,
+                            boss_->presentation, exitReason);
     // 仅整场遭遇结束时通知时间轴；阶段切换仍属于同一异步事件。
     if (!hasNextPhase && bossEventId_) {
         stage_.EndEvent(*bossEventId_);

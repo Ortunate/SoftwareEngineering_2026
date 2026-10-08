@@ -36,6 +36,7 @@ add_library(red_mist_engine STATIC
     src/gameplay/actors/player.cpp
     src/gameplay/bullets/system.cpp
     src/gameplay/combat/combat.cpp
+    src/gameplay/effects/actor_effects.cpp
     src/gameplay/items/drop_system.cpp
     src/render/game_render.cpp
     src/render/sprite_renderer.cpp
@@ -98,12 +99,23 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(red_mist_tests
         tests/core_tests.cpp
+        tests/actor_effect_tests.cpp
         tests/drop_tests.cpp
         tests/gameplay_tests.cpp
         tests/player_tests.cpp
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
     target_link_libraries(red_mist_tests PRIVATE red_mist_engine)
+    # 离屏生命周期测试仍需要图形会话，手动运行，避免普通无窗口测试依赖桌面服务。
+    add_executable(red_mist_lifecycle_tests EXCLUDE_FROM_ALL tests/lifecycle_tests.cpp)
+    target_link_libraries(red_mist_lifecycle_tests PRIVATE red_mist_engine)
+    if(MSVC)
+        target_sources(red_mist_lifecycle_tests PRIVATE src/windows_utf8.manifest)
+        target_compile_options(red_mist_lifecycle_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(red_mist_lifecycle_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_dependencies(red_mist_lifecycle_tests copy_assets)
     if(MSVC)
         target_sources(red_mist_tests PRIVATE src/windows_utf8.manifest)
     endif()

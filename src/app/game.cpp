@@ -109,6 +109,9 @@ void Game::SaveSettings() const {
 }
 
 void Game::StartRun(bool captureCursor) {
+    // VisualId 属于本关卡；先丢弃旧快照，再加载可能使用相同编号的新纹理。
+    actorEffects_.Clear();
+    captureCursor_ = captureCursor;
     stage_ = StageDirector{};
     stageContent_ = CreateStageContent(stageId_);
     stage_ = StageDirector(stageContent_->Events());
@@ -139,6 +142,7 @@ void Game::StartRun(bool captureCursor) {
 }
 
 void Game::EnterMainMenu() {
+    actorEffects_.Clear();
     bullets_.Reset();
     enemies_.Clear();
     drops_.Clear();
@@ -163,13 +167,40 @@ void Game::EnterMainMenu() {
 
 void Game::EndStage(RunState result) {
     bullets_.Reset();
-    enemies_.Clear();
+    ClearEnemiesWithEffects();
     drops_.Clear();
+    if (boss_ && boss_->active) {
+        actorEffects_.Spawn(boss_->visual, boss_->position, boss_->hitRadius,
+                            boss_->presentation, ActorExitReason::StageClear);
+        boss_->active = false;
+    }
     boss_.reset();
     dialogueActive_ = false;
-    assets_.UnloadStage();
-    state_ = result;
-    EnableCursor();
+    spellCutInTimer_ = messageTimer_ = 0.0F;
+    finishResult_ = result;
+    state_ = RunState::Finishing;
+}
+
+void Game::ClearEnemiesWithEffects() {
+    enemies_.ForEachActive([this](Enemy& enemy) {
+        actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
+                            enemy.presentation, ActorExitReason::StageClear);
+        enemy.active = false;
+    });
+    enemies_.Clear();
+}
+
+void Game::TogglePause() {
+    if (state_ == RunState::Playing || state_ == RunState::Finishing) {
+        pausedState_ = state_;
+        state_ = RunState::Paused;
+        assets_.PauseMusic();
+        EnableCursor();
+    } else if (state_ == RunState::Paused) {
+        state_ = pausedState_;
+        assets_.ResumeMusic();
+        if (captureCursor_) DisableCursor();
+    }
 }
 
 void Game::Update(float deltaTime) {
@@ -196,15 +227,18 @@ void Game::Update(float deltaTime) {
     }
 
     if (IsKeyPressed(KEY_ESCAPE) || BindingPressed(bindings_.pause)) {
-        if (state_ == RunState::Playing) {
-            state_ = RunState::Paused;
-            assets_.PauseMusic();
+        TogglePause();
+    }
+    if (state_ == RunState::Finishing) {
+        screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
+        actorEffects_.Update(deltaTime);
+        if (actorEffects_.Pool().ActiveCount() == 0) {
+            actorEffects_.Clear();
+            assets_.UnloadStage();
+            state_ = finishResult_;
             EnableCursor();
-        } else if (state_ == RunState::Paused) {
-            state_ = RunState::Playing;
-            assets_.ResumeMusic();
-            DisableCursor();
         }
+        return;
     }
     if (state_ != RunState::Playing) {
         if (state_ == RunState::Paused && IsKeyPressed(KEY_M)) {
@@ -221,6 +255,8 @@ void Game::Update(float deltaTime) {
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
     screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
     spellCutInTimer_ = std::max(0.0F, spellCutInTimer_ - deltaTime);
+    // 先推进旧效果，本帧产生的快照下一帧开始计时，避免大 dt 吞掉退场首帧。
+    actorEffects_.Update(deltaTime);
 
     const bool dialogueWasActive = dialogueActive_;
     stage_.Update(deltaTime,
@@ -243,6 +279,7 @@ void Game::Update(float deltaTime) {
     UpdatePlayer(deltaTime);
     UpdateEnemies(deltaTime);
     UpdateBoss(deltaTime);
+    if (state_ != RunState::Playing) return;
     std::array<Vector3, kEnemyCapacity + 1> targets{};
     std::size_t targetCount = 0;
     enemies_.ForEachActive([&](const Enemy& enemy) {
@@ -278,7 +315,7 @@ void Game::SpawnStageEnemy(const EnemySpec& spec) {
 
 void Game::BeginStageBoss(bool final, StageEventId id) {
     stage_.CancelEnemySpawns();
-    enemies_.Clear();
+    ClearEnemiesWithEffects();
     bullets_.ClearEnemyBullets();
     bossEventId_ = id;
     boss_ = stageContent_->CreateBoss(final);
@@ -288,7 +325,7 @@ void Game::BeginStageBoss(bool final, StageEventId id) {
 
 void Game::BeginStageDialogue(StageEventId id) {
     stage_.CancelEnemySpawns();
-    enemies_.Clear();
+    ClearEnemiesWithEffects();
     bullets_.ClearEnemyBullets();
     dialogueActive_ = true;
     dialogueTimer_ = 0.0F;

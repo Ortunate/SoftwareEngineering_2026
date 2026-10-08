@@ -150,7 +150,7 @@ private:
 
     /// @brief 绘制天空盒、战场与空间中的敌人和弹幕。
     void DrawWorld() const;
-    /// @brief 绘制战场立方体边框、网格和坐标轴。
+    /// @brief 绘制战场长方体边框和六个表面的网格。
     void DrawArena() const;
     /// @brief 绘制分数、残机、Bomb 与坐标等战斗信息。
     void DrawHud() const;

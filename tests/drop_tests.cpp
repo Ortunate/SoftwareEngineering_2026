@@ -67,7 +67,7 @@ void TestPickupMotion() {
     }
 
     // 从已下落的状态立即转入吸取；拾取后复用槽位须恢复上抛而不继承追踪。
-    assert(drops.Update(1.0F, {5.0F, 0.0F, 6.0F}).power == 8);
+    assert(drops.Update(1.0F, {5.0F, 0.0F, redmist::kArenaHalfExtents.z * 0.6F}).power == 8);
     drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 1);
     const auto reused = SinglePickup(drops);
     assert(!reused.homing && reused.age == 0.0F && reused.velocityZ == 4.0F);
@@ -156,7 +156,7 @@ void RunDropTests() {
     using redmist::DropSystem;
     using redmist::Pickup;
     using redmist::PickupKind;
-    constexpr float autoCollectZ = redmist::kArenaHalfExtent * 0.6F;
+    constexpr float autoCollectZ = redmist::kArenaHalfExtents.z * 0.6F;
 
     DropSystem drops(1234);
     constexpr std::array<DropOutcome, 2> outcomes{{
@@ -181,6 +181,9 @@ void RunDropTests() {
     });
     assert(powerCount == 1 && scoreCount == 2);
     assert(itemIndex == 3);
+    // 旧吸取线 z=6 已移出前端五分之一区域，停在这里不能提前启动追踪。
+    drops.Update(0.0F, {0.0F, 0.0F, 6.0F});
+    drops.ForEachActive([](const Pickup& pickup) { assert(!pickup.homing); });
     const auto falling = drops.Update(1.0F, {0.0F, 0.0F, autoCollectZ - 0.01F});
     assert(falling.power == 0 && falling.score == 0);
     itemIndex = 0;
@@ -203,6 +206,21 @@ void RunDropTests() {
     const auto reward = drops.Update(1.0F, {0.0F, 0.0F, autoCollectZ});
     assert(reward.power == 1);
     assert(reward.score == 2 * DropSystem::kScorePointValue);
+
+    // 超出 X/Y 的掉落会被钳制；Z 新增区间中的掉落保留原深度。
+    constexpr std::array<DropOutcome, 1> cornerOutcome{{{1, 0, 1}}};
+    for (float sign : {-1.0F, 1.0F}) {
+        drops.SpawnEnemyDrops({sign * 20.0F, sign * 20.0F, sign * 11.0F},
+                              cornerOutcome);
+        const Pickup corner = SinglePickup(drops);
+        assert(std::abs(corner.position.x - sign * 9.8F) < 0.0001F);
+        assert(std::abs(corner.position.y - sign * 9.8F) < 0.0001F);
+        assert(std::abs(corner.position.z - sign * 11.0F) < 0.0001F);
+        drops.Clear();
+        drops.SpawnEnemyDrops({0.0F, 0.0F, sign * 20.0F}, cornerOutcome);
+        assert(std::abs(SinglePickup(drops).position.z - sign * 11.3F) < 0.0001F);
+        drops.Clear();
+    }
 
     constexpr std::array<DropOutcome, 2> alternatives{{
         {1, 0, 1}, {0, 1, 1},

@@ -110,9 +110,9 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets) {
 
         constexpr float margin = 3.0F;
         if (bullet.age > bullet.maxAge ||
-            std::abs(bullet.position.x) > kArenaHalfExtent + margin ||
-            std::abs(bullet.position.y) > kArenaHalfExtent + margin ||
-            std::abs(bullet.position.z) > kArenaHalfExtent + margin) {
+            std::abs(bullet.position.x) > kArenaHalfExtents.x + margin ||
+            std::abs(bullet.position.y) > kArenaHalfExtents.y + margin ||
+            std::abs(bullet.position.z) > kArenaHalfExtents.z + margin) {
             bullet.active = false;
         }
     });

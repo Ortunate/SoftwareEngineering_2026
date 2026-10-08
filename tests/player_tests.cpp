@@ -55,6 +55,30 @@ void RunPlayerTests() {
                                          (moved.z + 6.5F) * (moved.z + 6.5F));
     assert(std::abs(displacement - 6.5F) < 0.0001F);
 
+    // 六个方向分别越界，验证 Z 新增的可移动空间及所有表面的内侧留白。
+    const std::array<PlayerInput, 6> boundaryInputs{{
+        {.forward = true}, {.backward = true}, {.moveLeft = true},
+        {.moveRight = true}, {.ascend = true}, {.descend = true},
+    }};
+    const std::array<Vector3, 6> expectedPositions{{
+        {0.0F, 0.0F, 11.15F}, {0.0F, 0.0F, -11.15F},
+        {9.65F, 0.0F, -6.5F}, {-9.65F, 0.0F, -6.5F},
+        {0.0F, 9.65F, -6.5F}, {0.0F, -9.65F, -6.5F},
+    }};
+    for (std::size_t index = 0; index < boundaryInputs.size(); ++index) {
+        player.Reset();
+        player.Update(10.0F, boundaryInputs[index], bullets,
+                      redmist::stage1::kPlayerGoldCard,
+                      redmist::stage1::kPlayerCyanCard, false);
+        const Vector3 actual = player.Position();
+        const Vector3 expected = expectedPositions[index];
+        assert(std::abs(actual.x - expected.x) < 0.0001F);
+        assert(std::abs(actual.y - expected.y) < 0.0001F);
+        assert(std::abs(actual.z - expected.z) < 0.0001F);
+        player.SyncCamera(camera);
+        assert(camera.position.z == actual.z);
+    }
+
     player.Reset();
     PlayerInput firing{};
     firing.fire = true;

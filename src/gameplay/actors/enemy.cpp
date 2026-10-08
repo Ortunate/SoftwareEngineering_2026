@@ -26,9 +26,10 @@ void Enemy::Update(float deltaTime, Vector3 playerPosition,
     if (age < 0.0F) return;
     Move(deltaTime);
     UpdateSkills(deltaTime, playerPosition, bullets);
-    constexpr float outside = kArenaHalfExtent + 2.0F;
-    if (std::abs(position.x) > outside || std::abs(position.y) > outside ||
-        std::abs(position.z) > outside) active = false;
+    constexpr float margin = 2.0F;
+    if (std::abs(position.x) > kArenaHalfExtents.x + margin ||
+        std::abs(position.y) > kArenaHalfExtents.y + margin ||
+        std::abs(position.z) > kArenaHalfExtents.z + margin) active = false;
 }
 
 }  // namespace redmist

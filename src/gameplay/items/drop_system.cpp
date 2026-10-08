@@ -20,8 +20,8 @@ constexpr float kFallAcceleration = 8.0F;
 constexpr float kFallSpeed = 2.5F;
 constexpr float kAutoCollectSpeed = 20.0F;
 constexpr float kCollectDistance = 0.6F;
-// 战场 Z 范围为 [-halfExtent, +halfExtent]，靠近 +Z 边界的五分之一区域从 +0.6 倍半径开始。
-constexpr float kAutoCollectZ = kArenaHalfExtent * 0.6F;
+// 战场 Z 范围为 [-kArenaHalfExtents.z, +kArenaHalfExtents.z]，靠近 +Z 边界的五分之一区域从 +0.6 倍半径开始。
+constexpr float kAutoCollectZ = kArenaHalfExtents.z * 0.6F;
 constexpr float kSpiralAngle = 2.3999632F;
 }
 
@@ -78,10 +78,12 @@ void DropSystem::SpawnEnemyDrops(Vector3 position,
             position.y + std::sin(angle) * radius,
             position.z,
         };
-        constexpr float limit = kArenaHalfExtent - 0.2F;
-        itemPosition.x = std::clamp(itemPosition.x, -limit, limit);
-        itemPosition.y = std::clamp(itemPosition.y, -limit, limit);
-        itemPosition.z = std::clamp(itemPosition.z, -limit, limit);
+        constexpr Vector3 limit{kArenaHalfExtents.x - 0.2F,
+                                kArenaHalfExtents.y - 0.2F,
+                                kArenaHalfExtents.z - 0.2F};
+        itemPosition.x = std::clamp(itemPosition.x, -limit.x, limit.x);
+        itemPosition.y = std::clamp(itemPosition.y, -limit.y, limit.y);
+        itemPosition.z = std::clamp(itemPosition.z, -limit.z, limit.z);
         if (index < powerCount)
             Spawn(PickupKind::Power, itemPosition, 1);
         else

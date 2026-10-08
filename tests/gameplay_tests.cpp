@@ -87,6 +87,37 @@ void RunGameplayTests() {
         redmist::stage1::Formation::Line);
     constexpr auto crossing = static_cast<std::uint16_t>(
         redmist::stage1::Formation::CrossingPair);
+
+    // 回收仍保留原来的世界单位余量；Z 新增区间内的对象不能按旧立方体过早失活。
+    for (int axis = 0; axis < 3; ++axis) {
+        for (float sign : {-1.0F, 1.0F}) {
+            const auto axisPosition = [axis, sign](float distance) -> Vector3 {
+                if (axis == 0) return {sign * distance, 0.0F, 0.0F};
+                if (axis == 1) return {0.0F, sign * distance, 0.0F};
+                return {0.0F, 0.0F, sign * distance};
+            };
+            const float bulletLimit = axis == 2 ? 14.5F : 13.0F;
+            auto* edgeBullet = bullets.Spawn(BulletOwner::Enemy,
+                axisPosition(bulletLimit), {}, 0.1F, RED,
+                redmist::stage1::kRedBullet);
+            assert(edgeBullet);
+            bullets.Update(0.0F);
+            assert(edgeBullet->active);
+            edgeBullet->position = axisPosition(bulletLimit + 0.01F);
+            bullets.Update(0.0F);
+            assert(!edgeBullet->active);
+
+            const float enemyLimit = axis == 2 ? 13.5F : 12.0F;
+            redmist::stage1::FairyEnemy edgeEnemy(
+                {axisPosition(enemyLimit), 0.0F, line, 0});
+            edgeEnemy.Update(0.0F, {}, bullets);
+            assert(edgeEnemy.active);
+            edgeEnemy.origin = axisPosition(enemyLimit + 0.01F);
+            edgeEnemy.Update(0.0F, {}, bullets);
+            assert(!edgeEnemy.active);
+            bullets.Reset();
+        }
+    }
     redmist::stage1::FairyEnemy fairy({{0.0F, 0.0F, 5.0F}, 0.0F, line, 0});
     const Vector3 fairyMuzzle = fairy.MuzzlePosition({0.0F, 0.0F, 0.0F});
     assert(std::abs(fairyMuzzle.z - (5.0F - fairy.hitRadius * 0.55F)) <

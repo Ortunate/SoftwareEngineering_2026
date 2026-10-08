@@ -83,10 +83,12 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
     const float speed = input.focus ? kFocusSpeed : kSpeed;
     position_ = game_math::Add(position_,
                                game_math::Scale(movement, speed * deltaTime));
-    const float limit = kArenaHalfExtent - kArenaPadding;
-    position_.x = std::clamp(position_.x, -limit, limit);
-    position_.y = std::clamp(position_.y, -limit, limit);
-    position_.z = std::clamp(position_.z, -limit, limit);
+    constexpr Vector3 limit{kArenaHalfExtents.x - kArenaPadding,
+                            kArenaHalfExtents.y - kArenaPadding,
+                            kArenaHalfExtents.z - kArenaPadding};
+    position_.x = std::clamp(position_.x, -limit.x, limit.x);
+    position_.y = std::clamp(position_.y, -limit.y, limit.y);
+    position_.z = std::clamp(position_.z, -limit.z, limit.z);
 
     if (allowFire && input.fire && fireTimer_ <= 0.0F) {
         Fire(bullets, bulletVisual, homingVisual);

@@ -73,35 +73,33 @@ void Game::DrawWorld() const {
 }
 
 void Game::DrawArena() const {
-    constexpr float h = kArenaHalfExtent;
+    constexpr Vector3 h = kArenaHalfExtents;
     const Color border{170, 105, 150, 190};
     const Color grid{100, 65, 115, 70};
-    DrawCubeWires({0.0F, 0.0F, 0.0F}, h * 2.0F, h * 2.0F, h * 2.0F, border);
+    DrawCubeWires({}, h.x * 2.0F, h.y * 2.0F, h.z * 2.0F, border);
 
     constexpr float step = 2.5F;
-    for (float value = -h + step; value < h; value += step) {
-        // 地面与天花板网格。
-        DrawLine3D({-h, -h, value}, {h, -h, value}, grid);
-        DrawLine3D({value, -h, -h}, {value, -h, h}, grid);
-        DrawLine3D({-h, h, value}, {h, h, value}, grid);
-        DrawLine3D({value, h, -h}, {value, h, h}, grid);
-
-        // 左右墙面网格。
-        DrawLine3D({-h, -h, value}, {-h, h, value}, grid);
-        DrawLine3D({-h, value, -h}, {-h, value, h}, grid);
-        DrawLine3D({h, -h, value}, {h, h, value}, grid);
-        DrawLine3D({h, value, -h}, {h, value, h}, grid);
-
-        // 前后墙面网格。
-        DrawLine3D({-h, value, -h}, {h, value, -h}, grid);
-        DrawLine3D({value, -h, -h}, {value, h, -h}, grid);
-        DrawLine3D({-h, value, h}, {h, value, h}, grid);
-        DrawLine3D({value, -h, h}, {value, h, h}, grid);
+    // 各轴独立铺设网格；以原点对称排列，Z 长度不是间距整数倍时两端留白仍相等。
+    for (float x = -h.x + step; x < h.x; x += step) {
+        DrawLine3D({x, -h.y, -h.z}, {x, -h.y, h.z}, grid);
+        DrawLine3D({x, h.y, -h.z}, {x, h.y, h.z}, grid);
+        DrawLine3D({x, -h.y, -h.z}, {x, h.y, -h.z}, grid);
+        DrawLine3D({x, -h.y, h.z}, {x, h.y, h.z}, grid);
     }
-
-    DrawLine3D({-h, 0.0F, 0.0F}, {h, 0.0F, 0.0F}, Color{255, 95, 120, 130});
-    DrawLine3D({0.0F, -h, 0.0F}, {0.0F, h, 0.0F}, Color{95, 255, 150, 130});
-    DrawLine3D({0.0F, 0.0F, -h}, {0.0F, 0.0F, h}, Color{90, 155, 255, 160});
+    for (float y = -h.y + step; y < h.y; y += step) {
+        DrawLine3D({-h.x, y, -h.z}, {-h.x, y, h.z}, grid);
+        DrawLine3D({h.x, y, -h.z}, {h.x, y, h.z}, grid);
+        DrawLine3D({-h.x, y, -h.z}, {h.x, y, -h.z}, grid);
+        DrawLine3D({-h.x, y, h.z}, {h.x, y, h.z}, grid);
+    }
+    const int zSteps = static_cast<int>(std::ceil(h.z / step)) - 1;
+    for (int index = -zSteps; index <= zSteps; ++index) {
+        const float z = index * step;
+        DrawLine3D({-h.x, -h.y, z}, {h.x, -h.y, z}, grid);
+        DrawLine3D({-h.x, h.y, z}, {h.x, h.y, z}, grid);
+        DrawLine3D({-h.x, -h.y, z}, {-h.x, h.y, z}, grid);
+        DrawLine3D({h.x, -h.y, z}, {h.x, h.y, z}, grid);
+    }
 }
 
 void Game::DrawHud() const {
@@ -363,7 +361,7 @@ void Game::DrawMainMenu() const {
     const char* subtitle = "FIRST-PERSON  6DoF  BULLET HELL";
     DrawText(subtitle, (screenWidth - MeasureText(subtitle, 25)) / 2,
              176, 25, Color{120, 195, 235, 255});
-    const char* description = "Fight inside a full 3D cube  -  the camera itself is your hitbox";
+    const char* description = "Fight inside a 20 x 20 x 23 arena  -  the camera itself is your hitbox";
     DrawText(description, (screenWidth - MeasureText(description, 18)) / 2,
              220, 18, Color{175, 195, 210, 255});
 

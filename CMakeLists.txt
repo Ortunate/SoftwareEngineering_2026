@@ -1,10 +1,10 @@
 # 本文件负责配置游戏引擎、程序、素材工具与测试目标。
 cmake_minimum_required(VERSION 3.20)
 
-project(red_mist_demo VERSION 0.1.0 LANGUAGES CXX)
+# 根工程显式启用 C，供原生桥接与 raylib 共用完整的语言配置。
+project(red_mist_demo VERSION 0.1.0 LANGUAGES C CXX)
 
-# raylib's macOS backend contains Objective-C sources. Explicitly enable that
-# language so CMake never attempts to pass .m files through a non-ObjC C mode.
+# macOS 原生输入桥接和 raylib 后端包含 Objective-C 源码，显式启用对应语言。
 if(APPLE)
     enable_language(OBJC)
 endif()
@@ -38,6 +38,7 @@ add_library(red_mist_engine STATIC
     src/gameplay/combat/combat.cpp
     src/gameplay/effects/actor_effects.cpp
     src/gameplay/items/drop_system.cpp
+    src/platform/window_input.cpp
     src/render/game_render.cpp
     src/render/sprite_renderer.cpp
     src/resources/asset_manager.cpp
@@ -54,6 +55,12 @@ add_library(red_mist_engine STATIC
 )
 target_include_directories(red_mist_engine PUBLIC src)
 target_link_libraries(red_mist_engine PUBLIC raylib)
+if(APPLE)
+    target_sources(red_mist_engine PRIVATE src/platform/window_input_macos.m)
+    target_link_libraries(red_mist_engine PRIVATE "-framework AppKit")
+elseif(WIN32)
+    target_link_libraries(red_mist_engine PRIVATE imm32)
+endif()
 # Game 的条件成员需要所有使用方采用相同的类布局。
 target_compile_definitions(red_mist_engine PUBLIC
     $<$<CONFIG:Debug>:RED_MIST_DEBUG_FEATURES>
@@ -136,5 +143,20 @@ if(BUILD_TESTING)
     if(MSVC)
         target_compile_options(red_mist_settings_ui_tests PRIVATE /utf-8)
         target_sources(red_mist_settings_ui_tests PRIVATE src/windows_utf8.manifest)
+    endif()
+endif()
+
+# 原生输入测试在隐藏窗口中验证系统消息路径；无桌面环境不加入默认 ctest。
+if(BUILD_TESTING AND (APPLE OR WIN32))
+    add_executable(red_mist_window_input_tests EXCLUDE_FROM_ALL tests/window_input_tests.cpp)
+    target_link_libraries(red_mist_window_input_tests PRIVATE red_mist_engine)
+    if(APPLE)
+        target_sources(red_mist_window_input_tests PRIVATE tests/window_input_macos.m)
+    else()
+        target_sources(red_mist_window_input_tests PRIVATE tests/window_input_win32.cpp)
+    endif()
+    if(MSVC)
+        target_compile_options(red_mist_window_input_tests PRIVATE /utf-8)
+        target_sources(red_mist_window_input_tests PRIVATE src/windows_utf8.manifest)
     endif()
 endif()

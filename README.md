@@ -160,6 +160,10 @@ Debug 构建的主菜单增加 `SHOT TEST`。进入后关卡时间轴停止，�
 
 上下键选择项目，左右键调整数值；也可以点击独立的左/右箭头按钮进行减小/增大；点击标签、数值及空白不会调整。数值到达边界后停止，帧率不循环跳档。选择改键行后，先松开用于确认的按键，再按新的键盘键或鼠标按钮；Esc 取消，F3～F6 留给调试功能。冲突时交换绑定。`FIRE (ALTERNATE)` / `BOMB (ALTERNATE)` 分别是可编辑的第二个射击/Bomb 入口，默认左键/右键；不存在额外硬编码鼠标快捷键。`RESET DEFAULTS` 只重置绑定，不改变音量、灵敏度和 FPS。
 
+macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合成，移动、射击及改键继续使用物理按键，不会弹出拼音候选框。该策略覆盖菜单、战斗和暂停，不切换系统输入源或修改其他应用的输入法设置；菜单栏或任务栏的输入法图标仍可能显示中文。macOS 对游戏视图禁用文字输入上下文并阻断文字解释，Windows 解除本窗口的 IMM 上下文关联；未来若增加文本输入框，需要为文字录入单独恢复输入法。
+
+可在具有图形会话的 macOS/Windows 环境构建并运行 `red_mist_window_input_tests`，隐藏窗口测试原生按下/松开、文字合成屏蔽、重复应用策略、调整尺寸及窗口重建。例如 macOS：`cmake --build --preset macos-debug --target red_mist_window_input_tests`，随后运行 `./build/macos-debug/red_mist_window_input_tests`。
+
 程序启动时会在当前运行目录中查找 `red_mist_settings.cfg`。如果文件不存在，程序会加载默认设置并自动创建该文件；FPS、音量、灵敏度或按键发生变化时会立即写回。无效的 FPS、音量、灵敏度、按键值或重复按键会回退为安全默认值。配置格式升级为 version=2；旧版的默认 Focus=C 会迁移为 Mouse 4，旧版其他自定义 Focus 键与 FPS 会保留。新版自行绑定 C 后不会在下次启动被迁移。
 
 详细架构和数据结构见 `docs/DESIGN.md`。

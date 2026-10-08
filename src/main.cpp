@@ -1,6 +1,7 @@
 // 本文件负责初始化窗口与游戏循环，并处理静默截图等启动参数。
 
 #include "app/game.hpp"
+#include "platform/window_input.hpp"
 
 #include "raylib.h"
 
@@ -77,6 +78,8 @@ int main(int argc, char** argv) {
     }
     SetConfigFlags(windowFlags);
     InitWindow(screenWidth, screenHeight, "Red Mist 3D - Stage 1 Normal Demo");
+    if (!redmist::DisableWindowInputMethods(GetWindowHandle()))
+        TraceLog(LOG_WARNING, "INPUT: Could not disable window input methods");
     if (!captureFrame) InitAudioDevice();
     SetExitKey(KEY_NULL);
     if (!captureFrame) SetWindowMinSize(900, 620);

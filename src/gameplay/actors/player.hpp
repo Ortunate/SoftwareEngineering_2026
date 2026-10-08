@@ -80,7 +80,10 @@ private:
     [[nodiscard]] Vector3 Forward() const;
     /// @brief 与当前水平朝向垂直的单位右向量。
     [[nodiscard]] Vector3 Right() const;
-    /// @brief 按当前 Power 档位从视线两侧生成直射弹与追踪弹。
+    /// @brief 与当前视线正交的屏幕上方单位向量，用于将发射点保持在准星下方。
+    [[nodiscard]] Vector3 Up() const;
+    /// @brief gold 从前方偏下的单个模块对称散射，cyan 使用其左右两个发射点。
+    /// 金色弹沿出射方向直飞，青蓝弹以散射方向起步后追踪目标；张角随档位增大且相对当前视线。
     void Fire(BulletSystem& bullets, VisualId bulletVisual,
               VisualId homingVisual);
     /// @brief 在库存和冷却允许时消耗 Bomb，并设置冷却与无敌时间。
@@ -92,8 +95,8 @@ private:
     float fireTimer_ = 0.0F;
     float invulnerableTimer_ = 1.5F;
     float bombCooldown_ = 0.0F;
-    // 奇数发火力档位的额外弹轮流从左右两侧出射，避免持续射击偏向单侧。
-    bool alternateShotSide_ = false;
+    // cyan 奇数发档位的额外弹逐轮交替左右模块；gold 始终为中央单模块对称散射。
+    bool alternateCyanSide_ = false;
     // lives_ 是额外残机数；初始值 3 对应 HUD 的 4 条命，降至 -1 时游戏结束。
     int lives_ = 3;
     int bombs_ = 3;

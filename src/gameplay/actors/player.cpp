@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 
 namespace redmist {
 namespace {
@@ -16,28 +17,40 @@ constexpr float kFocusSpeed = 2.8F;
 constexpr float kMouseSensitivity = 0.0024F;
 constexpr float kHitRadius = 0.18F;
 constexpr float kGrazeRadius = 0.72F;
-// 符卡直径约为 0.6 世界单位；两侧出射让最近处的贴图也避开准星。
+// 发射点使用玩家局部坐标：gold 位于前方偏下，cyan 在其左右各偏移 0.78 世界单位。
+// Power 只改变弹数和张角，不能随通道编号移动这三个发射点。
 constexpr float kMuzzleForward = 1.2F;
-constexpr float kStraightSide = 0.62F;
+constexpr float kMuzzleDown = 0.6F;
 constexpr float kHomingSide = 0.78F;
-constexpr float kLaneSpacing = 0.11F;
-constexpr float kAimDistance = 10.0F;
-/// @brief 使用原作式火力成长门槛；弹数按三维战场调整，直射和追踪各有独立通道。
+// gold 与 cyan 统一使用 20% 不透明度（255×0.2）；渲染时还会乘以贴图自身 Alpha。
+constexpr unsigned char kPlayerBulletAlpha = 51;
+/// @brief 火力档位同时决定弹数和散射宽度；角度为相对视线的单侧最大偏转（度）。
 struct ShotLevel {
     int threshold;
     int straightCount;
     int homingCount;
+    float straightHalfAngleDegrees;
+    float homingHalfAngleDegrees;
 };
 constexpr std::array<ShotLevel, 9> kShotLevels{{
-    {0, 2, 0}, {8, 2, 2}, {16, 3, 2}, {32, 3, 3}, {48, 4, 3},
-    {64, 4, 4}, {80, 5, 4}, {96, 5, 5}, {128, 6, 6},
+    {0, 2, 0, 2.0F, 0.0F}, {8, 2, 2, 3.0F, 3.5F},
+    {16, 3, 2, 4.0F, 4.5F}, {32, 3, 3, 4.5F, 5.5F},
+    {48, 4, 3, 5.0F, 6.5F}, {64, 4, 4, 6.0F, 7.5F},
+    {80, 5, 4, 6.5F, 8.0F}, {96, 5, 5, 7.0F, 9.0F},
+    {128, 6, 6, 8.0F, 10.0F},
 }};
 
-/// @brief 按左右成对排列射击通道；奇数发多出的外侧弹随轮次换边。
-float ShotSideOffset(int index, bool alternateSides, float firstLane) {
-    const float side = (index + static_cast<int>(alternateSides)) % 2 == 0
-                           ? -1.0F : 1.0F;
-    return side * (firstLane + static_cast<float>(index / 2) * kLaneSpacing);
+/// @brief 返回成对散射通道的方向符号（-1 或 +1）；奇数发多出的外侧弹随轮次换边。
+float ShotSideSign(int index, bool alternateSides) {
+    return (index + static_cast<int>(alternateSides)) % 2 == 0 ? -1.0F : 1.0F;
+}
+/// @brief 将视线沿横向偏转 angleDegrees（度），返回单位方向；forward/right 须正交且归一化。
+/// angleDegrees 的正负分别指向玩家局部右侧和左侧。
+Vector3 ShotSpreadDirection(Vector3 forward, Vector3 right, float angleDegrees) {
+    const float angle = angleDegrees * std::numbers::pi_v<float> / 180.0F;
+    // 在局部正交基上偏转，保证高仰俯角下仍保持张角和弹速；不能直接叠加世界 yaw。
+    return game_math::Add(game_math::Scale(forward, std::cos(angle)),
+                          game_math::Scale(right, std::sin(angle)));
 }
 }  // namespace
 
@@ -150,45 +163,54 @@ Vector3 Player::Right() const {
     return {-std::cos(yaw_), 0.0F, std::sin(yaw_)};
 }
 
+Vector3 Player::Up() const {
+    return {-std::sin(yaw_) * std::sin(pitch_), std::cos(pitch_),
+            -std::cos(yaw_) * std::sin(pitch_)};
+}
+
 void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
                   VisualId homingVisual) {
     const Vector3 forward = Forward();
     const Vector3 right = Right();
+    // 相对屏幕下移而非世界 -Y，避免仰俯视时发射点重新遮挡准星。
     const Vector3 muzzle = game_math::Add(position_,
-                                          game_math::Scale(forward, kMuzzleForward));
-    const Vector3 aimPoint = game_math::Add(position_,
-                                           game_math::Scale(forward, kAimDistance));
+        game_math::Subtract(game_math::Scale(forward, kMuzzleForward),
+                            game_math::Scale(Up(), kMuzzleDown)));
     const ShotLevel* level = &kShotLevels.front();
     for (const ShotLevel& candidate : kShotLevels) {
         if (power_ < candidate.threshold) break;
         level = &candidate;
     }
     for (int index = 0; index < level->straightCount; ++index) {
-        const float offset = ShotSideOffset(index, alternateShotSide_,
-                                            kStraightSide);
-        const Vector3 origin = game_math::Add(muzzle,
-                                              game_math::Scale(right, offset));
-        // 从侧面向远处准星汇聚，兼顾近景视线和正前方目标的命中率。
-        Bullet* bullet = bullets.Spawn(BulletOwner::Player, origin,
-            game_math::Scale(BulletSystem::DirectionTo(origin, aimPoint), 20.0F),
+        // gold 只有一个中央模块：整组弹从同一点均匀展开，奇数发的中央弹沿视线直飞。
+        const float lane = level->straightCount > 1
+                               ? 2.0F * index / (level->straightCount - 1) - 1.0F
+                               : 0.0F;
+        const Vector3 direction = ShotSpreadDirection(forward, right,
+            lane * level->straightHalfAngleDegrees);
+        Bullet* bullet = bullets.Spawn(BulletOwner::Player, muzzle,
+            game_math::Scale(direction, 20.0F),
             0.09F,
-            Color{255, 255, 255, 185}, bulletVisual);
+            Color{255, 255, 255, kPlayerBulletAlpha}, bulletVisual);
         if (bullet) bullet->damage = 2.0F;
     }
     for (int index = 0; index < level->homingCount; ++index) {
-        const float offset = ShotSideOffset(index, !alternateShotSide_,
-                                            kHomingSide);
+        const float side = ShotSideSign(index, alternateCyanSide_);
         const Vector3 origin = game_math::Add(muzzle,
-                                              game_math::Scale(right, offset));
+                                              game_math::Scale(right, side * kHomingSide));
+        const float laneFraction = static_cast<float>(index / 2 + 1) /
+                                   static_cast<float>((level->homingCount + 1) / 2);
+        const Vector3 direction = ShotSpreadDirection(forward, right,
+            side * laneFraction * level->homingHalfAngleDegrees);
         Bullet* bullet = bullets.Spawn(BulletOwner::Player, origin,
-            game_math::Scale(forward, 14.0F),
-            0.10F, Color{255, 255, 255, 165}, homingVisual);
+            game_math::Scale(direction, 14.0F),
+            0.10F, Color{255, 255, 255, kPlayerBulletAlpha}, homingVisual);
         if (bullet) {
             bullet->damage = 1.0F;
             bullet->homingTurnRate = 5.5F;
         }
     }
-    alternateShotSide_ = !alternateShotSide_;
+    alternateCyanSide_ = !alternateCyanSide_;
 }
 
 bool Player::TryUseBomb() {

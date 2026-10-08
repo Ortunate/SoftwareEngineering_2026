@@ -4,12 +4,129 @@
 #include "stages/stage1/ids.hpp"
 
 #include <cassert>
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <memory>
+#include <numbers>
+
+namespace {
+// 验证发射点保持在画面下方、gold 单模块对称散射，以及 cyan 双模块散射和追踪。
+void TestShotSpread() {
+    using redmist::Bullet;
+    using redmist::BulletSystem;
+    using redmist::Player;
+    using redmist::PlayerInput;
+    const auto dot = [](Vector3 a, Vector3 b) {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
+    };
+    auto storage = std::make_unique<BulletSystem>();
+    BulletSystem& bullets = *storage;
+    for (float yaw : {0.0F, 1.1F, 3.1F}) {
+        for (float pitch : {-1.45F, 0.0F, 1.45F}) {
+            for (bool focus : {false, true}) {
+                Player player;
+                player.AdjustPower(128);
+                player.SetView(yaw, pitch);
+                bullets.Reset();
+                player.Update(0.0F, {.focus = focus, .fire = true}, bullets,
+                              redmist::stage1::kPlayerGoldCard,
+                              redmist::stage1::kPlayerCyanCard, true);
+                const Vector3 forward = BulletSystem::DirectionFromYawPitch(yaw, pitch);
+                const Vector3 right{-std::cos(yaw), 0.0F, std::sin(yaw)};
+                const Vector3 up{-std::sin(yaw) * std::sin(pitch), std::cos(pitch),
+                                 -std::cos(yaw) * std::sin(pitch)};
+                float goldHalfAngle = 0.0F;
+                float cyanHalfAngle = 0.0F;
+                float goldLateralSum = 0.0F;
+                float cyanLateralSum = 0.0F;
+                bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+                    const bool cyan = bullet.visual == redmist::stage1::kPlayerCyanCard;
+                    const float speed = cyan ? 14.0F : 20.0F;
+                    assert(std::abs(BulletSystem::Length(bullet.velocity) - speed) < 0.0001F);
+                    const float lateral = dot(bullet.velocity, right);
+                    const float forwardSpeed = dot(bullet.velocity, forward);
+                    assert(forwardSpeed > 0.0F);
+                    assert(std::abs(dot(bullet.velocity, up)) < 0.0001F);
+                    const Vector3 relative{bullet.position.x - player.Position().x,
+                                           bullet.position.y - player.Position().y,
+                                           bullet.position.z - player.Position().z};
+                    assert(std::abs(dot(relative, forward) - 1.2F) < 0.0001F);
+                    assert(std::abs(dot(relative, up) + 0.6F) < 0.0001F);
+                    const float originSide = dot(relative, right);
+                    if (cyan) {
+                        assert(std::abs(std::abs(originSide) - 0.78F) < 0.0001F);
+                        assert(originSide * lateral > 0.0F);
+                    } else {
+                        assert(std::abs(originSide) < 0.0001F);
+                        assert(std::abs(relative.x - (forward.x * 1.2F - up.x * 0.6F)) < 0.0001F);
+                        assert(std::abs(relative.y - (forward.y * 1.2F - up.y * 0.6F)) < 0.0001F);
+                        assert(std::abs(relative.z - (forward.z * 1.2F - up.z * 0.6F)) < 0.0001F);
+                    }
+                    const float angle = std::abs(std::atan2(lateral, forwardSpeed));
+                    if (cyan) {
+                        cyanHalfAngle = std::max(cyanHalfAngle, angle);
+                        cyanLateralSum += lateral;
+                    } else {
+                        goldHalfAngle = std::max(goldHalfAngle, angle);
+                        goldLateralSum += lateral;
+                    }
+                });
+                assert(std::abs(goldHalfAngle - 8.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
+                assert(std::abs(cyanHalfAngle - 10.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
+                assert(std::abs(goldLateralSum) < 0.0001F && std::abs(cyanLateralSum) < 0.0001F);
+            }
+        }
+    }
+
+    // gold 每轮都对称，cyan 两轮奇数发散射的横向速度互相抵消。
+    for (int power : {16, 32, 80, 96}) {
+        Player player;
+        player.AdjustPower(power);
+        bullets.Reset();
+        for (float deltaTime : {0.0F, 0.09F}) {
+            player.Update(deltaTime, {.fire = true}, bullets,
+                          redmist::stage1::kPlayerGoldCard,
+                          redmist::stage1::kPlayerCyanCard, true);
+            float goldRoundSum = 0.0F;
+            bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+                if (bullet.visual == redmist::stage1::kPlayerGoldCard)
+                    goldRoundSum += bullet.velocity.x;
+            });
+            assert(std::abs(goldRoundSum) < 0.0001F);
+        }
+        float goldSum = 0.0F;
+        float cyanSum = 0.0F;
+        bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+            if (bullet.visual == redmist::stage1::kPlayerGoldCard)
+                goldSum += bullet.velocity.x;
+            else
+                cyanSum += bullet.velocity.x;
+        });
+        assert(std::abs(goldSum) < 0.0001F && std::abs(cyanSum) < 0.0001F);
+    }
+
+    Player player;
+    player.AdjustPower(128);
+    bullets.Reset();
+    player.Update(0.0F, {.fire = true}, bullets,
+                  redmist::stage1::kPlayerGoldCard, redmist::stage1::kPlayerCyanCard, true);
+    const std::array<Vector3, 1> target{{{0.0F, 0.0F, 6.0F}}};
+    bullets.Update(0.1F, target);
+    bullets.Pool().ForEachActive([](const Bullet& bullet) {
+        if (bullet.visual == redmist::stage1::kPlayerCyanCard) {
+            assert(bullet.position.x * bullet.velocity.x < 0.0F);
+            assert(std::abs(BulletSystem::Length(bullet.velocity) - 14.0F) < 0.0001F);
+        } else {
+            assert(bullet.position.x * bullet.velocity.x > 0.0F);
+        }
+    });
+}
+}  // namespace
 
 /// @brief 运行玩家行为回归用例；断言失败时终止进程。
 void RunPlayerTests() {
+    TestShotSpread();
     using redmist::Bullet;
     using redmist::BulletOwner;
     using redmist::BulletSystem;
@@ -91,11 +208,12 @@ void RunPlayerTests() {
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
         assert(bullet.owner == BulletOwner::Player);
         assert(bullet.visual == redmist::stage1::kPlayerGoldCard);
-        assert(std::abs(bullet.position.x) >= 0.62F);
+        assert(bullet.color.a == 51);
+        assert(bullet.position.x == 0.0F && bullet.position.y == -0.6F);
         assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
-        assert(bullet.position.x * bullet.velocity.x < 0.0F);
-        const float timeToAim = (3.5F - bullet.position.z) / bullet.velocity.z;
-        assert(std::abs(bullet.position.x + bullet.velocity.x * timeToAim) < 0.0001F);
+        assert(bullet.velocity.x != 0.0F);
+        const float angle = std::abs(std::atan2(bullet.velocity.x, bullet.velocity.z));
+        assert(std::abs(angle - 2.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
     });
     player.Update(0.01F, firing, bullets, redmist::stage1::kPlayerGoldCard,
                   redmist::stage1::kPlayerCyanCard, true);
@@ -104,9 +222,11 @@ void RunPlayerTests() {
                   redmist::stage1::kPlayerCyanCard, true);
     assert(bullets.Pool().ActiveCount() == 4);
 
-    // 每个原作门槛都应改变三维化的直射或追踪弹数量。
+    // 每个火力档位应增加弹数并扩大外侧散射角，保持单发伤害和速度。
     constexpr std::array<int, 8> thresholds{8, 16, 32, 48, 64, 80, 96, 128};
     constexpr std::array<std::size_t, 8> shotCounts{4, 5, 6, 7, 8, 9, 10, 12};
+    float previousGoldAngle = 2.0F * std::numbers::pi_v<float> / 180.0F;
+    float previousCyanAngle = 0.0F;
     for (std::size_t index = 0; index < thresholds.size(); ++index) {
         Player upgraded;
         // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
@@ -119,18 +239,39 @@ void RunPlayerTests() {
                         redmist::stage1::kPlayerCyanCard, true);
         assert(volley.Pool().ActiveCount() == shotCounts[index]);
         int homingCount = 0;
+        float maxGoldAngle = 0.0F;
+        float maxCyanAngle = 0.0F;
         volley.Pool().ForEachActive([&](const Bullet& bullet) {
+            const float angle = std::abs(std::atan2(bullet.velocity.x, bullet.velocity.z));
             if (bullet.homingTurnRate > 0.0F) {
                 assert(bullet.visual == redmist::stage1::kPlayerCyanCard);
-                assert(bullet.damage < 2.0F);
+                assert(bullet.damage == 1.0F && bullet.homingTurnRate == 5.5F);
+                assert(std::abs(BulletSystem::Length(bullet.velocity) - 14.0F) < 0.0001F);
+                maxCyanAngle = std::max(maxCyanAngle, angle);
                 ++homingCount;
             } else {
                 assert(bullet.visual == redmist::stage1::kPlayerGoldCard);
+                assert(bullet.damage == 2.0F);
+                assert(std::abs(BulletSystem::Length(bullet.velocity) - 20.0F) < 0.0001F);
+                maxGoldAngle = std::max(maxGoldAngle, angle);
             }
-            assert(std::abs(bullet.position.x) >= 0.62F);
-            assert(bullet.color.a < 255);
+            if (bullet.visual == redmist::stage1::kPlayerCyanCard) {
+                assert(std::abs(std::abs(bullet.position.x) - 0.78F) < 0.0001F);
+                assert(bullet.position.x * bullet.velocity.x > 0.0F);
+            } else {
+                assert(bullet.position.x == 0.0F);
+            }
+            assert(bullet.position.y == -0.6F);
+            assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
+            assert(bullet.velocity.y == 0.0F);
+            assert(bullet.color.a == 51);
         });
         assert(homingCount > 0);
+        assert(maxGoldAngle > previousGoldAngle && maxCyanAngle > previousCyanAngle);
+        assert(maxGoldAngle <= 8.0F * std::numbers::pi_v<float> / 180.0F + 0.0001F);
+        assert(maxCyanAngle <= 10.0F * std::numbers::pi_v<float> / 180.0F + 0.0001F);
+        previousGoldAngle = maxGoldAngle;
+        previousCyanAngle = maxCyanAngle;
     }
     Player alternating;
     // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
@@ -145,12 +286,15 @@ void RunPlayerTests() {
                        redmist::stage1::kPlayerCyanCard, true);
     int leftShots = 0;
     int rightShots = 0;
+    int centerShots = 0;
     alternatingBullets.Pool().ForEachActive([&](const Bullet& bullet) {
         if (bullet.visual != redmist::stage1::kPlayerGoldCard) return;
-        if (bullet.position.x < 0.0F) ++leftShots;
-        else ++rightShots;
+        assert(bullet.position.x == 0.0F);
+        if (bullet.velocity.x < 0.0F) ++leftShots;
+        else if (bullet.velocity.x > 0.0F) ++rightShots;
+        else ++centerShots;
     });
-    assert(leftShots == 3 && rightShots == 3);
+    assert(leftShots == 2 && rightShots == 2 && centerShots == 2);
     // 升满只报告一次；继续收集不重复报告，降级后再次达到上限可重新报告。
     assert(player.AdjustPower(999));
     assert(player.Power() == Player::kMaxPower);

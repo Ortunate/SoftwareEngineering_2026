@@ -13,7 +13,6 @@
 namespace redmist {
 namespace {
 constexpr int kMaxCountPerKind = 32;
-constexpr float kLifetime = 15.0F;
 // 速度单位为世界单位/秒，加速度为世界单位/秒²；0.5 秒到达比生成点高 1 单位的顶点。
 constexpr float kLaunchSpeed = 4.0F;
 constexpr float kFallAcceleration = 8.0F;
@@ -114,11 +113,6 @@ void DropSystem::ConvertEnemyBulletsToStars(BulletSystem& bullets) {
 PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
     PickupReward reward{};
     const auto updatePickup = [&](Pickup& pickup) {
-        pickup.age += deltaTime;
-        if (pickup.age > kLifetime) {
-            pickup.active = false;
-            return;
-        }
         // 吸取状态属于单个道具；玩家离开触发区域不会取消已有道具的追踪。
         if (playerPosition.z >= kAutoCollectZ) pickup.homing = true;
         if (pickup.homing) {
@@ -147,6 +141,12 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
                                  kFallSpeed * (deltaTime - accelerationTime);
             pickup.velocityZ = std::max(
                 -kFallSpeed, pickup.velocityZ - kFallAcceleration * accelerationTime);
+            // 仅下落道具按后边界回收；先判断越界再拾取，避免穿出场地后仍发放奖励。
+            // 追踪会中断下落，清弹星点也可能从边界外生成，须允许它们继续飞回玩家。
+            if (pickup.position.z < -kArenaHalfExtents.z) {
+                pickup.active = false;
+                return;
+            }
         }
         const float dx = playerPosition.x - pickup.position.x;
         const float dy = playerPosition.y - pickup.position.y;

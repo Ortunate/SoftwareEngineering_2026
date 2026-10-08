@@ -70,7 +70,55 @@ void TestPickupMotion() {
     assert(drops.Update(1.0F, {5.0F, 0.0F, redmist::kArenaHalfExtents.z * 0.6F}).power == 8);
     drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 1);
     const auto reused = SinglePickup(drops);
-    assert(!reused.homing && reused.age == 0.0F && reused.velocityZ == 4.0F);
+    assert(!reused.homing && reused.velocityZ == 4.0F);
+}
+
+// 在场内交替移动玩家，让追踪持续超过旧超时时间而不提前拾取。
+void KeepHomingPickupUncollected(redmist::DropSystem& drops) {
+    for (int frame = 0; frame < 1600; ++frame) {
+        const float x = frame % 2 == 0 ? -9.0F : 9.0F;
+        const auto reward = drops.Update(0.01F, {x, 9.0F, 0.0F});
+        assert(reward.power == 0 && reward.score == 0);
+        assert(SinglePickup(drops).homing);
+    }
+}
+
+void TestPickupBoundary() {
+    using redmist::DropSystem;
+    constexpr float rearZ = -redmist::kArenaHalfExtents.z;
+    constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
+    constexpr std::array<redmist::DropOutcome, 1> outcome{{{1, 1, 1}}};
+    DropSystem drops(1234);
+    // 1.25 秒位移为 -0.484375；P 点和分数点都恰好落在边界时仍保留。
+    drops.SpawnEnemyDrops({5.0F, 0.0F, rearZ + 0.484375F}, outcome);
+    drops.Update(1.25F, distantPlayer);
+    int remaining = 0;
+    drops.ForEachActive([&](const redmist::Pickup& pickup) {
+        ++remaining;
+        assert(pickup.position.z == rearZ);
+        assert(pickup.velocityZ == -2.5F);
+    });
+    assert(remaining == 2);
+    // 越界后即使仍在玩家拾取半径内，也必须回收而不结算奖励。
+    const auto expired = drops.Update(0.01F, {5.0F, 0.0F, rearZ + 0.35F});
+    assert(expired.power == 0 && expired.score == 0);
+    drops.ForEachActive([](const redmist::Pickup&) { assert(false); });
+    drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
+    assert(!SinglePickup(drops).homing && SinglePickup(drops).velocityZ == 4.0F);
+    // 一个大帧跨出后边界也应回收。
+    assert(drops.Update(10.0F, distantPlayer).power == 0);
+    drops.ForEachActive([](const redmist::Pickup&) { assert(false); });
+
+    // 上抛超过 +Z 边界不提前消失；消失边界只在 -Z 端。
+    drops.SpawnFixedPower({5.0F, 0.0F, redmist::kArenaHalfExtents.z - 0.2F}, 1);
+    drops.Update(0.25F, distantPlayer);
+    assert(SinglePickup(drops).position.z > redmist::kArenaHalfExtents.z);
+    drops.Clear();
+
+    drops.SpawnFixedPower({}, 8);
+    drops.Update(0.0F, {0.0F, 0.0F, redmist::kArenaHalfExtents.z * 0.6F});
+    KeepHomingPickupUncollected(drops);
+    assert(drops.Update(1.0F, {}).power == 8);
 }
 
 void TestBulletStars() {
@@ -98,7 +146,7 @@ void TestBulletStars() {
     const auto star = SinglePickup(drops);
     assert(star.kind == PickupKind::Star && star.homing);
     assert(star.position.x == origin.x && star.position.z == origin.z);
-    assert(star.age == 0.0F && star.value == DropSystem::kStarPointValue);
+    assert(star.value == DropSystem::kStarPointValue);
     // 转换瞬间不计分；即使玩家在自动吸取线之外，仍以 20 世界单位/秒追踪。
     const auto moving = drops.Update(0.1F, player);
     assert(moving.power == 0 && moving.score == 0);
@@ -141,7 +189,8 @@ void TestBulletStars() {
     assert(drops.Update(1.0F, player).score == 0);
     assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
     drops.ConvertEnemyBulletsToStars(*bullets);
-    assert(drops.Update(15.1F, player).score == 0);
+    KeepHomingPickupUncollected(drops);
+    assert(drops.Update(1.0F, player).score == DropSystem::kStarPointValue);
     int remaining = 0;
     drops.ForEachActive([&](const Pickup&) { ++remaining; });
     assert(remaining == 0);
@@ -151,6 +200,7 @@ void TestBulletStars() {
 /// @brief 验证普通道具掉落与运动、吸取状态持续性，以及清弹星点的转换和计分。
 void RunDropTests() {
     TestPickupMotion();
+    TestPickupBoundary();
     TestBulletStars();
     using redmist::DropOutcome;
     using redmist::DropSystem;

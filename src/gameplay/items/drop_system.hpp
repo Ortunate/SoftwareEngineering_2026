@@ -20,7 +20,7 @@ class BulletSystem;
 /// @brief 道具种类；P 点增加 Power，分数点与清弹星点增加分数。
 enum class PickupKind : std::uint8_t { Power, Score, Star };
 
-/// @brief 系统持有的道具；position 为世界坐标，age 为存活秒数。
+/// @brief 系统持有的道具；position 为世界坐标。
 /// velocityZ 为非追踪运动的世界 Z 轴速度（单位/秒），正值上抛、负值下落；追踪时忽略。
 /// value 对 P 点是 Power 增量，对分数点和星点是得分增量；homing 一经触发便持续到拾取或消失。
 /// active 失活后普通道具槽位可复用，星点由容器移除；复用时会重置全部运动状态。
@@ -30,7 +30,6 @@ struct Pickup {
     PickupKind kind = PickupKind::Power;
     Vector3 position{};
     int value = 1;
-    float age = 0.0F;
     float velocityZ = 0.0F;
 };
 
@@ -74,7 +73,8 @@ public:
     /// @brief 推进道具并拾取；普通掉落物先向 +Z 上抛，再沿 -Z 加速至下落速度上限。
     /// @note 玩家进入 +Z 端五分之一区域时，所有活动道具立即持续追踪玩家，优先于上抛和下落。
     /// 已触发的道具在玩家离开该区域后仍追踪；之后生成的道具重新从上抛开始。
-    /// 星点生成时已触发追踪，不受玩家所处区域限制；所有道具存活超过 15 秒后消失。
+    /// 非追踪道具沿 -Z 下落至 z < -kArenaHalfExtents.z 时消失；刚好位于边界时仍保留。
+    /// 星点生成时已触发追踪，不受玩家所处区域限制；追踪中的道具持续到拾取或清场。
     /// @param deltaTime 本帧非负秒数。
     /// @param playerPosition 玩家判定中心的世界坐标。
     /// @return 本帧近距离拾取的 Power 和分数，调用方负责应用上限与满火力效果。
@@ -92,7 +92,7 @@ private:
     void Spawn(PickupKind kind, Vector3 position, int value);
 
     FixedPool<Pickup, kCapacity> pickups_{};
-    // 星点使用可增长容器，确保弹幕池满或普通道具池满时也能逐弹转换；拾取/过期后回收。
+    // 星点使用可增长容器，确保弹幕池满或普通道具池满时也能逐弹转换；拾取/清场后回收。
     std::vector<Pickup> stars_;
     std::mt19937 random_;
 };

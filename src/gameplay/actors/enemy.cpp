@@ -30,18 +30,20 @@ void Enemy::Update(float deltaTime, Vector3 playerPosition,
     UpdateSkills(deltaTime, playerPosition, bullets);
     constexpr float margin = 2.0F;
     // 到达战场表面之前按当前外向速度预淡出；原有场外回收边界保持不变。
-    // 用单轴最早到边界的时间，斜向运动不能晚于实际最早越界的轴。
-    if (deltaTime > 0.0F) {
+    // 首帧轨道偏移不是速度；后续预测只在本帧有效，转向后不能沿用过时淡出。
+    // 同帧取最早越界的轴，斜向运动不能漏掉更近的表面。
+    if (hasMovementSample_ && deltaTime > 0.0F) {
         const auto prepare = [this, deltaTime](float current, float last, float extent) {
             const float outward = (current - last) * (current >= 0.0F ? 1.0F : -1.0F);
             if (outward > 0.0F)
-                presentation.PrepareExit(std::max(0.0F, extent - std::abs(current)) *
-                                         deltaTime / outward);
+                presentation.PreviewBoundaryExit(std::max(0.0F, extent - std::abs(current)) *
+                                                 deltaTime / outward);
         };
         prepare(position.x, previous.x, kArenaHalfExtents.x);
         prepare(position.y, previous.y, kArenaHalfExtents.y);
         prepare(position.z, previous.z, kArenaHalfExtents.z);
     }
+    hasMovementSample_ = true;
     if (std::abs(position.x) > kArenaHalfExtents.x + margin ||
         std::abs(position.y) > kArenaHalfExtents.y + margin ||
         std::abs(position.z) > kArenaHalfExtents.z + margin) active = false;

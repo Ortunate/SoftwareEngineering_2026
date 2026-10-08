@@ -44,6 +44,20 @@ struct GameLifecycleProbe {
     }
 
     static void Run(Game& game, const std::string& prefix) {
+        // 经过真实 Game 更新验证高帧率入场，不能把轨道首帧偏移锁定为退场。
+        game.StartPreview();
+        game.stage_ = StageDirector{};
+        game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{
+            {0, -0.5F, 8.8F}, stage1::FairyParams::Movement::Helix}));
+        game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{
+            {9, 3.15F, 7.8F}, stage1::FairyParams::Movement::CrossFromRight}));
+        for (int frame = 0; frame < 90; ++frame) game.Update(1.0F / 240.0F);
+        assert(EnemyCount(game) == 2);
+        game.enemies_.ForEachActive([](const Enemy& enemy) {
+            assert(enemy.presentation.Sample().alpha == 1.0F);
+        });
+        Capture(game, prefix, "fairy-visible");
+
         game.StartPreview();
         game.stage_ = StageDirector{};
         game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{0, 0, 4}}));

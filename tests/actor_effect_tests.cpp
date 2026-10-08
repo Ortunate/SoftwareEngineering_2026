@@ -9,9 +9,72 @@
 #include <cmath>
 #include <memory>
 
+namespace {
+/// @brief Fairy 及带出生轨道偏移的 Orb 在各帧率下完成入场后都应完全显示。
+void TestEnemyEntryOpacity() {
+    using namespace redmist;
+    using Movement = stage1::FairyParams::Movement;
+    auto bullets = std::make_unique<BulletSystem>();
+    for (const int fps : {30, 60, 120, 240}) {
+        const float dt = 1.0F / static_cast<float>(fps);
+        for (const stage1::FairyParams params : {
+                 stage1::FairyParams{{0, -0.5F, 8.8F}, Movement::Helix},
+                 stage1::FairyParams{{9, 3.15F, 7.8F}, Movement::CrossFromRight},
+                 stage1::FairyParams{{-9, -4.5F, 7.8F}, Movement::CrossFromLeft},
+                 stage1::FairyParams{{0, 1.2F, 8.8F}, Movement::Straight}}) {
+            stage1::FairyEnemy fairy(params);
+            for (int frame = 0; frame < fps; ++frame) {
+                fairy.Update(dt, {}, *bullets);
+                if (fairy.age >= 0.3F)
+                    assert(fairy.presentation.Sample().alpha == 1.0F);
+                assert(fairy.active);
+            }
+        }
+        stage1::OrbEnemy orb({{0, 0, 8.8F}, stage1::OrbParams::Movement::OrbitForward});
+        for (int frame = 0; frame < fps; ++frame) {
+            orb.Update(dt, {}, *bullets);
+            if (orb.age >= 0.3F)
+                assert(orb.presentation.Sample().alpha == 1.0F);
+            assert(orb.active);
+        }
+    }
+}
+
+/// @brief 贴近边界但始终在场内的螺旋轨道，转向后不能保留外推产生的淡出。
+void TestBoundaryPredictionRecovers() {
+    using namespace redmist;
+    auto bullets = std::make_unique<BulletSystem>();
+    stage1::FairyEnemy fairy({{8.7F, 0, 8.8F}, stage1::FairyParams::Movement::Helix});
+    bool sawPreview = false;
+    for (int frame = 0; frame < 180; ++frame) {
+        fairy.Update(1.0F / 60.0F, {}, *bullets);
+        assert(fairy.active);
+        assert(std::abs(fairy.position.x) < kArenaHalfExtents.x);
+        if (fairy.age > 0.3F && fairy.presentation.Sample().alpha < 0.99F)
+            sawPreview = true;
+    }
+    assert(sawPreview);
+    assert(fairy.presentation.Sample().alpha == 1.0F);
+
+    ActorPresentation presentation;
+    presentation.Update(1.0F);
+    presentation.PreviewBoundaryExit(0.125F);
+    assert(presentation.Sample().alpha == 0.5F);
+    presentation.Update(0.01F);
+    assert(presentation.Sample().alpha == 1.0F);
+    presentation.PrepareExit(0.125F);
+    presentation.PreviewBoundaryExit(0.0F);
+    assert(presentation.Sample().alpha == 0.0F);
+    presentation.Update(0.01F);
+    assert(presentation.Sample().alpha == 0.5F);  // 明确退场的进度不能被预测重置。
+}
+}
+
 /// @brief 验证公共角色视觉状态、自然退场、Boss 阶段和效果池，不需要窗口或资源。
 void RunActorEffectTests() {
     using namespace redmist;
+    TestEnemyEntryOpacity();
+    TestBoundaryPredictionRecovers();
     ActorPresentation presentation;
     assert(presentation.Sample().alpha == 0.0F);
     assert(presentation.Sample().ringAlpha > 0.0F);

@@ -66,6 +66,8 @@ protected:
 
 private:
     std::span<const DropOutcome> dropDistribution_;
+    // 首次 Move 可能把 origin 转成轨道初始位置，须等后续采样才能估算真实速度。
+    bool hasMovementSample_ = false;
 };
 
 /// @brief 用固定数量的槽位持有多态敌人并统计丢弃的生成请求。

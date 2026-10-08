@@ -30,10 +30,15 @@ public:
     explicit ActorPresentation(ActorKind kind = ActorKind::Enemy) : kind_(kind) {}
     /// @brief 设置本次遭遇的规格并重置入场；Boss 换阶段不得调用。
     void Reset(ActorKind kind = ActorKind::Enemy);
-    /// @brief 推进视觉时钟，deltaTime 为非负秒数。
+    /// @brief 推进视觉时钟并清除上一帧的边界预测；deltaTime 为非负秒数。
+    /// 调用方先 Update，再按本帧实际运动提交 PreviewBoundaryExit。
     void Update(float deltaTime);
-    /// @brief 已知退场剩余秒数时提前淡出；始终保留战斗对象到原定退场时刻。
+    /// @brief 已确定退场终点/时刻时提前淡出；剩余秒数非负，进度不可逆。
+    /// 不适用于可能因轨道转向失效的边界预测；始终保留战斗对象到原定退场时刻。
     void PrepareExit(float remainingSeconds);
+    /// @brief 按本帧外向速度预测的剩余非负秒数预淡出；正无穷表示无预计越界。
+    /// 同帧多个轴取最深淡出，下一次 Update 清除预测，允许转向后正常显示。
+    void PreviewBoundaryExit(float remainingSeconds);
     /// @brief 返回当前入场与预退场的组合表现。
     [[nodiscard]] ActorAppearance Sample() const;
     /// @brief 查询规格，供脱离对象的退场快照使用。
@@ -44,8 +49,9 @@ public:
 private:
     ActorKind kind_ = ActorKind::Enemy;
     float age_ = 0.0F;
-    // 预退场只会加深，不会因曲线轨迹或 dt 波动重新显现。
+    // 已确定的退场只会加深；速度外推的边界预测必须逐帧更新，不能永久锁定透明度。
     float departure_ = 0.0F;
+    float boundaryDeparture_ = 0.0F;
 };
 
 /// @brief 值快照，不持有 Enemy/Boss 指针或纹理；VisualId 仅在当前关卡资源存活时有效。

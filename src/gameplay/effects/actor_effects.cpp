@@ -20,11 +20,12 @@ float DefeatDuration(ActorKind kind) {
 
 void ActorPresentation::Reset(ActorKind kind) {
     kind_ = kind;
-    age_ = departure_ = 0.0F;
+    age_ = departure_ = boundaryDeparture_ = 0.0F;
 }
 
 void ActorPresentation::Update(float deltaTime) {
     age_ += std::max(0.0F, deltaTime);
+    boundaryDeparture_ = 0.0F;
 }
 
 float ActorPresentation::ExitDuration(ActorKind kind) {
@@ -36,12 +37,18 @@ void ActorPresentation::PrepareExit(float remainingSeconds) {
         1.0F - remainingSeconds / ExitDuration(kind_)));
 }
 
+void ActorPresentation::PreviewBoundaryExit(float remainingSeconds) {
+    boundaryDeparture_ = std::max(boundaryDeparture_, Smooth(
+        1.0F - remainingSeconds / ExitDuration(kind_)));
+}
+
 ActorAppearance ActorPresentation::Sample() const {
     const float entry = Smooth(age_ / EntryDuration(kind_));
-    const float visible = entry * (1.0F - departure_);
+    const float departure = std::max(departure_, boundaryDeparture_);
+    const float visible = entry * (1.0F - departure);
     return {0.65F + 0.35F * visible, visible,
-            1.3F + 1.1F * entry - 1.2F * departure_,
-            std::max(1.0F - entry, departure_ * (1.0F - departure_)) * 0.8F};
+            1.3F + 1.1F * entry - 1.2F * departure,
+            std::max(1.0F - entry, departure * (1.0F - departure)) * 0.8F};
 }
 
 ActorAppearance ActorExitEffect::Sample() const {

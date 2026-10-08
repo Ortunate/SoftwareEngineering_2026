@@ -125,6 +125,7 @@ private:
     /// @brief 委托当前 Stage 工厂构造敌人并加入敌人池。
     /// @param spec 携带具体敌人类型、出生位置和显式轨迹的配置。
     void SpawnStageEnemy(const EnemySpec& spec) override;
+    /// @brief 开始 Boss 战并停止旧批次后续出怪，保留现存小怪、弹幕、道具及效果。
     void BeginStageBoss(bool final, StageEventId id) override;
     void BeginStageDialogue(StageEventId id) override;
     void StageMessage(std::string_view message, float duration) override;

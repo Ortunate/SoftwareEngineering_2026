@@ -314,9 +314,8 @@ void Game::SpawnStageEnemy(const EnemySpec& spec) {
 }
 
 void Game::BeginStageBoss(bool final, StageEventId id) {
+    // 只停止旧批次的后续出怪；现存小怪和弹幕继续更新，不能在 Boss 入场时清场。
     stage_.CancelEnemySpawns();
-    ClearEnemiesWithEffects();
-    bullets_.ClearEnemyBullets();
     bossEventId_ = id;
     boss_ = stageContent_->CreateBoss(final);
     if (final) assets_.PlayBossMusic();

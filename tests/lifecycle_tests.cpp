@@ -1,4 +1,4 @@
-// 本文件负责在隐藏图形窗口中验证 Game 的真实击破、清场、暂停与关底资源生命周期。
+// 本文件负责在隐藏图形窗口中验证 Game 的击破、Boss 入场保留战场、清场及资源生命周期。
 
 #include "app/game.hpp"
 #include "stages/stage1/enemies.hpp"
@@ -43,7 +43,43 @@ struct GameLifecycleProbe {
         UnloadRenderTexture(target);
     }
 
+    /// @brief 道中与关底 Boss 入场均保留现存战斗对象，并继续推进其运动。
+    static void TestBossEntryPreservesField(Game& game) {
+        for (const bool final : {false, true}) {
+            game.StartPreview();
+            game.stage_ = StageDirector{};
+            game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(
+                stage1::FairyParams{{4, 0, 5}}));
+            Bullet* enemyShot = game.bullets_.Spawn(
+                BulletOwner::Enemy, {-4, 0, 0}, {1, 0, 0}, 0.1F, WHITE, kInvalidVisualId);
+            Bullet* playerShot = game.bullets_.Spawn(
+                BulletOwner::Player, {-4, 2, 0}, {1, 0, 0}, 0.1F, WHITE, kInvalidVisualId);
+            assert(enemyShot && playerShot);
+            game.drops_.SpawnFixedPower({4, 0, 0}, 1);
+            const auto pickups = PickupCount(game);
+            assert(pickups > 0);
+
+            game.BeginStageBoss(final, 1);
+            assert(game.boss_ && game.boss_->active);
+            assert(EnemyCount(game) == 1);
+            assert(enemyShot->active && playerShot->active);
+            assert(game.bullets_.Pool().ActiveCount() == 2);
+            assert(PickupCount(game) == pickups);
+            assert(game.actorEffects_.Pool().ActiveCount() == 0);
+
+            game.Update(0.1F);
+            assert(EnemyCount(game) == 1);
+            game.enemies_.ForEachActive([](const Enemy& enemy) {
+                assert(enemy.age == 0.1F && enemy.position.z < 5.0F);
+            });
+            assert(enemyShot->active && enemyShot->position.x > -4.0F);
+            assert(playerShot->active && playerShot->position.x > -4.0F);
+            assert(PickupCount(game) == pickups);
+        }
+    }
+
     static void Run(Game& game, const std::string& prefix) {
+        TestBossEntryPreservesField(game);
         // 经过真实 Game 更新验证高帧率入场，不能把轨道首帧偏移锁定为退场。
         game.StartPreview();
         game.stage_ = StageDirector{};

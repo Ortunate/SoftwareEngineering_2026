@@ -86,7 +86,7 @@ public:
     /// @return 找到尚未结束的已启动非出怪事件时返回 true；出怪批次由调度器结束。
     bool EndEvent(StageEventId id);
     /// @brief 取消已启动批次中尚未发出的出怪请求，并以当前时刻结束这些批次。
-    /// Boss 或对话清场时调用，避免清场后旧批次重新生成敌人；不取消尚未启动的事件。
+    /// Boss 入场或对话清场时调用，停止旧批次后续出怪；不取消尚未启动的事件或移除现存敌人。
     void CancelEnemySpawns();
     /// @brief 查询开局至今的关卡时间。
     /// @return 已累计的秒数。

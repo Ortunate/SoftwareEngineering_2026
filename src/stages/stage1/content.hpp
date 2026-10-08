@@ -12,10 +12,8 @@ class Stage1Content final : public StageContent {
 public:
     [[nodiscard]] const StageAssetManifest& Assets() const override;
     [[nodiscard]] std::span<const StageEvent> Events() const override;
-    [[nodiscard]] std::unique_ptr<Enemy> CreateEnemy(
-        std::uint16_t archetype, const EnemySpawn& spawn) const override;
+    [[nodiscard]] std::unique_ptr<Enemy> CreateEnemy(const EnemySpec& spec) const override;
     [[nodiscard]] std::unique_ptr<Boss> CreateBoss(bool final) const override;
-    bool HandleEvent(const StageEvent& event, StageEventSink& sink) const override;
     [[nodiscard]] std::span<const DialogueLine> Dialogue() const override;
     [[nodiscard]] float DialogueLineDuration() const override { return 2.5F; }
     [[nodiscard]] VisualId PlayerBulletVisual() const override { return kPlayerGoldCard; }

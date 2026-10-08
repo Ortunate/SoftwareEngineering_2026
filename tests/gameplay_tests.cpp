@@ -83,11 +83,6 @@ void RunGameplayTests() {
     bullets.ClearEnemyBullets();
     assert(bullets.Pool().ActiveCount() == 0);
 
-    constexpr auto line = static_cast<std::uint16_t>(
-        redmist::stage1::Formation::Line);
-    constexpr auto crossing = static_cast<std::uint16_t>(
-        redmist::stage1::Formation::CrossingPair);
-
     // 回收仍保留原来的世界单位余量；Z 新增区间内的对象不能按旧立方体过早失活。
     for (int axis = 0; axis < 3; ++axis) {
         for (float sign : {-1.0F, 1.0F}) {
@@ -109,7 +104,7 @@ void RunGameplayTests() {
 
             const float enemyLimit = axis == 2 ? 13.5F : 12.0F;
             redmist::stage1::FairyEnemy edgeEnemy(
-                {axisPosition(enemyLimit), 0.0F, line, 0});
+                {axisPosition(enemyLimit)});
             edgeEnemy.Update(0.0F, {}, bullets);
             assert(edgeEnemy.active);
             edgeEnemy.origin = axisPosition(enemyLimit + 0.01F);
@@ -118,7 +113,7 @@ void RunGameplayTests() {
             bullets.Reset();
         }
     }
-    redmist::stage1::FairyEnemy fairy({{0.0F, 0.0F, 5.0F}, 0.0F, line, 0});
+    redmist::stage1::FairyEnemy fairy({{0.0F, 0.0F, 5.0F}});
     const Vector3 fairyMuzzle = fairy.MuzzlePosition({0.0F, 0.0F, 0.0F});
     assert(std::abs(fairyMuzzle.z - (5.0F - fairy.hitRadius * 0.55F)) <
            0.0001F);
@@ -131,25 +126,25 @@ void RunGameplayTests() {
     bullets.Reset();
 
     redmist::stage1::DarkFairyEnemy darkFairy(
-        {{0.0F, 0.0F, 5.0F}, 0.0F, line, 0});
+        {{0.0F, 0.0F, 5.0F}});
     darkFairy.Update(0.9F, {}, bullets);
     assert(bullets.Pool().ActiveCount() == 1);
     assert(darkFairy.position.x != fairy.position.x);
     bullets.Reset();
 
     redmist::stage1::FairyEnemy helixFairy(
-        {{0.0F, 0.0F, 5.0F}, 0.0F, line, 1});
+        {{0.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::Helix});
     helixFairy.Update(0.9F, {}, bullets);
     assert(helixFairy.position.x != fairy.position.x);
     bullets.Reset();
     redmist::stage1::FairyEnemy crossingFairy(
-        {{-9.0F, 0.0F, 5.0F}, 0.0F, crossing, 0});
+        {{-9.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::CrossFromLeft});
     crossingFairy.Update(0.9F, {}, bullets);
     assert(crossingFairy.position.x > -9.0F);
     assert(crossingFairy.visual == fairy.visual);
     bullets.Reset();
 
-    redmist::stage1::OrbEnemy orb({{0.0F, 0.0F, 5.0F}, 0.0F, line, 0});
+    redmist::stage1::OrbEnemy orb({{0.0F, 0.0F, 5.0F}});
     orb.Update(0.9F, {}, bullets);
     assert(bullets.Pool().ActiveCount() == 6);
     bullets.Reset();

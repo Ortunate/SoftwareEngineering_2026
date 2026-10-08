@@ -1,56 +1,81 @@
-// 本文件负责第一面的出怪、道中 Boss、对话与关底 Boss 时间轴。
+// 本文件负责第一面的显式连续出怪、道中 Boss、对话与关底 Boss 时间轴。
 
 #include "stages/stage1/data.hpp"
-#include "stages/stage1/ids.hpp"
+#include "stages/stage1/enemy_params.hpp"
 
 #include <array>
 
 namespace redmist::stage1 {
 namespace {
-constexpr std::uint16_t A(Action action) { return static_cast<std::uint16_t>(action); }
-constexpr std::uint16_t E(EnemyType enemy) { return static_cast<std::uint16_t>(enemy); }
 constexpr StageEventId kMidbossEventId = 1;
 constexpr StageEventId kDialogueEventId = 2;
 constexpr StageEventId kFinalBossEventId = 3;
+using FairyMove = FairyParams::Movement;
+using DarkMove = DarkFairyParams::Movement;
 
-// 普通波次相对上一事件启动；道中战及对话后的事件等待其真实结束。
-constexpr std::array<StageEvent, 21> kEvents{{
-    {0.2F, A(Action::ShowMessage)},
-    {0.8F, A(Action::SpawnLine), E(EnemyType::Fairy), 8,
-     {0.0F, 1.2F, 8.8F}, 1.15F},
-    {3.5F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 8},
-    {3.5F, A(Action::SpawnLine), E(EnemyType::DarkFairy), 6,
-     {0.0F, 2.0F, 8.8F}, 1.5F},
-    {3.5F, A(Action::SpawnCrossingPair), E(EnemyType::DarkFairy), 6},
-    {3.5F, A(Action::SpawnLine), E(EnemyType::Fairy), 8,
-     {0.0F, -0.5F, 8.8F}, 1.2F},
-    {3.5F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 8},
-    {3.5F, A(Action::SpawnLine), E(EnemyType::Fairy), 10,
-     {0.0F, 1.5F, 8.8F}, 1.0F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 10},
-    {.time = 4.0F, .action = A(Action::StartMidboss), .id = kMidbossEventId},
-    {.time = 3.0F, .action = A(Action::SpawnLine),
-     .archetype = E(EnemyType::DarkFairy), .count = 6,
-     .center = {0.0F, 1.2F, 8.7F}, .spacing = 1.5F,
+// 每条出怪事件只描述同位置、同轨迹的连续实例；左右横穿用两条同时启动的事件表达。
+// 保留原波次起始间隔和总人数，原横列改为连续入场，间隔未指定时为 0.5 秒。
+// 道中战及对话后的事件仍等待其真实结束，不能改为从遭遇开始计时。
+constexpr std::array<StageEvent, 29> kEvents{{
+    {.delay = 0.2F, .action = ShowMessage{"Stage 1  Mystic Flier  Normal"}},
+    {.delay = 0.8F, .action = SpawnEnemies{
+        FairyParams{{0.0F, 1.2F, 8.8F}, FairyMove::Straight}, 8}},
+    {.delay = 3.5F, .action = SpawnEnemies{
+        FairyParams{{-9.0F, -4.5F, 7.8F}, FairyMove::CrossFromLeft}, 4}},
+    {.action = SpawnEnemies{
+        FairyParams{{9.0F, 3.15F, 7.8F}, FairyMove::CrossFromRight}, 4}},
+    {.delay = 3.5F, .action = SpawnEnemies{
+        DarkFairyParams{{0.0F, 2.0F, 8.8F}, DarkMove::Corkscrew}, 6}},
+    {.delay = 3.5F, .action = SpawnEnemies{
+        DarkFairyParams{{-9.0F, -4.5F, 7.8F}, DarkMove::CrossFromLeft}, 3}},
+    {.action = SpawnEnemies{
+        DarkFairyParams{{9.0F, 3.15F, 7.8F}, DarkMove::CrossFromRight}, 3}},
+    {.delay = 3.5F, .action = SpawnEnemies{
+        FairyParams{{0.0F, -0.5F, 8.8F}, FairyMove::Helix}, 8}},
+    {.delay = 3.5F, .action = SpawnEnemies{
+        FairyParams{{-9.0F, -4.5F, 7.8F}, FairyMove::CrossFromLeft}, 4}},
+    {.action = SpawnEnemies{
+        FairyParams{{9.0F, 3.15F, 7.8F}, FairyMove::CrossFromRight}, 4}},
+    {.delay = 3.5F, .action = SpawnEnemies{
+        FairyParams{{0.0F, 1.5F, 8.8F}, FairyMove::Straight}, 10}},
+    {.delay = 4.0F, .action = SpawnEnemies{
+        FairyParams{{-9.0F, -4.5F, 7.8F}, FairyMove::CrossFromLeft}, 5}},
+    {.action = SpawnEnemies{
+        FairyParams{{9.0F, 3.15F, 7.8F}, FairyMove::CrossFromRight}, 5}},
+    {.delay = 4.0F, .action = StartBoss{}, .id = kMidbossEventId},
+    {.delay = 3.0F, .action = SpawnEnemies{
+        DarkFairyParams{{0.0F, 1.2F, 8.7F}, DarkMove::Drift}, 6},
      .afterEndOf = kMidbossEventId},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::DarkFairy), 8},
-    {4.0F, A(Action::SpawnLine), E(EnemyType::DarkFairy), 7,
-     {0.0F, -0.8F, 8.8F}, 1.25F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::DarkFairy), 8},
-    {5.0F, A(Action::SpawnLine), E(EnemyType::Fairy), 10,
-     {0.0F, 1.2F, 8.8F}, 1.0F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 10},
-    {4.0F, A(Action::SpawnLine), E(EnemyType::Fairy), 10,
-     {0.0F, -1.0F, 8.8F}, 1.0F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 10},
-    {4.0F, A(Action::SpawnLine), E(EnemyType::Fairy), 8,
-     {0.0F, 1.2F, 8.8F}, 1.2F},
-    {.time = 4.0F, .action = A(Action::StartDialogue), .id = kDialogueEventId},
-    {.time = 0.0F, .action = A(Action::StartFinalBoss),
+    {.delay = 4.0F, .action = SpawnEnemies{
+        DarkFairyParams{{-9.0F, -4.5F, 7.8F}, DarkMove::CrossFromLeft}, 4}},
+    {.action = SpawnEnemies{
+        DarkFairyParams{{9.0F, 3.15F, 7.8F}, DarkMove::CrossFromRight}, 4}},
+    {.delay = 4.0F, .action = SpawnEnemies{
+        DarkFairyParams{{0.0F, -0.8F, 8.8F}, DarkMove::Corkscrew}, 7}},
+    {.delay = 4.0F, .action = SpawnEnemies{
+        DarkFairyParams{{-9.0F, -4.5F, 7.8F}, DarkMove::CrossFromLeft}, 4}},
+    {.action = SpawnEnemies{
+        DarkFairyParams{{9.0F, 3.15F, 7.8F}, DarkMove::CrossFromRight}, 4}},
+    {.delay = 5.0F, .action = SpawnEnemies{
+        FairyParams{{0.0F, 1.2F, 8.8F}, FairyMove::Helix}, 10}},
+    {.delay = 4.0F, .action = SpawnEnemies{
+        FairyParams{{-9.0F, -4.5F, 7.8F}, FairyMove::CrossFromLeft}, 5}},
+    {.action = SpawnEnemies{
+        FairyParams{{9.0F, 3.15F, 7.8F}, FairyMove::CrossFromRight}, 5}},
+    {.delay = 4.0F, .action = SpawnEnemies{
+        FairyParams{{0.0F, -1.0F, 8.8F}, FairyMove::Straight}, 10}},
+    {.delay = 4.0F, .action = SpawnEnemies{
+        FairyParams{{-9.0F, -4.5F, 7.8F}, FairyMove::CrossFromLeft}, 5}},
+    {.action = SpawnEnemies{
+        FairyParams{{9.0F, 3.15F, 7.8F}, FairyMove::CrossFromRight}, 5}},
+    {.delay = 4.0F, .action = SpawnEnemies{
+        FairyParams{{0.0F, 1.2F, 8.8F}, FairyMove::Helix}, 8}},
+    {.delay = 4.0F, .action = StartDialogue{}, .id = kDialogueEventId},
+    {.action = StartBoss{BossEncounter::Final},
      .id = kFinalBossEventId, .afterEndOf = kDialogueEventId},
 }};
 
- }  // namespace
+}  // namespace
 
 std::span<const StageEvent> Stage1Timeline() { return kEvents; }
 }  // namespace redmist::stage1

@@ -14,12 +14,12 @@
 
 namespace redmist {
 
-/// @brief 小怪抽象基类：仅处理入场与边界，移动和技能计时由具体敌人实现。
+/// @brief 小怪抽象基类：处理出生后的年龄与边界，移动和技能计时由具体敌人实现。
 class Enemy {
 public:
     /// @brief 通过基类指针安全销毁具体敌人。
     virtual ~Enemy() = default;
-    /// @brief 更新入场延迟，并委托子类执行移动和各技能计时。
+    /// @brief 更新出生后的年龄，并委托子类执行移动和各技能计时。
     /// @param deltaTime 本帧经过的秒数。
     /// @param playerPosition 玩家判定中心，用于瞄准。
     /// @param bullets 接收技能生成的弹幕。
@@ -30,8 +30,8 @@ public:
     const VisualId visual;
     Vector3 position;
     Vector3 origin;
-    /// @brief 从实际入场起算的秒数；延迟期间为负，达到零后才移动和发弹。
-    float age;
+    /// @brief 从实例出生起算的非负秒数；出怪调度不在敌人内部等待。
+    float age = 0.0F;
     float health = 10.0F;
     float maxHealth = 10.0F;
     float hitRadius = 0.55F;
@@ -48,12 +48,11 @@ public:
     [[nodiscard]] Vector3 MuzzlePosition(Vector3 playerPosition) const;
 
 protected:
-    /// @brief 初始化外观、出生位置和入场延迟。
+    /// @brief 初始化外观、出生位置与掉落表；实例立即活动。
     /// @param visual 外观编号。
     /// @param position 出生位置。
-    /// @param delay 非负入场延迟（秒）。
     /// @param drops 本类敌人的静态掉落结果表；存储须覆盖敌人生命周期。
-    Enemy(VisualId visual, Vector3 position, float delay,
+    Enemy(VisualId visual, Vector3 position,
           std::span<const DropOutcome> drops);
     /// @brief Stage 子类按自身规则更新空间位置。
     virtual void Move(float deltaTime) = 0;

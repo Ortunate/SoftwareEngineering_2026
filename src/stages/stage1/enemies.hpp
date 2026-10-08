@@ -2,20 +2,21 @@
 
 #pragma once
 
-#include "stage/content.hpp"
+#include "gameplay/actors/enemy.hpp"
+#include "stages/stage1/enemy_params.hpp"
 #include "stages/stage1/ids.hpp"
 
 namespace redmist::stage1 {
 
-/// @brief 普通妖精固定使用蓝衣外观，自行选择直行、绕行或交叉入场。
+/// @brief 普通妖精固定使用蓝衣外观，按显式参数直行、绕行或交叉入场。
 class FairyEnemy final : public Enemy {
 public:
-    /// @brief 按出生编队选择本妖精内部的移动状态。
-    /// @param spawn 第一面有效的编队与非负入场延迟。
-    explicit FairyEnemy(const EnemySpawn& spawn);
+    /// @brief 复制普通妖精的出生位置与显式轨迹；生成后立即活动。
+    /// @param params 有限的世界坐标与对应敌人支持的移动枚举。
+    explicit FairyEnemy(const FairyParams& params);
 
 private:
-    enum class Movement { Straight, Helix, CrossFromLeft, CrossFromRight };
+    using Movement = FairyParams::Movement;
     void Move(float deltaTime) override;
     void UpdateSkills(float deltaTime, Vector3 playerPosition,
                       BulletSystem& bullets) override;
@@ -28,12 +29,12 @@ private:
 /// @brief 暗色妖精固定使用紫衣外观，并拥有自己的漂移与交叉轨迹。
 class DarkFairyEnemy final : public Enemy {
 public:
-    /// @brief 按出生编队选择暗色妖精内部的移动状态。
-    /// @param spawn 第一面有效的编队与非负入场延迟。
-    explicit DarkFairyEnemy(const EnemySpawn& spawn);
+    /// @brief 复制暗色妖精的出生位置与显式轨迹；生成后立即活动。
+    /// @param params 有限的世界坐标与对应敌人支持的移动枚举。
+    explicit DarkFairyEnemy(const DarkFairyParams& params);
 
 private:
-    enum class Movement { Drift, Corkscrew, CrossFromLeft, CrossFromRight };
+    using Movement = DarkFairyParams::Movement;
     void Move(float deltaTime) override;
     void UpdateSkills(float deltaTime, Vector3 playerPosition,
                       BulletSystem& bullets) override;
@@ -46,12 +47,12 @@ private:
 /// @brief 光球敌人固定使用蓝珠外观，在前进中上下浮动并释放锥形弹幕。
 class OrbEnemy final : public Enemy {
 public:
-    /// @brief 根据编队上下文初始化光球运动。
-    /// @param spawn 第一面有效的编队与非负入场延迟。
-    explicit OrbEnemy(const EnemySpawn& spawn);
+    /// @brief 复制光球的出生位置与显式轨迹；生成后立即活动。
+    /// @param params 有限的世界坐标与对应敌人支持的移动枚举。
+    explicit OrbEnemy(const OrbParams& params);
 
 private:
-    enum class Movement { FloatForward, OrbitForward, CrossArena };
+    using Movement = OrbParams::Movement;
     void Move(float deltaTime) override;
     void UpdateSkills(float deltaTime, Vector3 playerPosition,
                       BulletSystem& bullets) override;

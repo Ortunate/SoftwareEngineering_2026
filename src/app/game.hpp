@@ -117,10 +117,8 @@ private:
     bool HandleStageEvent(const StageEvent& event);
 
     /// @brief 委托当前 Stage 工厂构造敌人并加入敌人池。
-    /// @param archetype Stage 局部敌人原型。
-    /// @param spawn 出生位置、延迟与编队上下文。
-    void SpawnStageEnemy(std::uint16_t archetype,
-                         const EnemySpawn& spawn) override;
+    /// @param spec 携带具体敌人类型、出生位置和显式轨迹的配置。
+    void SpawnStageEnemy(const EnemySpec& spec) override;
     void BeginStageBoss(bool final, StageEventId id) override;
     void BeginStageDialogue(StageEventId id) override;
     void StageMessage(std::string_view message, float duration) override;

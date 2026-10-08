@@ -34,22 +34,11 @@ bool SkillReady(float& timer, float interval, float deltaTime, float age) {
     timer = interval;
     return true;
 }
-
-/// @brief 把已由 Stage1Content 校验的关卡局部编队编号还原为枚举。
-Formation SpawnFormation(const EnemySpawn& spawn) {
-    return static_cast<Formation>(spawn.formation);
-}
 }  // namespace
 
-FairyEnemy::FairyEnemy(const EnemySpawn& spawn)
-    : Enemy(kFairy, spawn.position, spawn.delay, kFairyDrops),
-      movement_(SpawnFormation(spawn) == Formation::CrossingPair
-                    ? (spawn.position.x < 0.0F ? Movement::CrossFromLeft
-                                               : Movement::CrossFromRight)
-                    : (SpawnFormation(spawn) == Formation::Star ||
-                       (spawn.slot % 2 != 0) ? Movement::Helix
-                                            : Movement::Straight)),
-      shotTimer_(0.8F + spawn.delay) {
+FairyEnemy::FairyEnemy(const FairyParams& params)
+    : Enemy(kFairy, params.position, kFairyDrops),
+      movement_(params.movement), shotTimer_(0.8F) {
     health = maxHealth = 10.0F;
     scoreValue = 500;
 }
@@ -93,15 +82,9 @@ void FairyEnemy::FireAimedShot(BulletSystem& bullets, Vector3 playerPosition) {
                   0.16F, kEnemyRed, kRedBullet);
 }
 
-DarkFairyEnemy::DarkFairyEnemy(const EnemySpawn& spawn)
-    : Enemy(kDarkFairy, spawn.position, spawn.delay, kDarkFairyDrops),
-      movement_(SpawnFormation(spawn) == Formation::CrossingPair
-                    ? (spawn.position.x < 0.0F ? Movement::CrossFromLeft
-                                               : Movement::CrossFromRight)
-                    : (SpawnFormation(spawn) == Formation::Star ||
-                       (spawn.slot % 2 != 0) ? Movement::Corkscrew
-                                            : Movement::Drift)),
-      shotTimer_(0.8F + spawn.delay) {
+DarkFairyEnemy::DarkFairyEnemy(const DarkFairyParams& params)
+    : Enemy(kDarkFairy, params.position, kDarkFairyDrops),
+      movement_(params.movement), shotTimer_(0.8F) {
     health = maxHealth = 12.0F;
     scoreValue = 650;
 }
@@ -148,13 +131,9 @@ void DarkFairyEnemy::FireAimedShot(BulletSystem& bullets,
                   0.17F, kEnemyRed, kRedBullet);
 }
 
-OrbEnemy::OrbEnemy(const EnemySpawn& spawn)
-    : Enemy(kOrb, spawn.position, spawn.delay, kOrbDrops),
-      movement_(SpawnFormation(spawn) == Formation::CrossingPair
-                    ? Movement::CrossArena
-                    : (SpawnFormation(spawn) == Formation::Star
-                           ? Movement::OrbitForward : Movement::FloatForward)),
-      shotTimer_(0.8F + spawn.delay) {
+OrbEnemy::OrbEnemy(const OrbParams& params)
+    : Enemy(kOrb, params.position, kOrbDrops),
+      movement_(params.movement), shotTimer_(0.8F) {
     health = maxHealth = 18.0F;
     scoreValue = 900;
     hitRadius = 0.62F;

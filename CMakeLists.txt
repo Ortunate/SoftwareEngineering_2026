@@ -1,3 +1,4 @@
+# 本文件负责配置游戏引擎、程序、素材工具与测试目标。
 cmake_minimum_required(VERSION 3.20)
 
 project(red_mist_demo VERSION 0.1.0 LANGUAGES CXX)
@@ -40,6 +41,8 @@ add_library(red_mist_engine STATIC
     src/render/sprite_renderer.cpp
     src/resources/asset_manager.cpp
     src/stage/catalog.cpp
+    src/stage/content.cpp
+    src/stage/enemy_spec.cpp
     src/stage/system.cpp
     src/stages/stage1/boss.cpp
     src/stages/stage1/content.cpp

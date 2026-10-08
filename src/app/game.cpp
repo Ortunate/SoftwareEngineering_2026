@@ -20,8 +20,7 @@ namespace {
 /// @brief 射击调试场地中的固定靶怪；不移动、不攻击，由 Game 在血量耗尽时复原。
 class ShotTestEnemy final : public Enemy {
 public:
-    ShotTestEnemy() : Enemy(stage1::kDarkFairy, {0.0F, 0.0F, 4.0F}, 0.0F,
-                            {}) {
+    ShotTestEnemy() : Enemy(stage1::kDarkFairy, {0.0F, 0.0F, 4.0F}, {}) {
         health = maxHealth = 240.0F;
         hitRadius = 1.0F;
         scoreValue = 0;
@@ -247,7 +246,7 @@ void Game::Update(float deltaTime) {
     std::array<Vector3, kEnemyCapacity + 1> targets{};
     std::size_t targetCount = 0;
     enemies_.ForEachActive([&](const Enemy& enemy) {
-        if (enemy.age >= 0.0F) targets[targetCount++] = enemy.position;
+        targets[targetCount++] = enemy.position;
     });
     if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
     bullets_.Update(deltaTime, {targets.data(), targetCount});
@@ -272,12 +271,13 @@ bool Game::HandleStageEvent(const StageEvent& event) {
     return stageContent_->HandleEvent(event, *this);
 }
 
-void Game::SpawnStageEnemy(std::uint16_t archetype, const EnemySpawn& spawn) {
-    if (auto enemy = stageContent_->CreateEnemy(archetype, spawn))
+void Game::SpawnStageEnemy(const EnemySpec& spec) {
+    if (auto enemy = stageContent_->CreateEnemy(spec))
         enemies_.Add(std::move(enemy));
 }
 
 void Game::BeginStageBoss(bool final, StageEventId id) {
+    stage_.CancelEnemySpawns();
     enemies_.Clear();
     bullets_.ClearEnemyBullets();
     bossEventId_ = id;
@@ -287,6 +287,7 @@ void Game::BeginStageBoss(bool final, StageEventId id) {
 }
 
 void Game::BeginStageDialogue(StageEventId id) {
+    stage_.CancelEnemySpawns();
     enemies_.Clear();
     bullets_.ClearEnemyBullets();
     dialogueActive_ = true;

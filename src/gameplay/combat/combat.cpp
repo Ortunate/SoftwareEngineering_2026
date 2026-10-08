@@ -48,8 +48,6 @@ void Game::ResolveCollisions() {
     if (playerWasHit) HandlePlayerHit();
 
     enemies_.ForEachActive([this](Enemy& enemy) {
-        // 延迟入场的敌人尚未显示，也不应提前承受玩家弹幕。
-        if (enemy.age < 0.0F) return;
         bullets_.Pool().ForEachActive([&enemy](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player) return;
             const float collisionDistance = bullet.radius + enemy.hitRadius;

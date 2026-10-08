@@ -43,7 +43,7 @@ void Game::DrawWorld() const {
     std::array<const Enemy*, kEnemyCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
     enemies_.ForEachActive([&](const Enemy& enemy) {
-        if (enemy.age >= 0.0F) visibleEnemies[visibleCount++] = &enemy;
+        visibleEnemies[visibleCount++] = &enemy;
     });
     const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
     pickupSprites_.clear();

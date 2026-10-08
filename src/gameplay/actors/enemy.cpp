@@ -1,4 +1,4 @@
-// 本文件负责实现敌人入场计时、边界检查和发弹点计算，并调用子类行为。
+// 本文件负责实现敌人出生计时、边界检查和发弹点计算，并调用子类行为。
 
 #include "gameplay/arena.hpp"
 #include "gameplay/actors/enemy.hpp"
@@ -9,9 +9,9 @@
 
 namespace redmist {
 
-Enemy::Enemy(VisualId appearance, Vector3 start, float delay,
+Enemy::Enemy(VisualId appearance, Vector3 start,
              std::span<const DropOutcome> drops)
-    : visual(appearance), position(start), origin(start), age(-delay),
+    : visual(appearance), position(start), origin(start),
       dropDistribution_(drops) {}
 
 Vector3 Enemy::MuzzlePosition(Vector3 playerPosition) const {
@@ -23,7 +23,6 @@ Vector3 Enemy::MuzzlePosition(Vector3 playerPosition) const {
 void Enemy::Update(float deltaTime, Vector3 playerPosition,
                    BulletSystem& bullets) {
     age += deltaTime;
-    if (age < 0.0F) return;
     Move(deltaTime);
     UpdateSkills(deltaTime, playerPosition, bullets);
     constexpr float margin = 2.0F;

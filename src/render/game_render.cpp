@@ -4,6 +4,7 @@
 #include "app/constants.hpp"
 #include "app/math.hpp"
 #include "config/settings.hpp"
+#include "stages/stage1/scenery.hpp"
 
 #include <algorithm>
 #include <array>
@@ -42,6 +43,7 @@ void Game::DrawWorld() const {
         rlEnableDepthMask();
         rlEnableBackfaceCulling();
     }
+    if (stageId_ == StageId::Stage1) stage1::DrawScenery(stage_.Elapsed());
     DrawArena();
     std::array<const Enemy*, kEnemyCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
@@ -79,7 +81,7 @@ void Game::DrawWorld() const {
 void Game::DrawArena() const {
     constexpr Vector3 h = kArenaHalfExtents;
     const Color border{170, 105, 150, 190};
-    const Color grid{100, 65, 115, 70};
+    const Color grid{100, 65, 115, 24};
     DrawCubeWires({}, h.x * 2.0F, h.y * 2.0F, h.z * 2.0F, border);
 
     constexpr float step = 2.5F;
@@ -112,7 +114,7 @@ void Game::DrawHud() const {
     DrawRectangleLinesEx({16.0F, 14.0F, 292.0F, 168.0F}, 1.0F,
                          Color{95, 165, 210, 200});
     DrawText(TextFormat("SCORE  %09lld", score_), 30, 27, 21, RAYWHITE);
-    DrawText(TextFormat("LIVES  %d", player_.RemainingLives()),
+    DrawText(challengeMode_ ? TextFormat("MISS  %d", missCount_) : TextFormat("LIVES  %d", player_.RemainingLives()),
              30, 57, 19, Color{255, 120, 140, 255});
     DrawText(TextFormat("BOMBS  %d", player_.Bombs()), 162, 57, 19,
              Color{110, 190, 255, 255});
@@ -131,10 +133,10 @@ void Game::DrawHud() const {
 
     float nearestEnemyBullet = 999.0F;
     bullets_.Pool().ForEachActive([playerPosition, &nearestEnemyBullet](const Bullet& bullet) {
-        if (bullet.owner == BulletOwner::Enemy) {
+        if (bullet.owner == BulletOwner::Enemy && bullet.Dangerous()) {
             nearestEnemyBullet = std::min(
                 nearestEnemyBullet,
-                std::sqrt(DistanceSquared(bullet.position, playerPosition)));
+                std::sqrt(bullet.DistanceSquaredTo(playerPosition)));
         }
     });
     const bool danger = nearestEnemyBullet < 1.15F;
@@ -228,12 +230,22 @@ void Game::DrawOverlay() const {
     if (state_ == RunState::Paused) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{0, 0, 0, 155});
-        const char* text = "PAUSED";
-        DrawText(text, (GetScreenWidth() - MeasureText(text, 52)) / 2,
-                 GetScreenHeight() / 2 - 50, 52, RAYWHITE);
-        const std::string hint = "Esc / " + KeyLabel(bindings_.pause) + " Resume     M Main Menu";
-        DrawText(hint.c_str(), (GetScreenWidth() - MeasureText(hint.c_str(), 20)) / 2,
-                 GetScreenHeight() / 2 + 20, 20, Color{185, 205, 220, 255});
+        const float centerX = GetScreenWidth() * 0.5F;
+        const float centerY = GetScreenHeight() * 0.5F;
+        const Font font = assets_.Common().uiFont;
+        const auto centered = [&](const char* text, float y, float size, Color color) {
+            const float width = MeasureTextEx(font, text, size, 1).x;
+            DrawTextEx(font, text, {centerX - width / 2, y}, size, 1, color);
+        };
+        DrawRectangleRounded({centerX - 245, centerY - 130, 490, 310}, 0.1F, 12, Color{38, 12, 25, 225});
+        centered("暂停", centerY - 110, 43, RAYWHITE);
+        constexpr std::array<const char*, 4> labels{"解除暂停", "返回开局选择", "返回主菜单", "从头再来"};
+        for (int index = 0; index < 4; ++index) {
+            const bool selected = index == selectedPauseItem_;
+            if (selected) DrawRectangle(centerX - 210, centerY - 40 + index * 48, 420, 42, Color{114, 42, 53, 190});
+            centered(labels[index], centerY - 36 + index * 48, 25,
+                     selected ? GOLD : Color{190, 153, 164, 255});
+        }
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{0, 0, 0, 175});
@@ -241,9 +253,14 @@ void Game::DrawOverlay() const {
         DrawText(title, (GetScreenWidth() - MeasureText(title, 56)) / 2,
                  GetScreenHeight() / 2 - 75, 56,
                  state_ == RunState::Won ? GOLD : Color{255, 90, 110, 255});
+        const int center = GetScreenWidth() / 2;
+        const int y = GetScreenHeight() / 2;
+        const char* detail = TextFormat("SCORE %09lld   GRAZE %d   MISS %d   BOMB %d", score_, graze_, missCount_, bombCount_);
+        DrawText(detail, center - MeasureText(detail, 22) / 2, y, 22, RAYWHITE);
+        const char* mode = spellPractice_ ? "SPELL PRACTICE" : practiceMode_ ? "STAGE PRACTICE" : challengeMode_ ? "CHALLENGE" : "NORMAL";
+        DrawText(mode, center - MeasureText(mode, 18) / 2, y + 40, 18, GOLD);
         const char* retry = "R Restart     Esc / M Main Menu";
-        DrawText(retry, (GetScreenWidth() - MeasureText(retry, 22)) / 2,
-                 GetScreenHeight() / 2 + 18, 22, RAYWHITE);
+        DrawText(retry, center - MeasureText(retry, 22) / 2, y + 85, 22, RAYWHITE);
     }
 
     if (screenFlashTimer_ > 0.0F) {
@@ -294,11 +311,10 @@ void Game::DrawDialogue() const {
                           screenW * 0.7F, 92.0F};
     DrawRectangleRounded(panel, 0.2F, 12, Color{11, 7, 25, 230});
     DrawRectangleLinesEx(panel, 2.0F, Color{225, 155, 190, 220});
-    DrawText(line.speaker, static_cast<int>(panel.x + 20.0F),
-             static_cast<int>(panel.y + 10.0F), 22,
-             Color{255, 165, 198, 255});
-    DrawText(line.text, static_cast<int>(panel.x + 20.0F),
-             static_cast<int>(panel.y + 42.0F), 21, RAYWHITE);
+    const Font font = assets_.Common().uiFont;
+    DrawTextEx(font, line.speaker, {panel.x + 20, panel.y + 9}, 25, 1, Color{255, 165, 198, 255});
+    DrawTextEx(font, line.text, {panel.x + 20, panel.y + 44}, 24, 1, RAYWHITE);
+    DrawTextEx(font, "Z 下一句 · Ctrl 跳过", {panel.x + panel.width - 250, panel.y + 11}, 17, 1, Color{170, 145, 175, 255});
 }
 
 void Game::DrawSpellCutIn() const {

@@ -229,9 +229,11 @@ private:
     int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
     bool challengeMode_ = false;
     bool practiceMode_ = false;
+    bool previewMode_ = false; // 静默截图不写入本机通关成绩，StartRun 会恢复普通记录规则。
     int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
     bool spellPractice_ = false;
     int selectedTrack_ = 0;
+    int selectedPauseItem_ = 0; // 暂停项：继续、开局选择、主菜单、重开。
     int missCount_ = 0;
     int bombCount_ = 0;
     float shotSoundTimer_ = 0.0F; // 秒；射击声音最多每 0.10 秒触发一次。

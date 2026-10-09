@@ -136,6 +136,22 @@ Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
     return bullet;
 }
 
+Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
+                                float radius, float warning, float duration, Color color) {
+    if (!std::isfinite(length) || !std::isfinite(radius) || !std::isfinite(warning) ||
+        !std::isfinite(duration) || !std::isfinite(warning + duration) ||
+        !std::isfinite(origin.x + origin.y + origin.z) ||
+        !std::isfinite(direction.x + direction.y + direction.z) ||
+        length <= 0 || radius <= 0 || warning < 0 || duration <= 0) return nullptr;
+    Bullet* beam = Spawn(BulletOwner::Enemy, origin, {}, radius, color, kInvalidVisualId);
+    if (!beam) return nullptr;
+    beam->beamDirection = Normalize(direction);
+    beam->beamLength = length;
+    beam->warningSeconds = warning;
+    beam->maxAge = warning + duration;
+    return beam;
+}
+
 void BulletSystem::ClearEnemyBullets() {
     bullets_.ForEachActive([](Bullet& bullet) {
         if (bullet.owner == BulletOwner::Enemy) {

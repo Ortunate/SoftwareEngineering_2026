@@ -83,6 +83,27 @@ void ForEachConeDirection(Vector3 axis, int ringCount, int bulletsPerRing,
     }
 }
 
+/// @brief 枚举带开口的三维锥面圆环，不发射中心弹；用于多层边界弹幕。
+/// axis 自动归一化，count 为采样数，angle/roll/opening 为弧度；opening 是开口半宽。
+/// 开口朝向 roll，所有层使用相同 roll 才能保留贯穿层间的通道。
+template <typename Emit>
+void ForEachOpenRingDirection(Vector3 axis, int count, float angle, float roll,
+                              float opening, Emit&& emit) {
+    if (count <= 0) return;
+    const Vector3 forward = Normalize(axis);
+    const Vector3 reference = std::abs(forward.y) < 0.9F ? Vector3{0, 1, 0} : Vector3{1, 0, 0};
+    const Vector3 right = Normalize(Cross(reference, forward));
+    const Vector3 up = Normalize(Cross(forward, right));
+    for (int index = 0; index < count; ++index) {
+        const float offset = 2.0F * std::numbers::pi_v<float> * index / count;
+        if (std::min(offset, 2.0F * std::numbers::pi_v<float> - offset) < opening) continue;
+        const float azimuth = roll + offset;
+        emit(Normalize(Add(Scale(forward, std::cos(angle)),
+            Add(Scale(right, std::sin(angle) * std::cos(azimuth)),
+                Scale(up, std::sin(angle) * std::sin(azimuth))))));
+    }
+}
+
 /// @brief 用黄金角在单位球面上近似均匀枚举方向，不创建弹幕对象。
 /// @tparam Emit 接收 Vector3 方向的回调类型。
 /// @param count 方向数量。

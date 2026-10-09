@@ -126,14 +126,14 @@ bool Player::AdjustPower(int delta) {
 }
 
 PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
-    if (!bullet.active || bullet.owner != BulletOwner::Enemy)
+    if (!bullet.Dangerous() || bullet.owner != BulletOwner::Enemy)
         return PlayerContact::None;
-    const float distanceSquared = game_math::DistanceSquared(bullet.position,
-                                                              position_);
-    // 使用距离平方比较；命中优先于擦弹，并使本帧多颗命中弹各自失活。
+    const float distanceSquared = bullet.DistanceSquaredTo(position_);
+    // 使用距离平方比较，命中优先于擦弹；球心或轴线段由 Bullet 统一计算。
     const float hitDistance = bullet.radius + kHitRadius;
     if (distanceSquared <= hitDistance * hitDistance) {
-        bullet.active = false;
+        // 光束持续到其寿命结束，不能因无敌玩家站在轴线上而吞掉整束光；普通弹仍消失。
+        if (bullet.beamLength == 0) bullet.active = false;
         return invulnerableTimer_ <= 0.0F ? PlayerContact::Hit
                                           : PlayerContact::None;
     }

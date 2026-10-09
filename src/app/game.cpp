@@ -68,6 +68,7 @@ void Game::StartStage(StageId id, bool captureCursor) {
 void Game::StartPreview() {
     practiceMode_ = spellPractice_ = challengeMode_ = false;
     StartRun(false);
+    previewMode_ = true;
     player_.SetInvulnerability(1000.0F);
 }
 
@@ -119,6 +120,7 @@ void Game::SaveSettings() const {
 }
 
 void Game::StartRun(bool captureCursor) {
+    previewMode_ = false;
     // VisualId 属于本关卡；先丢弃旧快照，再加载可能使用相同编号的新纹理。
     actorEffects_.Clear();
     captureCursor_ = captureCursor;
@@ -189,7 +191,7 @@ void Game::EnterMainMenu() {
 void Game::EndStage(RunState result) {
     if (result == RunState::Won) {
         assets_.PlaySoundEffect("clear");
-        if (!practiceMode_ && !challengeMode_ && score_ > bestScore_) {
+        if (!practiceMode_ && !challengeMode_ && !previewMode_ && score_ > bestScore_) {
             bestScore_ = static_cast<int>(std::min(score_, 2000000000LL));
             SaveSettings();
         }
@@ -220,6 +222,8 @@ void Game::ClearEnemiesWithEffects() {
 
 void Game::TogglePause() {
     if (state_ == RunState::Playing || state_ == RunState::Finishing) {
+        selectedPauseItem_ = 0;
+        assets_.PlaySoundEffect("menu_cancel");
         pausedState_ = state_;
         state_ = RunState::Paused;
         assets_.PauseMusic();
@@ -255,6 +259,35 @@ void Game::Update(float deltaTime) {
             StartRun();
         } else if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_M)) {
             EnterMainMenu();
+        }
+        return;
+    }
+
+    if (state_ == RunState::Paused) {
+        if (IsKeyPressed(KEY_ESCAPE) || BindingPressed(bindings_.pause)) { TogglePause(); return; }
+        if (IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
+        const int previous = selectedPauseItem_;
+        if (IsKeyPressed(KEY_UP)) selectedPauseItem_ = (selectedPauseItem_ + 3) % 4;
+        if (IsKeyPressed(KEY_DOWN)) selectedPauseItem_ = (selectedPauseItem_ + 1) % 4;
+        if (selectedPauseItem_ != previous) assets_.PlaySoundEffect("menu_move");
+        bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
+        const float centerX = GetScreenWidth() * 0.5F;
+        const float centerY = GetScreenHeight() * 0.5F;
+        for (int index = 0; index < 4; ++index) {
+            const Rectangle row{centerX - 210, centerY - 40 + index * 48, 420, 42};
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), row)) {
+                selectedPauseItem_ = index;
+                confirm = true;
+            }
+        }
+        if (confirm) {
+            assets_.PlaySoundEffect("menu_confirm");
+            switch (selectedPauseItem_) {
+                case 0: TogglePause(); break;
+                case 1: EnterMainMenu(); setupStep_ = spellPractice_ ? 3 : 0; state_ = RunState::StartSetup; break;
+                case 2: EnterMainMenu(); break;
+                case 3: StartRun(); break;
+            }
         }
         return;
     }
@@ -299,6 +332,11 @@ void Game::Update(float deltaTime) {
     // 本帧由时间轴刚启动的对话从下一帧计时，避免第一句少显示一个 deltaTime。
     if (dialogueWasActive && dialogueActive_) {
         dialogueTimer_ += deltaTime;
+        const float duration = stageContent_->DialogueLineDuration();
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))
+            dialogueTimer_ = (std::floor(dialogueTimer_ / duration) + 1) * duration;
+        if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))
+            dialogueTimer_ = duration * static_cast<float>(stageContent_->Dialogue().size());
         if (dialogueTimer_ >=
             stageContent_->DialogueLineDuration() *
                 static_cast<float>(stageContent_->Dialogue().size())) {

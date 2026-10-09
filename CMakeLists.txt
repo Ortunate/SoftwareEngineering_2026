@@ -51,6 +51,7 @@ add_library(red_mist_engine STATIC
     src/stages/stage1/content.cpp
     src/stages/stage1/dialogue.cpp
     src/stages/stage1/enemies.cpp
+    src/stages/stage1/scenery.cpp
     src/stages/stage1/manifest.cpp
     src/stages/stage1/timeline.cpp
 )

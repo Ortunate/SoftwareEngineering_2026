@@ -7,6 +7,9 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <filesystem>
+#include <chrono>
+#include <array>
 
 namespace redmist {
 
@@ -78,7 +81,70 @@ struct GameLifecycleProbe {
         }
     }
 
+    /// @brief 不跳过事件，按 60 Hz 从开场推进到结算，并渲染对话、每个 Boss 阶段和光束。
+    static void TestWholeStage(Game& game, const std::string& prefix) {
+        game.StartPreview();
+        game.previewMode_ = false; // 本用例在临时目录验证标准模式成绩保存。
+        bool midbossSeen = false, dialogueSeen = false;
+        std::array<bool, 4> phases{};
+        int frame = 0;
+        for (; frame < 240 * 60 && game.state_ != RunState::Won; ++frame) {
+            game.Update(1.0F / 60.0F);
+            if (frame == 12 * 60) Capture(game, prefix, "stage-opening");
+            if (game.dialogueActive_ && !dialogueSeen && game.dialogueTimer_ > 1) {
+                dialogueSeen = true;
+                Capture(game, prefix, "dialogue");
+            }
+            if (game.boss_ && game.boss_->active) {
+                if (game.boss_->IsMidboss()) midbossSeen = true;
+                else if (game.boss_->phaseTimer > 5.1F && !phases[game.boss_->phase - 1]) {
+                    phases[game.boss_->phase - 1] = true;
+                    const auto name = "phase-" + std::to_string(game.boss_->phase);
+                    Capture(game, prefix, name.c_str());
+                }
+            }
+            assert(game.state_ != RunState::GameOver);
+        }
+        assert(frame < 240 * 60 && midbossSeen && dialogueSeen);
+        for (bool seen : phases) assert(seen);
+        assert(game.state_ == RunState::Won && game.bullets_.Pool().ActiveCount() == 0);
+        assert(game.assets_.Stage().visuals.empty());
+        assert(game.bestScore_ >= 120000);
+        Capture(game, prefix, "whole-stage-clear");
+        std::cout << "Whole Stage 1 cleared at " << frame / 60.0F << " seconds\n";
+
+        for (int phase : {2, 4}) {
+            game.practiceMode_ = game.spellPractice_ = true;
+            game.practicePhase_ = phase;
+            const int bestScore = game.bestScore_;
+            game.StartRun(false);
+            game.player_.SetInvulnerability(1000);
+            assert(game.boss_->phase == phase && game.player_.Power() == Player::kMaxPower);
+            for (int step = 0; step < 30 * 60 && game.state_ != RunState::Won; ++step)
+                game.Update(1.0F / 60);
+            assert(game.state_ == RunState::Won && game.bestScore_ == bestScore);
+            assert(game.score_ >= 25000 && game.score_ < 50000 && EnemyCount(game) == 0);
+        }
+        game.StartPreview();
+        game.stage_ = StageDirector{};
+        game.bullets_.SpawnBeam({-2, 2, 7}, {0, -0.1F, -1}, 24, 0.22F, 1, 0.65F, SKYBLUE);
+        game.Update(0.5F);
+        Capture(game, prefix, "beam-warning");
+        game.TogglePause();
+        game.Update(3);
+        game.bullets_.Pool().ForEachActive([](const Bullet& bullet) { assert(bullet.age == 0.5F); });
+        Capture(game, prefix, "pause");
+        game.TogglePause();
+        game.Update(0.6F);
+        Capture(game, prefix, "beam-active");
+        game.ApplyBombEffect();
+        assert(game.bullets_.Pool().ActiveCount() == 0);
+        game.StartPreview(); // 恢复整关模式，不能把练习设置泄漏给后续调用方。
+        assert(!game.spellPractice_ && !game.practiceMode_ && !game.challengeMode_);
+    }
+
     static void Run(Game& game, const std::string& prefix) {
+        TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
         // 经过真实 Game 更新验证高帧率入场，不能把轨道首帧偏移锁定为退场。
         game.StartPreview();
@@ -228,6 +294,12 @@ struct GameLifecycleProbe {
 
 /// @brief 使用隐藏窗口运行集成测试；可选 argv[1] 是截图路径前缀，不初始化音频。
 int main(int argc, char** argv) {
+    const auto originalDirectory = std::filesystem::current_path();
+    const std::string prefix = argc >= 2 ? std::filesystem::absolute(argv[1]).string() : "";
+    const auto scratch = std::filesystem::temp_directory_path() /
+        ("redmist_stage_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(scratch);
+    std::filesystem::current_path(scratch); // 配置和成绩只写入临时目录，不能改用户的实际记录。
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_HIDDEN | FLAG_WINDOW_UNFOCUSED | FLAG_WINDOW_ALWAYS_RUN);
     InitWindow(1100, 760, "Actor lifecycle tests");
@@ -235,8 +307,10 @@ int main(int argc, char** argv) {
     {
         auto game = std::make_unique<redmist::Game>();
         SetTargetFPS(0);
-        redmist::GameLifecycleProbe::Run(*game, argc >= 2 ? argv[1] : "");
+        redmist::GameLifecycleProbe::Run(*game, prefix);
     }
     CloseWindow();
+    std::filesystem::current_path(originalDirectory);
+    std::filesystem::remove_all(scratch);
     std::cout << "Actor lifecycle integration tests passed\n";
 }

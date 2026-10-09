@@ -61,11 +61,11 @@ public:
     /// @return 仅从未满升到满级时返回 true，调用方负责提示和清弹奖励。
     bool AdjustPower(int delta);
 
-    /// @brief 处理单颗活动敌弹的命中与擦弹标记；命中时清除该弹。
+    /// @brief 处理活动敌弹/光束的命中与擦弹；预警无害，命中只清除普通弹，光束保持到结束。
     /// @param bullet 由弹幕池持有的敌弹，玩家只修改 active 或 grazed。
     /// @return 无接触、首次擦弹或可造成伤害的命中；无敌时命中返回 None。
     PlayerContact ContactEnemyBullet(Bullet& bullet) const;
-    /// @brief 扣除一条残机及 16 Power、补足 Bomb、复位位置并给予复活无敌时间。
+    /// @brief 普通模式扣除一条残机，挑战模式保留残机；均扣 16 Power、补足 Bomb、复位并给予无敌。
     /// @return 仍有可用残机时返回 true；用尽时返回 false。
     bool TakeHit();
     /// @brief 根据玩家位置和视角更新相机；相机位置始终等于玩家判定中心。

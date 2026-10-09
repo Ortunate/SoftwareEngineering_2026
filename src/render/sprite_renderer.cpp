@@ -159,11 +159,26 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     translucentPlayerBullets_.clear();
     translucentActors_.clear();
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+        if (bullet.beamLength > 0) return;
         if (bullet.visual < bulletGroups_.size()) {
             bulletGroups_[bullet.visual].push_back(&bullet);
             if (bullet.owner == BulletOwner::Player &&
                 visuals[bullet.visual].mode == VisualMode::Bullet)
                 translucentPlayerBullets_.push_back(&bullet);
+        }
+    });
+
+    // 光束采用真实三维柱体，预警只画细线；亮芯和碰撞使用同一条轴线。
+    bullets.Pool().ForEachActive([](const Bullet& bullet) {
+        if (bullet.beamLength <= 0) return;
+        const auto end = bullet.BeamEnd();
+        if (!bullet.Dangerous()) {
+            DrawLine3D(bullet.position, end, Fade(bullet.color, 0.7F));
+            DrawCylinderWiresEx(bullet.position, end, bullet.radius * 0.3F,
+                                bullet.radius * 0.3F, 6, Fade(bullet.color, 0.4F));
+        } else {
+            DrawCylinderEx(bullet.position, end, bullet.radius * 0.45F,
+                           bullet.radius * 0.45F, 10, WHITE);
         }
     });
 
@@ -196,6 +211,9 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     if (hasCutoutShader) BeginShaderMode(shaders.cutout);
     const auto drawActor = [&](Vector3 position, VisualId id, float hitRadius,
                                ActorKind kind, ActorAppearance appearance) {
+        // 第一人称穿过近处角色时逐渐淡去贴图，避免巨幅裙摆遮住整屏弹幕；判定不变。
+        const float nearOpacity = std::clamp((std::sqrt(DistanceSquared(position, camera.position)) - 0.6F) / 1.2F, 0.0F, 1.0F);
+        appearance.alpha *= nearOpacity;
         if (appearance.alpha < 0.999F || appearance.ringAlpha > 0.001F) {
             translucentActors_.push_back({position, id, hitRadius, kind, appearance});
             return;
@@ -290,6 +308,18 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     // 光晕只做视觉叠加，不写深度以免遮挡后续透明层；每种外观最多绘制 2048 个近景光晕。
     rlDisableDepthMask();
     BeginBlendMode(BLEND_ADDITIVE);
+    bullets.Pool().ForEachActive([](const Bullet& bullet) {
+        if (bullet.beamLength > 0 && bullet.Dangerous()) {
+            // 色壳在亮芯之后叠加，不能用不透明外柱挡住内部白芯；镜头进入光束也可见。
+            rlDisableBackfaceCulling();
+            DrawCylinderEx(bullet.position, bullet.BeamEnd(), bullet.radius,
+                           bullet.radius, 12, Fade(bullet.color, 0.7F));
+            DrawCylinderEx(bullet.position, bullet.BeamEnd(), bullet.radius * 1.5F,
+                           bullet.radius * 1.5F, 12, Fade(bullet.color, 0.2F));
+            rlDrawRenderBatchActive();
+            rlEnableBackfaceCulling();
+        }
+    });
     constexpr float glowDistanceSquared = 8.0F * 8.0F;
     for (std::size_t id = 0; id < visuals.size(); ++id) {
         const VisualResource& visual = visuals[id];
@@ -328,6 +358,11 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
     int shownBullets = 0;
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         if (shownBullets++ >= 256) return;
+        if (bullet.beamLength > 0) {
+            DrawCylinderWiresEx(bullet.position, bullet.BeamEnd(), bullet.radius, bullet.radius,
+                                10, Color{255, 230, 90, 230});
+            return;
+        }
         DrawSphereWires(bullet.position, bullet.radius, 7, 10,
                         Color{255, 230, 90, 230});
     });

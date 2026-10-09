@@ -177,7 +177,7 @@ void Game::DrawMenuPage() const {
             const std::array<const char*, 2> names = setupStep_ == 1
                 ? std::array<const char*, 2>{"灵之御札 · Homing Amulet", "梦之御札 · Persuasion Needle"}
                 : setupStep_ == 2 ? std::array<const char*, 2>{"标准模式", "挑战模式"}
-                : std::array<const char*, 2>{"夜符 · Night Bird", "境符 · Demarcation"};
+                : std::array<const char*, 2>{"夜符 · Night Bird", "暗符 · Demarcation"};
             const std::array<const char*, 2> hints = setupStep_ == 1
                 ? std::array<const char*, 2>{"广域追踪 · 梦想封印", "集中直射 · 封魔阵"}
                 : setupStep_ == 2 ? std::array<const char*, 2>{"有限残机 · 挑战一面最高分", "无限残机 · 挑战最少 Miss"}

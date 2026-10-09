@@ -97,7 +97,7 @@ bool RumiaBoss::Update(float deltaTime, Vector3 playerPosition,
                 break;
             case 3:
                 FireMoonlightBeam(bullets, playerPosition);
-                fireTimer += 0.75F;
+                fireTimer += 2.8F;
                 break;
             case 4:
                 CastDemarcation(bullets, playerPosition);
@@ -133,7 +133,7 @@ bool RumiaBoss::AdvancePhase() {
 const char* RumiaBoss::SpellName() const {
     if (!active || encounter_ != Encounter::Final) return nullptr;
     if (phase == 2) return "NIGHT SIGN  -  NIGHT BIRD";
-    if (phase == 4) return "BOUNDARY SIGN  -  DEMARCATION";
+    if (phase == 4) return "DARK SIGN  -  DEMARCATION";
     return nullptr;
 }
 
@@ -173,17 +173,22 @@ void RumiaBoss::CastNightBird(BulletSystem& bullets,
                               Vector3 playerPosition) {
     const Vector3 muzzle = MuzzlePosition(playerPosition);
     const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
+    // 内外两层绕各自发射时的瞄准轴反向转弯，离开 Boss 后也保持三维曲线。
     pattern::ForEachConeDirection(axis, 2, 12, 0.75F, starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 2.4F), 0.15F, kBlue,
-                          kBlueBullet);
+        [muzzle, axis, &bullets](Vector3 direction) {
+            if (Bullet* bullet = bullets.Spawn(BulletOwner::Enemy, muzzle,
+                    pattern::Scale(direction, 2.4F), 0.15F, kBlue, kBlueBullet)) {
+                bullet->rotationAxis = axis;
+                bullet->angularVelocity = 0.16F;
+            }
         });
     pattern::ForEachConeDirection(axis, 1, 10, 0.38F, -starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 3.0F), 0.14F, kCyan,
-                          kBlueBullet);
+        [muzzle, axis, &bullets](Vector3 direction) {
+            if (Bullet* bullet = bullets.Spawn(BulletOwner::Enemy, muzzle,
+                    pattern::Scale(direction, 3.0F), 0.14F, kCyan, kBlueBullet)) {
+                bullet->rotationAxis = axis;
+                bullet->angularVelocity = -0.13F;
+            }
         });
     starRotation += 0.37F;
 }
@@ -192,12 +197,9 @@ void RumiaBoss::FireMoonlightBeam(BulletSystem& bullets,
                                   Vector3 playerPosition) {
     const Vector3 muzzle = MuzzlePosition(playerPosition);
     const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
-    for (int index = 0; index < 12; ++index) {
-        const Vector3 start = pattern::Add(muzzle,
-                                           pattern::Scale(axis, index * 0.32F));
-        bullets.Spawn(BulletOwner::Enemy, start, pattern::Scale(axis, 5.0F),
-                      0.16F, kBlue, kBlueBullet);
-    }
+    // 方向在预警开始时锁定；之后 Boss 横移也不能使光束追着玩家扫过。
+    // 1.05 秒预警 + 0.65 秒生效，再留 1.1 秒间隔，给三个轴向的闪避留足窗口。
+    bullets.SpawnBeam(muzzle, axis, 24.0F, 0.22F, 1.05F, 0.65F, kCyan);
     pattern::ForEachConeDirection(axis, 1, 8, 0.55F, starRotation,
         [muzzle, &bullets](Vector3 direction) {
             bullets.Spawn(BulletOwner::Enemy, muzzle,
@@ -211,19 +213,20 @@ void RumiaBoss::CastDemarcation(BulletSystem& bullets,
                                 Vector3 playerPosition) {
     const Vector3 muzzle = MuzzlePosition(playerPosition);
     const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
-    pattern::ForEachConeDirection(axis, 2, 18, 0.95F, starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 2.25F), 0.14F, kBlue,
-                          kBlueBullet);
-        });
-    pattern::ForEachConeDirection(axis, 1, 12, 0.52F, -starRotation * 0.8F,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 3.15F), 0.12F, kGreen,
-                          kGreenSphere);
-        });
-    starRotation += 0.3F;
+    // 三个深度层共享同一开口；每轮缓慢转动开口，不能给每层随机角度封死通道。
+    for (int layer = 0; layer < 3; ++layer) {
+        const float angle = 0.32F + layer * 0.27F;
+        pattern::ForEachOpenRingDirection(axis, 24, angle, starRotation, 0.42F,
+            [muzzle, layer, &bullets](Vector3 direction) {
+                bullets.Spawn(BulletOwner::Enemy, muzzle,
+                    pattern::Scale(direction, 2.8F - layer * 0.3F),
+                    layer == 0 ? 0.12F : 0.14F, layer == 0 ? kRed : layer == 1 ? kGreen : kBlue,
+                    layer == 0 ? kRedBullet : layer == 1 ? kGreenSphere : kBlueBullet);
+            });
+    }
+    // 稀疏的中央瞄准弹使玩家不能永远停在轴线；与宽环错速，保留闪避空间。
+    bullets.Spawn(BulletOwner::Enemy, muzzle, pattern::Scale(axis, 2.1F), 0.12F, kGreen, kGreenSphere);
+    starRotation += 0.15F;
 }
 
 }  // namespace redmist::stage1

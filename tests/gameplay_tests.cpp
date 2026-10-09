@@ -112,10 +112,54 @@ void TestDarkFairyBehavior() {
     immediate.Update(approachTime, {}, bullets);
     assert(!immediate.active && bullets.Pool().ActiveCount() == 18);
 }
+/// @brief 验证预警不伤人、光束中段与端点胶囊碰撞、持续擦弹及清除，不依赖图形窗口。
+void TestBeamContacts() {
+    using namespace redmist;
+    auto pool = std::make_unique<BulletSystem>();
+    Player player;
+    player.SetInvulnerability(0);
+    const Vector3 target = player.Position();
+    Bullet* beam = pool->SpawnBeam({target.x - 4, target.y, target.z}, {2, 0, 0}, 8, 0.2F, 1, 0.6F, SKYBLUE);
+    assert(beam && !beam->Dangerous());
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::None);
+    pool->Update(0.99F);
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::None);
+    pool->Update(0.02F);
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::Hit && beam->active);
+    player.SetInvulnerability(2);
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::None && beam->active);
+    beam->position.y += 0.6F;
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::Graze);
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::None);
+    assert(std::abs(beam->DistanceSquaredTo({target.x + 4.3F, target.y + 0.6F, target.z}) - 0.09F) < 0.0001F);
+    pool->Update(0.6F);
+    assert(!beam->active);
+    assert(!pool->SpawnBeam({}, {}, -1, 0.2F, 1, 1, WHITE));
+    beam = pool->SpawnBeam({}, {0, 0, 1}, 5, 0.2F, 1, 1, WHITE);
+    assert(beam);
+    auto* own = pool->Spawn(BulletOwner::Player, {}, {}, 0.1F, WHITE, 0);
+    pool->ClearEnemyBullets();
+    assert(!beam->active && own->active);
+
+    // 各层同向开口中没有采样点；高仰俯角也保持单位方向与正确张角。
+    for (Vector3 axis : {Vector3{0, 0, 1}, Vector3{0, 1, 0}, Vector3{1, 2, 3}}) {
+        const auto forward = pattern::Normalize(axis);
+        int count = 0;
+        pattern::ForEachOpenRingDirection(axis, 24, 0.6F, 0, 0.42F, [&](Vector3 direction) {
+            assert(std::abs(BulletSystem::Length(direction) - 1) < 0.0001F);
+            const float dot = forward.x * direction.x + forward.y * direction.y + forward.z * direction.z;
+            assert(std::abs(dot - std::cos(0.6F)) < 0.0001F);
+            ++count;
+        });
+        assert(count == 21);
+    }
+}
+
 }  // namespace
 
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
+    TestBeamContacts();
     using redmist::BulletOwner;
     using redmist::BulletSystem;
     const Vector3 forward = BulletSystem::DirectionFromYawPitch(0.0F, 0.0F);
@@ -278,12 +322,22 @@ void RunGameplayTests() {
     assert(bullets.Pool().ActiveCount() == 36);
     assert(boss.AdvancePhase());
     assert(boss.SpellName() == nullptr);
+    bullets.Reset();
+    boss.Update(0.8F, {0, 0, -6.5F}, bullets);
+    const redmist::Bullet* fixedBeam = nullptr;
+    bullets.Pool().ForEachActive([&](const redmist::Bullet& bullet) {
+        if (bullet.beamLength > 0) fixedBeam = &bullet;
+    });
+    assert(fixedBeam && !fixedBeam->Dangerous());
+    const Vector3 endpoint = fixedBeam->BeamEnd();
+    boss.Update(0.5F, {9, 9, 0}, bullets);
+    assert(fixedBeam->BeamEnd().x == endpoint.x && fixedBeam->BeamEnd().z == endpoint.z);
     assert(boss.AdvancePhase());
     assert(std::string_view(boss.SpellName()) ==
-           "BOUNDARY SIGN  -  DEMARCATION");
+           "DARK SIGN  -  DEMARCATION");
     bullets.Reset();
     boss.Update(2.6F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 50);
+    assert(bullets.Pool().ActiveCount() == 64);
     assert(!boss.AdvancePhase());
     assert(!boss.active);
 

@@ -36,7 +36,13 @@ public:
                   float radius, Color color, VisualId visual,
                   Vector3 acceleration = {});
 
-    /// @brief 清除敌方弹幕，保留玩家弹幕。
+    /// @brief 生成固定三维敌方光束；方向在生成时锁定，预警后才有胶囊碰撞。
+    /// direction 自动归一化；length/radius 为正世界单位，warning/duration 为非负/正秒数。
+    /// @return 池持有的光束；容量不足、尺寸或时间非法时返回 nullptr；生命期与 Spawn 一致。
+    Bullet* SpawnBeam(Vector3 origin, Vector3 direction, float length, float radius,
+                      float warning, float duration, Color color);
+
+    /// @brief 清除敌方弹幕和光束，保留玩家弹幕。
     void ClearEnemyBullets();
     /// @brief 获取可修改的弹幕池。
     /// @return 弹幕池引用。

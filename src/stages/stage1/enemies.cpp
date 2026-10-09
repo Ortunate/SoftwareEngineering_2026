@@ -181,4 +181,24 @@ void OrbEnemy::FireCone(BulletSystem& bullets, Vector3 playerPosition) {
         });
 }
 
+ReferenceEnemy::ReferenceEnemy(const ReferenceEnemyParams& params)
+    : Enemy(params.sub < 3 ? kFairy : kDarkFairy, params.position, {}), sourceItem_(params.sourceItem) {
+    Vector3 source{position.x/kReferenceScale+192, (10-position.y)/kReferenceScale, (7.2F-position.z)/kReferenceScale};
+    if (params.randomX) source.x = static_cast<float>((params.seed * 1664525U + 1013904223U) >> 8) / 16777216.0F * 384;
+    script_.Reset(params.sub,source,params.sourceHealth,params.seed,params.mirrored);
+    position = origin = script_.Position();
+    health = maxHealth = params.sourceHealth/kReferenceHealthUnit;
+    hitRadius = 14*kReferenceScale;
+    scoreValue = params.sourceScore;
+}
+void ReferenceEnemy::Update(float deltaTime, Vector3 playerPosition, BulletSystem& bullets) {
+    age += deltaTime; presentation.Update(deltaTime);
+    script_.health = health*kReferenceHealthUnit;
+    script_.Update(deltaTime,playerPosition,bullets);
+    position = script_.Position();
+    const Vector3 p = script_.sourcePosition;
+    // 出生在 y=-32 的场外缓冲带；只有实际入场后再越界才回收，不能在第一帧销毁。
+    if (p.x >= -16 && p.x <= 400 && p.y >= -16 && p.y <= 464) entered_ = true;
+    if (script_.finished || (entered_ && (p.x < -16 || p.x > 400 || p.y < -16 || p.y > 464))) active = false;
+}
 }  // namespace redmist::stage1

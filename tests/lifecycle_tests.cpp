@@ -1,6 +1,7 @@
 // 本文件负责在隐藏图形窗口中验证 Game 的击破、Boss 入场保留战场、清场及资源生命周期。
 
 #include "app/game.hpp"
+#include "rlgl.h"
 #include "stages/stage1/enemies.hpp"
 
 #include <cassert>
@@ -27,7 +28,7 @@ struct GameLifecycleProbe {
     }
     /// @brief 可选导出同一测试状态的图片；prefix 为空时只绘制并检查逻辑。
     static void Capture(const Game& game, const std::string& prefix, const char* name) {
-        const RenderTexture2D target = LoadRenderTexture(1100, 760);
+        const RenderTexture2D target = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
         assert(IsRenderTextureValid(target));
         BeginDrawing();
         BeginTextureMode(target);
@@ -88,9 +89,26 @@ struct GameLifecycleProbe {
         bool midbossSeen = false, dialogueSeen = false;
         std::array<bool, 4> phases{};
         int frame = 0;
-        for (; frame < 240 * 60 && game.state_ != RunState::Won; ++frame) {
+        for (; frame < 400 * 60 && game.state_ != RunState::Won; ++frame) {
             game.Update(1.0F / 60.0F);
-            if (frame == 12 * 60) Capture(game, prefix, "stage-opening");
+            if (frame == 12 * 60) {
+                const int width=GetScreenWidth(),height=GetScreenHeight();
+                for(const auto size:std::array<Vector2,3>{{{1280,720},{960,720},{1680,720}}}) {
+                    SetWindowSize(static_cast<int>(size.x),static_cast<int>(size.y));
+                    const std::string name="opening-"+std::to_string(static_cast<int>(size.x));
+                    Capture(game,prefix,name.c_str());
+                }
+                SetWindowSize(width,height);
+                Capture(game, prefix, "stage-opening");
+                // 真实默认 framebuffer 与离屏纹理分别验证；Retina 恢复逻辑视口会使右半屏空白。
+                BeginDrawing(); ClearBackground(BLACK); game.Draw(); EndDrawing();
+                BeginDrawing(); ClearBackground(BLACK); game.Draw(); rlDrawRenderBatchActive();
+                Image windowImage=LoadImageFromScreen();
+                const Color sidebar=GetImageColor(windowImage,windowImage.width*9/10,windowImage.height/2);
+                assert(sidebar.r+sidebar.g+sidebar.b>0);
+                if(!prefix.empty())assert(ExportImage(windowImage,(prefix+"-window-retina.png").c_str()));
+                UnloadImage(windowImage); EndDrawing();
+            }
             if (game.dialogueActive_ && !dialogueSeen && game.dialogueTimer_ > 1) {
                 dialogueSeen = true;
                 Capture(game, prefix, "dialogue");
@@ -105,7 +123,11 @@ struct GameLifecycleProbe {
             }
             assert(game.state_ != RunState::GameOver);
         }
-        assert(frame < 240 * 60 && midbossSeen && dialogueSeen);
+        if (frame>=400*60) std::cerr << "Stage stalled: state " << static_cast<int>(game.state_)
+            << " stage " << game.stage_.Elapsed() << " dialogue " << game.dialogueActive_
+            << " after " << game.dialogueAfterBattle_ << " boss phase " << (game.boss_ ? game.boss_->phase : -1)
+            << " hp " << (game.boss_ ? game.boss_->health : -1) << " timer " << (game.boss_ ? game.boss_->phaseTimer : -1) << "\n";
+        assert(frame < 400 * 60 && midbossSeen && dialogueSeen);
         for (bool seen : phases) assert(seen);
         assert(game.state_ == RunState::Won && game.bullets_.Pool().ActiveCount() == 0);
         assert(game.assets_.Stage().visuals.empty());
@@ -123,7 +145,14 @@ struct GameLifecycleProbe {
             for (int step = 0; step < 30 * 60 && game.state_ != RunState::Won; ++step)
                 game.Update(1.0F / 60);
             assert(game.state_ == RunState::Won && game.bestScore_ == bestScore);
-            assert(game.score_ >= 25000 && game.score_ < 50000 && EnemyCount(game) == 0);
+            // 超时练习只保留实际擦弹分数，不能获得旧版固定 25000 分捕获奖励。
+            assert(game.score_ == game.graze_*100 && EnemyCount(game) == 0);
+            game.StartRun(false); game.player_.SetInvulnerability(1000);
+            for(int step=0;step<130;++step)game.Update(1.0F/60);
+            assert(game.boss_->CanTakeDamage());
+            game.boss_->health=0; game.ResolveCollisions();
+            assert(game.score_>=200000 && game.spellBonus_>=200000);
+            assert(game.bestScore_==bestScore); // 捕获练习不能写入整关最高分。
         }
         game.StartPreview();
         game.stage_ = StageDirector{};
@@ -221,6 +250,12 @@ struct GameLifecycleProbe {
             game.boss_->health = 0.0F;
             game.AdvanceBossPhase();
         }
+        // 末符击破后保留原作死亡演出和两句战后独白；完成独白后才进入结算。
+        for(int frame=0;frame<62;++frame)game.UpdateBoss(1.0F/60);
+        assert(!game.boss_->active);
+        game.BeginStageDialogue(4,true);
+        game.dialogueTimer_=game.DialogueDuration();
+        game.Update(0);
         assert(game.state_ == RunState::Finishing);
         assert(!game.boss_);
         assert(!game.assets_.Stage().visuals.empty());
@@ -260,7 +295,7 @@ struct GameLifecycleProbe {
         game.actorEffects_.Clear();
 
         game.BeginStageBoss(false, 3);
-        game.UpdateBoss(22.0F);
+        for(int frame=0;frame<1503;++frame)game.UpdateBoss(1.0F/60);
         assert(game.state_ == RunState::Playing);
         assert(!game.boss_->active);
         game.actorEffects_.Pool().ForEachActive([](const ActorExitEffect& effect) {

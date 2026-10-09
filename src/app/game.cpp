@@ -134,6 +134,7 @@ void Game::StartRun(bool captureCursor) {
     player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,
                          selectedShot_ == 0 ? ShotType::HomingAmulet : ShotType::Needle);
     missCount_ = bombCount_ = 0;
+    spellStartMisses_=spellStartBombs_=0;
     shotSoundTimer_ = 0.0F;
     boss_.reset();
     bullets_.Reset();
@@ -141,10 +142,13 @@ void Game::StartRun(bool captureCursor) {
     drops_.Clear();
     stage_.Reset();
     score_ = 0;
-    graze_ = 0;
+    graze_ = pointItems_ = 0;
+    referenceRank_=16; referenceSubrank_=0; rankTime_=0;
     screenFlashTimer_ = 0.0F;
     spellCutInTimer_ = 0.0F;
+    spellBonusTimer_=0; spellBonus_=stageBonus_=0;
     dialogueTimer_ = 0.0F;
+    dialogueAfterBattle_ = dialogueBossMusic_ = false;
     dialogueActive_ = false;
     bossEventId_.reset();
     dialogueEventId_.reset();
@@ -154,7 +158,7 @@ void Game::StartRun(bool captureCursor) {
 #endif
     player_.SyncCamera(camera_);
     if (captureCursor) DisableCursor();
-    SetMessage(stageContent_->StartTitle(), 3.0F);
+    messageTimer_=0;
     if (spellPractice_) {
         stage_ = StageDirector{};
         BeginStageBoss(true, 3);
@@ -321,6 +325,7 @@ void Game::Update(float deltaTime) {
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
     screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
     spellCutInTimer_ = std::max(0.0F, spellCutInTimer_ - deltaTime);
+    spellBonusTimer_=std::max(0.0F,spellBonusTimer_-deltaTime);
     // 先推进旧效果，本帧产生的快照下一帧开始计时，避免大 dt 吞掉退场首帧。
     actorEffects_.Update(deltaTime);
 
@@ -332,20 +337,26 @@ void Game::Update(float deltaTime) {
     // 本帧由时间轴刚启动的对话从下一帧计时，避免第一句少显示一个 deltaTime。
     if (dialogueWasActive && dialogueActive_) {
         dialogueTimer_ += deltaTime;
-        const float duration = stageContent_->DialogueLineDuration();
+        float lineStart=0;
+        const auto lines=CurrentDialogue();
+        const auto& line=lines[DialogueIndex(&lineStart)];
         if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))
-            dialogueTimer_ = (std::floor(dialogueTimer_ / duration) + 1) * duration;
+            dialogueTimer_=lineStart+(line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
         if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))
-            dialogueTimer_ = duration * static_cast<float>(stageContent_->Dialogue().size());
-        if (dialogueTimer_ >=
-            stageContent_->DialogueLineDuration() *
-                static_cast<float>(stageContent_->Dialogue().size())) {
-            dialogueActive_ = false;
-            if (dialogueEventId_) {
-                stage_.EndEvent(*dialogueEventId_);
-                dialogueEventId_.reset();
-            }
+            dialogueTimer_=DialogueDuration();
+        if (!dialogueAfterBattle_ && DialogueIndex()>=13 && !dialogueBossMusic_) {
+            assets_.PlayBossMusic(); dialogueBossMusic_=true;
         }
+        if (dialogueTimer_+0.00001F>=DialogueDuration()) {
+            dialogueActive_=false;
+            if (dialogueEventId_) { stage_.EndEvent(*dialogueEventId_); dialogueEventId_.reset(); }
+            if (dialogueAfterBattle_) { EndStage(RunState::Won); return; }
+        }
+    }
+    if(!dialogueActive_) {
+        rankTime_+=deltaTime;
+        const float period=std::max(4.0F,40.0F-std::max(0,player_.RemainingLives()-1)*4.0F);
+        while(rankTime_>=period) { rankTime_-=period; AdjustReferenceRank(100); }
     }
     UpdatePlayer(deltaTime);
     UpdateEnemies(deltaTime);
@@ -357,7 +368,7 @@ void Game::Update(float deltaTime) {
         targets[targetCount++] = enemy.position;
     });
     if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
-    bullets_.Update(deltaTime, {targets.data(), targetCount});
+    bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position());
     ResolveCollisions();
     if (state_ == RunState::Playing) UpdatePickups(deltaTime);
 }
@@ -380,6 +391,8 @@ bool Game::HandleStageEvent(const StageEvent& event) {
 }
 
 void Game::SpawnStageEnemy(const EnemySpec& spec) {
+    // 新典道中 Boss 存在时，出生请求被跳过，但时间轴仍继续计时。
+    if (boss_ && boss_->active) return;
     if (auto enemy = stageContent_->CreateEnemy(spec))
         enemies_.Add(std::move(enemy));
 }
@@ -389,11 +402,18 @@ void Game::BeginStageBoss(bool final, StageEventId id) {
     stage_.CancelEnemySpawns();
     bossEventId_ = id;
     boss_ = stageContent_->CreateBoss(final);
-    if (final) assets_.PlayBossMusic();
-    SetMessage(stageContent_->BossStartMessage(final), 2.0F);
+    if (final && !dialogueBossMusic_) assets_.PlayBossMusic();
+    messageTimer_=0;
 }
 
-void Game::BeginStageDialogue(StageEventId id) {
+void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
+    dialogueAfterBattle_=afterBattle;
+    if(afterBattle) {
+        // 一面沿用基础 Normal 结算公式；3D 拾取/擦弹数采用当前世界的实际结果。
+        stageBonus_=(1000LL+graze_*10LL+player_.Power()*100LL)*pointItems_;
+        score_+=stageBonus_;
+    }
+    dialogueBossMusic_=false;
     stage_.CancelEnemySpawns();
     ClearEnemiesWithEffects();
     bullets_.ClearEnemyBullets();
@@ -403,6 +423,28 @@ void Game::BeginStageDialogue(StageEventId id) {
     messageTimer_ = 0.0F;
 }
 
+void Game::AdjustReferenceRank(int subrank) {
+    referenceSubrank_+=subrank;
+    while(referenceSubrank_>=100) { ++referenceRank_; referenceSubrank_-=100; }
+    while(referenceSubrank_<0) { --referenceRank_; referenceSubrank_+=100; }
+    referenceRank_=std::clamp(referenceRank_,10,32);
+}
+std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->Dialogue(dialogueAfterBattle_); }
+int Game::DialogueIndex(float* lineStart) const {
+    float start=0; const auto lines=CurrentDialogue();
+    for (int index=0;index<static_cast<int>(lines.size());++index) {
+        const float duration=lines[index].duration>0 ? lines[index].duration : stageContent_->DialogueLineDuration();
+        if (dialogueTimer_<start+duration || index==static_cast<int>(lines.size())-1) {
+            if(lineStart)*lineStart=start; return index;
+        }
+        start+=duration;
+    }
+    return 0;
+}
+float Game::DialogueDuration() const {
+    float duration=0; for(const auto& line:CurrentDialogue()) duration+=line.duration>0 ? line.duration : stageContent_->DialogueLineDuration();
+    return duration;
+}
 void Game::StageMessage(std::string_view message, float duration) {
     SetMessage(std::string(message), duration);
 }

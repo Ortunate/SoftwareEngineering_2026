@@ -129,7 +129,8 @@ private:
     void SpawnStageEnemy(const EnemySpec& spec) override;
     /// @brief 开始 Boss 战并停止旧批次后续出怪，保留现存小怪、弹幕、道具及效果。
     void BeginStageBoss(bool final, StageEventId id) override;
-    void BeginStageDialogue(StageEventId id) override;
+    /// @brief 开始原文对话；战后先结算当前一面的 Bonus，待独白结束再进入胜利状态。
+    void BeginStageDialogue(StageEventId id, bool afterBattle = false) override;
     void StageMessage(std::string_view message, float duration) override;
     /// @brief 玩家已消耗 Bomb 后清弹、伤害敌人并展示反馈。
     void ApplyBombEffect();
@@ -200,10 +201,24 @@ private:
     AssetManager assets_;
 
     long long score_ = 0;
+    /// @brief 按原作每 100 subrank 提升一个 rank；Normal 限制 10…32，初始 16。
+    void AdjustReferenceRank(int subrank);
+    int referenceRank_ = 16, referenceSubrank_ = 0;
+    float rankTime_ = 0;
     int graze_ = 0;
+    int pointItems_ = 0; // 本局普通蓝色道具累计数量，供原作点数栏显示。
     float messageTimer_ = 0.0F;
     float screenFlashTimer_ = 0.0F;
     float spellCutInTimer_ = 0.0F;
+    float spellBonusTimer_ = 0; // 秒；暂停时冻结，捕获反馈最多显示 280 原作帧。
+    long long spellBonus_ = 0, stageBonus_ = 0;
+    /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
+    [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
+    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，Z 仍只推进一句。
+    [[nodiscard]] int DialogueIndex(float* lineStart = nullptr) const;
+    [[nodiscard]] float DialogueDuration() const;
+    bool dialogueAfterBattle_ = false;
+    bool dialogueBossMusic_ = false;
     float dialogueTimer_ = 0.0F;
     bool dialogueActive_ = false;
     std::optional<StageEventId> bossEventId_;
@@ -236,6 +251,8 @@ private:
     int selectedPauseItem_ = 0; // 暂停项：继续、开局选择、主菜单、重开。
     int missCount_ = 0;
     int bombCount_ = 0;
+    // 每张符卡开始时保存计数；发生 Miss、Bomb 或超时则不能获得捕获奖励。
+    int spellStartMisses_ = 0, spellStartBombs_ = 0;
     float shotSoundTimer_ = 0.0F; // 秒；射击声音最多每 0.10 秒触发一次。
     bool waitingForBinding_ = false;
     /// @brief 激活录入后须先释放确认键/鼠标按钮，避免把打开弹窗的点击录入为绑定。

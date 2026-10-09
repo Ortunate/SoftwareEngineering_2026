@@ -36,7 +36,7 @@ struct StartBoss {
 };
 
 /// @brief 开始当前关卡对话；所属 StageEvent 必须带 id，对话结束时报告完成。
-struct StartDialogue {};
+struct StartDialogue { bool afterBattle = false; };
 
 /// @brief 显示提示；duration 为非负有限秒数，text 的存储须覆盖事件表生命周期。
 struct ShowMessage {
@@ -51,6 +51,8 @@ using StageAction = std::variant<SpawnEnemies, StartBoss, StartDialogue, ShowMes
 struct StageEvent {
     /// @brief 无依赖时相对上一事件实际开始、存在依赖时相对依赖事件结束的延迟秒数。
     float delay = 0.0F;
+    /// @brief 可选绝对出生帧（60 Hz）；存在时忽略 delay，不能同时设置 afterEndOf。
+    std::optional<int> atFrame = std::nullopt;
     StageAction action = ShowMessage{};
     /// @brief 本事件的可选标识，用于被后续事件引用和报告结束。
     std::optional<StageEventId> id = std::nullopt;

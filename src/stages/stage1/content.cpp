@@ -12,13 +12,15 @@ namespace redmist::stage1 {
 
 const StageAssetManifest& Stage1Content::Assets() const { return Stage1Manifest(); }
 std::span<const StageEvent> Stage1Content::Events() const { return Stage1Timeline(); }
-std::span<const DialogueLine> Stage1Content::Dialogue() const { return Stage1Dialogue(); }
+std::span<const DialogueLine> Stage1Content::Dialogue(bool afterBattle) const { return Stage1Dialogue(afterBattle); }
 
 std::unique_ptr<Enemy> Stage1Content::CreateEnemy(const EnemySpec& spec) const {
     if (!IsValidEnemySpec(spec)) return nullptr;
     return std::visit([](const auto& params) -> std::unique_ptr<Enemy> {
         using Params = std::decay_t<decltype(params)>;
-        if constexpr (std::is_same_v<Params, FairyParams>) {
+        if constexpr (std::is_same_v<Params, ReferenceEnemyParams>) {
+            return std::make_unique<ReferenceEnemy>(params);
+        } else if constexpr (std::is_same_v<Params, FairyParams>) {
             return std::make_unique<FairyEnemy>(params);
         } else if constexpr (std::is_same_v<Params, DarkFairyParams>) {
             return std::make_unique<DarkFairyEnemy>(params);

@@ -5,6 +5,7 @@
 #include "app/math.hpp"
 #include "config/settings.hpp"
 #include "stages/stage1/scenery.hpp"
+#include "render/gameplay_layout.hpp"
 
 #include <algorithm>
 #include <array>
@@ -33,7 +34,33 @@ void Game::Draw() const {
 }
 
 void Game::DrawWorld() const {
+    const GameplayLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto drawTexture=[&](Texture2D texture,Rectangle source,Rectangle destination) {
+        if(texture.id)DrawTexturePro(texture,source,destination,{},0,WHITE);
+    };
+    drawTexture(assets_.Common().referenceFrame,{1,1,1920,1080},layout.Rect(0,0,1920,1080));
+    drawTexture(assets_.Common().referenceStage1,{0,0,560,1080},layout.Rect(0,0,560,1080));
+    drawTexture(assets_.Common().referenceFrame,{1922,1,966,1080},layout.Rect(477,0,966,1080));
+    const Rectangle viewport=layout.Viewport();
+    // 默认窗口的 rlgl 尺寸是逻辑像素，macOS Retina 实际视口需用 GetRenderWidth/Height；
+    // 离屏 FBO 则已按纹理像素建立，不能再次乘 DPI，否则截图会裁切到左下角。
+    const bool windowTarget=rlGetActiveFramebuffer()==0;
+    const int framebufferWidth=windowTarget ? GetRenderWidth() : rlGetFramebufferWidth();
+    const int framebufferHeight=windowTarget ? GetRenderHeight() : rlGetFramebufferHeight();
+    const float pixelX=static_cast<float>(framebufferWidth)/GetScreenWidth();
+    const float pixelY=static_cast<float>(framebufferHeight)/GetScreenHeight();
+    rlDrawRenderBatchActive();
+    const int left=static_cast<int>(viewport.x*pixelX),bottom=static_cast<int>((GetScreenHeight()-viewport.y-viewport.height)*pixelY);
+    rlViewport(left,bottom,static_cast<int>(viewport.width*pixelX),static_cast<int>(viewport.height*pixelY));
+    rlEnableScissorTest();
+    rlScissor(left,bottom,static_cast<int>(viewport.width*pixelX),static_cast<int>(viewport.height*pixelY));
     BeginMode3D(camera_);
+    // 原生窗口与离屏截图共用当前 framebuffer；只更改视口和投影，不创建/切换额外 FBO。
+    rlMatrixMode(RL_PROJECTION); rlLoadIdentity();
+    const double top=rlGetCullDistanceNear()*std::tan(camera_.fovy*DEG2RAD/2);
+    const double right=top*viewport.width/viewport.height;
+    rlFrustum(-right,right,-top,top,rlGetCullDistanceNear(),rlGetCullDistanceFar());
+    rlMatrixMode(RL_MODELVIEW);
     if (assets_.Common().skyboxModel.meshCount != 0) {
         // 天空盒仅提供远景，不写入深度，确保战场和角色正常显示在前方。
         rlDisableBackfaceCulling();
@@ -76,6 +103,8 @@ void Game::DrawWorld() const {
 #endif
 
     EndMode3D();
+    rlDisableScissorTest();
+    rlViewport(0,0,framebufferWidth,framebufferHeight);
 }
 
 void Game::DrawArena() const {
@@ -109,105 +138,58 @@ void Game::DrawArena() const {
 }
 
 void Game::DrawHud() const {
-    DrawRectangleRounded({16.0F, 14.0F, 292.0F, 168.0F}, 0.08F, 8,
-                         Color{4, 7, 18, 205});
-    DrawRectangleLinesEx({16.0F, 14.0F, 292.0F, 168.0F}, 1.0F,
-                         Color{95, 165, 210, 200});
-    DrawText(TextFormat("SCORE  %09lld", score_), 30, 27, 21, RAYWHITE);
-    DrawText(challengeMode_ ? TextFormat("MISS  %d", missCount_) : TextFormat("LIVES  %d", player_.RemainingLives()),
-             30, 57, 19, Color{255, 120, 140, 255});
-    DrawText(TextFormat("BOMBS  %d", player_.Bombs()), 162, 57, 19,
-             Color{110, 190, 255, 255});
-    DrawText(player_.Power() == Player::kMaxPower
-                 ? "POWER  MAX" : TextFormat("POWER  %03d", player_.Power()),
-             30, 86, 19, Color{255, 205, 125, 255});
-    DrawText(TextFormat("GRAZE %05d", graze_), 165, 86, 17,
-             Color{230, 210, 120, 255});
-    const Vector3 playerPosition = player_.Position();
-    DrawText(TextFormat("XYZ  %+.1f  %+.1f  %+.1f", playerPosition.x,
-                        playerPosition.y, playerPosition.z),
-             30, 116, 17, Color{160, 190, 210, 255});
-    DrawText(TextFormat("BULLETS  %04d",
-                        static_cast<int>(bullets_.Pool().ActiveCount())),
-             30, 143, 17, Color{160, 190, 210, 255});
-
-    float nearestEnemyBullet = 999.0F;
-    bullets_.Pool().ForEachActive([playerPosition, &nearestEnemyBullet](const Bullet& bullet) {
-        if (bullet.owner == BulletOwner::Enemy && bullet.Dangerous()) {
-            nearestEnemyBullet = std::min(
-                nearestEnemyBullet,
-                std::sqrt(bullet.DistanceSquaredTo(playerPosition)));
-        }
-    });
-    const bool danger = nearestEnemyBullet < 1.15F;
-    const int centerX = GetScreenWidth() / 2;
-    const int centerY = GetScreenHeight() / 2;
-    const Color reticle = danger ? Color{255, 70, 90, 255}
-                                  : Color{215, 240, 255, 235};
-    DrawCircleLines(centerX, centerY, 11.0F, reticle);
-    DrawLine(centerX - 22, centerY, centerX - 7, centerY, reticle);
-    DrawLine(centerX + 7, centerY, centerX + 22, centerY, reticle);
-    DrawLine(centerX, centerY - 22, centerX, centerY - 7, reticle);
-    DrawLine(centerX, centerY + 7, centerX, centerY + 22, reticle);
-    DrawCircle(centerX, centerY, 2.0F, reticle);
-
-    if (danger) {
-        const char* warning = "HITBOX PROXIMITY";
-        DrawText(warning, centerX - MeasureText(warning, 18) / 2,
-                 centerY + 32, 18, reticle);
+    const GameplayLayout l(GetScreenWidth(),GetScreenHeight());
+    const Font font=assets_.Common().uiFont;
+    const auto text=[&](const char* value,float x,float y,float size,Color color) {
+        DrawTextEx(font,value,l.Point(x+1.5F,y+1.5F),size*l.scale,0,Color{0,0,0,220});
+        DrawTextEx(font,value,l.Point(x,y),size*l.scale,0,color);
+    };
+    text("（普通难度）",1550,6,22,RAYWHITE);
+    text("NORMAL",1490,30,52,Color{210,230,255,255});
+    text("最高得分",1470,110,28,RAYWHITE);
+    text(TextFormat("%09d",bestScore_),1645,104,38,RAYWHITE);
+    text("得分",1470,158,28,RAYWHITE);
+    text(TextFormat("%09lld",score_),1645,152,38,RAYWHITE);
+    text("Player",1470,236,34,Color{255,180,190,255});
+    if(challengeMode_)text(TextFormat("MISS %d",missCount_),1620,238,30,RAYWHITE);
+    else for(int n=0;n<player_.RemainingLives();++n)text("★",1620+n*32,234,36,Color{255,185,220,255});
+    text("Bomb",1470,294,34,Color{180,245,185,255});
+    for(int n=0;n<player_.Bombs();++n)text("★",1620+n*32,290,36,Color{160,240,170,255});
+    text("Power",1470,376,32,Color{255,160,180,255});
+    DrawRectangleRec(l.Rect(1616,381,260,35),Color{5,3,8,255});
+    DrawRectangleLinesEx(l.Rect(1616,381,260,35),l.scale,Color{215,210,215,255});
+    DrawRectangleRec(l.Rect(1620,385,252.0F*player_.Power()/Player::kMaxPower,27),Color{165,75,100,255});
+    text(player_.Power()==Player::kMaxPower ? "MAX" : TextFormat("%d",player_.Power()),1628,380,32,RAYWHITE);
+    text("Graze",1470,433,32,Color{155,245,185,255});
+    text(TextFormat("%d",graze_),1620,433,34,RAYWHITE);
+    text("点数",1470,482,30,Color{180,145,250,255});
+    text(TextFormat("%d",pointItems_),1620,482,34,RAYWHITE);
+    const Rectangle field=l.Viewport();
+    if(boss_ && boss_->active) {
+        text(TextFormat("Enemy %d",!boss_->IsMidboss() && boss_->phase<=2 ? 1 : 0),550,46,31,GOLD);
+        const float ratio=boss_->maxHealth>0 ? std::clamp(boss_->health/boss_->maxHealth,0.0F,1.0F):0;
+        DrawRectangleRec(l.Rect(735,60,550,7),Color{60,20,40,255});
+        DrawRectangleRec(l.Rect(735,60,550*ratio,7),RAYWHITE);
+        if(boss_->TimeLimit()>0)text(TextFormat("%02d",std::max(0,static_cast<int>(std::ceil(boss_->TimeLimit()-boss_->phaseTimer)))),1320,43,35,RAYWHITE);
+        if(boss_->SpellName())text(boss_->SpellName(),950,88,29,Color{165,155,255,255});
     }
-
-    if (boss_ && boss_->active) {
-        const float width = std::min(540.0F, static_cast<float>(GetScreenWidth()) - 390.0F);
-        const float ratio = std::clamp(boss_->health / boss_->maxHealth, 0.0F, 1.0F);
-        const float left = (static_cast<float>(GetScreenWidth()) - width) * 0.5F;
-        DrawRectangleRounded({left, 20.0F, width, 24.0F}, 0.5F, 12,
-                             Color{20, 9, 26, 220});
-        DrawRectangleRounded({left + 3.0F, 23.0F, (width - 6.0F) * ratio, 18.0F},
-                             0.5F, 12,
-                             boss_->phase == 1 ? Color{255, 80, 110, 255}
-                                              : Color{190, 80, 255, 255});
-        DrawText(boss_->DisplayName(),
-                 static_cast<int>(left), 48, 18, RAYWHITE);
-    }
-
-    if (!dialogueActive_ && state_ != RunState::Won &&
-        state_ != RunState::GameOver) {
-        const std::string controls = "Focus: " + KeyLabel(bindings_.focus) +
-            "   Fire: " + KeyLabel(bindings_.fire) + " / " + KeyLabel(bindings_.fireAlt) +
-            "   Bomb: " + KeyLabel(bindings_.bomb) + " / " + KeyLabel(bindings_.bombAlt);
-        int controlsSize = 17;
-        while (controlsSize > 10 && MeasureText(controls.c_str(), controlsSize) > GetScreenWidth() - 32)
-            --controlsSize;
-        DrawText(controls.c_str(), 16, GetScreenHeight() - 29, controlsSize,
-                 Color{185, 205, 220, 235});
-        DrawText("CAMERA = HITBOX", GetScreenWidth() - 190, GetScreenHeight() - 56,
-                 17, Color{255, 125, 145, 240});
-    }
-#ifdef RED_MIST_DEBUG_FEATURES
-    DrawFPS(GetScreenWidth() - 90, 16);
-    DrawText(debugInvincible_ ? "DEBUG INVINCIBLE: ON  [F4]"
-                              : "DEBUG INVINCIBLE: OFF [F4]",
-             GetScreenWidth() - 280, 75, 17,
-             debugInvincible_ ? Color{125, 255, 200, 255}
-                              : Color{180, 190, 205, 255});
-    if (shotTestActive_) {
-        float dummyHealth = 0.0F;
-        enemies_.ForEachActive([&dummyHealth](const Enemy& enemy) {
-            dummyHealth = enemy.health;
+    if(spellBonusTimer_>0)text(TextFormat("Spell Card Bonus  %lld",spellBonus_),735,125,30,GOLD);
+    if(dialogueAfterBattle_ && dialogueActive_)text(TextFormat("BONUS  %lld",stageBonus_),775,85,35,GOLD);
+    if(!dialogueActive_ && state_==RunState::Playing) {
+        const Vector3 p=player_.Position(); bool danger=false;
+        bullets_.Pool().ForEachActive([&](const Bullet& b) {
+            if(b.owner==BulletOwner::Enemy && b.Dangerous() && b.DistanceSquaredTo(p)<1.15F*1.15F)danger=true;
         });
-        DrawText(TextFormat("SHOT TEST  F5 -8  F6 +8  DUMMY HP %.0f", dummyHealth),
-                 GetScreenWidth() - 465, 104, 17,
-                 Color{180, 230, 255, 255});
-    } else {
-        DrawText("POWER  F5: -8  F6: +8", GetScreenWidth() - 280, 104, 17,
-                 Color{180, 230, 255, 255});
+        const int x=static_cast<int>(field.x+field.width/2),y=static_cast<int>(field.y+field.height/2);
+        const Color color=danger ? Color{255,70,90,255} : Color{215,240,255,235};
+        DrawCircleLines(x,y,7*l.scale,color); DrawCircle(x,y,1.8F*l.scale,color);
+        DrawLine(x-16*l.scale,y,x-9*l.scale,y,color); DrawLine(x+9*l.scale,y,x+16*l.scale,y,color);
+        DrawLine(x,y-16*l.scale,x,y-9*l.scale,color); DrawLine(x,y+9*l.scale,x,y+16*l.scale,color);
     }
-    if (debugRender_) {
-        DrawText("F3  HITBOX: yellow bullet / cyan body / magenta muzzle",
-                 16, GetScreenHeight() - 57, 14,
-                 Color{255, 225, 120, 255});
-    }
+    text(TextFormat("%02d.00fps",GetFPS()),1660,1045,23,RAYWHITE);
+#ifdef RED_MIST_DEBUG_FEATURES
+    if(debugRender_)text(TextFormat("XYZ %+.1f %+.1f %+.1f | %d bullets",player_.Position().x,player_.Position().y,player_.Position().z,
+                   static_cast<int>(bullets_.Pool().ActiveCount())),25,1020,22,RAYWHITE);
 #endif
 }
 
@@ -272,101 +254,53 @@ void Game::DrawOverlay() const {
 }
 
 void Game::DrawDialogue() const {
-    if (!dialogueActive_) return;
-    const Texture2D reimuPortrait = assets_.GetVisual(
-        stageContent_->HeroPortraitVisual()).texture;
-    const Texture2D rumiaPortrait = assets_.GetVisual(
-        stageContent_->BossPortraitVisual()).texture;
-    const auto lines = stageContent_->Dialogue();
-    const int index = std::clamp(static_cast<int>(dialogueTimer_ / stageContent_->DialogueLineDuration()),
-                                  0, static_cast<int>(lines.size()) - 1);
-    const DialogueLine& line = lines[index];
-    const float screenW = static_cast<float>(GetScreenWidth());
-    const float screenH = static_cast<float>(GetScreenHeight());
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                  Color{10, 5, 22, 45});
-    const float portraitH = screenH * 0.58F;
-    if (reimuPortrait.id != 0) {
-        const float portraitW = portraitH * reimuPortrait.width /
-                                reimuPortrait.height;
-        DrawTexturePro(reimuPortrait,
-                       {0.0F, 0.0F, static_cast<float>(reimuPortrait.width),
-                        static_cast<float>(reimuPortrait.height)},
-                       {12.0F, screenH - portraitH - 82.0F,
-                        portraitW, portraitH}, {0.0F, 0.0F}, 0.0F,
-                       line.bossSpeaking ? Color{170, 170, 185, 165} : WHITE);
+    if(!dialogueActive_)return;
+    const GameplayLayout l(GetScreenWidth(),GetScreenHeight());
+    const auto lines=CurrentDialogue(); float start=0;
+    const DialogueLine& line=lines[DialogueIndex(&start)];
+    const float elapsed=dialogueTimer_-start;
+    const auto portrait=[&](VisualId id,bool right,bool speaking) {
+        const Texture2D texture=assets_.GetVisual(id).texture;
+        if(!texture.id)return;
+        const float height=640, width=height*texture.width/texture.height;
+        DrawTexturePro(texture,{0,0,static_cast<float>(texture.width),static_cast<float>(texture.height)},
+            l.Rect(right ? 1388-width : 532,1042-height,width,height),{},0,
+            speaking ? WHITE : Color{115,115,130,255});
+    };
+    portrait(stageContent_->HeroPortraitVisual(),false,!line.bossSpeaking);
+    if(line.showBoss)portrait(stageContent_->BossPortraitVisual(),true,line.bossSpeaking);
+    const Font font=assets_.Common().uiFont;
+    if(elapsed>=line.textDelay) {
+        const Rectangle panel=l.Rect(620,845,670,144);
+        DrawRectangleRounded(panel,0.45F,16,Color{12,6,22,215});
+        DrawTextEx(font,line.text,l.Point(650,872),31*l.scale,0,RAYWHITE);
+        if(elapsed>=line.textDelay+line.line2Delay)
+            DrawTextEx(font,line.secondLine,l.Point(650,918),31*l.scale,0,RAYWHITE);
     }
-    if (rumiaPortrait.id != 0) {
-        const float portraitW = portraitH * rumiaPortrait.width /
-                                rumiaPortrait.height;
-        DrawTexturePro(rumiaPortrait,
-                       {0.0F, 0.0F, static_cast<float>(rumiaPortrait.width),
-                        static_cast<float>(rumiaPortrait.height)},
-                       {screenW - portraitW - 12.0F,
-                        screenH - portraitH - 82.0F, portraitW, portraitH},
-                       {0.0F, 0.0F}, 0.0F,
-                       line.bossSpeaking ? WHITE : Color{170, 170, 185, 165});
+    if(line.introduce) {
+        DrawTextEx(font,"宵暗的妖怪",l.Point(1035,480),33*l.scale,0,Color{225,220,255,255});
+        DrawTextEx(font,"露米娅",l.Point(1100,525),53*l.scale,0,RAYWHITE);
     }
-    const Rectangle panel{screenW * 0.15F, screenH - 118.0F,
-                          screenW * 0.7F, 92.0F};
-    DrawRectangleRounded(panel, 0.2F, 12, Color{11, 7, 25, 230});
-    DrawRectangleLinesEx(panel, 2.0F, Color{225, 155, 190, 220});
-    const Font font = assets_.Common().uiFont;
-    DrawTextEx(font, line.speaker, {panel.x + 20, panel.y + 9}, 25, 1, Color{255, 165, 198, 255});
-    DrawTextEx(font, line.text, {panel.x + 20, panel.y + 44}, 24, 1, RAYWHITE);
-    DrawTextEx(font, "Z 下一句 · Ctrl 跳过", {panel.x + panel.width - 250, panel.y + 11}, 17, 1, Color{170, 145, 175, 255});
 }
 
 void Game::DrawSpellCutIn() const {
-    if (spellCutInTimer_ <= 0.0F || !boss_ || !boss_->active ||
-        boss_->SpellName() == nullptr) return;
-
-    const float elapsed = kSpellCutInDuration - spellCutInTimer_;
-    const float opacity = std::clamp(
-        std::min(elapsed / 0.25F, spellCutInTimer_ / 0.35F), 0.0F, 1.0F);
-    const unsigned char alpha = static_cast<unsigned char>(opacity * 255.0F);
-    const int screenWidth = GetScreenWidth();
-    const int screenHeight = GetScreenHeight();
-
-    DrawRectangle(0, 0, screenWidth, screenHeight,
-                  Color{11, 2, 22, static_cast<unsigned char>(105.0F * opacity)});
-    const float portraitHeight = std::min(600.0F,
-                                          static_cast<float>(screenHeight) - 90.0F);
-    const float portraitWidth = portraitHeight * 2.0F / 3.0F;
-    const Rectangle frame{24.0F, static_cast<float>(screenHeight) - portraitHeight - 22.0F,
-                          portraitWidth, portraitHeight};
-    const Texture2D rumiaPortrait = assets_.GetVisual(
-        stageContent_->BossPortraitVisual()).texture;
-    if (rumiaPortrait.id != 0) {
-        DrawTexturePro(rumiaPortrait,
-                       {0.0F, 0.0F, static_cast<float>(rumiaPortrait.width),
-                        static_cast<float>(rumiaPortrait.height)},
-                       frame, {0.0F, 0.0F}, 0.0F, Color{255, 255, 255, alpha});
+    if(spellCutInTimer_<=0 || !boss_ || !boss_->active || !boss_->SpellName())return;
+    const GameplayLayout l(GetScreenWidth(),GetScreenHeight());
+    const float elapsed=kSpellCutInDuration-spellCutInTimer_;
+    const float opacity=std::clamp(std::min(elapsed/0.2F,spellCutInTimer_/0.4F),0.0F,1.0F);
+    const Texture2D texture=assets_.GetVisual(stageContent_->BossPortraitVisual()).texture;
+    if(texture.id) {
+        const float height=760, width=height*texture.width/texture.height;
+        const float offset=(1-std::clamp(elapsed/0.4F,0.0F,1.0F))*400;
+        BeginScissorMode(static_cast<int>(l.Viewport().x),static_cast<int>(l.Viewport().y),
+                         static_cast<int>(l.Viewport().width),static_cast<int>(l.Viewport().height));
+        DrawTexturePro(texture,{0,0,static_cast<float>(texture.width),static_cast<float>(texture.height)},
+            l.Rect(1388-width+offset,1042-height,width,height),{},0,Fade(WHITE,opacity));
+        EndScissorMode();
     }
-    DrawRectangleLinesEx(frame, 3.0F, Color{255, 115, 175, alpha});
-
-    const float bannerY = static_cast<float>(screenHeight) * 0.48F;
-    DrawRectangle(0, static_cast<int>(bannerY), screenWidth, 146,
-                  Color{15, 3, 30, static_cast<unsigned char>(220.0F * opacity)});
-    DrawLine(0, static_cast<int>(bannerY), screenWidth,
-             static_cast<int>(bannerY), Color{255, 95, 155, alpha});
-    DrawLine(0, static_cast<int>(bannerY) + 146, screenWidth,
-             static_cast<int>(bannerY) + 146, Color{255, 95, 155, alpha});
-
-    const std::string name = boss_->SpellName();
-    const std::size_t separator = name.find("  -  ");
-    const std::string sign = name.substr(0, separator);
-    const std::string title = separator == std::string::npos
-                                  ? std::string{} : name.substr(separator + 5);
-    const int textX = static_cast<int>(std::max(400.0F, portraitWidth + 36.0F));
-    DrawText("SPELL CARD", textX, static_cast<int>(bannerY) + 16, 23,
-             Color{255, 170, 205, alpha});
-    DrawText(sign.c_str(), textX, static_cast<int>(bannerY) + 51, 35,
-             Color{255, 245, 250, alpha});
-    DrawText(title.c_str(), textX, static_cast<int>(bannerY) + 97, 26,
-             Color{215, 180, 255, alpha});
+    DrawRectangleRec(l.Rect(820,660,550,55),Color{10,5,30,static_cast<unsigned char>(opacity*180)});
+    DrawTextEx(assets_.Common().uiFont,boss_->SpellName(),l.Point(850,670),32*l.scale,0,Fade(Color{190,185,255,255},opacity));
 }
-
 void Game::DrawKeyBindings() const {
     const int screenWidth = GetScreenWidth();
     const int screenHeight = GetScreenHeight();

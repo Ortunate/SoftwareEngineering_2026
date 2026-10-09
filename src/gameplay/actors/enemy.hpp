@@ -28,6 +28,12 @@ public:
     virtual void Update(float deltaTime, Vector3 playerPosition,
                         BulletSystem& bullets);
 
+    /// @brief 接收关卡自适应难度值 10…32；普通演员默认忽略，原作脚本演员用于弹速/弹数。
+    virtual void SetChallengeRank(int) {}
+    /// @brief 借用本帧脚本产生的音效编号；下次更新失效，普通演员返回空表。
+    [[nodiscard]] virtual std::span<const int> SoundEvents() const { return {}; }
+    /// @brief 原作掉落编号；-1 为轮换掉落，0 为小 P 点，-3 表示使用 DropDistribution。
+    [[nodiscard]] virtual int ReferenceDropKind() const { return -3; }
     bool active = true;
     const VisualId visual;
     Vector3 position;

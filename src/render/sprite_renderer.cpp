@@ -168,17 +168,18 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         }
     });
 
-    // 光束采用真实三维柱体，预警只画细线；亮芯和碰撞使用同一条轴线。
+    // 光束亮芯和判定共用轴线；原作预警最后 30 帧开始展开，但命中仍等待 hitboxStartTime。
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
         if (bullet.beamLength <= 0) return;
         const auto end = bullet.BeamEnd();
-        if (!bullet.Dangerous()) {
+        const float width=bullet.radius*bullet.BeamVisualScale();
+        if (!bullet.Dangerous() && bullet.beamGrowSeconds<=0) {
             DrawLine3D(bullet.position, end, Fade(bullet.color, 0.7F));
             DrawCylinderWiresEx(bullet.position, end, bullet.radius * 0.3F,
                                 bullet.radius * 0.3F, 6, Fade(bullet.color, 0.4F));
         } else {
-            DrawCylinderEx(bullet.position, end, bullet.radius * 0.45F,
-                           bullet.radius * 0.45F, 10, WHITE);
+            DrawCylinderEx(bullet.position, end, width * 0.45F,
+                           width * 0.45F, 10, WHITE);
         }
     });
 
@@ -309,13 +310,14 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     rlDisableDepthMask();
     BeginBlendMode(BLEND_ADDITIVE);
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
-        if (bullet.beamLength > 0 && bullet.Dangerous()) {
+        if (bullet.beamLength > 0 && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
             // 色壳在亮芯之后叠加，不能用不透明外柱挡住内部白芯；镜头进入光束也可见。
             rlDisableBackfaceCulling();
-            DrawCylinderEx(bullet.position, bullet.BeamEnd(), bullet.radius,
-                           bullet.radius, 12, Fade(bullet.color, 0.7F));
-            DrawCylinderEx(bullet.position, bullet.BeamEnd(), bullet.radius * 1.5F,
-                           bullet.radius * 1.5F, 12, Fade(bullet.color, 0.2F));
+            const float width=bullet.radius*bullet.BeamVisualScale();
+            DrawCylinderEx(bullet.position, bullet.BeamEnd(), width,
+                           width, 12, Fade(bullet.color, 0.7F));
+            DrawCylinderEx(bullet.position, bullet.BeamEnd(), width * 1.5F,
+                           width * 1.5F, 12, Fade(bullet.color, 0.2F));
             rlDrawRenderBatchActive();
             rlEnableBackfaceCulling();
         }

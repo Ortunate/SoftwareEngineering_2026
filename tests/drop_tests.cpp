@@ -322,4 +322,21 @@ void RunDropTests() {
         assert(std::abs(pickup.velocityZ - 3.2F) < 0.0001F);
     });
     assert(freshCount == 1);
+
+    // 原作脚本散落 5 个道具：未满 Power 时 8+1+1+1+1，满 Power 时为 5 个点数。
+    drops.Clear();
+    drops.SpawnReferenceBurst({},5,false);
+    int burstCount=0, burstPower=0;
+    drops.ForEachActive([&](const Pickup& item) { ++burstCount; burstPower+=item.value;
+        assert(item.kind==PickupKind::Power); });
+    assert(burstCount==5 && burstPower==12);
+    drops.Clear(); drops.SpawnReferenceBurst({},5,true);
+    burstCount=0;
+    drops.ForEachActive([&](const Pickup& item) { ++burstCount; assert(item.kind==PickupKind::Score); });
+    assert(burstCount==5);
+    drops.Clear();
+    for(int kill=0;kill<96;++kill)drops.SpawnReferenceDrop({},-1,false);
+    burstCount=0;
+    drops.ForEachActive([&](const Pickup&) { ++burstCount; });
+    assert(burstCount==32);
 }

@@ -21,7 +21,8 @@ public:
     /// @brief 按速度、加速度与角速度推进弹幕，追踪弹朝最近目标转向，并清除过期或越界者。
     /// @param deltaTime 本帧经过的秒数。
     /// @param targets 当前可攻击目标的世界坐标；仅在本次调用期间借用。
-    void Update(float deltaTime, std::span<const Vector3> targets = {});
+    /// @param enemyAimTarget 敌弹延迟重新瞄准时的玩家世界坐标，普通弹不使用。
+    void Update(float deltaTime, std::span<const Vector3> targets = {}, Vector3 enemyAimTarget = {});
 
     /// @brief 从定长池申请并初始化单颗弹幕。
     /// @param owner 弹幕所属阵营。

@@ -6,6 +6,7 @@
 #include "gameplay/bullets/system.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <numbers>
@@ -31,6 +32,8 @@ DropSystem::DropSystem(std::uint32_t seed) : random_(seed) {}
 void DropSystem::Clear() {
     pickups_.Clear();
     stars_.clear();
+    referenceDropIndex_ = std::uniform_int_distribution<unsigned>(0,2)(random_);
+    referenceItemIndex_ = std::uniform_int_distribution<unsigned>(0,7)(random_);
 }
 
 void DropSystem::Spawn(PickupKind kind, Vector3 position, int value) {
@@ -92,6 +95,30 @@ void DropSystem::SpawnEnemyDrops(Vector3 position,
 
 void DropSystem::SpawnFixedPower(Vector3 position, int power) {
     Spawn(PickupKind::Power, position, power);
+}
+
+void DropSystem::SpawnReferenceDrop(Vector3 position, int item, bool fullPower) {
+    // 原作随机掉落实际为共享轮换表；每三次满足随机掉落条件的击破才前进一项。
+    static constexpr std::array<int,32> items{0,0,1,0,1,0,0,1,1,1,0,0,0,1,1,0,
+                                            1,0,1,0,1,0,1,0,1,0,0,1,1,1,0,2};
+    if(item==-1) {
+        if(referenceDropIndex_++%3!=0)return;
+        item=items[referenceItemIndex_++%items.size()];
+    }
+    if(item<0 || item>2)return;
+    const bool score=item==1 || fullPower;
+    Spawn(score ? PickupKind::Score : PickupKind::Power,position,
+          score ? kScorePointValue : item==2 ? 8 : 1);
+}
+
+void DropSystem::SpawnReferenceBurst(Vector3 position, int count, bool fullPower) {
+    constexpr float spread=72.0F*20.0F/448.0F;
+    std::uniform_real_distribution<float> offset(-spread,spread);
+    for(int index=0;index<std::clamp(count,0,32);++index) {
+        const Vector3 scattered{position.x+offset(random_),position.y+offset(random_),position.z};
+        Spawn(fullPower ? PickupKind::Score : PickupKind::Power,scattered,
+              fullPower ? kScorePointValue : index==0 ? 8 : 1);
+    }
 }
 
 void DropSystem::ConvertEnemyBulletsToStars(BulletSystem& bullets) {
@@ -156,6 +183,7 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
                 reward.power += pickup.value;
             else
                 reward.score += pickup.value;
+            if (pickup.kind == PickupKind::Score) ++reward.pointItems;
             pickup.active = false;
         }
     };

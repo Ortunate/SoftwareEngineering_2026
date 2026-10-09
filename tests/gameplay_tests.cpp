@@ -296,49 +296,67 @@ void RunGameplayTests() {
     assert(bullets.Pool().ActiveCount() == 6);
     bullets.Reset();
 
+    // 使用新典原始帧节点核对道中首发（16 向×3 速度层）与固定 24 秒上限。
+    // Normal 妖精镜像只反转 X 位移；60 帧直行后左右轨迹保持对称，Y 与脚本时钟一致。
+    redmist::stage1::ReferenceScript left,mirrored,dark;
+    left.Reset(0,{60,-32,0},32,1); mirrored.Reset(0,{324,-32,0},32,1,true);
+    bullets.Reset();
+    for(int frame=0;frame<180;++frame) {
+        left.Update(1.0F/60,{},bullets); mirrored.Update(1.0F/60,{},bullets);
+        assert(std::abs(left.sourcePosition.x+mirrored.sourcePosition.x-384)<0.001F);
+        assert(std::abs(left.sourcePosition.y-mirrored.sourcePosition.y)<0.001F);
+    }
+    assert(bullets.Pool().ActiveCount()==0);
+    dark.Reset(3,{192,-32,0},256,1);
+    for(int frame=0;frame<70;++frame)dark.Update(1.0F/60,{},bullets);
+    assert(bullets.Pool().ActiveCount()==0);
+    dark.Update(1.0F/60,{},bullets);
+    assert(bullets.Pool().ActiveCount()==7);
+    bullets.Pool().ForEachActive([](const redmist::Bullet& b) {
+        assert(!b.Dangerous() && std::abs(b.spawnVisualSeconds-10.0F/60)<0.0001F);
+    });
+    bullets.Reset(); dark.Reset(4,{192,-32,0},256,1);
+    for(int frame=0;frame<220;++frame)dark.Update(1.0F/60,{},bullets);
+    assert(bullets.Pool().ActiveCount()==0); // Sub4 在 Normal 是无攻击的后段妖精。
+
     redmist::stage1::RumiaBoss boss;
     boss.StartMidboss();
-    assert(boss.SpellName() == nullptr);
-    assert(std::abs(boss.position.x - 3.0F) < 0.0001F);
-    assert(!boss.Update(1.0F, {}, bullets));
-    assert(bullets.Pool().ActiveCount() == 22);
+    for (int frame=0;frame<160;++frame) assert(!boss.Update(1.0F/60,{},bullets));
+    assert(bullets.Pool().ActiveCount()==0);
+    boss.Update(1.0F/60,{},bullets);
+    assert(bullets.Pool().ActiveCount()==48);
+    assert(std::abs(boss.TimeLimit()-24)<0.001F && boss.SpellName()==nullptr);
     bullets.Reset();
-    assert(!boss.Update(6.6F, {}, bullets));
-    assert(std::abs(boss.position.x + 3.0F) < 0.0001F);
-    assert(boss.SpellName() == nullptr);
-    assert(!boss.Update(9.4F, {}, bullets));
-    assert(boss.Update(5.0F, {}, bullets));
-    assert(!boss.AdvancePhase());
-    assert(!boss.active);
-
+    for (int frame=161;frame<1441;++frame) boss.Update(1.0F/60,{},bullets);
+    assert(boss.AdvancePhase()); // 超时后保留原作 60 帧退场。
+    for (int frame=0;frame<61;++frame) boss.Update(1.0F/60,{},bullets);
+    assert(!boss.AdvancePhase() && !boss.active);
     boss.StartFinalBoss();
-    assert(boss.CurrentEncounter() == redmist::stage1::RumiaBoss::Encounter::Final);
-    assert(boss.SpellName() == nullptr);
-    assert(boss.AdvancePhase());
-    assert(std::string_view(boss.SpellName()) ==
-           "NIGHT SIGN  -  NIGHT BIRD");
     bullets.Reset();
-    boss.Update(2.6F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 36);
-    assert(boss.AdvancePhase());
-    assert(boss.SpellName() == nullptr);
+    for (int frame=0;frame<112;++frame) boss.Update(1.0F/60,{0,0,-6.5F},bullets);
+    assert(bullets.Pool().ActiveCount()==0);
+    boss.Update(1.0F/60,{0,0,-6.5F},bullets);
+    assert(bullets.Pool().ActiveCount()==10); // 首次红弹为十个速度层，而非环/锥。
+    assert(std::abs(boss.TimeLimit()-35)<0.001F);
+    assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="夜符「Night Bird」");
     bullets.Reset();
-    boss.Update(0.8F, {0, 0, -6.5F}, bullets);
-    const redmist::Bullet* fixedBeam = nullptr;
-    bullets.Pool().ForEachActive([&](const redmist::Bullet& bullet) {
-        if (bullet.beamLength > 0) fixedBeam = &bullet;
+    for (int frame=0;frame<122;++frame) boss.Update(1.0F/60,{0,3,-6.5F},bullets);
+    assert(bullets.Pool().ActiveCount()==0);
+    boss.Update(1.0F/60,{0,3,-6.5F},bullets);
+    assert(bullets.Pool().ActiveCount()==1);
+    assert(std::abs(boss.TimeLimit()-25)<0.001F);
+    assert(boss.AdvancePhase() && boss.SpellName()==nullptr);
+    bullets.Reset();
+    for (int frame=0;frame<261;++frame) boss.Update(1.0F/60,{0,0,-6.5F},bullets);
+    int beams=0;
+    bullets.Pool().ForEachActive([&](const redmist::Bullet& b){ if(b.beamLength>0)++beams; });
+    assert(beams==6 && std::abs(boss.TimeLimit()-30)<0.001F);
+    assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="暗符「Demarcation」");
+    bullets.Reset();
+    for (int frame=0;frame<121;++frame) boss.Update(1.0F/60,{0,0,-6.5F},bullets);
+    assert(bullets.Pool().ActiveCount()==34); // rank=16 时原作 -3…6 的弹数修正增加 1 向。
+    bullets.Pool().ForEachActive([](const redmist::Bullet& b){
+        assert(std::abs(b.turnDelaySeconds-40.0F/60)<0.0001F);
+        assert(std::abs(std::abs(b.turnAngle)-std::numbers::pi_v<float>/2)<0.0001F);
     });
-    assert(fixedBeam && !fixedBeam->Dangerous());
-    const Vector3 endpoint = fixedBeam->BeamEnd();
-    boss.Update(0.5F, {9, 9, 0}, bullets);
-    assert(fixedBeam->BeamEnd().x == endpoint.x && fixedBeam->BeamEnd().z == endpoint.z);
-    assert(boss.AdvancePhase());
-    assert(std::string_view(boss.SpellName()) ==
-           "DARK SIGN  -  DEMARCATION");
-    bullets.Reset();
-    boss.Update(2.6F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 64);
-    assert(!boss.AdvancePhase());
-    assert(!boss.active);
-
 }

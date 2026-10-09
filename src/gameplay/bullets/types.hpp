@@ -52,7 +52,25 @@ struct Bullet {
         return offset.x * offset.x + offset.y * offset.y + offset.z * offset.z;
     }
     /// @brief 当前是否可命中或擦弹；暂停时 age 不推进，预警期一直无害。
-    bool Dangerous() const { return active && age >= warningSeconds; }
+    bool Dangerous() const { return active && age >= std::max(warningSeconds,spawnVisualSeconds) && age < dangerEndSeconds; }
+    // 新典延迟转向采用先减速、到点后瞬时旋转/重新瞄准；秒和世界单位/秒。
+    float turnDelaySeconds = 0, turnAngle = 0, turnSpeed = 0;
+    bool turnAimed = false, turnApplied = false;
+    Vector3 baseVelocity{};
+    float launchBoost = 0, launchBoostSeconds = 0, spawnVisualSeconds = 0;
+    float spawnMoveScale = 1; // 10/16/32 帧显现期按原作 1/2、1/2.5、1/3 的速度移动，不参与接触。
+    // turnDelaySeconds 与 launchBoostSeconds 从显现结束起算；age 仍从生成起算。
+    // 光束以 grow 秒展开、末尾 fade 秒收束；dangerEndSeconds 之前才有碰撞。
+    float beamGrowSeconds = 0, beamFadeSeconds = 0, dangerEndSeconds = 1.0e9F;
+    /// @brief 原作光束宽度比例；先保持细线，入射前 30 帧展开，退场按 fade 秒收束；不改变判定时窗。
+    float BeamVisualScale() const {
+        if(beamGrowSeconds<=0)return Dangerous() ? 1 : 0.3F;
+        if(age<beamGrowSeconds-0.5F)return 0.075F;
+        if(age<beamGrowSeconds)return std::clamp(age/beamGrowSeconds,0.075F,1.0F);
+        if(beamFadeSeconds>0 && age>maxAge-beamFadeSeconds)
+            return std::clamp((maxAge-age)/beamFadeSeconds,0.0F,1.0F);
+        return 1;
+    }
     Color color = WHITE;
 };
 

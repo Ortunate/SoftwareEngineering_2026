@@ -51,7 +51,8 @@ int main(int argc, char** argv) {
     if (argc >= 3 && std::string_view(argv[1]) == "--capture-stage") {
         captureFrame = true;
         captureStage = true;
-        captureStageTime = std::clamp(std::strtof(argv[2], nullptr), 0.0F, 180.0F);
+        // 原文对话自动等待与所有 Boss 超时约需 301 秒，截图范围须覆盖战后独白。
+        captureStageTime = std::clamp(std::strtof(argv[2], nullptr), 0.0F, 400.0F);
         if (argc >= 4) capturePath = argv[3];
         if (argc >= 5) captureYaw = std::strtof(argv[4], nullptr);
         if (argc >= 6) capturePitch = std::strtof(argv[5], nullptr);

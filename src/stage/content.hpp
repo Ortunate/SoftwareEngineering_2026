@@ -22,17 +22,24 @@ public:
     virtual void SpawnStageEnemy(const EnemySpec& spec) = 0;
     /// @brief 请求开始道中或关底 Boss，并登记等待战斗结束的异步事件编号。
     virtual void BeginStageBoss(bool final, StageEventId id) = 0;
-    /// @brief 请求开始对话并登记异步事件编号。
-    virtual void BeginStageDialogue(StageEventId id) = 0;
+    /// @brief 请求开始战前或战后对话并登记异步事件编号；afterBattle 决定所用台词及结算路径。
+    virtual void BeginStageDialogue(StageEventId id, bool afterBattle = false) = 0;
     /// @brief 请求显示一条持续指定秒数的提示；接收方须复制需要留存的文本。
     virtual void StageMessage(std::string_view message, float duration) = 0;
 };
 
-/// @brief 关卡对话中的一条台词与说话人信息；两个字符串指针须在对话结束前有效。
+/// @brief 关卡对话中的一条台词与说话人信息；所有字符串指针须在对话结束前有效。
 struct DialogueLine {
     const char* speaker;
     const char* text;
     bool bossSpeaking;
+    /// @brief 非零时为本句停留秒数，否则使用关卡默认；line2Delay 为第二行出现的延迟秒数。
+    float duration = 0, line2Delay = 0;
+    /// @brief Rumia 在首次搭话时才出现，战后独白不显示；introduce 显示宵暗的妖怪名牌。
+    bool showBoss = true, introduce = false;
+    const char* secondLine = "";
+    int expression = 0; // 新典原始表情编号；当前现代立绘沿用角色图，记录编号供表情资产扩展。
+    float textDelay = 0;
 };
 
 /// @brief 一个关卡提供自己的素材、事件、敌人、Boss 和对话内容。
@@ -53,7 +60,7 @@ public:
     /// @throws std::invalid_argument 未规范的批次、缺少异步 ID 或动作参数非法。
     bool HandleEvent(const StageEvent& event, StageEventSink& sink) const;
     /// @brief 返回本关卡的对话台词；底层存储须在展示期间有效。
-    [[nodiscard]] virtual std::span<const DialogueLine> Dialogue() const = 0;
+    [[nodiscard]] virtual std::span<const DialogueLine> Dialogue(bool afterBattle = false) const = 0;
     /// @brief 返回单句台词的展示秒数。
     [[nodiscard]] virtual float DialogueLineDuration() const = 0;
     /// @brief 返回玩家直射弹的外观 ID。

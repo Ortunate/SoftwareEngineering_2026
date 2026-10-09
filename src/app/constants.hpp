@@ -5,7 +5,7 @@
 #include <array>
 
 namespace redmist {
-inline constexpr float kSpellCutInDuration = 2.6F;
+inline constexpr float kSpellCutInDuration = 2.0F;
 inline constexpr std::array<const char*, 12> kBindingNames{
     "FORWARD", "BACKWARD", "MOVE LEFT", "MOVE RIGHT", "ASCEND",
     "DESCEND", "FOCUS / SLOW", "FIRE", "BOMB", "PAUSE", "FIRE (ALTERNATE)", "BOMB (ALTERNATE)",

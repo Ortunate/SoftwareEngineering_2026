@@ -13,6 +13,8 @@ StageDirector::StageDirector(std::span<const StageEvent> events)
     : events_(events), states_(events.size()) {
     for (std::size_t index = 0; index < events_.size(); ++index) {
         const StageEvent& event = events_[index];
+        if (event.atFrame && (*event.atFrame < 0 || event.afterEndOf))
+            throw std::invalid_argument("Invalid absolute StageEvent frame");
         if (!std::isfinite(event.delay) || event.delay < 0.0F) {
             throw std::invalid_argument("StageEvent delay must be nonnegative and finite");
         }
@@ -93,7 +95,8 @@ void StageDirector::Update(float deltaTime, const EventHandler& handler) {
         } else if (nextEvent_ > 0) {
             anchor = *states_[nextEvent_ - 1].startedAt;
         }
-        if (elapsed_ < anchor + event.delay) break;
+        const float due = event.atFrame ? *event.atFrame / 60.0F : anchor + event.delay;
+        if (elapsed_ + 0.00001F < due) break;
 
         // 先推进索引再执行回调；回调可以同步报告结束，也可能触发依赖后续事件。
         const std::size_t startedIndex = nextEvent_;

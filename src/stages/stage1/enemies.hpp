@@ -5,6 +5,7 @@
 #include "gameplay/actors/enemy.hpp"
 #include "stages/stage1/enemy_params.hpp"
 #include "stages/stage1/ids.hpp"
+#include "stages/stage1/reference_script.hpp"
 
 namespace redmist::stage1 {
 
@@ -63,4 +64,20 @@ private:
     float shotTimer_;
 };
 
+/// @brief 按新典 Normal 原始子程序运行的妖精；出生、转弯、停止与发弹以 60 Hz 帧为准。
+class ReferenceEnemy final : public Enemy {
+public:
+    /// @brief 复制出生参数；像素 HP 转换到当前玩家伤害单位，RandomX 只在这里求值一次。
+    explicit ReferenceEnemy(const ReferenceEnemyParams& params);
+    void SetChallengeRank(int rank) override { script_.SetRank(rank); }
+    [[nodiscard]] std::span<const int> SoundEvents() const override { return script_.soundEvents; }
+    [[nodiscard]] int ReferenceDropKind() const override { return sourceItem_; }
+    void Update(float deltaTime, Vector3 playerPosition, BulletSystem& bullets) override;
+private:
+    void Move(float) override {}
+    void UpdateSkills(float, Vector3, BulletSystem&) override {}
+    ReferenceScript script_;
+    bool entered_ = false;
+    int sourceItem_ = -1;
+};
 }  // namespace redmist::stage1

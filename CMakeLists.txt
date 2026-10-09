@@ -47,6 +47,7 @@ add_library(red_mist_engine STATIC
     src/stage/content.cpp
     src/stage/enemy_spec.cpp
     src/stage/system.cpp
+    src/stages/stage1/reference_script.cpp
     src/stages/stage1/boss.cpp
     src/stages/stage1/content.cpp
     src/stages/stage1/dialogue.cpp

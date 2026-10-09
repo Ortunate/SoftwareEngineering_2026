@@ -200,17 +200,13 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 
 ## 弹幕与关卡结构
 
-`BulletSystem` 只创建单颗弹体，并负责对象池、运动更新和清除；它不决定弹幕图案。各敌人子类实现 `Move` 和 `UpdateSkills`，由 `Enemy::Update` 从实例出生后调用；具体技能与各自的计时器由子类持有。`RumiaBoss` 分别处理道中和关底遭遇，并在关底阶段调用两种普通攻击与两张符卡技能函数。道中露米娅没有符卡；关底符卡开始时清除旧弹幕，展示立绘与名称，再释放弹幕。
+一面 Normal 的 222 次逐只出生与 570 条帧指令来自本机《东方红魔乡：新典》数据。`ReferenceScript` 在原像素坐标与 60 Hz 时基执行调用、循环、镜像移动、插值、瞄准、速度层、延迟转向和光束；`ReferenceEnemy`、`RumiaBoss` 将状态接入原生演员生命周期。旧的球面/锥面演员仍可用于调试，实际一面不再使用概括式技能。
 
-第一面的事件表由 `Stage1Content` 提供。`StageEvent::action` 是 `SpawnEnemies`、`StartBoss`、`StartDialogue`、`ShowMessage` 四种带参动作的 `std::variant`；`delay` 表示距上一事件实际开始的秒数，设置 `afterEndOf` 后则表示距指定事件实际结束的秒数。Boss 和对话事件必须带唯一 `id`，并在完成时报告结束。
+`StageEvent::atFrame` 是开局起算的绝对帧，不能同时设置 `afterEndOf`；普通关卡仍可用 `delay` 相对上一事件或指定事件结束调度。道中 Boss 在 1882 帧入场，战斗期间时间轴继续运行并跳过到期杂鱼；5092 帧开始战前对话，之后依次为普通攻击一、夜符「Night Bird」、普通攻击二、暗符「Demarcation」、退场和战后独白。
 
-`SpawnEnemies` 携带 `enemy` 配置、`count`（默认 1）和 `interval`（默认 0.5 秒）。第一只立即生成，其余从本批开始时刻按间隔调度；每次都使用相同出生位置与轨迹。数量必须至少为 1，间隔必须非负且有限，零间隔在同帧生成全部。`StageDirector` 保存各批次进度，跨帧补发所有到期请求，最后一次请求发出后自动结束本批，不等待敌人死亡；池满丢弃的请求也算一次。连续出怪不阻塞后续事件，需要等待整批结束时设置 `afterEndOf`。实例仅在到期时创建，不再提前占槽位等待入场。Boss 与对话清场会取消已启动批次的剩余请求，重置关卡会清空全部执行进度。
+敌机航线与弹幕 X/Y 投影保留，整轮弹幕增加朝玩家深度的 Z 速度，继续支持 6DoF 操作。HP/阈值统一转换到当前伤害单位，原作随机范围和 rank 修正保留；玩家火力、道具运动、碰撞与计分继续适配三维玩法。
 
-Stage1 保留原波次起始间隔与人数，原横列改为固定位置的连续入场，普通妖精左右横穿用两条同时启动的显式事件表达，暗色妖精在各出生点只沿 Z 轴往返。道中 Boss 退场后才开始计算后续出怪的延迟，对话播放完毕后才触发关底 Boss。
-
-暗色妖精只有一种行为：保持 X/Y 不变，以 1.7 世界单位/秒沿 -Z 前进战场 Z 全长的五分之一（当前为 4.6 单位），到达后立即向 18 个球面方向各发射一颗红弹，弹速为 3.5 单位/秒。参考图的疏散环扩展为 X/Y 平面 8 向、沿 Z 轴前后纬圈各 4 向及两极 2 向，相邻方向最小夹角约 45°，不瞄准玩家、不重复攻击。发弹后等待 `retreatDelay`（默认 1 秒），再以相同速度沿 +Z 返回出生位置并失活退场。
-
-当前的三维化方式是将敌人与 Boss 放进可移动的长方体战场，弹幕既有球面放射，也有朝向玩家的三维锥面传播。玩家可以沿三个坐标轴移动和转向。对话以中文改写表现，Z / Enter 推进、Ctrl 跳过；未操作时每句自动播放 2.5 秒。流程顺序参考录像；原作的二维运动投影、逐项掉落表、音效波形、精确时间轴和逐弹参数仍按三维战场调整。录像观察与时间映射见 [Stage 1 对照记录](docs/STAGE1_REFERENCE.md)。
+15 句战前、2 句战后台词采用新典 zh-CN 原文，按原等待时间和双行延迟展示，Z / Enter 推进一句、Ctrl 跳过。场地、侧栏和一面题签使用原始图集，按 16:9 等比留边；角色继续采用现代重绘，当前仍为统一表情。具体数据来源、帧时序、三维约定与验证见 [Stage 1 对照记录](docs/STAGE1_REFERENCE.md)。
 
 ## 开发截图
 
@@ -222,7 +218,7 @@ Stage1 保留原波次起始间隔与人数，原横列改为固定位置的连�
 ./build/red_mist_demo --capture red_mist_capture.png
 ./build/red_mist_demo --capture-gameplay gameplay_capture.png
 ./build/red_mist_demo --capture-options options_capture.png
-./build/red_mist_demo --capture-stage 125 night_bird_capture.png
+./build/red_mist_demo --capture-stage 215 night_bird_capture.png
 ./build/red_mist_demo --capture-stage 6 side_view.png 90 20
 ./build/macos-debug/red_mist_demo --capture-stage 8 hitbox_capture.png 0 0 --debug-render
 ```

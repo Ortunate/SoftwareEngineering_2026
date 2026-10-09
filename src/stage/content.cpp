@@ -32,7 +32,7 @@ struct EventExecutor {
 
     bool operator()(const StartDialogue&) const {
         if (!event.id) throw std::invalid_argument("StartDialogue requires an id");
-        sink.BeginStageDialogue(*event.id);
+        sink.BeginStageDialogue(*event.id, std::get<StartDialogue>(event.action).afterBattle);
         return false;
     }
 

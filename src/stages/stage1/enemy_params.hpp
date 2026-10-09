@@ -29,4 +29,15 @@ struct OrbParams {
     Movement movement = Movement::FloatForward;
 };
 
+/// @brief 新典逐只出生配置；position 为世界坐标，sub 为 0…4，HP/score 保留原作单位。
+/// randomX 在生成瞬间确定横坐标；seed 为实例独立的可重放种子；mirrored 反转 X 轴位移。
+struct ReferenceEnemyParams {
+    Vector3 position{};
+    int sub = 0;
+    bool mirrored = false, randomX = false;
+    float sourceHealth = 32;
+    int sourceScore = 300;
+    unsigned seed = 1;
+    int sourceItem = -1; // 原作 -1 为全关共享轮换掉落，0 为固定小 P 点。
+};
 }  // namespace redmist::stage1

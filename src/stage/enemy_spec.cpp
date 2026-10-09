@@ -14,7 +14,11 @@ bool IsValidEnemySpec(const EnemySpec& spec) {
             !std::isfinite(params.position.y) ||
             !std::isfinite(params.position.z)) return false;
         // 枚举按连续编号定义；转换为无符号值也会拒绝负数伪造的枚举。
-        if constexpr (std::is_same_v<Params, stage1::OrbParams>) {
+        if constexpr (std::is_same_v<Params, stage1::ReferenceEnemyParams>) {
+            return params.sub >= 0 && params.sub <= 4 && std::isfinite(params.sourceHealth) &&
+                   params.sourceHealth > 0 && params.sourceScore >= 0 &&
+                   params.sourceItem >= -1 && params.sourceItem <= 0;
+        } else if constexpr (std::is_same_v<Params, stage1::OrbParams>) {
             return static_cast<unsigned>(params.movement) <=
                    static_cast<unsigned>(Params::Movement::CrossArena);
         } else if constexpr (std::is_same_v<Params, stage1::FairyParams>) {

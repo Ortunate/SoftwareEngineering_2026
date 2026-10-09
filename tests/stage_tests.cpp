@@ -234,7 +234,7 @@ struct EventProbe final : StageEventSink {
         if (final) ++finalBosses;
         else { ++midbosses; midbossId = id; }
     }
-    void BeginStageDialogue(StageEventId id) override { ++dialogues; dialogueId = id; }
+    void BeginStageDialogue(StageEventId id, bool = false) override { ++dialogues; dialogueId = id; }
     void StageMessage(std::string_view text, float duration) override {
         assert(!text.empty() && duration > 0.0F);
         ++messages;
@@ -250,27 +250,23 @@ void TestStage1Content() {
     const auto execute = [&](const StageEvent& event) {
         return content->HandleEvent(event, probe);
     };
-    for (int frame = 0; frame < 400; ++frame) stage.Update(0.125F, execute);
-    assert(probe.midbosses == 1 && probe.dialogues == 0 && probe.finalBosses == 0);
-    assert(probe.enemies.size() == 64 && probe.messages == 1);
+    for (int frame=0;frame<1882;++frame) stage.Update(1.0F/60,execute);
+    // 道中 Boss 的出生以 1882 帧为准；其结束不重置或暂停后续出生时间。
+    stage.Update(1.0F/60,execute);
+    assert(probe.midbosses==1 && probe.dialogues==0 && probe.finalBosses==0);
     assert(stage.EndEvent(probe.midbossId));
-    stage.Update(2.5F, execute);
-    assert(probe.enemies.size() == 64);
-    stage.Update(0.5F, execute);
-    assert(probe.enemies.size() == 65);
-    for (int frame = 0; frame < 480; ++frame) stage.Update(0.125F, execute);
-    assert(probe.dialogues == 1 && probe.finalBosses == 0);
-    assert(probe.enemies.size() == 141);
+    for (int frame=1883;frame<5093;++frame) stage.Update(1.0F/60,execute);
+    assert(probe.enemies.size()==222 && probe.dialogues==1 && probe.finalBosses==0);
     assert(stage.EndEvent(probe.dialogueId));
-    stage.Update(0.0F, execute);
-    assert(probe.finalBosses == 1);
-    stage.Update(100.0F, execute);
-    assert(probe.finalBosses == 1 && probe.enemies.size() == 141);
-
-    stage.Reset();
-    probe.enemies.clear();
-    for (int frame = 0; frame < 400; ++frame) stage.Update(0.125F, execute);
-    assert(probe.enemies.size() == 64 && probe.midbosses == 2 && probe.dialogues == 1);
+    stage.Update(0,execute);
+    assert(probe.finalBosses==1);
+    assert(stage.EndEvent(3));
+    stage.Update(0,execute);
+    assert(probe.dialogues==2); // 原作两句战后独白属于单独的异步对话。
+    assert(content->Dialogue().size()==15 && content->Dialogue(true).size()==2);
+    stage.Reset(); probe.enemies.clear();
+    stage.Update(100,execute);
+    assert(probe.enemies.size()==222 && probe.midbosses==2);
 
     const auto fairy = content->CreateEnemy(stage1::FairyParams{
         {1.0F, 2.0F, 5.0F}, stage1::FairyParams::Movement::Helix});

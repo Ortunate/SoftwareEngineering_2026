@@ -21,11 +21,11 @@ void Text(const menu::Canvas& canvas, Font font, const char* text,
     DrawTextEx(font, text, point, size * canvas.scale, canvas.scale, color);
 }
 
-/// @brief 回纹边框由程序绘制，保证标题和深色页面缩放时线宽、角饰保持一致。
-void Frame(const menu::Canvas& canvas, Color color) {
-    DrawRectangleLinesEx(canvas.Rect(18, 18, 1064, 724), canvas.scale, color);
-    for (float x : {18.0F, 1062.0F}) {
-        for (float y : {18.0F, 722.0F}) {
+/// @brief 按设计像素 width/height 绘制回纹边框；标题使用窗口全幅，其他页采用默认设计尺寸。
+void Frame(const menu::Canvas& canvas, Color color, float width = 1100, float height = 760) {
+    DrawRectangleLinesEx(canvas.Rect(18, 18, width - 36, height - 36), canvas.scale, color);
+    for (float x : {18.0F, width - 38}) {
+        for (float y : {18.0F, height - 38}) {
             DrawRectangleRec(canvas.Rect(x, y, 20, 20), color);
             DrawRectangleRec(canvas.Rect(x + 4, y + 4, 12, 12), kIvory);
             DrawRectangleRec(canvas.Rect(x + 6, y + 6, 8, 8), color);
@@ -62,55 +62,65 @@ void PageButton(const menu::Canvas& canvas, Font font, Rectangle bounds, const c
 }  // namespace
 
 void Game::DrawMainMenu() const {
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+    const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), menu::kTitleRowCount);
+    const auto& canvas = layout.canvas;
     const auto& common = assets_.Common();
     ClearBackground(kIvory);
     if (common.titleBackground.id != 0) {
-        // 裁掉右侧多余留白，保持人物不变形；等比素材比设计画布更宽。
-        const float sourceWidth = common.titleBackground.height * (1100.0F / 760.0F);
         DrawTexturePro(common.titleBackground,
-            {0, 0, sourceWidth, static_cast<float>(common.titleBackground.height)},
-            canvas.Rect(0, 0, 1100, 760), {}, 0, WHITE);
+            layout.BackgroundSource(common.titleBackground.width, common.titleBackground.height),
+            canvas.Rect(0, 0, layout.width, layout.height), {}, 0, WHITE);
     }
-    Frame(canvas, Color{134, 50, 57, 210});
-    Text(canvas, common.uiFont, "东方红魔乡", 450, 94, 61, kScarlet);
-    Text(canvas, common.uiFont, "the Embodiment of Scarlet Devil", 455, 171, 18, kScarlet);
-    Text(canvas, common.uiFont, "三维新绘 · 第一面", 455, 205, 23, kScarlet);
+    // 方形/竖屏的背景裁剪会移除右侧留白，底板保障插画上方的标题和菜单对比度。
+    if (layout.compact) {
+        DrawRectangleRec(canvas.Rect(28, 28, layout.width - 56, 188), Color{252, 246, 236, 225});
+        DrawRectangleRec(canvas.Rect(layout.menuLeft - 12, layout.menuTop + (titleIntro_ ? 250 : -10),
+            layout.menuWidth + 24, titleIntro_ ? 94 : layout.rowCount * 45 + 12), Color{252, 246, 236, 228});
+    }
+    Frame(canvas, Color{134, 50, 57, 210}, layout.width, layout.height);
+    const float titleX = layout.compact ? layout.width / 2 : layout.width - 650;
+    Text(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet, layout.compact);
+    Text(canvas, common.uiFont, "the Embodiment of Scarlet Devil", titleX + (layout.compact ? 0 : 5),
+         layout.compact ? 125 : 171, 18, kScarlet, layout.compact);
+    Text(canvas, common.uiFont, "三维新绘 · 第一面", titleX + (layout.compact ? 0 : 5),
+         layout.compact ? 163 : 205, 23, kScarlet, layout.compact);
     if (titleIntro_) {
         const float pulse = 0.7F + 0.3F * std::sin(static_cast<float>(GetTime()) * 2.5F);
-        Text(canvas, common.uiFont, "PRESS Z / ENTER", 832, 480, 29, Fade(kScarlet, pulse), true);
+        Text(canvas, common.uiFont, "PRESS Z / ENTER", layout.menuLeft + layout.menuWidth / 2,
+             layout.menuTop + 280, 29, Fade(kScarlet, pulse), true);
     } else {
         constexpr std::array<const char*, 11> labels{
             "Start", "Extra Start", "Practice Start", "Spell Practice", "Replay",
             "Score", "Music Room", "Credit", "Option", "Quit", "Shot Test"};
-#ifdef RED_MIST_DEBUG_FEATURES
-        constexpr int count = 11;
-#else
-        constexpr int count = 10;
-#endif
+        constexpr int count = menu::kTitleRowCount;
         for (int index = 0; index < count; ++index) {
-            const auto row = menu::MainRow(canvas, index);
+            const auto row = layout.Row(index);
+            const float rowY = layout.menuTop + index * 45;
             const bool selected = selectedMenuItem_ == index;
             const bool locked = index == 1 || index == 4;
             if (selected) {
                 DrawRectangleRec(row, Color{255, 250, 240, 175});
-                const auto center = canvas.Point(759, 192 + index * 45);
+                const auto center = canvas.Point(layout.menuLeft + 14, rowY + 20);
                 DrawCircleV(center, 8 * canvas.scale, kScarlet);
                 DrawCircleV({center.x, center.y - 4 * canvas.scale}, 3 * canvas.scale, kIvory);
             }
-            Text(canvas, common.uiFont, labels[index], selected ? 775 : 790,
-                174 + index * 45, locked ? 23 : 28,
+            Text(canvas, common.uiFont, labels[index], layout.menuLeft + (selected ? 30 : 45),
+                rowY + 2, locked ? 23 : 28,
                 locked ? Color{155, 116, 117, 100} : selected ? kScarlet : Color{160, 87, 94, 220});
-            const auto left = canvas.Point(775, 213 + index * 45);
-            const auto right = canvas.Point(1047, 213 + index * 45);
+            const auto left = canvas.Point(layout.menuLeft + 30, rowY + 41);
+            const auto right = canvas.Point(layout.menuLeft + layout.menuWidth - 13, rowY + 41);
             DrawLineEx(left, right, canvas.scale, selected ? kScarlet : Color{178, 119, 124, 70});
         }
     }
-    DrawRectangleRec(canvas.Rect(330, 676, 730, 62), Color{252, 246, 236, 225});
-    Text(canvas, common.uiFont, "Z / Enter 确认   方向键选择   Esc 返回", 550, 688, 15, kScarlet, true);
+    DrawRectangleRec(canvas.Rect(layout.compact ? 28 : layout.width - 770, layout.height - 84,
+        layout.compact ? layout.width - 56 : 730, 62), Color{252, 246, 236, 225});
+    Text(canvas, common.uiFont, "Z / Enter 确认   方向键选择   Esc 返回",
+        layout.compact ? layout.width / 2 : layout.width - 550, layout.height - 72, 15, kScarlet, true);
     // 页脚放在浅色底板内，繁密插画上仍保持可读。
-    Text(canvas, common.uiFont, "Stage 1 · Normal · 3D", 832, 708, 17, kScarlet, true);
-    Text(canvas, common.uiFont, "Fan recreation · 原作 Team Shanghai Alice", 550, 727, 12, kScarlet, true);
+    Text(canvas, common.uiFont, "Stage 1 · Normal · 3D", layout.compact ? layout.width / 2 : layout.width - 268,
+        layout.height - 52, 17, kScarlet, true);
+    Text(canvas, common.uiFont, "Fan recreation · 原作 Team Shanghai Alice",
+        layout.compact ? layout.width / 2 : layout.width - 550, layout.height - 33, 12, kScarlet, true);
 }
 
 void Game::DrawOptions() const {

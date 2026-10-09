@@ -21,11 +21,7 @@ void Game::UpdateMainMenu() {
         }
         return;
     }
-#ifdef RED_MIST_DEBUG_FEATURES
-    constexpr int itemCount = 11;
-#else
-    constexpr int itemCount = 10;
-#endif
+    constexpr int itemCount = menu::kTitleRowCount;
     const int previous = selectedMenuItem_;
     const auto available = [](int index) { return index != 1 && index != 4; };
     int offset = 0;
@@ -36,12 +32,12 @@ void Game::UpdateMainMenu() {
         while (!available(selectedMenuItem_));
     }
     if (IsKeyPressed(KEY_ESCAPE)) selectedMenuItem_ = 9;
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+    const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), itemCount);
     const Vector2 mouse = GetMousePosition();
     const Vector2 movement = GetMouseDelta();
     bool hovered = false;
     for (int index = 0; index < itemCount; ++index) {
-        if (available(index) && CheckCollisionPointRec(mouse, menu::MainRow(canvas, index))) {
+        if (available(index) && CheckCollisionPointRec(mouse, layout.Row(index))) {
             hovered = true;
             if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 selectedMenuItem_ = index;

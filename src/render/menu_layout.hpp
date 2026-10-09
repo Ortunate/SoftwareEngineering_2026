@@ -39,8 +39,46 @@ inline Rectangle OptionRow(const Canvas& canvas, int index) {
 inline Rectangle OptionArrow(const Canvas& canvas, int index, int direction) {
     return canvas.Rect(direction < 0 ? 670 : 886, 165 + index * 48, 32, 32);
 }
-/// @brief 标题右侧菜单的屏幕点击矩形；index 为 0～9（Debug 增加第 10 行）。
-inline Rectangle MainRow(const Canvas& canvas, int index) {
-    return canvas.Rect(745, 172 + index * 45, 315, 40);
-}
+/// @brief 标题页的响应式布局；使用完整窗口，方形/竖屏将标题放到菜单上方。
+/// width/height 为窗口逻辑像素，须为正数；行数包含 Debug 专用项，绘制和点击必须共用。
+/// canvas 坐标原点在窗口左上角，不采用其他菜单页的固定画布居中留边。
+struct TitleLayout {
+    Canvas canvas;
+    float width;
+    float height;
+    bool compact;
+    float menuLeft;
+    float menuTop;
+    float menuWidth;
+    int rowCount;
+
+    TitleLayout(int windowWidth, int windowHeight, int count)
+        : canvas(windowWidth, windowHeight), compact(windowWidth < windowHeight * 1.2F), rowCount(count) {
+        if (compact) canvas.scale = std::min(windowWidth / 900.0F, windowHeight / 900.0F);
+        canvas.origin = {};
+        width = windowWidth / canvas.scale;
+        height = windowHeight / canvas.scale;
+        menuWidth = compact ? 390.0F : 315.0F;
+        menuLeft = width - menuWidth - (compact ? 28.0F : 40.0F);
+        // 窄屏先为标题保留 240 像素；最后一行和页脚之间始终留出操作空间。
+        menuTop = compact ? std::max(240.0F, (height - count * 45 - 100 + 240) / 2)
+                          : 172 + (height - 760) / 2;
+    }
+    /// @brief 菜单行的窗口点击矩形；index 为 0～rowCount-1，行距为设计像素。
+    [[nodiscard]] Rectangle Row(int index) const {
+        return canvas.Rect(menuLeft, menuTop + index * 45, menuWidth, 40);
+    }
+    /// @brief 等比铺满窗口的素材裁剪矩形（纹理像素）；纹理尺寸须为正，保留左侧人物。
+    [[nodiscard]] Rectangle BackgroundSource(int textureWidth, int textureHeight) const {
+        const float cover = std::max(width / textureWidth, height / textureHeight);
+        const float sourceWidth = width / cover;
+        const float sourceHeight = height / cover;
+        return {0, (textureHeight - sourceHeight) * 0.25F, sourceWidth, sourceHeight};
+    }
+};
+#ifdef RED_MIST_DEBUG_FEATURES
+inline constexpr int kTitleRowCount = 11;
+#else
+inline constexpr int kTitleRowCount = 10;
+#endif
 }  // namespace redmist::menu

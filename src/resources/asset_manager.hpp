@@ -22,6 +22,7 @@ struct CommonAssets {
     Shader skyboxShader{};
     Texture2D titleBackground{};
     Texture2D reimuPortrait{};
+    Texture2D referenceFrame{}, referenceStage1{}; // 管理器独占的原作侧栏图集与一面题签。
     Font uiFont{}; // 管理器持有；缺失时借用 raylib 默认字体，不能重复释放。
 };
 

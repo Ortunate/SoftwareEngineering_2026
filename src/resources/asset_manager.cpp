@@ -13,7 +13,7 @@ namespace redmist {
 namespace {
 
 /// @brief 音效清单项，资源路径相对 assets 根目录。
-constexpr std::array<SoundDefinition, 12> kCommonSounds{{
+constexpr std::array<SoundDefinition, 18> kCommonSounds{{
     {"menu_move", "common/se/menu_move.wav"},
     {"menu_confirm", "common/se/menu_confirm.wav"},
     {"menu_cancel", "common/se/menu_cancel.wav"},
@@ -26,6 +26,13 @@ constexpr std::array<SoundDefinition, 12> kCommonSounds{{
     {"spell", "common/se/spell.wav"},
     {"clear", "common/se/clear.wav"},
     {"full_power", "common/se/full_power.wav"},
+    {"reference_6", "common/se/reference_6.wav"},
+    {"reference_7", "common/se/reference_7.wav"},
+    {"reference_8", "common/se/reference_8.wav"},
+    {"reference_9", "common/se/reference_9.wav"},
+    {"reference_16", "common/se/reference_16.wav"},
+    {"reference_18", "common/se/reference_18.wav"},
+
 }};
 
 /// @brief 读取一张贴图；调用方负责在对应生命周期结束时释放。
@@ -126,6 +133,8 @@ AssetManager::~AssetManager() {
 void AssetManager::LoadCommon() {
     if (commonLoaded_) return;
     commonLoaded_ = true;
+    common_.referenceFrame = LoadTextureAsset(root_ / "common/reference_frame.png");
+    common_.referenceStage1 = LoadTextureAsset(root_ / "common/reference_stage1.png");
     common_.titleBackground = LoadTextureAsset(root_ / "common/title_reimu_modern.png");
     common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/reimu_cutout.png");
     const auto fontPath = root_ / "common/ui_font.otf";
@@ -240,6 +249,8 @@ void AssetManager::UnloadCommon() {
     SwitchMusic(MusicSlot::None);
     UnloadSounds(commonSounds_);
     UnloadMusicAsset(menuMusic_);
+    UnloadTextureAsset(common_.referenceFrame);
+    UnloadTextureAsset(common_.referenceStage1);
     UnloadTextureAsset(common_.titleBackground);
     UnloadTextureAsset(common_.reimuPortrait);
     if (common_.uiFont.texture.id != 0 &&

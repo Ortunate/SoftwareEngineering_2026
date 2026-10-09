@@ -1,6 +1,6 @@
 # 一面新增素材
 
-本批素材用于现代化重绘版本。标题与立绘使用内置 ImageGen 生成；游戏界面文字、边框、花纹由程序绘制。
+本批素材用于现代化重绘版本。标题与立绘使用内置 ImageGen 生成；游戏界面文字由程序绘制，战斗边框与花纹使用本机参考游戏的原始图集。
 
 | 文件 | 用途与生成提示 |
 |---|---|
@@ -10,9 +10,24 @@
 
 PNG 保留透明通道，原始立绘保留在目录中供比较。生成方式为内置 ImageGen，并非精确复制参考游戏像素。
 
+## 新典界面图集
+
+`reference_frame.png` 为 CM 包的 `frame_zh-CN.dds` 格式转换，`reference_stage1.png` 为 `frame_stage1_zh-CN.dds` 格式转换。没有重采样或重新绘制；图集来源坐标按 ANM 的 sprite 定义使用，原生 3D 视口适配到其透明场地窗口。
+
 ## 音效
 
-`tools/generate_sound_assets.py` 使用标准库合成 44.1 kHz、单声道、16-bit PCM WAV，固定随机种子，覆盖菜单移动/确认/取消、射击、击破、受击、Bomb、擦弹、拾取、符卡、通关、满火力共 12 种事件。运行 `python3 tools/generate_sound_assets.py assets/runtime/common/se` 可重建。音效是适配三维版的合成替代音色，尚未逐项比对原作波形。
+当前运行时 WAV 来自本机新典 IN 包，保留原始波形：
+
+| 运行时名 | 源文件 |
+|---|---|
+| menu_move / menu_confirm / menu_cancel | select00 / ok00 / cancel00 |
+| shoot / enemy_down / hit | plst00 / enep00 / pldead00 |
+| bomb / graze / pickup | gun00 / graze / item00 |
+| spell / clear / full_power | kira00 / extend / powerup |
+| reference_6 / 7 / 8 / 9 | power1 / tan00 / tan01 / tan02 |
+| reference_16 / 18 | lazer00 / enep01 |
+
+`reference_*` 按原始帧指令 106 的编号播放。`tools/generate_sound_assets.py` 仍保留为无参考素材时的合成替代工具；运行它会覆盖同名 WAV，不是当前素材的重建命令。
 
 ## 中文字体
 

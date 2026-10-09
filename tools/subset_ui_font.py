@@ -15,7 +15,7 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     characters = set(chr(code) for code in range(32, 127))
-    characters.update("·～「」：，。！？ / —")
+    characters.update("·～「」：，。！？（）★…←、 / —")
     for path in args.source.rglob("*"):
         if path.suffix in {".cpp", ".hpp"}:
             characters.update(char for char in path.read_text() if '\u4e00' <= char <= '\u9fff')

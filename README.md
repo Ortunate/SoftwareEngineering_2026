@@ -101,6 +101,20 @@ ctest --test-dir build --output-on-failure
 
 Apple Silicon 与 Intel Mac 均使用相同命令。首次启动时，系统可能要求允许程序接收键盘输入。
 
+### 可双击的原生 app
+
+在项目根目录使用 Release 预设构建并打包：
+
+```bash
+cmake --preset macos-release
+cmake --build --preset macos-release --target red_mist_demo
+python3 tools/package_game_macos.py
+```
+
+生成 `output/RedMist3D.app`，包含原生游戏和运行时素材，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/red_mist_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
+
+工具拒绝覆盖已有 app；再次打包时可用 `--output output/RedMist3D-new.app` 指定新目标，或用 `--build` 指定其他构建目录。生成的 app 与截图不提交到 Git。
+
 ## Windows Visual Studio
 
 本次验证环境为 VS 2026、CMake 4.4.3、raylib 6.0。默认依赖仍为 raylib 5.5；VS 2022 用户将生成器改为 `Visual Studio 17 2022`。VS 2026 需要支持该生成器的 CMake 4.2+。

@@ -183,7 +183,7 @@ void OrbEnemy::FireCone(BulletSystem& bullets, Vector3 playerPosition) {
 
 ReferenceEnemy::ReferenceEnemy(const ReferenceEnemyParams& params)
     : Enemy(params.sub < 3 ? kFairy : kDarkFairy, params.position, {}), sourceItem_(params.sourceItem) {
-    Vector3 source{position.x/kReferenceScale+192, (10-position.y)/kReferenceScale, (7.2F-position.z)/kReferenceScale};
+    Vector3 source = ReferenceSourcePosition(position);
     if (params.randomX) source.x = static_cast<float>((params.seed * 1664525U + 1013904223U) >> 8) / 16777216.0F * 384;
     script_.Reset(params.sub,source,params.sourceHealth,params.seed,params.mirrored);
     position = origin = script_.Position();

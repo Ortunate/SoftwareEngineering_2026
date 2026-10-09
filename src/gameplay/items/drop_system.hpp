@@ -71,7 +71,7 @@ public:
     /// 满 Power 时生成点数；计数属于整关，Clear 随机初始化两个表偏移。
     void SpawnReferenceDrop(Vector3 position, int item, bool fullPower);
     /// @brief 执行 ins_119；count 限制在 0…32，未满 Power 时首个大 P（8），其余小 P（1）。
-    /// 散落范围为 X/Y 各 ±72 原作像素，满 Power 时全部转为点数。
+    /// 散落范围为 X/Z 各 ±72 原作像素，Y 保持敌人高度，满 Power 时全部转为点数。
     void SpawnReferenceBurst(Vector3 position, int count, bool fullPower);
     /// @brief 将当前全部活动敌弹在原位置转成立即追踪玩家的星点，保留玩家弹。
     /// @param bullets 借用的弹幕系统；转换的敌弹失活，不再参与碰撞。

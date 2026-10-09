@@ -325,11 +325,19 @@ void RunDropTests() {
 
     // 原作脚本散落 5 个道具：未满 Power 时 8+1+1+1+1，满 Power 时为 5 个点数。
     drops.Clear();
-    drops.SpawnReferenceBurst({},5,false);
+    constexpr Vector3 burstOrigin{1,2,3};
+    drops.SpawnReferenceBurst(burstOrigin,5,false);
     int burstCount=0, burstPower=0;
+    bool spreadAlongZ=false;
     drops.ForEachActive([&](const Pickup& item) { ++burstCount; burstPower+=item.value;
-        assert(item.kind==PickupKind::Power); });
-    assert(burstCount==5 && burstPower==12);
+        assert(item.kind==PickupKind::Power);
+        // 脚本道具与敌机共用 X/Z 平面，散落后高度不变，后续沿 -Z 落向玩家。
+        assert(item.position.y==burstOrigin.y);
+        assert(std::abs(item.position.x-burstOrigin.x)<=72.0F*20/448);
+        assert(std::abs(item.position.z-burstOrigin.z)<=72.0F*20/448);
+        if(std::abs(item.position.z-burstOrigin.z)>0.01F)spreadAlongZ=true;
+    });
+    assert(burstCount==5 && burstPower==12 && spreadAlongZ);
     drops.Clear(); drops.SpawnReferenceBurst({},5,true);
     burstCount=0;
     drops.ForEachActive([&](const Pickup& item) { ++burstCount; assert(item.kind==PickupKind::Score); });

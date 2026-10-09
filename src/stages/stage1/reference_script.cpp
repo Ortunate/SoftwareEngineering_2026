@@ -173,12 +173,12 @@ void ReferenceScript::Emit(const reference::Instruction& i, Vector3 player, Bull
     const float first=Value(a[4])==0 ? 0 : std::max(0.3F,Value(a[4])+influence);
     const float last=std::max(0.3F,Value(a[5])+influence/2);
     const Vector3 origin=ReferencePosition(Add(sourcePosition,offset_));
-    // 原作二维角度与位移完整保留在 X/Y 投影；同一齐射按各速度层的原作到达时间推进深度。
-    // 深度坡度在发射时锁定，使弹幕真正穿过 3D 玩家所在平面，避免正面视角把整张弹幕看成一条线。
-    const float planarDistance=std::hypot(player.x-origin.x,player.y-origin.y);
-    const float depthSlope=std::clamp((player.z-origin.z)/std::max(planarDistance,4.0F),-3.0F,3.0F);
-    const float depthFactor=std::sqrt(1+depthSlope*depthSlope);
-    const float aim=std::atan2(origin.y-player.y,player.x-origin.x);
+    // 原作二维角度与位移完整保留在 X/Z 投影；源 Y 向下对应世界 -Z，源正角度因此绕世界 +Y。
+    // 整轮在发射时锁定高度坡度，各速度层沿 Y 同步扩展，玩家升降不会改变原扇形或环的投影结构。
+    const float planarDistance=std::hypot(player.x-origin.x,player.z-origin.z);
+    const float heightSlope=std::clamp((player.y-origin.y)/std::max(planarDistance,4.0F),-3.0F,3.0F);
+    const float heightFactor=std::sqrt(1+heightSlope*heightSlope);
+    const float aim=std::atan2(origin.z-player.z,player.x-origin.x);
     for(int layer=0;layer<layers;++layer) for(int n=0;n<count;++n) {
         float angle=Value(a[6]);
         if(i.opcode<=68) {
@@ -186,20 +186,20 @@ void ReferenceScript::Emit(const reference::Instruction& i, Vector3 player, Bull
             if(n%2)fan=-fan;
             angle+=fan+(i.opcode==67 ? aim : 0);
         } else angle+=n*2*kPi/count+layer*Value(a[7])+(i.opcode==69 ? aim : 0);
-        const Vector3 direction{std::cos(angle),-std::sin(angle),depthSlope};
+        const Vector3 direction{std::cos(angle),heightSlope,-std::sin(angle)};
         const float speed=first-(first-last)*layer/layers;
         const VisualId visual=color<=4 ? kRedBullet : color<=8 ? kBlueBullet : kGreenSphere;
         Bullet* bullet=bullets.Spawn(BulletOwner::Enemy,origin,Multiply(direction,speed*60*kReferenceScale),
                 (type==2 ? 5.0F : 2.0F)*kReferenceScale,kColors[color],visual);
         if(!bullet) continue;
-        bullet->rotationAxis={0,0,-1};
+        bullet->rotationAxis={0,1,0};
         const int flags=static_cast<int>(a[8]);
         if(flags&16)bullet->acceleration=Multiply(direction,effects_[4]*3600*kReferenceScale);
-        if(flags&1) { bullet->launchBoost=5*60*kReferenceScale*depthFactor; bullet->launchBoostSeconds=16.0F/60;
+        if(flags&1) { bullet->launchBoost=5*60*kReferenceScale*heightFactor; bullet->launchBoostSeconds=16.0F/60;
                      bullet->baseVelocity=bullet->velocity; }
         if(flags&(64|128)) {
             bullet->turnDelaySeconds=effects_[0]/60;
-            bullet->turnAngle=effects_[4]; bullet->turnSpeed=effects_[5]*60*kReferenceScale*depthFactor;
+            bullet->turnAngle=effects_[4]; bullet->turnSpeed=effects_[5]*60*kReferenceScale*heightFactor;
             bullet->turnAimed=(flags&128)!=0; bullet->baseVelocity=bullet->velocity;
         }
         // etama3.anm 的显现脚本结束于 10/16/32 帧；ECL 运动特效在显现结束后才起算。

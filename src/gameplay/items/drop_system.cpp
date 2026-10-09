@@ -115,7 +115,7 @@ void DropSystem::SpawnReferenceBurst(Vector3 position, int count, bool fullPower
     constexpr float spread=72.0F*20.0F/448.0F;
     std::uniform_real_distribution<float> offset(-spread,spread);
     for(int index=0;index<std::clamp(count,0,32);++index) {
-        const Vector3 scattered{position.x+offset(random_),position.y+offset(random_),position.z};
+        const Vector3 scattered{position.x+offset(random_),position.y,position.z+offset(random_)};
         Spawn(fullPower ? PickupKind::Score : PickupKind::Power,scattered,
               fullPower ? kScorePointValue : index==0 ? 8 : 1);
     }

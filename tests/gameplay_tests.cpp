@@ -297,7 +297,18 @@ void RunGameplayTests() {
     bullets.Reset();
 
     // 使用新典原始帧节点核对道中首发（16 向×3 速度层）与固定 24 秒上限。
-    // Normal 妖精镜像只反转 X 位移；60 帧直行后左右轨迹保持对称，Y 与脚本时钟一致。
+    // 入场从 +Z 场外缓冲带开始，源纵向贯穿战场深度，高度不参与二维出怪轨迹。
+    const Vector3 entry=redmist::stage1::ReferencePosition({192,-32,0});
+    assert(entry.x==0 && entry.y==0 && entry.z>11 && entry.z<11.5F);
+    const Vector3 exit=redmist::stage1::ReferencePosition({192,448,0});
+    assert(exit.y==0 && std::abs(exit.z+10)<0.0001F);
+    redmist::stage1::ReferenceEnemy entryEnemy({entry});
+    entryEnemy.Update(2.0F/60,{},bullets);
+    assert(entryEnemy.active && entryEnemy.position.z<entry.z && entryEnemy.position.y==0);
+    // 带高度的世界出生点经过演员的逆映射后仍保留该高度，避免构造路径混用旧坐标系。
+    redmist::stage1::ReferenceEnemy elevatedEnemy({{entry.x,2,entry.z}});
+    assert(std::abs(elevatedEnemy.position.y-2)<0.0001F);
+    // Normal 妖精镜像只反转 X 位移；直行和转弯后左右轨迹保持对称，Z 与脚本时钟一致。
     redmist::stage1::ReferenceScript left,mirrored,dark;
     left.Reset(0,{60,-32,0},32,1); mirrored.Reset(0,{324,-32,0},32,1,true);
     bullets.Reset();
@@ -305,16 +316,28 @@ void RunGameplayTests() {
         left.Update(1.0F/60,{},bullets); mirrored.Update(1.0F/60,{},bullets);
         assert(std::abs(left.sourcePosition.x+mirrored.sourcePosition.x-384)<0.001F);
         assert(std::abs(left.sourcePosition.y-mirrored.sourcePosition.y)<0.001F);
+        assert(std::abs(left.Position().x+mirrored.Position().x)<0.001F);
+        assert(std::abs(left.Position().z-mirrored.Position().z)<0.001F);
+        assert(left.Position().y==0 && mirrored.Position().y==0);
     }
     assert(bullets.Pool().ActiveCount()==0);
     dark.Reset(3,{192,-32,0},256,1);
-    for(int frame=0;frame<70;++frame)dark.Update(1.0F/60,{},bullets);
+    constexpr Vector3 raisedPlayer{2,3,-6.5F};
+    for(int frame=0;frame<70;++frame)dark.Update(1.0F/60,raisedPlayer,bullets);
     assert(bullets.Pool().ActiveCount()==0);
-    dark.Update(1.0F/60,{},bullets);
+    dark.Update(1.0F/60,raisedPlayer,bullets);
     assert(bullets.Pool().ActiveCount()==7);
-    bullets.Pool().ForEachActive([](const redmist::Bullet& b) {
+    int aimedCenters=0;
+    bullets.Pool().ForEachActive([&](const redmist::Bullet& b) {
         assert(!b.Dangerous() && std::abs(b.spawnVisualSeconds-10.0F/60)<0.0001F);
+        assert(b.position.y==0 && b.velocity.y>0);
+        assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
+        const Vector3 toPlayer=redmist::BulletSystem::DirectionTo(b.position,raisedPlayer);
+        const Vector3 direction=redmist::pattern::Normalize(b.velocity);
+        const float alignment=direction.x*toPlayer.x+direction.y*toPlayer.y+direction.z*toPlayer.z;
+        if(alignment>0.99999F)++aimedCenters;
     });
+    assert(aimedCenters==1); // 七向扇形的中心弹必须穿过玩家的 X/Z 位置与 Y 高度。
     bullets.Reset(); dark.Reset(4,{192,-32,0},256,1);
     for(int frame=0;frame<220;++frame)dark.Update(1.0F/60,{},bullets);
     assert(bullets.Pool().ActiveCount()==0); // Sub4 在 Normal 是无攻击的后段妖精。
@@ -347,16 +370,36 @@ void RunGameplayTests() {
     assert(std::abs(boss.TimeLimit()-25)<0.001F);
     assert(boss.AdvancePhase() && boss.SpellName()==nullptr);
     bullets.Reset();
-    for (int frame=0;frame<261;++frame) boss.Update(1.0F/60,{0,0,-6.5F},bullets);
+    for (int frame=0;frame<261;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
     int beams=0;
-    bullets.Pool().ForEachActive([&](const redmist::Bullet& b){ if(b.beamLength>0)++beams; });
+    bullets.Pool().ForEachActive([&](const redmist::Bullet& b){
+        if(b.beamLength<=0)return;
+        ++beams;
+        const Vector3 expected=redmist::BulletSystem::DirectionTo(b.position,raisedPlayer);
+        assert(b.beamDirection.y>0 && b.beamDirection.z<0);
+        assert(std::abs(b.beamDirection.x-expected.x)<0.0001F);
+        assert(std::abs(b.beamDirection.y-expected.y)<0.0001F);
+        assert(std::abs(b.beamDirection.z-expected.z)<0.0001F);
+    });
     assert(beams==6 && std::abs(boss.TimeLimit()-30)<0.001F);
     assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="暗符「Demarcation」");
     bullets.Reset();
-    for (int frame=0;frame<121;++frame) boss.Update(1.0F/60,{0,0,-6.5F},bullets);
+    for (int frame=0;frame<121;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
     assert(bullets.Pool().ActiveCount()==34); // rank=16 时原作 -3…6 的弹数修正增加 1 向。
     bullets.Pool().ForEachActive([](const redmist::Bullet& b){
         assert(std::abs(b.turnDelaySeconds-40.0F/60)<0.0001F);
         assert(std::abs(std::abs(b.turnAngle)-std::numbers::pi_v<float>/2)<0.0001F);
+        assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
+    });
+    // 实际延迟转向必须在 X/Z 内完成 90°，Y 坡度保持不变，避免只修正出生位置。
+    bullets.Update(1.1F,{},raisedPlayer);
+    assert(bullets.Pool().ActiveCount()==34);
+    bullets.Pool().ForEachActive([](const redmist::Bullet& b){
+        assert(b.turnApplied && !b.turnAimed);
+        const Vector3 before=redmist::pattern::Normalize(b.baseVelocity);
+        const Vector3 after=redmist::pattern::Normalize(b.velocity);
+        assert(std::abs(before.y-after.y)<0.0001F);
+        assert(std::abs(before.x*after.x+before.z*after.z)<0.0001F);
+        assert((before.z*after.x-before.x*after.z)*b.turnAngle>0);
     });
 }

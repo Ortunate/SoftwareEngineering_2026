@@ -6,17 +6,23 @@
 #include <cstdint>
 #include <vector>
 namespace redmist::stage1 {
-// 384×448 像素场地映射到正面 X/Y 平面；原作深度映射到 Z，统一比例保持投影角度与轨迹。
+// 384×448 像素场地映射到 X/Z 平面；原作深度映射到高度 Y，统一比例保持投影角度与轨迹。
 inline constexpr float kReferenceScale = 20.0F / 448.0F;
 // 当前 3D 玩家弹的伤害单位换算；所有原作 HP 和阶段阈值同时除以此值，不改变阶段血量比例。
 inline constexpr float kReferenceHealthUnit = 25.0F;
-/// @brief 将原作像素坐标转换为世界坐标；原点为左上角，原作 Y 向下、世界 Y 向上，原作 Z=0 位于世界 Z=7.2 的入场平面。
+/// @brief 将原作像素坐标转换为世界坐标；X 居中，原作 Y=0…448 对应世界 Z=+10…-10，向玩家推进。
+/// 原作 Z=0 对应世界 Y=0，与玩家初始高度一致；原作 Z 正方向对应世界 -Y。
 inline Vector3 ReferencePosition(Vector3 source) {
-    return {(source.x - 192.0F) * kReferenceScale, 10-source.y*kReferenceScale,
-            7.2F-source.z*kReferenceScale};
+    return {(source.x - 192.0F) * kReferenceScale, -source.z*kReferenceScale,
+            10-source.y*kReferenceScale};
+}
+/// @brief 将世界坐标还原为原作像素坐标；供演员初始化使用，与 ReferencePosition 互为逆映射。
+inline Vector3 ReferenceSourcePosition(Vector3 world) {
+    return {world.x/kReferenceScale+192, (10-world.z)/kReferenceScale,
+            -world.y/kReferenceScale};
 }
 /// @brief 单个演员的 Normal ECL 上下文；固定 60 Hz，调用栈最多 32 层，寄存器属于各层而非演员共享。
-/// 移动在原作像素坐标求解，发弹保留 X/Y 投影，并沿 Z 增加朝玩家的纵向速度；不增加弹数或改变投影角间距。
+/// 移动在原作像素坐标求解，发弹保留 X/Z 投影，并沿 Y 增加朝玩家的高度速度；不增加弹数或改变投影角间距。
 class ReferenceScript {
 public:
     /// @brief 初始化 Normal 子程序、像素出生点、原作 HP 与独立随机种子；mirrored 仅反转移动的 X 分量。

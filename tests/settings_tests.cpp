@@ -16,6 +16,7 @@ void RunSettingsTests() {
     assert(std::filesystem::exists(path));
     assert(defaults.fpsLimit == 60 && defaults.musicVolume == 50);
     assert(defaults.mouseSensitivity == 100);
+    assert(defaults.soundVolume == 60 && defaults.initialLives == 2 && defaults.initialBombs == 3);
     assert(defaults.bindings.focus == MouseBinding(MOUSE_BUTTON_SIDE));
     assert(defaults.bindings.descend == KEY_LEFT_SHIFT);
     assert(defaults.bindings.fireAlt == MouseBinding(MOUSE_BUTTON_LEFT));
@@ -26,12 +27,18 @@ void RunSettingsTests() {
             settings.fpsLimit = 144;
             settings.musicVolume = volume;
             settings.mouseSensitivity = sensitivity;
+            settings.soundVolume = volume;
+            settings.initialLives = 5;
+            settings.initialBombs = 0;
+            settings.bestScore = 1234567;
             settings.bindings.fire = KEY_F1;
             settings.bindings.pause = MouseBinding(MOUSE_BUTTON_EXTRA);
             assert(SaveSettingsFile(path, settings));
             const auto loaded = LoadOrCreateSettings(path);
             assert(loaded.fpsLimit == 144 && loaded.musicVolume == volume);
             assert(loaded.mouseSensitivity == sensitivity);
+            assert(loaded.soundVolume == volume && loaded.initialLives == 5 && loaded.initialBombs == 0);
+            assert(loaded.bestScore == 1234567);
             assert(loaded.bindings.fire == KEY_F1);
             assert(loaded.bindings.pause == MouseBinding(MOUSE_BUTTON_EXTRA));
         }
@@ -69,5 +76,8 @@ void RunSettingsTests() {
     const auto repaired = LoadOrCreateSettings(path);
     assert(repaired.musicVolume == 50 && repaired.mouseSensitivity == 100);
     assert(repaired.bindings.forward == KEY_W); // 与 FIRE ALT 重复，回退键位组。
+    { std::ofstream out(path); out << "version=3\nsound_volume=101\ninitial_lives=0\ninitial_bombs=4\nbest_score=-1\n"; }
+    const auto stock = LoadOrCreateSettings(path);
+    assert(stock.soundVolume == 60 && stock.initialLives == 2 && stock.initialBombs == 3 && stock.bestScore == 0);
     std::filesystem::remove(path);
 }

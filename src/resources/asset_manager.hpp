@@ -20,6 +20,9 @@ struct CommonAssets {
     Model skyboxModel{};
     TextureCubemap skyboxTexture{};
     Shader skyboxShader{};
+    Texture2D titleBackground{};
+    Texture2D reimuPortrait{};
+    Font uiFont{}; // 管理器持有；缺失时借用 raylib 默认字体，不能重复释放。
 };
 
 /// @brief 单个关卡使用的图形素材；由 AssetManager 独占所有权。
@@ -71,8 +74,10 @@ public:
     void UpdateAudio();
     /// @brief 设置全部已加载/未来加载的 BGM 音量；percent 限定到 0～100，不影响音效。
     void SetMusicVolumePercent(int percent);
+    /// @brief 设置全部已加载/未来加载的音效音量；percent 钳制到 0～100，不影响 BGM。
+    void SetSoundVolumePercent(int percent);
     /// @brief 按清单中的名字播放通用或当前关卡的音效。
-    /// @param name 音效资源名；未配置时不播放。
+    /// @param name 音效资源名；未配置或同一音效仍在播放时不重启缓冲。
     void PlaySoundEffect(std::string_view name) const;
 
 private:
@@ -96,6 +101,7 @@ private:
     std::unordered_map<std::string, Texture2D> stageTextures_;
     MusicSlot activeMusic_ = MusicSlot::None;
     int musicVolumePercent_ = 50;
+    int soundVolumePercent_ = 60;
     bool commonLoaded_ = false;
     bool stageLoaded_ = false;
 };

@@ -1,6 +1,7 @@
 // 本文件负责游戏生命周期、主循环调度和关卡事件转发。
 
 #include "app/game.hpp"
+#include "app/constants.hpp"
 #include "config/settings.hpp"
 #include "stages/stage1/ids.hpp"
 
@@ -53,16 +54,19 @@ void Game::Reset() {
 }
 
 void Game::Start(bool captureCursor) {
+    practiceMode_ = spellPractice_ = challengeMode_ = false;
     stageId_ = StageId::Stage1;
     StartRun(captureCursor);
 }
 
 void Game::StartStage(StageId id, bool captureCursor) {
+    practiceMode_ = spellPractice_ = challengeMode_ = false;
     stageId_ = id;
     StartRun(captureCursor);
 }
 
 void Game::StartPreview() {
+    practiceMode_ = spellPractice_ = challengeMode_ = false;
     StartRun(false);
     player_.SetInvulnerability(1000.0F);
 }
@@ -89,7 +93,12 @@ void Game::LoadSettings() {
     bindings_ = settings.bindings;
     musicVolume_ = settings.musicVolume;
     mouseSensitivity_ = settings.mouseSensitivity;
+    soundVolume_ = settings.soundVolume;
+    initialLives_ = settings.initialLives;
+    initialBombs_ = settings.initialBombs;
+    bestScore_ = settings.bestScore;
     assets_.SetMusicVolumePercent(musicVolume_);
+    assets_.SetSoundVolumePercent(soundVolume_);
 
     const auto fpsLimit = std::find(kSupportedFpsLimits.begin(),
                                     kSupportedFpsLimits.end(),
@@ -102,7 +111,8 @@ void Game::LoadSettings() {
 }
 
 void Game::SaveSettings() const {
-    const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_], musicVolume_, mouseSensitivity_};
+    const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_],
+        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_};
     if (!SaveSettingsFile(kSettingsFilename, settings)) {
         TraceLog(LOG_WARNING, "SETTINGS: Failed to save %s", kSettingsFilename);
     }
@@ -119,6 +129,10 @@ void Game::StartRun(bool captureCursor) {
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
     player_.Reset();
+    player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,
+                         selectedShot_ == 0 ? ShotType::HomingAmulet : ShotType::Needle);
+    missCount_ = bombCount_ = 0;
+    shotSoundTimer_ = 0.0F;
     boss_.reset();
     bullets_.Reset();
     enemies_.Clear();
@@ -139,6 +153,13 @@ void Game::StartRun(bool captureCursor) {
     player_.SyncCamera(camera_);
     if (captureCursor) DisableCursor();
     SetMessage(stageContent_->StartTitle(), 3.0F);
+    if (spellPractice_) {
+        stage_ = StageDirector{};
+        BeginStageBoss(true, 3);
+        while (boss_->phase < practicePhase_) boss_->AdvancePhase();
+        player_.AdjustPower(Player::kMaxPower);
+        spellCutInTimer_ = kSpellCutInDuration;
+    }
 }
 
 void Game::EnterMainMenu() {
@@ -166,6 +187,13 @@ void Game::EnterMainMenu() {
 }
 
 void Game::EndStage(RunState result) {
+    if (result == RunState::Won) {
+        assets_.PlaySoundEffect("clear");
+        if (!practiceMode_ && !challengeMode_ && score_ > bestScore_) {
+            bestScore_ = static_cast<int>(std::min(score_, 2000000000LL));
+            SaveSettings();
+        }
+    }
     bullets_.Reset();
     ClearEnemiesWithEffects();
     drops_.Clear();
@@ -211,6 +239,11 @@ void Game::Update(float deltaTime) {
     }
     if (state_ == RunState::Options) {
         UpdateOptions();
+        return;
+    }
+    if (state_ == RunState::StartSetup || state_ == RunState::MusicRoom ||
+        state_ == RunState::Score || state_ == RunState::Credit) {
+        UpdateMenuPage();
         return;
     }
 #ifdef RED_MIST_DEBUG_FEATURES

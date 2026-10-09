@@ -92,7 +92,9 @@ private:
     void SaveSettings() const;
     /// @brief 处理主菜单的移动、点击与确认输入。
     void UpdateMainMenu();
-    /// @brief 处理 FPS、音量、灵敏度与设置菜单页面的输入。
+    /// @brief 处理一面 Normal 的灵梦机体/标准或挑战模式选择，以及成绩、音乐和制作信息页。
+    void UpdateMenuPage();
+    /// @brief 处理 FPS、音量、灵敏度、开局资源与设置菜单页面的输入。
     void UpdateOptions();
     /// @brief 处理按键绑定列表与新按键录入。
     void UpdateKeyBindings();
@@ -167,7 +169,9 @@ private:
     void DrawDialogue() const;
     /// @brief 绘制开始菜单。
     void DrawMainMenu() const;
-    /// @brief 绘制 FPS、音量、灵敏度和按键设置入口。
+    /// @brief 绘制启动选择、音乐、成绩或制作信息页，保持通用素材生命周期。
+    void DrawMenuPage() const;
+    /// @brief 绘制 FPS、音量、灵敏度、开局资源和按键设置入口。
     void DrawOptions() const;
     /// @brief 绘制可重新绑定的战斗按键列表。
     void DrawKeyBindings() const;
@@ -215,6 +219,22 @@ private:
     int fpsLimitIndex_ = 1;
     int musicVolume_ = 50;
     int mouseSensitivity_ = 100;
+    int soundVolume_ = 60;
+    int initialLives_ = 2;
+    int initialBombs_ = 3;
+    int bestScore_ = 0;
+    // 标题开场只在首次启动显示；返回标题后保持展开菜单。
+    bool titleIntro_ = true;
+    int setupStep_ = 0; // 0: 难度确认，1: 灵梦机体，2: 模式，3: 符卡练习；仅提供一面 Normal。
+    int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
+    bool challengeMode_ = false;
+    bool practiceMode_ = false;
+    int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
+    bool spellPractice_ = false;
+    int selectedTrack_ = 0;
+    int missCount_ = 0;
+    int bombCount_ = 0;
+    float shotSoundTimer_ = 0.0F; // 秒；射击声音最多每 0.10 秒触发一次。
     bool waitingForBinding_ = false;
     /// @brief 激活录入后须先释放确认键/鼠标按钮，避免把打开弹窗的点击录入为绑定。
     bool bindingCaptureReady_ = false;

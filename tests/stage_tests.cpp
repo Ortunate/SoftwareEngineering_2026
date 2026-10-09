@@ -293,7 +293,7 @@ void TestStage1Content() {
     assert(visuals.size() == 13);
     assert(visuals[stage1::kFairy].path == "stages/stage1/fairy_modern.png");
     assert(visuals[stage1::kDarkFairy].path == "stages/stage1/dark_fairy_modern.png");
-    assert(visuals[stage1::kRumia].path == "stages/stage1/rumia_modern.png");
+    assert(visuals[stage1::kRumia].path == "stages/stage1/rumia_cutout.png");
     assert(visuals[stage1::kGreenSphere].mode == VisualMode::Sphere);
     assert(content->PlayerBulletVisual() == stage1::kPlayerGoldCard);
     assert(content->PlayerHomingVisual() == stage1::kPlayerCyanCard);

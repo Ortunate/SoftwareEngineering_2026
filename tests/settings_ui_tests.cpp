@@ -1,6 +1,7 @@
 // 本文件以隐藏窗口回放键鼠输入，检查设置界面、录入防误触及配置保存。
 #include "app/game.hpp"
 #include "config/settings.hpp"
+#include "render/menu_layout.hpp"
 #include "raylib.h"
 #include <chrono>
 #include <cstdio>
@@ -69,38 +70,48 @@ int main(int argc, char** argv) {
         {
             redmist::Game game;
             SetTargetFPS(0);
+            Capture(game, (screenshots / "title.png").string().c_str());
+            Key(game, KEY_Z);
+            Capture(game, (screenshots / "menu.png").string().c_str());
+            Key(game, KEY_Z);
+            Capture(game, (screenshots / "normal.png").string().c_str());
+            Key(game, KEY_Z);
+            Capture(game, (screenshots / "shot.png").string().c_str());
+            Key(game, KEY_Z);
+            Capture(game, (screenshots / "mode.png").string().c_str());
             game.OpenOptions();
             Event(7, 0, 0); Frame(game);
             // 在最小/默认窗口宽度下，数字、文字、按钮外一像素及行空白均不能调值。
             for (int width : {900, 1100}) {
                 SetWindowSize(width, 620); Frame(game);
-                const int center = GetScreenWidth() / 2;
+                const redmist::menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
                 for (int row = 0; row < 3; ++row) {
-                    const int y = 185 + row * 62;
+                    const auto bounds = redmist::menu::OptionRow(canvas, row);
+                    const auto left = redmist::menu::OptionArrow(canvas, row, -1);
+                    const auto right = redmist::menu::OptionArrow(canvas, row, 1);
                     const auto before = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
-                    for (int x : {center - 200, center + 55, center + 100, center + 153, center + 251})
-                        Click(game, x, y + 25);
-                    Click(game, center + 70, y + 2);
-                    Click(game, center + 234, y + 48);
+                    for (float x : {bounds.x + 20, left.x - 1, left.x + left.width + 1, (left.x + right.x) / 2, right.x + right.width + 1})
+                        Click(game, static_cast<int>(x), static_cast<int>(bounds.y + bounds.height / 2));
+                    Click(game, static_cast<int>(left.x + 10), static_cast<int>(left.y - 1));
                     auto after = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
                     Check(after.fpsLimit == before.fpsLimit && after.musicVolume == before.musicVolume &&
                           after.mouseSensitivity == before.mouseSensitivity, "click outside arrows changed setting");
-                    Click(game, center + 249, y + 25);
+                    Click(game, static_cast<int>(right.x + 10), static_cast<int>(right.y + 10));
                     after = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
                     Check(row == 0 ? after.fpsLimit == 120 : row == 1 ? after.musicVolume == 55 :
                           after.mouseSensitivity == 110, "right arrow did not increase");
-                    Click(game, center + 57, y + 25);
+                    Click(game, static_cast<int>(left.x + 10), static_cast<int>(left.y + 10));
                     after = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
                     Check(after.fpsLimit == before.fpsLimit && after.musicVolume == before.musicVolume &&
                           after.mouseSensitivity == before.mouseSensitivity, "left arrow did not decrease");
                 }
             }
             SetWindowSize(900, 620); Frame(game);
-            Click(game, 520, 210); Click(game, 520, 210);
+            game.OpenOptions(); Event(7, 0, 0); Frame(game);
+            Key(game, KEY_LEFT); Key(game, KEY_LEFT);
             Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).fpsLimit == 30, "FPS lower boundary wrapped");
-            for (int i = 0; i < 7; ++i) Click(game, 684, 210);
+            for (int i = 0; i < 7; ++i) Key(game, KEY_RIGHT);
             Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).fpsLimit == 0, "FPS upper boundary wrapped");
-            for (int i = 0; i < 4; ++i) Click(game, 520, 210);
             game.OpenOptions(); Event(7, 0, 0); Frame(game);
             Key(game, KEY_DOWN);
             Key(game, KEY_RIGHT);
@@ -117,7 +128,13 @@ int main(int argc, char** argv) {
             Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).mouseSensitivity == 10, "sensitivity minimum failed");
             for (int i = 0; i < 9; ++i) Key(game, KEY_RIGHT);
             Capture(game, (screenshots / "options.png").string().c_str());
-            Key(game, KEY_DOWN); Key(game, KEY_ENTER);
+            Key(game, KEY_DOWN); Key(game, KEY_RIGHT);
+            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).soundVolume == 65, "SE volume not saved");
+            Key(game, KEY_DOWN); Key(game, KEY_RIGHT);
+            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).initialLives == 3, "stock not saved");
+            Key(game, KEY_DOWN); Key(game, KEY_LEFT);
+            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).initialBombs == 2, "bomb count not saved");
+            Key(game, KEY_DOWN); Key(game, KEY_Z);
             // 点击 Focus 行打开录入；持续按住的激活点击不能立即变成新绑定。
             Event(7, 300, 316); Event(6, MOUSE_BUTTON_LEFT); Frame(game); Frame(game);
             Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).bindings.focus == redmist::MouseBinding(MOUSE_BUTTON_SIDE), "opening click captured");

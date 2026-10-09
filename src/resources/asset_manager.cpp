@@ -13,8 +13,20 @@ namespace redmist {
 namespace {
 
 /// @brief 音效清单项，资源路径相对 assets 根目录。
-// 目前素材包没有音效文件；后续只需在清单中登记，不必修改加载与卸载流程。
-constexpr std::array<SoundDefinition, 0> kCommonSounds{};
+constexpr std::array<SoundDefinition, 12> kCommonSounds{{
+    {"menu_move", "common/se/menu_move.wav"},
+    {"menu_confirm", "common/se/menu_confirm.wav"},
+    {"menu_cancel", "common/se/menu_cancel.wav"},
+    {"shoot", "common/se/shoot.wav"},
+    {"enemy_down", "common/se/enemy_down.wav"},
+    {"hit", "common/se/hit.wav"},
+    {"bomb", "common/se/bomb.wav"},
+    {"graze", "common/se/graze.wav"},
+    {"pickup", "common/se/pickup.wav"},
+    {"spell", "common/se/spell.wav"},
+    {"clear", "common/se/clear.wav"},
+    {"full_power", "common/se/full_power.wav"},
+}};
 
 /// @brief 读取一张贴图；调用方负责在对应生命周期结束时释放。
 /// @param path 图片文件路径。
@@ -114,6 +126,23 @@ AssetManager::~AssetManager() {
 void AssetManager::LoadCommon() {
     if (commonLoaded_) return;
     commonLoaded_ = true;
+    common_.titleBackground = LoadTextureAsset(root_ / "common/title_reimu_modern.png");
+    common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/reimu_cutout.png");
+    const auto fontPath = root_ / "common/ui_font.otf";
+    common_.uiFont = GetFontDefault();
+    if (FileExists(fontPath.string().c_str())) {
+        // 字符表与素材一起提供，只生成实际需要的字形，避免整个 CJK 字库占用 GPU。
+        const auto charsetPath = root_ / "common/ui_charset.txt";
+        char* charset = LoadFileText(charsetPath.string().c_str());
+        if (charset) {
+            int count = 0;
+            int* codepoints = LoadCodepoints(charset, &count);
+            common_.uiFont = LoadFontEx(fontPath.string().c_str(), 64, codepoints, count);
+            UnloadCodepoints(codepoints);
+            UnloadFileText(charset);
+            SetTextureFilter(common_.uiFont.texture, TEXTURE_FILTER_BILINEAR);
+        }
+    }
 
     const std::filesystem::path skyboxPath = root_ / "common/crimson_mist_skybox.png";
     Image skyboxImage = LoadImage(skyboxPath.string().c_str());
@@ -149,6 +178,7 @@ void AssetManager::LoadCommon() {
                                 "比赤色更鲜红的梦.mp3");
     SetMusicVolumePercent(musicVolumePercent_);
     LoadSounds(commonSounds_, root_, kCommonSounds);
+    SetSoundVolumePercent(soundVolumePercent_);
 }
 
 void AssetManager::LoadStage(const StageAssetManifest& manifest) {
@@ -178,6 +208,7 @@ void AssetManager::LoadStage(const StageAssetManifest& manifest) {
         bossMusic_ = LoadMusicAsset(root_ / std::string(manifest.bossBgm));
     SetMusicVolumePercent(musicVolumePercent_);
     LoadSounds(stageSounds_, root_, manifest.sounds);
+    SetSoundVolumePercent(soundVolumePercent_);
     stageLoaded_ = true;
 }
 
@@ -209,6 +240,11 @@ void AssetManager::UnloadCommon() {
     SwitchMusic(MusicSlot::None);
     UnloadSounds(commonSounds_);
     UnloadMusicAsset(menuMusic_);
+    UnloadTextureAsset(common_.titleBackground);
+    UnloadTextureAsset(common_.reimuPortrait);
+    if (common_.uiFont.texture.id != 0 &&
+        common_.uiFont.texture.id != GetFontDefault().texture.id)
+        UnloadFont(common_.uiFont);
     if (common_.skyboxModel.meshCount != 0) UnloadModel(common_.skyboxModel);
     UnloadShaderAsset(common_.skyboxShader);
     if (IsTextureValid(common_.skyboxTexture)) UnloadTexture(common_.skyboxTexture);
@@ -271,15 +307,26 @@ void AssetManager::UpdateAudio() {
     }
 }
 
+void AssetManager::SetSoundVolumePercent(int percent) {
+    soundVolumePercent_ = std::clamp(percent, 0, 100);
+    for (const auto* bank : {&commonSounds_, &stageSounds_}) {
+        for (const auto& [name, sound] : *bank) {
+            (void)name;
+            SetSoundVolume(sound, soundVolumePercent_ / 100.0F);
+        }
+    }
+}
+
 void AssetManager::PlaySoundEffect(std::string_view name) const {
     if (!IsAudioDeviceReady()) return;
     const std::string key(name);
     if (const auto stageSound = stageSounds_.find(key);
         stageSound != stageSounds_.end()) {
-        ::PlaySound(stageSound->second);
+        if (!IsSoundPlaying(stageSound->second)) ::PlaySound(stageSound->second);
     } else if (const auto commonSound = commonSounds_.find(key);
                commonSound != commonSounds_.end()) {
-        ::PlaySound(commonSound->second);
+        // 同一帧的多个击破/拾取共用一个音效，不能不断重启缓冲产生爆音。
+        if (!IsSoundPlaying(commonSound->second)) ::PlaySound(commonSound->second);
     }
 }
 

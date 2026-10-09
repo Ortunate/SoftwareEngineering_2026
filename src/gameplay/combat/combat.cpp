@@ -44,6 +44,7 @@ void Game::ResolveCollisions() {
             case PlayerContact::Graze:
                 ++graze_;
                 score_ += 100;
+                assets_.PlaySoundEffect("graze");
                 break;
             case PlayerContact::None:
                 break;
@@ -70,6 +71,7 @@ void Game::ResolveCollisions() {
             }
 #endif
             enemy.active = false;
+            assets_.PlaySoundEffect("enemy_down");
             actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
                                 enemy.presentation, ActorExitReason::Defeated);
             score_ += enemy.scoreValue;
@@ -96,15 +98,19 @@ void Game::UpdatePickups(float deltaTime) {
     const PickupReward reward = drops_.Update(deltaTime, player_.Position());
     AdjustPlayerPower(reward.power);
     score_ += reward.score;
+    if (reward.power != 0 || reward.score != 0) assets_.PlaySoundEffect("pickup");
 }
 
 void Game::AdjustPlayerPower(int delta) {
     if (!player_.AdjustPower(delta)) return;
     drops_.ConvertEnemyBulletsToStars(bullets_);
     SetMessage("Full Power", 2.0F);
+    assets_.PlaySoundEffect("full_power");
 }
 
 void Game::ApplyBombEffect() {
+    ++bombCount_;
+    assets_.PlaySoundEffect("bomb");
     screenFlashTimer_ = 0.35F;
     bullets_.ClearEnemyBullets();
     enemies_.ForEachActive([](Enemy& enemy) { enemy.health -= 22.0F; });
@@ -113,6 +119,8 @@ void Game::ApplyBombEffect() {
 }
 
 void Game::HandlePlayerHit() {
+    ++missCount_;
+    assets_.PlaySoundEffect("hit");
     const bool survived = player_.TakeHit();
     player_.SyncCamera(camera_);
     screenFlashTimer_ = 0.22F;
@@ -126,6 +134,11 @@ void Game::HandlePlayerHit() {
 
 void Game::AdvanceBossPhase() {
     if (!boss_ || !boss_->active) return;
+    if (spellPractice_) {
+        score_ += 25000;
+        EndStage(RunState::Won);
+        return;
+    }
     bullets_.ClearEnemyBullets();
     const bool wasMidboss =
         boss_->IsMidboss();
@@ -146,6 +159,7 @@ void Game::AdvanceBossPhase() {
         spellCutInTimer_ = boss_->SpellName() != nullptr
                                ? kSpellCutInDuration : 0.0F;
         messageTimer_ = 0.0F;
+        assets_.PlaySoundEffect(boss_->SpellName() ? "spell" : "enemy_down");
     } else if (wasMidboss) {
         score_ += 5000;
         // Boss 的专属概率规则尚未实现，暂时保留原有的固定大 P 点奖励。

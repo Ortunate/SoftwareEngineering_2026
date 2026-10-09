@@ -39,6 +39,7 @@ add_library(red_mist_engine STATIC
     src/gameplay/effects/actor_effects.cpp
     src/gameplay/items/drop_system.cpp
     src/platform/window_input.cpp
+    src/render/menu_render.cpp
     src/render/game_render.cpp
     src/render/sprite_renderer.cpp
     src/resources/asset_manager.cpp

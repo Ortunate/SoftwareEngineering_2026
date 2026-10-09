@@ -17,12 +17,15 @@ using namespace game_math;
 #include "rlgl.h"
 
 void Game::Draw() const {
-    DrawWorld();
     if (state_ == RunState::MainMenu) {
         DrawMainMenu();
     } else if (state_ == RunState::Options) {
         DrawOptions();
+    } else if (state_ == RunState::StartSetup || state_ == RunState::MusicRoom ||
+               state_ == RunState::Score || state_ == RunState::Credit) {
+        DrawMenuPage();
     } else {
+        DrawWorld();
         DrawHud();
         DrawOverlay();
     }
@@ -346,141 +349,6 @@ void Game::DrawSpellCutIn() const {
              Color{255, 245, 250, alpha});
     DrawText(title.c_str(), textX, static_cast<int>(bannerY) + 97, 26,
              Color{215, 180, 255, alpha});
-}
-
-void Game::DrawMainMenu() const {
-    const int screenWidth = GetScreenWidth();
-    const int screenHeight = GetScreenHeight();
-    DrawRectangle(0, 0, screenWidth, screenHeight, Color{2, 4, 14, 118});
-
-    const char* title = "RED MIST 3D";
-    const int titleSize = 72;
-    const int titleX = (screenWidth - MeasureText(title, titleSize)) / 2;
-    DrawText(title, titleX + 4, 88, titleSize, Color{82, 8, 30, 230});
-    DrawText(title, titleX, 84, titleSize, Color{255, 235, 240, 255});
-
-    const char* subtitle = "FIRST-PERSON  6DoF  BULLET HELL";
-    DrawText(subtitle, (screenWidth - MeasureText(subtitle, 25)) / 2,
-             176, 25, Color{120, 195, 235, 255});
-    const char* description = "Fight inside a 20 x 20 x 23 arena  -  the camera itself is your hitbox";
-    DrawText(description, (screenWidth - MeasureText(description, 18)) / 2,
-             220, 18, Color{175, 195, 210, 255});
-
-    const float centerX = static_cast<float>(screenWidth) * 0.5F;
-#ifdef RED_MIST_DEBUG_FEATURES
-    const float startY = static_cast<float>(screenHeight) * 0.5F + 10.0F;
-#else
-    const float startY = static_cast<float>(screenHeight) * 0.5F + 50.0F;
-#endif
-#ifdef RED_MIST_DEBUG_FEATURES
-    const char* labels[4] = {"START GAME", "OPTIONS", "SHOT TEST", "QUIT"};
-    constexpr int itemCount = 4;
-#else
-    const char* labels[3] = {"START GAME", "OPTIONS", "QUIT"};
-    constexpr int itemCount = 3;
-#endif
-    for (int index = 0; index < itemCount; ++index) {
-        const Rectangle button{centerX - 170.0F,
-                               startY + static_cast<float>(index) * 70.0F,
-                               340.0F, 52.0F};
-        const bool selected = selectedMenuItem_ == index;
-        DrawRectangleRounded(button, 0.18F, 10,
-                             selected ? Color{106, 24, 52, 235}
-                                      : Color{7, 13, 28, 220});
-        DrawRectangleRoundedLinesEx(button, 0.18F, 10, selected ? 3.0F : 1.0F,
-                                    selected ? Color{255, 120, 150, 255}
-                                             : Color{80, 130, 165, 210});
-        DrawText(labels[index],
-                 static_cast<int>(centerX) - MeasureText(labels[index], 25) / 2,
-                 static_cast<int>(button.y + 13.0F), 25,
-                 selected ? RAYWHITE : Color{165, 180, 198, 255});
-    }
-
-    const char* hint = "W/S or Arrow Keys to select     Enter or Mouse to confirm";
-    DrawText(hint, (screenWidth - MeasureText(hint, 18)) / 2,
-             screenHeight - 68, 18, Color{160, 180, 200, 230});
-    DrawText("Fan project for study",
-             (screenWidth - MeasureText("Fan project for study", 16)) / 2,
-             screenHeight - 38, 16, Color{105, 125, 145, 220});
-}
-
-void Game::DrawOptions() const {
-    if (optionsPage_ == OptionsPage::KeyBindings) {
-        DrawKeyBindings();
-        return;
-    }
-
-    const int screenWidth = GetScreenWidth();
-    const int screenHeight = GetScreenHeight();
-    const float centerX = static_cast<float>(screenWidth) * 0.5F;
-    DrawRectangle(0, 0, screenWidth, screenHeight, Color{2, 4, 14, 205});
-
-    const char* title = "OPTIONS";
-    DrawText(title, (screenWidth - MeasureText(title, 48)) / 2,
-             70, 48, RAYWHITE);
-    const char* instruction = "Audio, mouse and display settings";
-    DrawText(instruction, (screenWidth - MeasureText(instruction, 19)) / 2,
-             132, 19, Color{155, 190, 215, 255});
-
-    constexpr int itemCount = 5;
-    constexpr float startY = kOptionsTop;
-    constexpr float rowSpacing = kOptionsSpacing;
-    const char* labels[itemCount] = {"FPS LIMIT", "MUSIC VOLUME", "MOUSE SENSITIVITY", "KEY BINDINGS", "BACK"};
-    for (int index = 0; index < itemCount; ++index) {
-        const Rectangle row{centerX - 270.0F,
-                            startY + static_cast<float>(index) * rowSpacing,
-                            540.0F, 50.0F};
-        const bool selected = selectedOption_ == index;
-        DrawRectangleRounded(row, 0.16F, 8,
-                             selected ? Color{90, 24, 50, 235}
-                                      : Color{8, 15, 30, 220});
-        DrawRectangleRoundedLinesEx(row, 0.16F, 8,
-                                    selected ? 2.0F : 1.0F,
-                                    selected ? Color{255, 110, 145, 255}
-                                             : Color{58, 95, 125, 210});
-        DrawText(labels[index], static_cast<int>(row.x + 18.0F),
-                 static_cast<int>(row.y + 16.0F), 22,
-                 selected ? RAYWHITE : Color{175, 195, 210, 255});
-
-        if (index < kBindingsOptionIndex) {
-            const int fps = kSupportedFpsLimits[fpsLimitIndex_];
-            const char* value = index == 0 ? (fps == 0 ? "UNLIMITED" : TextFormat("%d", fps))
-                : index == 1 ? TextFormat("%d%%", musicVolume_)
-                : TextFormat("%.1fx", mouseSensitivity_ / 100.0F);
-            DrawText(value, static_cast<int>(centerX + 153.0F) - MeasureText(value, 20) / 2,
-                     static_cast<int>(row.y + 16.0F), 20, Color{120, 215, 255, 255});
-            for (const int direction : {-1, 1}) {
-                const Rectangle button = OptionArrowBounds(centerX, index, direction);
-                const bool atBoundary = index == 0 ? (direction < 0 ? fpsLimitIndex_ == 0 : fps == 0)
-                    : index == 1 ? (direction < 0 ? musicVolume_ == 0 : musicVolume_ == 100)
-                    : (direction < 0 ? mouseSensitivity_ == kMinMouseSensitivity
-                                    : mouseSensitivity_ == kMaxMouseSensitivity);
-                const bool hovered = !atBoundary && CheckCollisionPointRec(GetMousePosition(), button);
-                DrawRectangleRec(button, hovered ? Color{52, 80, 108, 255} : Color{14, 24, 42, 255});
-                DrawRectangleLinesEx(button, 1.0F, atBoundary ? Color{42, 55, 70, 255}
-                    : hovered ? Color{150, 230, 255, 255} : Color{80, 135, 165, 255});
-                const char* arrow = direction < 0 ? "<" : ">";
-                DrawText(arrow, static_cast<int>(button.x + button.width / 2) - MeasureText(arrow, 22) / 2,
-                         static_cast<int>(button.y + 5), 22,
-                         atBoundary ? Color{65, 80, 95, 255} : Color{150, 230, 255, 255});
-            }
-        } else if (index == kBindingsOptionIndex) {
-            const char* arrow = ">";
-            DrawText(arrow,
-                     static_cast<int>(row.x + row.width - 30.0F),
-                     static_cast<int>(row.y + 16.0F), 22,
-                     selected ? Color{120, 215, 255, 255}
-                              : Color{110, 160, 195, 255});
-        }
-    }
-
-    const char* currentFps = TextFormat("CURRENT FPS  %d", GetFPS());
-    DrawText(currentFps, (screenWidth - MeasureText(currentFps, 18)) / 2,
-             510, 18, Color{120, 175, 205, 235});
-    const char* footer =
-        "Up / Down: Select     Left / Right: Adjust     Enter: Confirm     Esc: Back";
-    DrawText(footer, (screenWidth - MeasureText(footer, 17)) / 2,
-             screenHeight - 42, 17, Color{145, 175, 198, 235});
 }
 
 void Game::DrawKeyBindings() const {

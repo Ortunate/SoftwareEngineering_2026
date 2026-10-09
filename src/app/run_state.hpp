@@ -11,6 +11,10 @@ namespace redmist {
 enum class RunState : std::uint8_t {
     MainMenu,
     Options,
+    StartSetup,
+    MusicRoom,
+    Score,
+    Credit,
     Playing,
     // 战斗已结束，仅播放退场；关卡资源须保留到效果池清空。
     Finishing,

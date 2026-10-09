@@ -127,6 +127,22 @@ void TestShotSpread() {
 /// @brief 运行玩家行为回归用例；断言失败时终止进程。
 void RunPlayerTests() {
     TestShotSpread();
+    // 挑战模式反复受击仍可继续；标准模式按额外残机数耗尽后失败。
+    redmist::Player challenge;
+    challenge.ConfigureRun(2, 0, true, redmist::ShotType::Needle);
+    for (int miss = 0; miss < 12; ++miss) assert(challenge.TakeHit());
+    assert(challenge.RemainingLives() == 3);
+    redmist::Player standard;
+    standard.ConfigureRun(1, 0, false, redmist::ShotType::Needle);
+    assert(standard.Bombs() == 0 && standard.TakeHit());
+    assert(!standard.TakeHit());
+    auto needlePool = std::make_unique<redmist::BulletSystem>();
+    challenge.AdjustPower(128);
+    challenge.Update(0, {.fire = true}, *needlePool, 0, 1, true);
+    assert(needlePool->Pool().ActiveCount() == 6);
+    needlePool->Pool().ForEachActive([](const redmist::Bullet& shot) {
+        assert(shot.homingTurnRate == 0 && shot.damage > 3);
+    });
     using redmist::Bullet;
     using redmist::BulletOwner;
     using redmist::BulletSystem;

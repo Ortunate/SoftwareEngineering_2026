@@ -56,6 +56,13 @@ Vector3 ShotSpreadDirection(Vector3 forward, Vector3 right, float angleDegrees) 
 
 void Player::Reset() { *this = Player{}; }
 
+void Player::ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot) {
+    lives_ = std::clamp(extraLives, 1, 5);
+    bombs_ = std::clamp(bombs, 0, 3);
+    challenge_ = challenge;
+    shot_ = shot;
+}
+
 void Player::ResetPose() {
     position_ = {0.0F, 0.0F, -6.5F};
     yaw_ = 0.0F;
@@ -139,7 +146,7 @@ PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
 }
 
 bool Player::TakeHit() {
-    --lives_;
+    if (!challenge_) --lives_;
     AdjustPower(-16);
     bombs_ = std::max(bombs_, 2);
     ResetPose();
@@ -187,14 +194,14 @@ void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
                                ? 2.0F * index / (level->straightCount - 1) - 1.0F
                                : 0.0F;
         const Vector3 direction = ShotSpreadDirection(forward, right,
-            lane * level->straightHalfAngleDegrees);
+            lane * (shot_ == ShotType::Needle ? 1.5F : level->straightHalfAngleDegrees));
         Bullet* bullet = bullets.Spawn(BulletOwner::Player, muzzle,
             game_math::Scale(direction, 20.0F),
             0.09F,
             Color{255, 255, 255, kPlayerBulletAlpha}, bulletVisual);
-        if (bullet) bullet->damage = 2.0F;
+        if (bullet) bullet->damage = shot_ == ShotType::Needle ? 3.3F : 2.0F;
     }
-    for (int index = 0; index < level->homingCount; ++index) {
+    for (int index = 0; shot_ == ShotType::HomingAmulet && index < level->homingCount; ++index) {
         const float side = ShotSideSign(index, alternateCyanSide_);
         const Vector3 origin = game_math::Add(muzzle,
                                               game_math::Scale(right, side * kHomingSide));

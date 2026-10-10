@@ -8,7 +8,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 
 /// @brief 单张精灵的贴图、世界高度与归一化锚点。
@@ -350,7 +350,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     rlEnableDepthMask();
 }
 
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
 void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
                                        std::span<const Enemy*> enemies,
                                        const Boss* boss,
@@ -388,4 +388,4 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
 }
 #endif
 
-}  // namespace redmist
+}  // namespace koumakyou

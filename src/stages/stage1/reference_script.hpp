@@ -5,7 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <vector>
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 // 384×448 像素场地映射到 X/Z 平面；原作深度映射到高度 Y，统一比例保持投影角度与轨迹。
 inline constexpr float kReferenceScale = 20.0F / 448.0F;
 // 当前 3D 玩家弹的伤害单位换算；所有原作 HP 和阶段阈值同时除以此值，不改变阶段血量比例。
@@ -71,4 +71,4 @@ private:
     float& Variable(float id);
     float Random(float range);
 };
-} // namespace redmist::stage1
+} // namespace koumakyou::stage1

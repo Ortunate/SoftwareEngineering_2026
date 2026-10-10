@@ -12,7 +12,7 @@
 #include <chrono>
 #include <array>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 仅此测试定义的友元探针；调用正式游戏路径验证效果不重复奖励或保留战斗对象。
 struct GameLifecycleProbe {
@@ -325,14 +325,14 @@ struct GameLifecycleProbe {
     }
 };
 
-}  // namespace redmist
+}  // namespace koumakyou
 
 /// @brief 使用隐藏窗口运行集成测试；可选 argv[1] 是截图路径前缀，不初始化音频。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
     const std::string prefix = argc >= 2 ? std::filesystem::absolute(argv[1]).string() : "";
     const auto scratch = std::filesystem::temp_directory_path() /
-        ("redmist_stage_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("koumakyou_stage_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(scratch);
     std::filesystem::current_path(scratch); // 配置和成绩只写入临时目录，不能改用户的实际记录。
     SetTraceLogLevel(LOG_WARNING);
@@ -340,9 +340,9 @@ int main(int argc, char** argv) {
     InitWindow(1100, 760, "Actor lifecycle tests");
     SetExitKey(KEY_NULL);
     {
-        auto game = std::make_unique<redmist::Game>();
+        auto game = std::make_unique<koumakyou::Game>();
         SetTargetFPS(0);
-        redmist::GameLifecycleProbe::Run(*game, prefix);
+        koumakyou::GameLifecycleProbe::Run(*game, prefix);
     }
     CloseWindow();
     std::filesystem::current_path(originalDirectory);

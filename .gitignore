@@ -9,11 +9,11 @@ build-*/
 cmake-build-*/
 
 # Runtime-local settings
-red_mist_settings.cfg
+koumakyou_settings.cfg
 
 # 本机 CrossOver 包装产物，包含借用的运行时与机器路径
 /output/th06nc-reference.app/
 
 # 本机原生应用与视觉检查截图
-/output/RedMist3D.app/
+/output/koumakyou.app/
 /output/stage1-review/

@@ -4,7 +4,7 @@
 #include <cmath>
 #include <initializer_list>
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 void DrawScenery(float seconds) {
     // 湖面在下边界外，树干位于左右边界外；不能遮住或占用玩家可移动的体积。
     DrawPlane({0, -10.7F, 20}, {96, 140}, Color{13, 24, 35, 255});

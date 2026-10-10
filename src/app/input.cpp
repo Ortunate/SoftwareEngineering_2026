@@ -10,7 +10,7 @@
 #include <array>
 #include <utility>
 
-namespace redmist {
+namespace koumakyou {
 
 void Game::UpdateMainMenu() {
     const bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
@@ -68,7 +68,7 @@ void Game::UpdateMainMenu() {
         case 7: state_ = RunState::Credit; break;
         case 8: OpenOptions(); break;
         case 9: shouldQuit_ = true; break;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
         case 10: practiceMode_ = true; spellPractice_ = false; StartShotTest(); break;
 #endif
         default: break;
@@ -406,4 +406,4 @@ std::string Game::KeyLabel(int key) {
     }
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

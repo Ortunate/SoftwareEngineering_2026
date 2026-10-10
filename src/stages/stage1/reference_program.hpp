@@ -3,7 +3,7 @@
 #pragma once
 #include <array>
 #include <span>
-namespace redmist::stage1::reference {
+namespace koumakyou::stage1::reference {
 /// @brief 一条借用的关卡指令；参数保留原作像素、帧及弧度单位，最多 16 项。
 struct Instruction { int frame; int opcode; std::array<float,16> args; };
 inline constexpr Instruction kSub0[]{

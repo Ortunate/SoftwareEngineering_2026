@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <utility>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 使用定长数组复用对象槽位；T 必须具有公开的 active 标记。
 /// @tparam T 对象类型。
@@ -80,4 +80,4 @@ private:
     std::size_t droppedSpawns_ = 0;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

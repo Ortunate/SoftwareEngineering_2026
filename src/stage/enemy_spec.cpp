@@ -5,7 +5,7 @@
 #include <cmath>
 #include <type_traits>
 
-namespace redmist {
+namespace koumakyou {
 
 bool IsValidEnemySpec(const EnemySpec& spec) {
     return std::visit([](const auto& params) {
@@ -32,4 +32,4 @@ bool IsValidEnemySpec(const EnemySpec& spec) {
     }, spec);
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

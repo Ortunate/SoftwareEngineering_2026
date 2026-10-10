@@ -1,7 +1,7 @@
 // 本文件将新典原始脚本的 HP/超时回调接入公共 Boss 生命周期；不重新编写弹幕或移动路径。
 #include "stages/stage1/boss.hpp"
 #include "stages/stage1/ids.hpp"
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 void RumiaBoss::StartMidboss() {
     encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
@@ -58,4 +58,4 @@ const char* RumiaBoss::SpellName() const {
     if(!active || IsMidboss() || retiring_) return nullptr;
     return phase==2 ? "夜符「Night Bird」" : phase==4 ? "暗符「Demarcation」" : nullptr;
 }
-} // namespace redmist::stage1
+} // namespace koumakyou::stage1

@@ -13,13 +13,13 @@
 namespace {
 
 /// @brief 对给定场景连续绘帧，返回每帧平均耗时（毫秒）；frames 须为正数。
-double DrawFrames(redmist::SpriteRenderer& renderer,
-                  const redmist::BulletSystem& bullets,
-                  std::span<const redmist::VisualResource> visuals,
-                  const redmist::SpriteShaders& shaders,
+double DrawFrames(koumakyou::SpriteRenderer& renderer,
+                  const koumakyou::BulletSystem& bullets,
+                  std::span<const koumakyou::VisualResource> visuals,
+                  const koumakyou::SpriteShaders& shaders,
                   const Camera3D& camera, int frames) {
     const double start = GetTime();
-    const redmist::ActorEffectSystem effects;
+    const koumakyou::ActorEffectSystem effects;
     for (int frame = 0; frame < frames; ++frame) {
         BeginDrawing();
         ClearBackground(BLACK);
@@ -47,16 +47,16 @@ int main(int argc, char** argv) {
 
     int exitCode = 0;
     {
-        redmist::AssetManager manager{std::filesystem::path(argv[1])};
-        redmist::stage1::Stage1Content content;
+        koumakyou::AssetManager manager{std::filesystem::path(argv[1])};
+        koumakyou::stage1::Stage1Content content;
         manager.LoadStage(content.Assets());
         const auto& assets = manager.Stage().visuals;
-        const redmist::SpriteShaders& shaders = manager.Stage().shaders;
-        if (!IsTextureValid(assets[redmist::stage1::kBlueBullet].texture) ||
-            !IsTextureValid(assets[redmist::stage1::kRedBullet].texture)) {
+        const koumakyou::SpriteShaders& shaders = manager.Stage().shaders;
+        if (!IsTextureValid(assets[koumakyou::stage1::kBlueBullet].texture) ||
+            !IsTextureValid(assets[koumakyou::stage1::kRedBullet].texture)) {
             exitCode = 1;
         } else {
-            redmist::SpriteRenderer renderer;
+            koumakyou::SpriteRenderer renderer;
             Camera3D camera{};
             camera.position = {0.0F, 0.0F, -6.5F};
             camera.target = {0.0F, 0.0F, 1.0F};
@@ -64,20 +64,20 @@ int main(int argc, char** argv) {
             camera.fovy = 72.0F;
             camera.projection = CAMERA_PERSPECTIVE;
 
-            redmist::BulletSystem bullets;
+            koumakyou::BulletSystem bullets;
             DrawFrames(renderer, bullets, assets, shaders, camera, 10);
             const double emptyMs = DrawFrames(renderer, bullets, assets,
                                               shaders, camera, 60);
             for (int i = 0;
-                 i < static_cast<int>(redmist::BulletSystem::kCapacity); ++i) {
+                 i < static_cast<int>(koumakyou::BulletSystem::kCapacity); ++i) {
                 const float x = (static_cast<float>(i % 64) - 31.5F) * 0.15F;
                 const float y = (static_cast<float>((i / 64) % 64) - 31.5F) * 0.15F;
                 const float z = (i / 4096 == 0) ? 0.0F : 2.0F;
                 const bool blueKind = (i % 2) == 0;
-                bullets.Spawn(redmist::BulletOwner::Enemy, {x, y, z}, {}, 0.14F,
+                bullets.Spawn(koumakyou::BulletOwner::Enemy, {x, y, z}, {}, 0.14F,
                               blueKind ? BLUE : RED,
-                              blueKind ? redmist::stage1::kBlueBullet
-                                       : redmist::stage1::kRedBullet);
+                              blueKind ? koumakyou::stage1::kBlueBullet
+                                       : koumakyou::stage1::kRedBullet);
             }
             DrawFrames(renderer, bullets, assets, shaders, camera, 10);
             const double fullMs = DrawFrames(renderer, bullets, assets,

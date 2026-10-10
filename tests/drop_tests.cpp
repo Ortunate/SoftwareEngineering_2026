@@ -11,10 +11,10 @@
 
 namespace {
 // 测试场景须恰有一个活动道具；返回副本，避免在后续推进时借用池内对象。
-redmist::Pickup SinglePickup(const redmist::DropSystem& drops) {
-    redmist::Pickup result{};
+koumakyou::Pickup SinglePickup(const koumakyou::DropSystem& drops) {
+    koumakyou::Pickup result{};
     int count = 0;
-    drops.ForEachActive([&](const redmist::Pickup& pickup) {
+    drops.ForEachActive([&](const koumakyou::Pickup& pickup) {
         result = pickup;
         ++count;
     });
@@ -23,7 +23,7 @@ redmist::Pickup SinglePickup(const redmist::DropSystem& drops) {
 }
 
 void TestPickupMotion() {
-    using redmist::DropSystem;
+    using koumakyou::DropSystem;
     constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
     DropSystem drops(1234);
     drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
@@ -67,14 +67,14 @@ void TestPickupMotion() {
     }
 
     // 从已下落的状态立即转入吸取；拾取后复用槽位须恢复上抛而不继承追踪。
-    assert(drops.Update(1.0F, {5.0F, 0.0F, redmist::kArenaHalfExtents.z * 0.6F}).power == 8);
+    assert(drops.Update(1.0F, {5.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.6F}).power == 8);
     drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 1);
     const auto reused = SinglePickup(drops);
     assert(!reused.homing && reused.velocityZ == 4.0F);
 }
 
 // 在场内交替移动玩家，让追踪持续超过旧超时时间而不提前拾取。
-void KeepHomingPickupUncollected(redmist::DropSystem& drops) {
+void KeepHomingPickupUncollected(koumakyou::DropSystem& drops) {
     for (int frame = 0; frame < 1600; ++frame) {
         const float x = frame % 2 == 0 ? -9.0F : 9.0F;
         const auto reward = drops.Update(0.01F, {x, 9.0F, 0.0F});
@@ -84,16 +84,16 @@ void KeepHomingPickupUncollected(redmist::DropSystem& drops) {
 }
 
 void TestPickupBoundary() {
-    using redmist::DropSystem;
-    constexpr float rearZ = -redmist::kArenaHalfExtents.z;
+    using koumakyou::DropSystem;
+    constexpr float rearZ = -koumakyou::kArenaHalfExtents.z;
     constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
-    constexpr std::array<redmist::DropOutcome, 1> outcome{{{1, 1, 1}}};
+    constexpr std::array<koumakyou::DropOutcome, 1> outcome{{{1, 1, 1}}};
     DropSystem drops(1234);
     // 1.25 秒位移为 -0.484375；P 点和分数点都恰好落在边界时仍保留。
     drops.SpawnEnemyDrops({5.0F, 0.0F, rearZ + 0.484375F}, outcome);
     drops.Update(1.25F, distantPlayer);
     int remaining = 0;
-    drops.ForEachActive([&](const redmist::Pickup& pickup) {
+    drops.ForEachActive([&](const koumakyou::Pickup& pickup) {
         ++remaining;
         assert(pickup.position.z == rearZ);
         assert(pickup.velocityZ == -2.5F);
@@ -102,31 +102,31 @@ void TestPickupBoundary() {
     // 越界后即使仍在玩家拾取半径内，也必须回收而不结算奖励。
     const auto expired = drops.Update(0.01F, {5.0F, 0.0F, rearZ + 0.35F});
     assert(expired.power == 0 && expired.score == 0);
-    drops.ForEachActive([](const redmist::Pickup&) { assert(false); });
+    drops.ForEachActive([](const koumakyou::Pickup&) { assert(false); });
     drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
     assert(!SinglePickup(drops).homing && SinglePickup(drops).velocityZ == 4.0F);
     // 一个大帧跨出后边界也应回收。
     assert(drops.Update(10.0F, distantPlayer).power == 0);
-    drops.ForEachActive([](const redmist::Pickup&) { assert(false); });
+    drops.ForEachActive([](const koumakyou::Pickup&) { assert(false); });
 
     // 上抛超过 +Z 边界不提前消失；消失边界只在 -Z 端。
-    drops.SpawnFixedPower({5.0F, 0.0F, redmist::kArenaHalfExtents.z - 0.2F}, 1);
+    drops.SpawnFixedPower({5.0F, 0.0F, koumakyou::kArenaHalfExtents.z - 0.2F}, 1);
     drops.Update(0.25F, distantPlayer);
-    assert(SinglePickup(drops).position.z > redmist::kArenaHalfExtents.z);
+    assert(SinglePickup(drops).position.z > koumakyou::kArenaHalfExtents.z);
     drops.Clear();
 
     drops.SpawnFixedPower({}, 8);
-    drops.Update(0.0F, {0.0F, 0.0F, redmist::kArenaHalfExtents.z * 0.6F});
+    drops.Update(0.0F, {0.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.6F});
     KeepHomingPickupUncollected(drops);
     assert(drops.Update(1.0F, {}).power == 8);
 }
 
 void TestBulletStars() {
-    using redmist::BulletOwner;
-    using redmist::BulletSystem;
-    using redmist::DropSystem;
-    using redmist::Pickup;
-    using redmist::PickupKind;
+    using koumakyou::BulletOwner;
+    using koumakyou::BulletSystem;
+    using koumakyou::DropSystem;
+    using koumakyou::Pickup;
+    using koumakyou::PickupKind;
     // 弹幕池较大，置于堆上，避免 Windows 默认栈容量不足。
     auto bullets = std::make_unique<BulletSystem>();
     DropSystem drops(1234);
@@ -202,11 +202,11 @@ void RunDropTests() {
     TestPickupMotion();
     TestPickupBoundary();
     TestBulletStars();
-    using redmist::DropOutcome;
-    using redmist::DropSystem;
-    using redmist::Pickup;
-    using redmist::PickupKind;
-    constexpr float autoCollectZ = redmist::kArenaHalfExtents.z * 0.6F;
+    using koumakyou::DropOutcome;
+    using koumakyou::DropSystem;
+    using koumakyou::Pickup;
+    using koumakyou::PickupKind;
+    constexpr float autoCollectZ = koumakyou::kArenaHalfExtents.z * 0.6F;
 
     DropSystem drops(1234);
     constexpr std::array<DropOutcome, 2> outcomes{{

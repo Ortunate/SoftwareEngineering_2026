@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <algorithm>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 区分玩家弹与敌弹，用于碰撞、清弹和计分。
 enum class BulletOwner : std::uint8_t { Player, Enemy };
@@ -74,4 +74,4 @@ struct Bullet {
     Color color = WHITE;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

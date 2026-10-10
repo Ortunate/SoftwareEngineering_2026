@@ -2,7 +2,7 @@
 #pragma once
 #include "gameplay/actors/boss.hpp"
 #include "stages/stage1/reference_script.hpp"
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 /// @brief 露米娅遭遇；原作 HP 与生命阈值统一换算，阶段包含受保护的准备期与脚本退场。
 class RumiaBoss final : public Boss {
 public:
@@ -30,4 +30,4 @@ private:
     bool retiring_ = false;
     bool defeated_ = false;
 };
-} // namespace redmist::stage1
+} // namespace koumakyou::stage1

@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 可选择的关卡内容编号；注册新关卡只修改目录模块。
 enum class StageId : std::uint8_t { Stage1 };
@@ -17,4 +17,4 @@ enum class StageId : std::uint8_t { Stage1 };
 /// @throws std::invalid_argument 未注册的关卡编号。
 [[nodiscard]] std::unique_ptr<StageContent> CreateStageContent(StageId id);
 
-}  // namespace redmist
+}  // namespace koumakyou

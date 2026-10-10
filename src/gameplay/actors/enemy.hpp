@@ -13,7 +13,7 @@
 #include <span>
 #include <utility>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 小怪抽象基类：处理出生年龄、独立视觉时钟与边界，移动和技能由具体敌人实现。
 class Enemy {
@@ -131,4 +131,4 @@ private:
     std::size_t droppedSpawns_ = 0;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

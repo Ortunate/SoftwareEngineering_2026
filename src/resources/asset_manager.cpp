@@ -9,7 +9,7 @@
 #include <span>
 #include <utility>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 
 /// @brief 音效清单项，资源路径相对 assets 根目录。
@@ -341,4 +341,4 @@ void AssetManager::PlaySoundEffect(std::string_view name) const {
     }
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <span>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 管理弹幕池中每颗弹幕的创建、运动和回收；图案由技能决定。
 class BulletSystem {
@@ -77,4 +77,4 @@ private:
     FixedPool<Bullet, kCapacity> bullets_;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

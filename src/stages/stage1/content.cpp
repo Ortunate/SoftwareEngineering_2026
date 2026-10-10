@@ -8,7 +8,7 @@
 
 #include <type_traits>
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 
 const StageAssetManifest& Stage1Content::Assets() const { return Stage1Manifest(); }
 std::span<const StageEvent> Stage1Content::Events() const { return Stage1Timeline(); }
@@ -40,4 +40,4 @@ std::unique_ptr<Boss> Stage1Content::CreateBoss(bool final) const {
     return boss;
 }
 
-}  // namespace redmist::stage1
+}  // namespace koumakyou::stage1

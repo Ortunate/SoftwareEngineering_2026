@@ -6,7 +6,7 @@
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 namespace {
 constexpr float kPi = std::numbers::pi_v<float>;
 constexpr std::array<Color,16> kColors{{{190,190,200,255},{140,35,60,255},{255,65,95,255},
@@ -208,4 +208,4 @@ void ReferenceScript::Emit(const reference::Instruction& i, Vector3 player, Bull
         if(bullet->spawnVisualSeconds>0)bullet->baseVelocity=bullet->velocity;
     }
 }
-} // namespace redmist::stage1
+} // namespace koumakyou::stage1

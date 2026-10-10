@@ -5,7 +5,7 @@
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/effects/actor_effects.hpp"
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief Boss 抽象基类，保存判定、血量与阶段公共状态。
 class Boss {
@@ -67,4 +67,4 @@ public:
     [[nodiscard]] Vector3 MuzzlePosition(Vector3 playerPosition) const;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

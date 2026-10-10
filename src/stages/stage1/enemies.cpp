@@ -10,7 +10,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 namespace {
 constexpr Color kEnemyRed{255, 70, 105, 255};
 constexpr Color kEnemyBlue{75, 145, 255, 255};
@@ -201,4 +201,4 @@ void ReferenceEnemy::Update(float deltaTime, Vector3 playerPosition, BulletSyste
     if (p.x >= -16 && p.x <= 400 && p.y >= -16 && p.y <= 464) entered_ = true;
     if (script_.finished || (entered_ && (p.x < -16 || p.x > 400 || p.y < -16 || p.y > 464))) active = false;
 }
-}  // namespace redmist::stage1
+}  // namespace koumakyou::stage1

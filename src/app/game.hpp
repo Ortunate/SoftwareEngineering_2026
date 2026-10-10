@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 游戏总控，协调输入、关卡、战斗、碰撞、资源和界面。
 class Game : private StageEventSink {
@@ -47,7 +47,7 @@ public:
     /// @param yawDegrees 水平角（度）。
     /// @param pitchDegrees 仰俯角（度）。
     void SetPreviewView(float yawDegrees, float pitchDegrees);
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     /// @brief 设置是否绘制判定球与发弹点。
     /// @param enabled 为 true 时启用调试图层。
     void SetDebugDraw(bool enabled) { debugRender_ = enabled; }
@@ -176,7 +176,7 @@ private:
     void DrawOptions() const;
     /// @brief 绘制可重新绑定的战斗按键列表。
     void DrawKeyBindings() const;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     /// @brief 进入禁用关卡时间轴、只有固定靶怪的射击调试场地。
     void StartShotTest();
 #endif
@@ -258,7 +258,7 @@ private:
     /// @brief 激活录入后须先释放确认键/鼠标按钮，避免把打开弹窗的点击录入为绑定。
     bool bindingCaptureReady_ = false;
     bool shouldQuit_ = false;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     bool shotTestActive_ = false;
     bool debugRender_ = false;
     /// @brief Debug 构建默认启用，F4 可切换；重新开始时保留当前值。
@@ -266,4 +266,4 @@ private:
 #endif
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

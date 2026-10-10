@@ -55,7 +55,7 @@
 
 FPS 上限提供 30、60、120、144、240 和 Unlimited 六档，通过 raylib 的 `SetTargetFPS` 即时应用。窗口未强制启用垂直同步，因此各档位不会被 VSync 设置覆盖。
 
-设置持久化由独立的 `settings` 模块负责。程序启动时先使用 `std::filesystem::exists` 检查当前运行目录中的 `red_mist_settings.cfg`：文件不存在时构造默认 `GameSettings` 并创建文件；文件存在时逐项读取 FPS、BGM 音量（0～100）、灵敏度（10～300，100 为原速度）和 `KeyBindings`。修改后立即保存 version=2 配置，校验数值范围及键位唯一性。旧版默认 C 迁移为 Mouse 4，其他自定义值保留。AssetManager 把音量同步到菜单、道中、Boss 已有音乐流，并在加载新流后重新应用；静音不停止流的计时。Game 保存灵敏度设置，每帧通过 PlayerInput 的倍率传入 Player，玩家重置不会丢失设置。
+设置持久化由独立的 `settings` 模块负责。程序启动时先使用 `std::filesystem::exists` 检查当前运行目录中的 `koumakyou_settings.cfg`：文件不存在时构造默认 `GameSettings` 并创建文件；文件存在时逐项读取 FPS、BGM 音量（0～100）、灵敏度（10～300，100 为原速度）和 `KeyBindings`。修改后立即保存 version=2 配置，校验数值范围及键位唯一性。旧版默认 C 迁移为 Mouse 4，其他自定义值保留。AssetManager 把音量同步到菜单、道中、Boss 已有音乐流，并在加载新流后重新应用；静音不停止流的计时。Game 保存灵敏度设置，每帧通过 PlayerInput 的倍率传入 Player，玩家重置不会丢失设置。
 
 长方体边框和六个表面的空间网格帮助玩家判断深度、速度和朝向。
 

@@ -15,8 +15,8 @@
 #include <numbers>
 #include <utility>
 
-namespace redmist {
-#ifdef RED_MIST_DEBUG_FEATURES
+namespace koumakyou {
+#ifdef KOUMAKYOU_DEBUG_FEATURES
 namespace {
 /// @brief 射击调试场地中的固定靶怪；不移动、不攻击，由 Game 在血量耗尽时复原。
 class ShotTestEnemy final : public Enemy {
@@ -36,7 +36,7 @@ private:
 
 Game::Game()
     : assets_(std::filesystem::path(GetApplicationDirectory()) / "assets") {
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     debugInvincible_ = true;
 #endif
     camera_.up = {0.0F, 1.0F, 0.0F};
@@ -153,7 +153,7 @@ void Game::StartRun(bool captureCursor) {
     bossEventId_.reset();
     dialogueEventId_.reset();
     shouldQuit_ = false;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     shotTestActive_ = false;
 #endif
     player_.SyncCamera(camera_);
@@ -179,7 +179,7 @@ void Game::EnterMainMenu() {
     stageContent_.reset();
     assets_.PlayMenuMusic();
     state_ = RunState::MainMenu;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     shotTestActive_ = false;
 #endif
     selectedMenuItem_ = 0;
@@ -254,7 +254,7 @@ void Game::Update(float deltaTime) {
         UpdateMenuPage();
         return;
     }
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     if (IsKeyPressed(KEY_F3)) debugRender_ = !debugRender_;
 #endif
 
@@ -316,7 +316,7 @@ void Game::Update(float deltaTime) {
         }
         return;
     }
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     if (IsKeyPressed(KEY_F4)) debugInvincible_ = !debugInvincible_;
     if (IsKeyPressed(KEY_F5)) AdjustPlayerPower(-8);
     if (IsKeyPressed(KEY_F6)) AdjustPlayerPower(8);
@@ -373,7 +373,7 @@ void Game::Update(float deltaTime) {
     if (state_ == RunState::Playing) UpdatePickups(deltaTime);
 }
 
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
 void Game::StartShotTest() {
     stageId_ = StageId::Stage1;
     StartRun();
@@ -454,4 +454,4 @@ void Game::SetMessage(std::string message, float duration) {
     messageTimer_ = duration;
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

@@ -12,7 +12,7 @@
 #include <span>
 #include <vector>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 单个道具的临时绘制数据；position 为世界坐标，heightScale 乘以外观的世界高度。
 /// visual 是当前 Stage 的外观 ID；渲染器只在本帧借用此数据。
@@ -40,7 +40,7 @@ public:
               std::span<const VisualResource> visuals,
               const SpriteShaders& shaders,
               const ActorEffectSystem& effects) const;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     /// @brief 在 Debug 构建中叠加判定球与发弹点。
     /// @param bullets 全部活动弹幕。
     /// @param enemies 当前可见敌人指针序列。
@@ -66,4 +66,4 @@ private:
     mutable std::vector<const Bullet*> translucentPlayerBullets_;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

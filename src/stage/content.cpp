@@ -5,7 +5,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 // 各重载明确列出动作类型；新增 variant 分支而未补充执行器时必须编译失败。
 struct EventExecutor {
@@ -50,4 +50,4 @@ bool StageContent::HandleEvent(const StageEvent& event, StageEventSink& sink) co
     return std::visit(EventExecutor{event, sink}, event.action);
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

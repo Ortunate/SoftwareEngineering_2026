@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 /// @brief 验证只有当前视图派生类禁用合成，原 GLFW 类的方法未被全局替换。
-bool RedMistCheckNativeTextInputDisabled(void* nativeWindow) {
+bool KoumakyouCheckNativeTextInputDisabled(void* nativeWindow) {
     NSWindow* window = (NSWindow*)nativeWindow;
     NSView* view = [window contentView];
     Class applied = object_getClass(view);
@@ -20,7 +20,7 @@ bool RedMistCheckNativeTextInputDisabled(void* nativeWindow) {
 }
 
 /// @brief 经本窗口的 sendEvent: 分派给第一响应者；keyCode=13 是 macOS 的物理 W 键。
-void RedMistSendNativeKeyEvent(void* nativeWindow, bool down) {
+void KoumakyouSendNativeKeyEvent(void* nativeWindow, bool down) {
     NSWindow* window = (NSWindow*)nativeWindow;
     NSEvent* event = [NSEvent keyEventWithType:down ? NSEventTypeKeyDown : NSEventTypeKeyUp
         location:NSZeroPoint modifierFlags:0 timestamp:0 windowNumber:[window windowNumber]

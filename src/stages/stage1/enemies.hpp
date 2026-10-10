@@ -7,7 +7,7 @@
 #include "stages/stage1/ids.hpp"
 #include "stages/stage1/reference_script.hpp"
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 
 /// @brief 普通妖精使用蓝衣外观并按显式轨迹移动；不攻击，当前玩家任一子弹命中即可击破。
 class FairyEnemy final : public Enemy {
@@ -80,4 +80,4 @@ private:
     bool entered_ = false;
     int sourceItem_ = -1;
 };
-}  // namespace redmist::stage1
+}  // namespace koumakyou::stage1

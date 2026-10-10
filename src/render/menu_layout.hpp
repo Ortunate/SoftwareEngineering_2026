@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <array>
 
-namespace redmist::menu {
+namespace koumakyou::menu {
 /// @brief 以 1100×760 为设计画布，等比缩放并居中；坐标单位为设计像素。
 struct Canvas {
     float scale;
@@ -76,9 +76,9 @@ struct TitleLayout {
         return {0, (textureHeight - sourceHeight) * 0.25F, sourceWidth, sourceHeight};
     }
 };
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
 inline constexpr int kTitleRowCount = 11;
 #else
 inline constexpr int kTitleRowCount = 10;
 #endif
-}  // namespace redmist::menu
+}  // namespace koumakyou::menu

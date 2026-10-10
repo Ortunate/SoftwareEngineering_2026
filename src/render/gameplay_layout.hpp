@@ -2,7 +2,7 @@
 #pragma once
 #include "raylib.h"
 #include <algorithm>
-namespace redmist {
+namespace koumakyou {
 /// @brief 参考界面以 16:9 等比居中；宽窄窗口均留边，避免拉伸纹理或改变游戏视口纵横比。
 struct GameplayLayout {
     float scale;
@@ -17,4 +17,4 @@ struct GameplayLayout {
     // frame.anm 的第二张 sprite 位于 (1922,1)，其透明内窗为 x=55…911、y=40…1042。
     [[nodiscard]] Rectangle Viewport() const { return Rect(532,40,856,1002); }
 };
-} // namespace redmist
+} // namespace koumakyou

@@ -4,7 +4,7 @@
 #include <array>
 #include <cstddef>
 
-namespace redmist {
+namespace koumakyou {
 /// @brief 鼠标编码使用独立区间，避免与 raylib 键盘键码混淆；配置文件沿用整数。
 inline constexpr int kMouseBindingBase = 1000;
 /// @brief 将 raylib 鼠标按钮编号（0～6）转换成持久化绑定编码。
@@ -74,4 +74,4 @@ inline bool Rebind(KeyBindings& bindings, int index, int code) {
     target = code;
     return true;
 }
-} // namespace redmist
+} // namespace koumakyou

@@ -4,7 +4,7 @@
 
 #include "gameplay/bullets/patterns.hpp"
 
-namespace redmist {
+namespace koumakyou {
 
 Vector3 Boss::MuzzlePosition(Vector3 playerPosition) const {
     return pattern::Add(position,
@@ -12,4 +12,4 @@ Vector3 Boss::MuzzlePosition(Vector3 playerPosition) const {
                        hitRadius * 0.55F));
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

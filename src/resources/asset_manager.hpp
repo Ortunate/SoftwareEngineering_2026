@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 主菜单与关卡共同使用、直到程序退出才释放的图形素材。
 struct CommonAssets {
@@ -107,4 +107,4 @@ private:
     bool stageLoaded_ = false;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

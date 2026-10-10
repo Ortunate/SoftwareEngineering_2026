@@ -4,7 +4,7 @@
 
 #include <array>
 
-namespace redmist {
+namespace koumakyou {
 inline constexpr float kSpellCutInDuration = 2.0F;
 inline constexpr std::array<const char*, 12> kBindingNames{
     "FORWARD", "BACKWARD", "MOVE LEFT", "MOVE RIGHT", "ASCEND",
@@ -14,4 +14,4 @@ inline constexpr std::array<const char*, 12> kBindingNames{
 inline constexpr float kBindingsTop = 136.0F;
 inline constexpr float kBindingsSpacing = 28.0F;
 inline constexpr float kBindingsHeight = 25.0F;
-}  // namespace redmist
+}  // namespace koumakyou

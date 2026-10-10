@@ -29,7 +29,7 @@ def main() -> None:
     # 子集使用新家族名，避免将经过修改的字体冒充原字体。
     for record in font['name'].names:
         if record.nameID in {1, 3, 4, 6}:
-            record.string = "RedMistUISerif".encode(record.getEncoding())
+            record.string = "KoumakyouUISerif".encode(record.getEncoding())
     args.output.mkdir(parents=True, exist_ok=True)
     font.save(args.output / "ui_font.otf")
     (args.output / "ui_charset.txt").write_text(text)

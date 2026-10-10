@@ -44,10 +44,10 @@ int main(int argc, char** argv) {
     float captureStageTime = 0.0F;
     float captureYaw = 0.0F;
     float capturePitch = 0.0F;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     bool captureDebug = false;
 #endif
-    std::string capturePath = "red_mist_capture.png";
+    std::string capturePath = "koumakyou_capture.png";
     if (argc >= 3 && std::string_view(argv[1]) == "--capture-stage") {
         captureFrame = true;
         captureStage = true;
@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
         if (argc >= 4) capturePath = argv[3];
         if (argc >= 5) captureYaw = std::strtof(argv[4], nullptr);
         if (argc >= 6) capturePitch = std::strtof(argv[5], nullptr);
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
         if (argc >= 7) captureDebug = std::string_view(argv[6]) == "--debug-render";
 #endif
     } else if (argc >= 2 && (std::string_view(argv[1]) == "--capture" ||
@@ -78,8 +78,8 @@ int main(int argc, char** argv) {
         SetTraceLogLevel(LOG_WARNING);
     }
     SetConfigFlags(windowFlags);
-    InitWindow(screenWidth, screenHeight, "Red Mist 3D - Stage 1 Normal Demo");
-    if (!redmist::DisableWindowInputMethods(GetWindowHandle()))
+    InitWindow(screenWidth, screenHeight, "koumakyou - Stage 1 Normal Demo");
+    if (!koumakyou::DisableWindowInputMethods(GetWindowHandle()))
         TraceLog(LOG_WARNING, "INPUT: Could not disable window input methods");
     if (!captureFrame) InitAudioDevice();
     SetExitKey(KEY_NULL);
@@ -96,11 +96,11 @@ int main(int argc, char** argv) {
     }
     bool captureSaved = !captureFrame;
     {
-        redmist::Game game;
+        koumakyou::Game game;
         if (captureStage) {
             // 以固定步长先推进关卡逻辑，再渲染目标时刻的画面。
             game.StartPreview();
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
             game.SetDebugDraw(captureDebug);
 #endif
             for (float elapsed = 0.0F; elapsed < captureStageTime;

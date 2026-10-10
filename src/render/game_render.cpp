@@ -13,7 +13,7 @@
 #include <numbers>
 #include <utility>
 
-namespace redmist {
+namespace koumakyou {
 using namespace game_math;
 
 #include "rlgl.h"
@@ -95,7 +95,7 @@ void Game::DrawWorld() const {
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
                          actorEffects_);
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
                                           player_.Position());
@@ -187,7 +187,7 @@ void Game::DrawHud() const {
         DrawLine(x,y-16*l.scale,x,y-9*l.scale,color); DrawLine(x,y+9*l.scale,x,y+16*l.scale,color);
     }
     text(TextFormat("%02d.00fps",GetFPS()),1660,1045,23,RAYWHITE);
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
     if(debugRender_)text(TextFormat("XYZ %+.1f %+.1f %+.1f | %d bullets",player_.Position().x,player_.Position().y,player_.Position().z,
                    static_cast<int>(bullets_.Pool().ActiveCount())),25,1020,22,RAYWHITE);
 #endif
@@ -386,4 +386,4 @@ void Game::DrawKeyBindings() const {
     }
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

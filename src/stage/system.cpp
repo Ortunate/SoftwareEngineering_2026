@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-namespace redmist {
+namespace koumakyou {
 StageDirector::StageDirector() : StageDirector(std::span<const StageEvent>{}) {}
 
 StageDirector::StageDirector(std::span<const StageEvent> events)
@@ -150,4 +150,4 @@ std::optional<std::size_t> StageDirector::FindEvent(StageEventId id) const {
     return std::nullopt;
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

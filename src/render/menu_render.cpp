@@ -7,7 +7,7 @@
 #include <cmath>
 #include <string>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 constexpr Color kScarlet{133, 24, 42, 255};
 constexpr Color kIvory{252, 246, 236, 255};
@@ -226,7 +226,7 @@ void Game::DrawMenuPage() const {
         Text(canvas, font, "原作 · 东方红魔乡：新典", 550, 260, 30, kIvory, true);
         Text(canvas, font, "Team Shanghai Alice", 550, 320, 28, kGold, true);
         Text(canvas, font, "三维扩展与现代化重绘", 550, 430, 27, kIvory, true);
-        Text(canvas, font, "Red Mist 3D · Fan recreation", 550, 480, 23, kGold, true);
+        Text(canvas, font, "koumakyou · Fan recreation", 550, 480, 23, kGold, true);
     }
 }
-}  // namespace redmist
+}  // namespace koumakyou

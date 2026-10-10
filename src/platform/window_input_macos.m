@@ -20,7 +20,7 @@ static void IgnoreTextInterpretation(id self, SEL selector, NSArray* events) {
 
 /// @brief 仅借用本窗口，主线程重复调用安全；成功后策略持续到视图销毁。
 /// 注册的无 ivar 子类由 Objective-C runtime 持有，不能在视图仍存活时释放。
-bool RedMistDisableCocoaInputMethods(void* nativeWindow) {
+bool KoumakyouDisableCocoaInputMethods(void* nativeWindow) {
     if (!nativeWindow || ![NSThread isMainThread]) return false;
     NSWindow* window = (NSWindow*)nativeWindow;
     NSView* view = [window contentView];
@@ -31,7 +31,7 @@ bool RedMistDisableCocoaInputMethods(void* nativeWindow) {
 
     // 不修改 GLFWContentView 的全局方法；只给当前实例换上无 ivar 的派生类。
     // 必须继承原 keyDown:/keyUp:/flagsChanged:，以保留 GLFW 到 raylib 的输入回调。
-    NSString* name = [@"RedMistRawKeyView_" stringByAppendingString:NSStringFromClass(original)];
+    NSString* name = [@"KoumakyouRawKeyView_" stringByAppendingString:NSStringFromClass(original)];
     Class rawKeyClass = NSClassFromString(name);
     if (!rawKeyClass) {
         rawKeyClass = objc_allocateClassPair(original, [name UTF8String], 0);

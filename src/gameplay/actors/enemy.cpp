@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace redmist {
+namespace koumakyou {
 
 Enemy::Enemy(VisualId appearance, Vector3 start,
              std::span<const DropOutcome> drops)
@@ -49,4 +49,4 @@ void Enemy::Update(float deltaTime, Vector3 playerPosition,
         std::abs(position.z) > kArenaHalfExtents.z + margin) active = false;
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

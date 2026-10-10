@@ -4,7 +4,7 @@
 
 #include "gameplay/bullets/system.hpp"
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 单帧玩家输入快照；mouseDelta 为鼠标像素位移，按键值表示当前按下状态，bomb 表示本帧新按下。
 struct PlayerInput {
@@ -110,4 +110,4 @@ private:
     ShotType shot_ = ShotType::HomingAmulet;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

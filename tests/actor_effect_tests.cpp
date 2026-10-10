@@ -12,7 +12,7 @@
 namespace {
 /// @brief Fairy 及带出生轨道偏移的 Orb 在各帧率下完成入场后都应完全显示。
 void TestEnemyEntryOpacity() {
-    using namespace redmist;
+    using namespace koumakyou;
     using Movement = stage1::FairyParams::Movement;
     auto bullets = std::make_unique<BulletSystem>();
     for (const int fps : {30, 60, 120, 240}) {
@@ -42,7 +42,7 @@ void TestEnemyEntryOpacity() {
 
 /// @brief 贴近边界但始终在场内的螺旋轨道，转向后不能保留外推产生的淡出。
 void TestBoundaryPredictionRecovers() {
-    using namespace redmist;
+    using namespace koumakyou;
     auto bullets = std::make_unique<BulletSystem>();
     stage1::FairyEnemy fairy({{8.7F, 0, 8.8F}, stage1::FairyParams::Movement::Helix});
     bool sawPreview = false;
@@ -72,7 +72,7 @@ void TestBoundaryPredictionRecovers() {
 
 /// @brief 验证公共角色视觉状态、自然退场、Boss 阶段和效果池，不需要窗口或资源。
 void RunActorEffectTests() {
-    using namespace redmist;
+    using namespace koumakyou;
     TestEnemyEntryOpacity();
     TestBoundaryPredictionRecovers();
     ActorPresentation presentation;

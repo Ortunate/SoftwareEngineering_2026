@@ -10,7 +10,7 @@
 #include <string_view>
 #include <system_error>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 
 /// @brief 将配置文件中的字段名映射到 KeyBindings 成员。
@@ -174,7 +174,7 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     std::ofstream output(path, std::ios::trunc);
     if (!output) return false;
 
-    output << "# Red Mist 3D local settings\n";
+    output << "# koumakyou local settings\n";
     output << "version=3\n";
     output << "fps_limit=" << settings.fpsLimit << '\n';
     output << "music_volume=" << settings.musicVolume << '\n';
@@ -189,4 +189,4 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     return output.good();
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

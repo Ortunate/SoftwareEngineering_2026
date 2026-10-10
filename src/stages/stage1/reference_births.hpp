@@ -1,7 +1,7 @@
 // 本文件保存新典一面逐只出生数据；frame 为开局起算的 60 Hz 帧，x 为 384 像素场地的横坐标。
 #pragma once
 #include <array>
-namespace redmist::stage1::reference {
+namespace koumakyou::stage1::reference {
 /// @brief 出生子程序编号、镜像标记及原作生命/击破分数；item=-1 为轮换掉落，0 为小 P 点；x=-999 表示出生时均匀随机横坐标。
 struct Birth { int frame; int sub; bool mirrored; float x; float health; int score; int item; };
 inline constexpr std::array<Birth,222> kBirths{{

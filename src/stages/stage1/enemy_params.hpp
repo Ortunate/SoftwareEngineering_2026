@@ -4,7 +4,7 @@
 
 #include "raylib.h"
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 
 /// @brief 普通妖精参数；position 为有限的世界坐标，movement 必须为有效枚举值。
 /// 每个实例从自身出生时刻起算轨迹，不再通过编队或编号选择运动方式。
@@ -40,4 +40,4 @@ struct ReferenceEnemyParams {
     unsigned seed = 1;
     int sourceItem = -1; // 原作 -1 为全关共享轮换掉落，0 为固定小 P 点。
 };
-}  // namespace redmist::stage1
+}  // namespace koumakyou::stage1

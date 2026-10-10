@@ -27,12 +27,12 @@
 namespace {
 /// @brief 验证暗色妖精的 Z 轴往返、单次稀疏球面散射以及跨帧阶段切换。
 void TestDarkFairyBehavior() {
-    using redmist::Bullet;
-    using redmist::BulletOwner;
-    using redmist::BulletSystem;
-    using redmist::stage1::DarkFairyEnemy;
+    using koumakyou::Bullet;
+    using koumakyou::BulletOwner;
+    using koumakyou::BulletSystem;
+    using koumakyou::stage1::DarkFairyEnemy;
     const Vector3 start{2.0F, -1.0F, 8.0F};
-    const float travelDistance = redmist::kArenaHalfExtents.z * 2.0F / 5.0F;
+    const float travelDistance = koumakyou::kArenaHalfExtents.z * 2.0F / 5.0F;
     const float approachTime = travelDistance / 1.7F;
     const Vector3 turn{start.x, start.y, start.z - travelDistance};
     auto storage = std::make_unique<BulletSystem>();
@@ -52,11 +52,11 @@ void TestDarkFairyBehavior() {
     std::array<bool, 6> axisSigns{};
     int planarDirections = 0;
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
-        assert(bullet.owner == BulletOwner::Enemy && bullet.visual == redmist::stage1::kRedBullet);
+        assert(bullet.owner == BulletOwner::Enemy && bullet.visual == koumakyou::stage1::kRedBullet);
         assert(bullet.position.x == turn.x && bullet.position.y == turn.y);
         assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
         assert(std::abs(BulletSystem::Length(bullet.velocity) - 3.5F) < 0.0001F);
-        const Vector3 direction = redmist::pattern::Normalize(bullet.velocity);
+        const Vector3 direction = koumakyou::pattern::Normalize(bullet.velocity);
         // 图中疏散环的三维扩展须无重叠方向，不能退化为平面环或密集同向弹束。
         for (Vector3 previous : directions) {
             const float dot = direction.x * previous.x + direction.y * previous.y +
@@ -65,7 +65,7 @@ void TestDarkFairyBehavior() {
         }
         directions.push_back(direction);
         if (std::abs(direction.z) < 0.0001F) ++planarDirections;
-        velocitySum = redmist::pattern::Add(velocitySum, bullet.velocity);
+        velocitySum = koumakyou::pattern::Add(velocitySum, bullet.velocity);
         if (direction.x > 0.1F) axisSigns[0] = true;
         if (direction.x < -0.1F) axisSigns[1] = true;
         if (direction.y > 0.1F) axisSigns[2] = true;
@@ -96,7 +96,7 @@ void TestDarkFairyBehavior() {
     std::size_t directionIndex = 0;
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
-        const Vector3 direction = redmist::pattern::Normalize(bullet.velocity);
+        const Vector3 direction = koumakyou::pattern::Normalize(bullet.velocity);
         const Vector3 expected = directions[directionIndex++];
         assert(std::abs(direction.x - expected.x) < 0.0001F);
         assert(std::abs(direction.y - expected.y) < 0.0001F);
@@ -114,7 +114,7 @@ void TestDarkFairyBehavior() {
 }
 /// @brief 验证预警不伤人、光束中段与端点胶囊碰撞、持续擦弹及清除，不依赖图形窗口。
 void TestBeamContacts() {
-    using namespace redmist;
+    using namespace koumakyou;
     auto pool = std::make_unique<BulletSystem>();
     Player player;
     player.SetInvulnerability(0);
@@ -160,8 +160,8 @@ void TestBeamContacts() {
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
     TestBeamContacts();
-    using redmist::BulletOwner;
-    using redmist::BulletSystem;
+    using koumakyou::BulletOwner;
+    using koumakyou::BulletSystem;
     const Vector3 forward = BulletSystem::DirectionFromYawPitch(0.0F, 0.0F);
     assert(std::abs(forward.x) < 0.0001F);
     assert(std::abs(forward.y) < 0.0001F);
@@ -178,11 +178,11 @@ void RunGameplayTests() {
     assert(std::abs(aimed.z - 0.8F) < 0.0001F);
 
     BulletSystem bullets;
-    redmist::pattern::ForEachSphereDirection(64, 0.0F,
+    koumakyou::pattern::ForEachSphereDirection(64, 0.0F,
         [&bullets](Vector3 direction) {
             bullets.Spawn(BulletOwner::Enemy, {},
-                          redmist::pattern::Scale(direction, 2.5F), 0.16F, RED,
-                          redmist::stage1::kRedBullet);
+                          koumakyou::pattern::Scale(direction, 2.5F), 0.16F, RED,
+                          koumakyou::stage1::kRedBullet);
         });
     assert(bullets.Pool().ActiveCount() == 64);
 
@@ -192,8 +192,8 @@ void RunGameplayTests() {
     bool hasNegativeY = false;
     bool hasPositiveZ = false;
     bool hasNegativeZ = false;
-    bullets.Pool().ForEachActive([&](const redmist::Bullet& bullet) {
-        assert(bullet.visual == redmist::stage1::kRedBullet);
+    bullets.Pool().ForEachActive([&](const koumakyou::Bullet& bullet) {
+        assert(bullet.visual == koumakyou::stage1::kRedBullet);
         assert(std::abs(BulletSystem::Length(bullet.velocity) - 2.5F) < 0.0002F);
         hasPositiveX = hasPositiveX || bullet.velocity.x > 0.2F;
         hasNegativeX = hasNegativeX || bullet.velocity.x < -0.2F;
@@ -206,15 +206,15 @@ void RunGameplayTests() {
            hasPositiveZ && hasNegativeZ);
 
     bullets.Reset();
-    redmist::pattern::ForEachConeDirection({0.0F, 0.0F, 1.0F},
+    koumakyou::pattern::ForEachConeDirection({0.0F, 0.0F, 1.0F},
         2, 6, 0.45F, 0.0F, [&bullets](Vector3 direction) {
             bullets.Spawn(BulletOwner::Enemy, {},
-                          redmist::pattern::Scale(direction, 3.0F), 0.16F, BLUE,
-                          redmist::stage1::kBlueBullet);
+                          koumakyou::pattern::Scale(direction, 3.0F), 0.16F, BLUE,
+                          koumakyou::stage1::kBlueBullet);
         });
     assert(bullets.Pool().ActiveCount() == 13);
-    bullets.Pool().ForEachActive([](const redmist::Bullet& bullet) {
-        assert(bullet.visual == redmist::stage1::kBlueBullet);
+    bullets.Pool().ForEachActive([](const koumakyou::Bullet& bullet) {
+        assert(bullet.visual == koumakyou::stage1::kBlueBullet);
     });
 
     bullets.ClearEnemyBullets();
@@ -231,7 +231,7 @@ void RunGameplayTests() {
             const float bulletLimit = axis == 2 ? 14.5F : 13.0F;
             auto* edgeBullet = bullets.Spawn(BulletOwner::Enemy,
                 axisPosition(bulletLimit), {}, 0.1F, RED,
-                redmist::stage1::kRedBullet);
+                koumakyou::stage1::kRedBullet);
             assert(edgeBullet);
             bullets.Update(0.0F);
             assert(edgeBullet->active);
@@ -240,7 +240,7 @@ void RunGameplayTests() {
             assert(!edgeBullet->active);
 
             const float enemyLimit = axis == 2 ? 13.5F : 12.0F;
-            redmist::stage1::FairyEnemy edgeEnemy(
+            koumakyou::stage1::FairyEnemy edgeEnemy(
                 {axisPosition(enemyLimit)});
             edgeEnemy.Update(0.0F, {}, bullets);
             assert(edgeEnemy.active);
@@ -250,7 +250,7 @@ void RunGameplayTests() {
             bullets.Reset();
         }
     }
-    redmist::stage1::FairyEnemy fairy({{0.0F, 0.0F, 5.0F}});
+    koumakyou::stage1::FairyEnemy fairy({{0.0F, 0.0F, 5.0F}});
     const Vector3 fairyMuzzle = fairy.MuzzlePosition({0.0F, 0.0F, 0.0F});
     assert(std::abs(fairyMuzzle.z - (5.0F - fairy.hitRadius * 0.55F)) <
            0.0001F);
@@ -261,14 +261,14 @@ void RunGameplayTests() {
     assert(bullets.Pool().ActiveCount() == 0);
     assert(fairy.health > 0.0F && fairy.health == fairy.maxHealth);
     // 使用真实玩家射击验证低火力直射弹与满火力追踪弹均能一发耗尽妖精血量。
-    for (int power : {0, redmist::Player::kMaxPower}) {
-        redmist::Player player;
+    for (int power : {0, koumakyou::Player::kMaxPower}) {
+        koumakyou::Player player;
         player.AdjustPower(power);
         player.Update(0.0F, {.fire = true}, bullets,
-                      redmist::stage1::kPlayerGoldCard,
-                      redmist::stage1::kPlayerCyanCard, true);
+                      koumakyou::stage1::kPlayerGoldCard,
+                      koumakyou::stage1::kPlayerCyanCard, true);
         assert(bullets.Pool().ActiveCount() > 0);
-        bullets.Pool().ForEachActive([&fairy](const redmist::Bullet& bullet) {
+        bullets.Pool().ForEachActive([&fairy](const koumakyou::Bullet& bullet) {
             assert(bullet.damage >= fairy.health);
         });
         bullets.Reset();
@@ -277,39 +277,39 @@ void RunGameplayTests() {
 
     TestDarkFairyBehavior();
 
-    redmist::stage1::FairyEnemy helixFairy(
-        {{0.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::Helix});
+    koumakyou::stage1::FairyEnemy helixFairy(
+        {{0.0F, 0.0F, 5.0F}, koumakyou::stage1::FairyParams::Movement::Helix});
     helixFairy.Update(0.9F, {}, bullets);
     assert(helixFairy.position.x != fairy.position.x);
     assert(bullets.Pool().ActiveCount() == 0);
     bullets.Reset();
-    redmist::stage1::FairyEnemy crossingFairy(
-        {{-9.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::CrossFromLeft});
+    koumakyou::stage1::FairyEnemy crossingFairy(
+        {{-9.0F, 0.0F, 5.0F}, koumakyou::stage1::FairyParams::Movement::CrossFromLeft});
     crossingFairy.Update(0.9F, {}, bullets);
     assert(crossingFairy.position.x > -9.0F);
     assert(crossingFairy.visual == fairy.visual);
     assert(bullets.Pool().ActiveCount() == 0);
     bullets.Reset();
 
-    redmist::stage1::OrbEnemy orb({{0.0F, 0.0F, 5.0F}});
+    koumakyou::stage1::OrbEnemy orb({{0.0F, 0.0F, 5.0F}});
     orb.Update(0.9F, {}, bullets);
     assert(bullets.Pool().ActiveCount() == 6);
     bullets.Reset();
 
     // 使用新典原始帧节点核对道中首发（16 向×3 速度层）与固定 24 秒上限。
     // 入场从 +Z 场外缓冲带开始，源纵向贯穿战场深度，高度不参与二维出怪轨迹。
-    const Vector3 entry=redmist::stage1::ReferencePosition({192,-32,0});
+    const Vector3 entry=koumakyou::stage1::ReferencePosition({192,-32,0});
     assert(entry.x==0 && entry.y==0 && entry.z>11 && entry.z<11.5F);
-    const Vector3 exit=redmist::stage1::ReferencePosition({192,448,0});
+    const Vector3 exit=koumakyou::stage1::ReferencePosition({192,448,0});
     assert(exit.y==0 && std::abs(exit.z+10)<0.0001F);
-    redmist::stage1::ReferenceEnemy entryEnemy({entry});
+    koumakyou::stage1::ReferenceEnemy entryEnemy({entry});
     entryEnemy.Update(2.0F/60,{},bullets);
     assert(entryEnemy.active && entryEnemy.position.z<entry.z && entryEnemy.position.y==0);
     // 带高度的世界出生点经过演员的逆映射后仍保留该高度，避免构造路径混用旧坐标系。
-    redmist::stage1::ReferenceEnemy elevatedEnemy({{entry.x,2,entry.z}});
+    koumakyou::stage1::ReferenceEnemy elevatedEnemy({{entry.x,2,entry.z}});
     assert(std::abs(elevatedEnemy.position.y-2)<0.0001F);
     // Normal 妖精镜像只反转 X 位移；直行和转弯后左右轨迹保持对称，Z 与脚本时钟一致。
-    redmist::stage1::ReferenceScript left,mirrored,dark;
+    koumakyou::stage1::ReferenceScript left,mirrored,dark;
     left.Reset(0,{60,-32,0},32,1); mirrored.Reset(0,{324,-32,0},32,1,true);
     bullets.Reset();
     for(int frame=0;frame<180;++frame) {
@@ -328,12 +328,12 @@ void RunGameplayTests() {
     dark.Update(1.0F/60,raisedPlayer,bullets);
     assert(bullets.Pool().ActiveCount()==7);
     int aimedCenters=0;
-    bullets.Pool().ForEachActive([&](const redmist::Bullet& b) {
+    bullets.Pool().ForEachActive([&](const koumakyou::Bullet& b) {
         assert(!b.Dangerous() && std::abs(b.spawnVisualSeconds-10.0F/60)<0.0001F);
         assert(b.position.y==0 && b.velocity.y>0);
         assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
-        const Vector3 toPlayer=redmist::BulletSystem::DirectionTo(b.position,raisedPlayer);
-        const Vector3 direction=redmist::pattern::Normalize(b.velocity);
+        const Vector3 toPlayer=koumakyou::BulletSystem::DirectionTo(b.position,raisedPlayer);
+        const Vector3 direction=koumakyou::pattern::Normalize(b.velocity);
         const float alignment=direction.x*toPlayer.x+direction.y*toPlayer.y+direction.z*toPlayer.z;
         if(alignment>0.99999F)++aimedCenters;
     });
@@ -342,7 +342,7 @@ void RunGameplayTests() {
     for(int frame=0;frame<220;++frame)dark.Update(1.0F/60,{},bullets);
     assert(bullets.Pool().ActiveCount()==0); // Sub4 在 Normal 是无攻击的后段妖精。
 
-    redmist::stage1::RumiaBoss boss;
+    koumakyou::stage1::RumiaBoss boss;
     boss.StartMidboss();
     for (int frame=0;frame<160;++frame) assert(!boss.Update(1.0F/60,{},bullets));
     assert(bullets.Pool().ActiveCount()==0);
@@ -372,10 +372,10 @@ void RunGameplayTests() {
     bullets.Reset();
     for (int frame=0;frame<261;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
     int beams=0;
-    bullets.Pool().ForEachActive([&](const redmist::Bullet& b){
+    bullets.Pool().ForEachActive([&](const koumakyou::Bullet& b){
         if(b.beamLength<=0)return;
         ++beams;
-        const Vector3 expected=redmist::BulletSystem::DirectionTo(b.position,raisedPlayer);
+        const Vector3 expected=koumakyou::BulletSystem::DirectionTo(b.position,raisedPlayer);
         assert(b.beamDirection.y>0 && b.beamDirection.z<0);
         assert(std::abs(b.beamDirection.x-expected.x)<0.0001F);
         assert(std::abs(b.beamDirection.y-expected.y)<0.0001F);
@@ -386,7 +386,7 @@ void RunGameplayTests() {
     bullets.Reset();
     for (int frame=0;frame<121;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
     assert(bullets.Pool().ActiveCount()==34); // rank=16 时原作 -3…6 的弹数修正增加 1 向。
-    bullets.Pool().ForEachActive([](const redmist::Bullet& b){
+    bullets.Pool().ForEachActive([](const koumakyou::Bullet& b){
         assert(std::abs(b.turnDelaySeconds-40.0F/60)<0.0001F);
         assert(std::abs(std::abs(b.turnAngle)-std::numbers::pi_v<float>/2)<0.0001F);
         assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
@@ -394,10 +394,10 @@ void RunGameplayTests() {
     // 实际延迟转向必须在 X/Z 内完成 90°，Y 坡度保持不变，避免只修正出生位置。
     bullets.Update(1.1F,{},raisedPlayer);
     assert(bullets.Pool().ActiveCount()==34);
-    bullets.Pool().ForEachActive([](const redmist::Bullet& b){
+    bullets.Pool().ForEachActive([](const koumakyou::Bullet& b){
         assert(b.turnApplied && !b.turnAimed);
-        const Vector3 before=redmist::pattern::Normalize(b.baseVelocity);
-        const Vector3 after=redmist::pattern::Normalize(b.velocity);
+        const Vector3 before=koumakyou::pattern::Normalize(b.baseVelocity);
+        const Vector3 after=koumakyou::pattern::Normalize(b.velocity);
         assert(std::abs(before.y-after.y)<0.0001F);
         assert(std::abs(before.x*after.x+before.z*after.z)<0.0001F);
         assert((before.z*after.x-before.x*after.z)*b.turnAngle>0);

@@ -8,9 +8,9 @@
 
 /// @brief 验证默认值、持久化边界、旧配置和键鼠冲突；失败时断言终止。
 void RunSettingsTests() {
-    using namespace redmist;
+    using namespace koumakyou;
     const auto path = std::filesystem::temp_directory_path() /
-        ("red_mist_settings_" + std::to_string(
+        ("koumakyou_settings_" + std::to_string(
             std::chrono::steady_clock::now().time_since_epoch().count()) + ".cfg");
     const auto defaults = LoadOrCreateSettings(path);
     assert(std::filesystem::exists(path));

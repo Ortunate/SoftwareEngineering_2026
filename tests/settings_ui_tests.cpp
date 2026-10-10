@@ -20,7 +20,7 @@ void Event(unsigned int type, int a, int b = 0) {
     PlayAutomationEvent(AutomationEvent{0, type, {a, b, 0, 0}});
 }
 /// @brief 推进一帧，EndDrawing 更新输入的上一帧状态；窗口保持隐藏。
-void Frame(redmist::Game& game) {
+void Frame(koumakyou::Game& game) {
     game.Update(1.0F / 60.0F);
     BeginDrawing();
     ClearBackground(BLACK);
@@ -28,17 +28,17 @@ void Frame(redmist::Game& game) {
     EndDrawing();
 }
 /// @brief 模拟一次完整键盘按下和松开。
-void Key(redmist::Game& game, int key) {
+void Key(koumakyou::Game& game, int key) {
     Event(2, key); Frame(game);
     Event(1, key); Frame(game);
 }
 /// @brief 点击一个窗口坐标并释放，检验实际鼠标命中区域而非直接调用调整函数。
-void Click(redmist::Game& game, int x, int y) {
+void Click(koumakyou::Game& game, int x, int y) {
     Event(7, x, y); Event(6, MOUSE_BUTTON_LEFT); Frame(game);
     Event(5, MOUSE_BUTTON_LEFT); Frame(game);
 }
 /// @brief 按当前窗口逻辑尺寸保存页面，保证比例截图和实际布局使用同一坐标系。
-void Capture(redmist::Game& game, const char* path) {
+void Capture(koumakyou::Game& game, const char* path) {
     RenderTexture2D target = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
     BeginTextureMode(target);
     ClearBackground(BLACK);
@@ -56,7 +56,7 @@ void Capture(redmist::Game& game, const char* path) {
 int main(int argc, char** argv) {
     const auto original = std::filesystem::current_path();
     const auto scratch = std::filesystem::temp_directory_path() /
-        ("red_mist_ui_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        ("koumakyou_ui_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(scratch);
     const auto screenshots = argc > 1 ? std::filesystem::absolute(argv[1]) : scratch;
     std::filesystem::create_directories(screenshots);
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
     int result = 0;
     try {
         {
-            redmist::Game game;
+            koumakyou::Game game;
             SetTargetFPS(0);
             Capture(game, (screenshots / "title.png").string().c_str());
             Key(game, KEY_Z);
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
                                                        {1920, 820}, {900, 900}, {900, 1400}}};
             for (const auto size : titleSizes) {
                 SetWindowSize(static_cast<int>(size.x), static_cast<int>(size.y)); Frame(game);
-                const redmist::menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), redmist::menu::kTitleRowCount);
+                const koumakyou::menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), koumakyou::menu::kTitleRowCount);
                 for (int index = 0; index < layout.rowCount; ++index) {
                     const auto row = layout.Row(index);
                     Check(row.x >= 0 && row.y >= 0 && row.x + row.width <= GetScreenWidth() &&
@@ -97,14 +97,14 @@ int main(int argc, char** argv) {
                 Capture(game, (screenshots / file).string().c_str());
                 const auto options = layout.Row(8);
                 Click(game, static_cast<int>(options.x + options.width / 2), static_cast<int>(options.y + options.height / 2));
-                const int fps = redmist::LoadOrCreateSettings(redmist::kSettingsFilename).fpsLimit;
+                const int fps = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).fpsLimit;
                 Key(game, KEY_RIGHT);
-                Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).fpsLimit != fps,
+                Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).fpsLimit != fps,
                       "responsive title Options click missed");
                 Key(game, KEY_LEFT); Key(game, KEY_ESCAPE);
             }
             SetWindowSize(900, 620); Frame(game);
-            const redmist::menu::TitleLayout title(GetScreenWidth(), GetScreenHeight(), redmist::menu::kTitleRowCount);
+            const koumakyou::menu::TitleLayout title(GetScreenWidth(), GetScreenHeight(), koumakyou::menu::kTitleRowCount);
             const auto start = title.Row(0);
             Click(game, static_cast<int>(start.x + start.width / 2), static_cast<int>(start.y + start.height / 2));
             Capture(game, (screenshots / "normal.png").string().c_str());
@@ -117,24 +117,24 @@ int main(int argc, char** argv) {
             // 在最小/默认窗口宽度下，数字、文字、按钮外一像素及行空白均不能调值。
             for (int width : {900, 1100}) {
                 SetWindowSize(width, 620); Frame(game);
-                const redmist::menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+                const koumakyou::menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
                 for (int row = 0; row < 3; ++row) {
-                    const auto bounds = redmist::menu::OptionRow(canvas, row);
-                    const auto left = redmist::menu::OptionArrow(canvas, row, -1);
-                    const auto right = redmist::menu::OptionArrow(canvas, row, 1);
-                    const auto before = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
+                    const auto bounds = koumakyou::menu::OptionRow(canvas, row);
+                    const auto left = koumakyou::menu::OptionArrow(canvas, row, -1);
+                    const auto right = koumakyou::menu::OptionArrow(canvas, row, 1);
+                    const auto before = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
                     for (float x : {bounds.x + 20, left.x - 1, left.x + left.width + 1, (left.x + right.x) / 2, right.x + right.width + 1})
                         Click(game, static_cast<int>(x), static_cast<int>(bounds.y + bounds.height / 2));
                     Click(game, static_cast<int>(left.x + 10), static_cast<int>(left.y - 1));
-                    auto after = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
+                    auto after = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
                     Check(after.fpsLimit == before.fpsLimit && after.musicVolume == before.musicVolume &&
                           after.mouseSensitivity == before.mouseSensitivity, "click outside arrows changed setting");
                     Click(game, static_cast<int>(right.x + 10), static_cast<int>(right.y + 10));
-                    after = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
+                    after = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
                     Check(row == 0 ? after.fpsLimit == 120 : row == 1 ? after.musicVolume == 55 :
                           after.mouseSensitivity == 110, "right arrow did not increase");
                     Click(game, static_cast<int>(left.x + 10), static_cast<int>(left.y + 10));
-                    after = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
+                    after = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
                     Check(after.fpsLimit == before.fpsLimit && after.musicVolume == before.musicVolume &&
                           after.mouseSensitivity == before.mouseSensitivity, "left arrow did not decrease");
                 }
@@ -142,69 +142,69 @@ int main(int argc, char** argv) {
             SetWindowSize(900, 620); Frame(game);
             game.OpenOptions(); Event(7, 0, 0); Frame(game);
             Key(game, KEY_LEFT); Key(game, KEY_LEFT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).fpsLimit == 30, "FPS lower boundary wrapped");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).fpsLimit == 30, "FPS lower boundary wrapped");
             for (int i = 0; i < 7; ++i) Key(game, KEY_RIGHT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).fpsLimit == 0, "FPS upper boundary wrapped");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).fpsLimit == 0, "FPS upper boundary wrapped");
             game.OpenOptions(); Event(7, 0, 0); Frame(game);
             Key(game, KEY_DOWN);
             Key(game, KEY_RIGHT);
-            auto settings = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
+            auto settings = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
             Check(settings.musicVolume == 55, "music volume not saved");
             for (int i = 0; i < 25; ++i) Key(game, KEY_LEFT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).musicVolume == 0, "mute boundary failed");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).musicVolume == 0, "mute boundary failed");
             for (int i = 0; i < 25; ++i) Key(game, KEY_RIGHT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).musicVolume == 100, "volume upper boundary failed");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).musicVolume == 100, "volume upper boundary failed");
             Key(game, KEY_DOWN);
             for (int i = 0; i < 35; ++i) Key(game, KEY_RIGHT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).mouseSensitivity == 300, "sensitivity maximum failed");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).mouseSensitivity == 300, "sensitivity maximum failed");
             for (int i = 0; i < 35; ++i) Key(game, KEY_LEFT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).mouseSensitivity == 10, "sensitivity minimum failed");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).mouseSensitivity == 10, "sensitivity minimum failed");
             for (int i = 0; i < 9; ++i) Key(game, KEY_RIGHT);
             Capture(game, (screenshots / "options.png").string().c_str());
             Key(game, KEY_DOWN); Key(game, KEY_RIGHT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).soundVolume == 65, "SE volume not saved");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).soundVolume == 65, "SE volume not saved");
             Key(game, KEY_DOWN); Key(game, KEY_RIGHT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).initialLives == 3, "stock not saved");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).initialLives == 3, "stock not saved");
             Key(game, KEY_DOWN); Key(game, KEY_LEFT);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).initialBombs == 2, "bomb count not saved");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).initialBombs == 2, "bomb count not saved");
             Key(game, KEY_DOWN); Key(game, KEY_Z);
             // 点击 Focus 行打开录入；持续按住的激活点击不能立即变成新绑定。
             Event(7, 300, 316); Event(6, MOUSE_BUTTON_LEFT); Frame(game); Frame(game);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).bindings.focus == redmist::MouseBinding(MOUSE_BUTTON_SIDE), "opening click captured");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_SIDE), "opening click captured");
             Capture(game, (screenshots / "binding-prompt.png").string().c_str());
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);
             Event(6, MOUSE_BUTTON_EXTRA); Frame(game);
             Event(5, MOUSE_BUTTON_EXTRA); Frame(game);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).bindings.focus == redmist::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse side binding failed");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse side binding failed");
             // 将 Focus 改成左键后，射击副键应交换为刚才的侧键，不能保留硬编码左键。
             Event(6, MOUSE_BUTTON_LEFT); Frame(game);
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);
             Event(6, MOUSE_BUTTON_LEFT); Frame(game);
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);
-            settings = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
-            Check(settings.bindings.focus == redmist::MouseBinding(MOUSE_BUTTON_LEFT), "left binding failed");
-            Check(settings.bindings.fireAlt == redmist::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse conflict swap failed");
+            settings = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
+            Check(settings.bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_LEFT), "left binding failed");
+            Check(settings.bindings.fireAlt == koumakyou::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse conflict swap failed");
             Capture(game, (screenshots / "bindings.png").string().c_str());
             Event(7, 0, 0); Frame(game);
             // Esc 取消不会修改绑定；静止鼠标不应抢走键盘列表选择。
             Key(game, KEY_ENTER); Key(game, KEY_ESCAPE);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).bindings.focus == settings.bindings.focus, "cancel altered binding");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == settings.bindings.focus, "cancel altered binding");
             Key(game, KEY_DOWN); Key(game, KEY_ENTER); Key(game, KEY_F1);
-            Check(redmist::LoadOrCreateSettings(redmist::kSettingsFilename).bindings.fire == KEY_F1, "keyboard rebind failed");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.fire == KEY_F1, "keyboard rebind failed");
             game.Start(false); Frame(game);
             // 统一编码必须正确分发到鼠标查询；按住/首次按下分别用于移动和 Bomb。
             Event(6, MOUSE_BUTTON_EXTRA);
-            Check(redmist::BindingDown(settings.bindings.fireAlt), "mouse held dispatch failed");
-            Check(redmist::BindingPressed(settings.bindings.fireAlt), "mouse press dispatch failed");
+            Check(koumakyou::BindingDown(settings.bindings.fireAlt), "mouse held dispatch failed");
+            Check(koumakyou::BindingPressed(settings.bindings.fireAlt), "mouse press dispatch failed");
             Frame(game);
-            Check(!redmist::BindingPressed(settings.bindings.fireAlt), "mouse press repeated while held");
+            Check(!koumakyou::BindingPressed(settings.bindings.fireAlt), "mouse press repeated while held");
             Event(5, MOUSE_BUTTON_EXTRA); Frame(game);
-            Check(!redmist::BindingDown(settings.bindings.fireAlt), "mouse release failed");
+            Check(!koumakyou::BindingDown(settings.bindings.fireAlt), "mouse release failed");
         }
         // 第二个实例模拟重启：读取配置后仍可加载关卡音乐与进入游戏。
         {
-            redmist::Game restarted;
-            const auto loaded = redmist::LoadOrCreateSettings(redmist::kSettingsFilename);
+            koumakyou::Game restarted;
+            const auto loaded = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
             Check(loaded.musicVolume == 100 && loaded.mouseSensitivity == 100, "restart persistence failed");
             restarted.Start(false); Frame(restarted);
         }
@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
     if (IsAudioDeviceReady()) CloseAudioDevice();
     CloseWindow();
     std::filesystem::current_path(original);
-    std::filesystem::remove(scratch / redmist::kSettingsFilename);
+    std::filesystem::remove(scratch / koumakyou::kSettingsFilename);
     if (scratch != screenshots) std::filesystem::remove(scratch);
     return result;
 }

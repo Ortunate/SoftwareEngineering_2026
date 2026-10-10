@@ -7,10 +7,10 @@
 #include <array>
 #include <filesystem>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 运行目录中的本地配置文件名。
-inline constexpr char kSettingsFilename[] = "red_mist_settings.cfg";
+inline constexpr char kSettingsFilename[] = "koumakyou_settings.cfg";
 /// @brief 可选帧率上限；0 表示不限制。
 inline constexpr std::array<int, 6> kSupportedFpsLimits{
     30, 60, 120, 144, 240, 0,
@@ -45,4 +45,4 @@ struct GameSettings {
 [[nodiscard]] bool SaveSettingsFile(const std::filesystem::path& path,
                                     const GameSettings& settings);
 
-}  // namespace redmist
+}  // namespace koumakyou

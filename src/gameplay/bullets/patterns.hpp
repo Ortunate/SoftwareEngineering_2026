@@ -9,7 +9,7 @@
 #include <numbers>
 #include <utility>
 
-namespace redmist::pattern {
+namespace koumakyou::pattern {
 
 /// @brief 将三维向量按系数缩放。
 /// @param value 原向量。
@@ -123,4 +123,4 @@ void ForEachSphereDirection(int count, float rotation, Emit&& emit) {
     }
 }
 
-}  // namespace redmist::pattern
+}  // namespace koumakyou::pattern

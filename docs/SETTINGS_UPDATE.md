@@ -2,7 +2,7 @@
 
 ## 整合基线
 
-本次以 `dev/redmist` 的 `374dbbf` 为基础整合 Settings。保留道具掉落与持续追踪、Power 成长、直射/追踪弹以及 Debug 射击测试场；没有用旧版文件覆盖这些功能。
+本次以 `dev/koumakyou` 的 `374dbbf` 为基础整合 Settings。保留道具掉落与持续追踪、Power 成长、直射/追踪弹以及 Debug 射击测试场；没有用旧版文件覆盖这些功能。
 
 鼠标灵敏度通过 `PlayerInput.mouseSensitivityScale` 传入封装后的 Player。F3～F6 保留给现有调试功能，避免重新绑定时同时触发。新增灵敏度倍率回归测试，同时将玩家测试的大型弹幕池改为堆上分配，避免 Windows 默认栈空间不足。
 
@@ -42,8 +42,8 @@
 
 ```powershell
 ctest --test-dir build -C Release --output-on-failure
-cmake --build build --config Release --target red_mist_settings_ui_tests
-.\build\Release\red_mist_settings_ui_tests.exe
+cmake --build build --config Release --target koumakyou_settings_ui_tests
+.\build\Release\koumakyou_settings_ui_tests.exe
 ```
 
 图形集成测试需要 OpenGL 和 raylib 自动化事件支持；创建隐藏窗口并静音，使用独立临时配置，不覆盖玩家设置。源码仍默认下载 raylib 5.5，本次实际验证使用6.0，未进行 macOS 构建验证。

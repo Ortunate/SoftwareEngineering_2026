@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 float Smooth(float value) {
     const float t = std::clamp(value, 0.0F, 1.0F);
@@ -93,4 +93,4 @@ void ActorEffectSystem::Update(float deltaTime) {
     });
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

@@ -1,4 +1,4 @@
-# Red Mist 3D Demo
+# koumakyou
 
 一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Normal 一面开场至一面结算。流程依据用户提供的 187 秒本地录像重排；事件时间与弹幕参数仍是近似值，尚未完成逐帧校准，因此当前版本不能称为 1:1 复刻。
 
@@ -63,7 +63,9 @@
 └── docs/                                # 设计说明与录像对照记录
 ```
 
-运行时生成的 `red_mist_settings.cfg` 位于启动目录，不属于源码。详细类关系和数据结构见 [设计文档](docs/DESIGN.md)。
+运行时生成的 `koumakyou_settings.cfg` 位于启动目录，不属于源码。详细类关系和数据结构见 [设计文档](docs/DESIGN.md)。
+
+项目名、可执行文件和 C++ 命名空间统一使用 `koumakyou`，开发分支为 `dev/koumakyou`。旧版玩家设置需要将文件重命名为 `koumakyou_settings.cfg` 后放回启动目录；配置内容与格式保持兼容。
 
 ## 构建要求
 
@@ -81,11 +83,11 @@ raylib 会在首次配置时通过 CMake FetchContent 下载。仅 `assets/runti
 
 需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets/runtime`。该程序默认在隐藏窗口分别测量空场景和 8192 发弹幕场景的平均帧时间。需要测量实际可见窗口时，追加 `--visible`；两种模式的数值不可直接比较。
 
-角色表现的无窗口测试随 `ctest` 运行。具有桌面图形会话时，还可构建 `red_mist_lifecycle_tests` 并运行该程序，在隐藏窗口验证击破奖励、清场、Boss 换阶段、暂停和关卡素材释放。可选首个参数是截图路径前缀，例如 macOS Debug：
+角色表现的无窗口测试随 `ctest` 运行。具有桌面图形会话时，还可构建 `koumakyou_lifecycle_tests` 并运行该程序，在隐藏窗口验证击破奖励、清场、Boss 换阶段、暂停和关卡素材释放。可选首个参数是截图路径前缀，例如 macOS Debug：
 
 ```bash
-cmake --build --preset macos-debug --target red_mist_lifecycle_tests
-./build/macos-debug/red_mist_lifecycle_tests /tmp/actor-effects
+cmake --build --preset macos-debug --target koumakyou_lifecycle_tests
+./build/macos-debug/koumakyou_lifecycle_tests /tmp/actor-effects
 ```
 
 测试不初始化音频，设置和成绩写入独立临时目录，测试结束时清理，不修改玩家记录。
@@ -98,7 +100,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++
 cmake --build build --config Release
 ctest --test-dir build --output-on-failure
-./build/red_mist_demo
+./build/koumakyou
 ```
 
 Apple Silicon 与 Intel Mac 均使用相同命令。首次启动时，系统可能要求允许程序接收键盘输入。
@@ -109,13 +111,13 @@ Apple Silicon 与 Intel Mac 均使用相同命令。首次启动时，系统可�
 
 ```bash
 cmake --preset macos-release
-cmake --build --preset macos-release --target red_mist_demo
+cmake --build --preset macos-release --target koumakyou
 python3 tools/package_game_macos.py
 ```
 
-生成 `output/RedMist3D.app`，包含原生游戏和运行时素材，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/red_mist_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
+生成 `output/koumakyou.app`，包含原生游戏和运行时素材，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/koumakyou_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
 
-工具拒绝覆盖已有 app；再次打包时可用 `--output output/RedMist3D-new.app` 指定新目标，或用 `--build` 指定其他构建目录。生成的 app 与截图不提交到 Git。
+工具拒绝覆盖已有 app；再次打包时可用 `--output output/koumakyou-new.app` 指定新目标，或用 `--build` 指定其他构建目录。生成的 app 与截图不提交到 Git。
 
 ## Windows Visual Studio
 
@@ -127,7 +129,7 @@ python3 tools/package_game_macos.py
 cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
-.\build\Release\red_mist_demo.exe
+.\build\Release\koumakyou.exe
 ```
 
 若 GitHub 下载失败，配置命令末尾追加 `-DFETCHCONTENT_SOURCE_DIR_RAYLIB="D:/Libraries/raylib-5.5"`（改为实际 raylib 源码目录，不是游戏项目）。
@@ -142,7 +144,7 @@ Windows/MSVC 构建自动嵌入 UTF-8 应用清单，保留中文音乐名；无
 cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
-.\build\red_mist_demo.exe
+.\build\koumakyou.exe
 ```
 
 ## 操作
@@ -186,9 +188,9 @@ Debug 构建的主菜单增加 `SHOT TEST`。进入后关卡时间轴停止，�
 
 macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合成，移动、射击及改键继续使用物理按键，不会弹出拼音候选框。该策略覆盖菜单、战斗和暂停，不切换系统输入源或修改其他应用的输入法设置；菜单栏或任务栏的输入法图标仍可能显示中文。macOS 对游戏视图禁用文字输入上下文并阻断文字解释，Windows 解除本窗口的 IMM 上下文关联；未来若增加文本输入框，需要为文字录入单独恢复输入法。
 
-可在具有图形会话的 macOS/Windows 环境构建并运行 `red_mist_window_input_tests`，隐藏窗口测试原生按下/松开、文字合成屏蔽、重复应用策略、调整尺寸及窗口重建。例如 macOS：`cmake --build --preset macos-debug --target red_mist_window_input_tests`，随后运行 `./build/macos-debug/red_mist_window_input_tests`。
+可在具有图形会话的 macOS/Windows 环境构建并运行 `koumakyou_window_input_tests`，隐藏窗口测试原生按下/松开、文字合成屏蔽、重复应用策略、调整尺寸及窗口重建。例如 macOS：`cmake --build --preset macos-debug --target koumakyou_window_input_tests`，随后运行 `./build/macos-debug/koumakyou_window_input_tests`。
 
-程序启动时会在当前运行目录中查找 `red_mist_settings.cfg`。如果文件不存在，程序会加载默认设置并自动创建该文件；FPS、音量、灵敏度或按键发生变化时会立即写回。无效的 FPS、音量、灵敏度、按键值或重复按键会回退为安全默认值。配置格式升级为 version=3；旧版的默认 Focus=C 会迁移为 Mouse 4，旧版其他自定义 Focus 键与 FPS 会保留。新版自行绑定 C 后不会在下次启动被迁移。
+程序启动时会在当前运行目录中查找 `koumakyou_settings.cfg`。如果文件不存在，程序会加载默认设置并自动创建该文件；FPS、音量、灵敏度或按键发生变化时会立即写回。无效的 FPS、音量、灵敏度、按键值或重复按键会回退为安全默认值。配置格式升级为 version=3；旧版的默认 Focus=C 会迁移为 Mouse 4，旧版其他自定义 Focus 键与 FPS 会保留。新版自行绑定 C 后不会在下次启动被迁移。
 
 详细架构和数据结构见 `docs/DESIGN.md`。
 
@@ -215,10 +217,10 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 所有 `--capture*` 命令都使用隐藏且不获焦的窗口和离屏渲染纹理，不会切换到游戏窗口；截图路径可使用相对或绝对路径。正常启动游戏仍显示窗口。
 
 ```bash
-./build/red_mist_demo --capture red_mist_capture.png
-./build/red_mist_demo --capture-gameplay gameplay_capture.png
-./build/red_mist_demo --capture-options options_capture.png
-./build/red_mist_demo --capture-stage 215 night_bird_capture.png
-./build/red_mist_demo --capture-stage 6 side_view.png 90 20
-./build/macos-debug/red_mist_demo --capture-stage 8 hitbox_capture.png 0 0 --debug-render
+./build/koumakyou --capture koumakyou_capture.png
+./build/koumakyou --capture-gameplay gameplay_capture.png
+./build/koumakyou --capture-options options_capture.png
+./build/koumakyou --capture-stage 215 night_bird_capture.png
+./build/koumakyou --capture-stage 6 side_view.png 90 20
+./build/macos-debug/koumakyou --capture-stage 8 hitbox_capture.png 0 0 --debug-render
 ```

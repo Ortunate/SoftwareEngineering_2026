@@ -5,7 +5,7 @@
 
 #include <array>
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 namespace {
 constexpr std::array<VisualDefinition, 13> kVisuals{{
     {kBlueBullet, "stages/stage1/bullet_pearl_runtime.png", VisualMode::Bullet, 1.0F,
@@ -39,4 +39,4 @@ const StageAssetManifest kAssets{
 }  // namespace
 
 const StageAssetManifest& Stage1Manifest() { return kAssets; }
-}  // namespace redmist::stage1
+}  // namespace koumakyou::stage1

@@ -5,7 +5,7 @@
 #include "raylib.h"
 #include <cstdint>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 游戏的菜单、战斗及结算状态。
 enum class RunState : std::uint8_t {
@@ -22,4 +22,4 @@ enum class RunState : std::uint8_t {
     Won,
     GameOver
 };
-}  // namespace redmist
+}  // namespace koumakyou

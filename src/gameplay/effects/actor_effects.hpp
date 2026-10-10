@@ -6,7 +6,7 @@
 #include "resources/visual_assets.hpp"
 #include "raylib.h"
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 表现规格与退场原因；清场不等同于击破，不产生奖励或爆散。
 enum class ActorKind { Enemy, Boss };
@@ -89,4 +89,4 @@ private:
     FixedPool<ActorExitEffect, 512> effects_;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

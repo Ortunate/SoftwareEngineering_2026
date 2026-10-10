@@ -13,10 +13,10 @@
 namespace {
 // 验证发射点保持在画面下方、gold 单模块对称散射，以及 cyan 双模块散射和追踪。
 void TestShotSpread() {
-    using redmist::Bullet;
-    using redmist::BulletSystem;
-    using redmist::Player;
-    using redmist::PlayerInput;
+    using koumakyou::Bullet;
+    using koumakyou::BulletSystem;
+    using koumakyou::Player;
+    using koumakyou::PlayerInput;
     const auto dot = [](Vector3 a, Vector3 b) {
         return a.x * b.x + a.y * b.y + a.z * b.z;
     };
@@ -30,8 +30,8 @@ void TestShotSpread() {
                 player.SetView(yaw, pitch);
                 bullets.Reset();
                 player.Update(0.0F, {.focus = focus, .fire = true}, bullets,
-                              redmist::stage1::kPlayerGoldCard,
-                              redmist::stage1::kPlayerCyanCard, true);
+                              koumakyou::stage1::kPlayerGoldCard,
+                              koumakyou::stage1::kPlayerCyanCard, true);
                 const Vector3 forward = BulletSystem::DirectionFromYawPitch(yaw, pitch);
                 const Vector3 right{-std::cos(yaw), 0.0F, std::sin(yaw)};
                 const Vector3 up{-std::sin(yaw) * std::sin(pitch), std::cos(pitch),
@@ -41,7 +41,7 @@ void TestShotSpread() {
                 float goldLateralSum = 0.0F;
                 float cyanLateralSum = 0.0F;
                 bullets.Pool().ForEachActive([&](const Bullet& bullet) {
-                    const bool cyan = bullet.visual == redmist::stage1::kPlayerCyanCard;
+                    const bool cyan = bullet.visual == koumakyou::stage1::kPlayerCyanCard;
                     const float speed = cyan ? 14.0F : 20.0F;
                     assert(std::abs(BulletSystem::Length(bullet.velocity) - speed) < 0.0001F);
                     const float lateral = dot(bullet.velocity, right);
@@ -86,11 +86,11 @@ void TestShotSpread() {
         bullets.Reset();
         for (float deltaTime : {0.0F, 0.09F}) {
             player.Update(deltaTime, {.fire = true}, bullets,
-                          redmist::stage1::kPlayerGoldCard,
-                          redmist::stage1::kPlayerCyanCard, true);
+                          koumakyou::stage1::kPlayerGoldCard,
+                          koumakyou::stage1::kPlayerCyanCard, true);
             float goldRoundSum = 0.0F;
             bullets.Pool().ForEachActive([&](const Bullet& bullet) {
-                if (bullet.visual == redmist::stage1::kPlayerGoldCard)
+                if (bullet.visual == koumakyou::stage1::kPlayerGoldCard)
                     goldRoundSum += bullet.velocity.x;
             });
             assert(std::abs(goldRoundSum) < 0.0001F);
@@ -98,7 +98,7 @@ void TestShotSpread() {
         float goldSum = 0.0F;
         float cyanSum = 0.0F;
         bullets.Pool().ForEachActive([&](const Bullet& bullet) {
-            if (bullet.visual == redmist::stage1::kPlayerGoldCard)
+            if (bullet.visual == koumakyou::stage1::kPlayerGoldCard)
                 goldSum += bullet.velocity.x;
             else
                 cyanSum += bullet.velocity.x;
@@ -110,11 +110,11 @@ void TestShotSpread() {
     player.AdjustPower(128);
     bullets.Reset();
     player.Update(0.0F, {.fire = true}, bullets,
-                  redmist::stage1::kPlayerGoldCard, redmist::stage1::kPlayerCyanCard, true);
+                  koumakyou::stage1::kPlayerGoldCard, koumakyou::stage1::kPlayerCyanCard, true);
     const std::array<Vector3, 1> target{{{0.0F, 0.0F, 6.0F}}};
     bullets.Update(0.1F, target);
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
-        if (bullet.visual == redmist::stage1::kPlayerCyanCard) {
+        if (bullet.visual == koumakyou::stage1::kPlayerCyanCard) {
             assert(bullet.position.x * bullet.velocity.x < 0.0F);
             assert(std::abs(BulletSystem::Length(bullet.velocity) - 14.0F) < 0.0001F);
         } else {
@@ -128,27 +128,27 @@ void TestShotSpread() {
 void RunPlayerTests() {
     TestShotSpread();
     // 挑战模式反复受击仍可继续；标准模式按额外残机数耗尽后失败。
-    redmist::Player challenge;
-    challenge.ConfigureRun(2, 0, true, redmist::ShotType::Needle);
+    koumakyou::Player challenge;
+    challenge.ConfigureRun(2, 0, true, koumakyou::ShotType::Needle);
     for (int miss = 0; miss < 12; ++miss) assert(challenge.TakeHit());
     assert(challenge.RemainingLives() == 3);
-    redmist::Player standard;
-    standard.ConfigureRun(1, 0, false, redmist::ShotType::Needle);
+    koumakyou::Player standard;
+    standard.ConfigureRun(1, 0, false, koumakyou::ShotType::Needle);
     assert(standard.Bombs() == 0 && standard.TakeHit());
     assert(!standard.TakeHit());
-    auto needlePool = std::make_unique<redmist::BulletSystem>();
+    auto needlePool = std::make_unique<koumakyou::BulletSystem>();
     challenge.AdjustPower(128);
     challenge.Update(0, {.fire = true}, *needlePool, 0, 1, true);
     assert(needlePool->Pool().ActiveCount() == 6);
-    needlePool->Pool().ForEachActive([](const redmist::Bullet& shot) {
+    needlePool->Pool().ForEachActive([](const koumakyou::Bullet& shot) {
         assert(shot.homingTurnRate == 0 && shot.damage > 3);
     });
-    using redmist::Bullet;
-    using redmist::BulletOwner;
-    using redmist::BulletSystem;
-    using redmist::Player;
-    using redmist::PlayerContact;
-    using redmist::PlayerInput;
+    using koumakyou::Bullet;
+    using koumakyou::BulletOwner;
+    using koumakyou::BulletSystem;
+    using koumakyou::Player;
+    using koumakyou::PlayerContact;
+    using koumakyou::PlayerInput;
 
     Player player;
     // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
@@ -169,8 +169,8 @@ void RunPlayerTests() {
         PlayerInput look{};
         look.mouseDelta = {10.0F, 0.0F};
         look.mouseSensitivityScale = scale;
-        player.Update(1.0F / 60.0F, look, bullets, redmist::stage1::kPlayerGoldCard,
-                      redmist::stage1::kPlayerCyanCard, false);
+        player.Update(1.0F / 60.0F, look, bullets, koumakyou::stage1::kPlayerGoldCard,
+                      koumakyou::stage1::kPlayerCyanCard, false);
         player.SyncCamera(camera);
         const float yaw = std::atan2(camera.target.x - camera.position.x,
                                      camera.target.z - camera.position.z);
@@ -181,8 +181,8 @@ void RunPlayerTests() {
     PlayerInput movement{};
     movement.forward = true;
     movement.moveRight = true;
-    player.Update(1.0F, movement, bullets, redmist::stage1::kPlayerGoldCard,
-                  redmist::stage1::kPlayerCyanCard, true);
+    player.Update(1.0F, movement, bullets, koumakyou::stage1::kPlayerGoldCard,
+                  koumakyou::stage1::kPlayerCyanCard, true);
     const Vector3 moved = player.Position();
     const float displacement = std::sqrt(moved.x * moved.x +
                                          (moved.z + 6.5F) * (moved.z + 6.5F));
@@ -201,8 +201,8 @@ void RunPlayerTests() {
     for (std::size_t index = 0; index < boundaryInputs.size(); ++index) {
         player.Reset();
         player.Update(10.0F, boundaryInputs[index], bullets,
-                      redmist::stage1::kPlayerGoldCard,
-                      redmist::stage1::kPlayerCyanCard, false);
+                      koumakyou::stage1::kPlayerGoldCard,
+                      koumakyou::stage1::kPlayerCyanCard, false);
         const Vector3 actual = player.Position();
         const Vector3 expected = expectedPositions[index];
         assert(std::abs(actual.x - expected.x) < 0.0001F);
@@ -215,15 +215,15 @@ void RunPlayerTests() {
     player.Reset();
     PlayerInput firing{};
     firing.fire = true;
-    player.Update(0.1F, firing, bullets, redmist::stage1::kPlayerGoldCard,
-                  redmist::stage1::kPlayerCyanCard, false);
+    player.Update(0.1F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
+                  koumakyou::stage1::kPlayerCyanCard, false);
     assert(bullets.Pool().ActiveCount() == 0);
-    player.Update(0.0F, firing, bullets, redmist::stage1::kPlayerGoldCard,
-                  redmist::stage1::kPlayerCyanCard, true);
+    player.Update(0.0F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
+                  koumakyou::stage1::kPlayerCyanCard, true);
     assert(bullets.Pool().ActiveCount() == 2);
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
         assert(bullet.owner == BulletOwner::Player);
-        assert(bullet.visual == redmist::stage1::kPlayerGoldCard);
+        assert(bullet.visual == koumakyou::stage1::kPlayerGoldCard);
         assert(bullet.color.a == 51);
         assert(bullet.position.x == 0.0F && bullet.position.y == -0.6F);
         assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
@@ -231,11 +231,11 @@ void RunPlayerTests() {
         const float angle = std::abs(std::atan2(bullet.velocity.x, bullet.velocity.z));
         assert(std::abs(angle - 2.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
     });
-    player.Update(0.01F, firing, bullets, redmist::stage1::kPlayerGoldCard,
-                  redmist::stage1::kPlayerCyanCard, true);
+    player.Update(0.01F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
+                  koumakyou::stage1::kPlayerCyanCard, true);
     assert(bullets.Pool().ActiveCount() == 2);
-    player.Update(0.09F, firing, bullets, redmist::stage1::kPlayerGoldCard,
-                  redmist::stage1::kPlayerCyanCard, true);
+    player.Update(0.09F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
+                  koumakyou::stage1::kPlayerCyanCard, true);
     assert(bullets.Pool().ActiveCount() == 4);
 
     // 每个火力档位应增加弹数并扩大外侧散射角，保持单发伤害和速度。
@@ -251,8 +251,8 @@ void RunPlayerTests() {
         upgraded.AdjustPower(thresholds[index]);
         assert(upgraded.Power() == thresholds[index]);
         upgraded.Update(0.0F, firing, volley,
-                        redmist::stage1::kPlayerGoldCard,
-                        redmist::stage1::kPlayerCyanCard, true);
+                        koumakyou::stage1::kPlayerGoldCard,
+                        koumakyou::stage1::kPlayerCyanCard, true);
         assert(volley.Pool().ActiveCount() == shotCounts[index]);
         int homingCount = 0;
         float maxGoldAngle = 0.0F;
@@ -260,18 +260,18 @@ void RunPlayerTests() {
         volley.Pool().ForEachActive([&](const Bullet& bullet) {
             const float angle = std::abs(std::atan2(bullet.velocity.x, bullet.velocity.z));
             if (bullet.homingTurnRate > 0.0F) {
-                assert(bullet.visual == redmist::stage1::kPlayerCyanCard);
+                assert(bullet.visual == koumakyou::stage1::kPlayerCyanCard);
                 assert(bullet.damage == 1.0F && bullet.homingTurnRate == 5.5F);
                 assert(std::abs(BulletSystem::Length(bullet.velocity) - 14.0F) < 0.0001F);
                 maxCyanAngle = std::max(maxCyanAngle, angle);
                 ++homingCount;
             } else {
-                assert(bullet.visual == redmist::stage1::kPlayerGoldCard);
+                assert(bullet.visual == koumakyou::stage1::kPlayerGoldCard);
                 assert(bullet.damage == 2.0F);
                 assert(std::abs(BulletSystem::Length(bullet.velocity) - 20.0F) < 0.0001F);
                 maxGoldAngle = std::max(maxGoldAngle, angle);
             }
-            if (bullet.visual == redmist::stage1::kPlayerCyanCard) {
+            if (bullet.visual == koumakyou::stage1::kPlayerCyanCard) {
                 assert(std::abs(std::abs(bullet.position.x) - 0.78F) < 0.0001F);
                 assert(bullet.position.x * bullet.velocity.x > 0.0F);
             } else {
@@ -295,16 +295,16 @@ void RunPlayerTests() {
     BulletSystem& alternatingBullets = *alternatingBulletsStorage;
     alternating.AdjustPower(16);
     alternating.Update(0.0F, firing, alternatingBullets,
-                       redmist::stage1::kPlayerGoldCard,
-                       redmist::stage1::kPlayerCyanCard, true);
+                       koumakyou::stage1::kPlayerGoldCard,
+                       koumakyou::stage1::kPlayerCyanCard, true);
     alternating.Update(0.09F, firing, alternatingBullets,
-                       redmist::stage1::kPlayerGoldCard,
-                       redmist::stage1::kPlayerCyanCard, true);
+                       koumakyou::stage1::kPlayerGoldCard,
+                       koumakyou::stage1::kPlayerCyanCard, true);
     int leftShots = 0;
     int rightShots = 0;
     int centerShots = 0;
     alternatingBullets.Pool().ForEachActive([&](const Bullet& bullet) {
-        if (bullet.visual != redmist::stage1::kPlayerGoldCard) return;
+        if (bullet.visual != koumakyou::stage1::kPlayerGoldCard) return;
         assert(bullet.position.x == 0.0F);
         if (bullet.velocity.x < 0.0F) ++leftShots;
         else if (bullet.velocity.x > 0.0F) ++rightShots;
@@ -326,20 +326,20 @@ void RunPlayerTests() {
     PlayerInput bombInput{};
     bombInput.bomb = true;
     assert(player.Update(0.0F, bombInput, bullets,
-                         redmist::stage1::kPlayerGoldCard,
-                         redmist::stage1::kPlayerCyanCard, true));
+                         koumakyou::stage1::kPlayerGoldCard,
+                         koumakyou::stage1::kPlayerCyanCard, true));
     assert(player.Bombs() == 2);
     assert(!player.Update(0.5F, bombInput, bullets,
-                          redmist::stage1::kPlayerGoldCard,
-                          redmist::stage1::kPlayerCyanCard, true));
+                          koumakyou::stage1::kPlayerGoldCard,
+                          koumakyou::stage1::kPlayerCyanCard, true));
     assert(player.Bombs() == 2);
     assert(player.Update(0.5F, bombInput, bullets,
-                         redmist::stage1::kPlayerGoldCard,
-                         redmist::stage1::kPlayerCyanCard, true));
+                         koumakyou::stage1::kPlayerGoldCard,
+                         koumakyou::stage1::kPlayerCyanCard, true));
     assert(player.Bombs() == 1);
 
-    player.Update(2.6F, {}, bullets, redmist::stage1::kPlayerGoldCard,
-                  redmist::stage1::kPlayerCyanCard, true);
+    player.Update(2.6F, {}, bullets, koumakyou::stage1::kPlayerGoldCard,
+                  koumakyou::stage1::kPlayerCyanCard, true);
     Bullet graze{};
     graze.active = true;
     graze.position = {0.5F, 0.0F, -6.5F};
@@ -371,7 +371,7 @@ void RunPlayerTests() {
     BulletSystem& tracking = *trackingStorage;
     Bullet* guided = tracking.Spawn(BulletOwner::Player, {},
         {0.0F, 0.0F, 10.0F}, 0.1F, WHITE,
-        redmist::stage1::kPlayerCyanCard);
+        koumakyou::stage1::kPlayerCyanCard);
     assert(guided != nullptr);
     guided->homingTurnRate = 4.0F;
     const std::array<Vector3, 1> target{{{8.0F, 0.0F, 8.0F}}};

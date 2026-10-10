@@ -1,7 +1,7 @@
 // 本文件保存新典 msg1 与 zh-CN 翻译表中的灵梦战前/战后原文、等待时长和入场顺序。
 #include "stages/stage1/data.hpp"
 #include <array>
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 namespace {
 constexpr std::array<DialogueLine,15> kBefore{{
     {"灵梦", "好久没开工啦", false, 6.0F, 0.0F, false, false, "感觉真惬意", 0, 1.0F},
@@ -26,4 +26,4 @@ constexpr std::array<DialogueLine,2> kAfter{{
 }};
 }
 std::span<const DialogueLine> Stage1Dialogue(bool afterBattle) { return afterBattle ? std::span<const DialogueLine>(kAfter) : std::span<const DialogueLine>(kBefore); }
-} // namespace redmist::stage1
+} // namespace koumakyou::stage1

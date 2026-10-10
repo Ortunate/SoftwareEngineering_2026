@@ -5,7 +5,7 @@
 #include "stage/content.hpp"
 #include "stages/stage1/ids.hpp"
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 
 /// @brief 第一面完整内容定义；新关卡实现 StageContent 即可接入总控。
 class Stage1Content final : public StageContent {
@@ -35,4 +35,4 @@ public:
     }
 };
 
-}  // namespace redmist::stage1
+}  // namespace koumakyou::stage1

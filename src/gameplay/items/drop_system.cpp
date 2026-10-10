@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <numbers>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 constexpr int kMaxCountPerKind = 32;
 // 速度单位为世界单位/秒，加速度为世界单位/秒²；0.5 秒到达比生成点高 1 单位的顶点。
@@ -193,4 +193,4 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
     return reward;
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

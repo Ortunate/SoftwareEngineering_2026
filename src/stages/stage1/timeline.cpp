@@ -3,7 +3,7 @@
 #include "stages/stage1/reference_births.hpp"
 #include "stages/stage1/reference_script.hpp"
 #include <vector>
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 namespace {
 const std::vector<StageEvent> kEvents = [] {
     std::vector<StageEvent> events;
@@ -25,4 +25,4 @@ const std::vector<StageEvent> kEvents = [] {
 }();
 }
 std::span<const StageEvent> Stage1Timeline() { return kEvents; }
-} // namespace redmist::stage1
+} // namespace koumakyou::stage1

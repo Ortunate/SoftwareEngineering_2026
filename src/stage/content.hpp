@@ -12,7 +12,7 @@
 #include <span>
 #include <string_view>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief Stage 对游戏总控提出的生成与演出请求。
 class StageEventSink {
@@ -87,4 +87,4 @@ public:
     [[nodiscard]] virtual const char* MidbossEndMessage() const = 0;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

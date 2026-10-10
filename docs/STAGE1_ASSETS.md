@@ -31,7 +31,7 @@ PNG 保留透明通道，原始立绘保留在目录中供比较。生成方式�
 
 ## 中文字体
 
-`ui_font.otf` 是 [Noto Serif CJK SC](https://github.com/notofonts/noto-cjk/tree/main/Serif) Regular 的子集，依据 SIL Open Font License 使用，许可全文见同目录 `FONT_LICENSE.txt`。子集字体改名为 RedMistUISerif。
+`ui_font.otf` 是 [Noto Serif CJK SC](https://github.com/notofonts/noto-cjk/tree/main/Serif) Regular 的子集，依据 SIL Open Font License 使用，许可全文见同目录 `FONT_LICENSE.txt`。子集字体改名为 KoumakyouUISerif。
 
 新增中文界面文字后，需以原字体和 fonttools 重建：
 

@@ -14,10 +14,10 @@
 #include <imm.h>
 #elif defined(__APPLE__)
 /// @brief Objective-C 桥接入口，借用 NSWindow*，不转移窗口所有权。
-extern "C" bool RedMistDisableCocoaInputMethods(void* nativeWindow);
+extern "C" bool KoumakyouDisableCocoaInputMethods(void* nativeWindow);
 #endif
 
-namespace redmist {
+namespace koumakyou {
 
 bool DisableWindowInputMethods(void* nativeWindow) {
     if (!nativeWindow) return false;
@@ -29,10 +29,10 @@ bool DisableWindowInputMethods(void* nativeWindow) {
     // 不释放原上下文：它由系统持有；本游戏没有文字输入框，也无需重建上下文。
     return ImmAssociateContextEx(window, nullptr, 0) != FALSE;
 #elif defined(__APPLE__)
-    return RedMistDisableCocoaInputMethods(nativeWindow);
+    return KoumakyouDisableCocoaInputMethods(nativeWindow);
 #else
     return false;
 #endif
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

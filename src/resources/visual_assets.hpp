@@ -9,7 +9,7 @@
 #include <span>
 #include <string_view>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 仅在当前 Stage 的素材清单内有效的稠密外观编号。
 using VisualId = std::uint16_t;
@@ -46,4 +46,4 @@ struct StageAssetManifest {
     std::span<const SoundDefinition> sounds;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

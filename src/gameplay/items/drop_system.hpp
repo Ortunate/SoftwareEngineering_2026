@@ -13,7 +13,7 @@
 #include <span>
 #include <vector>
 
-namespace redmist {
+namespace koumakyou {
 
 class BulletSystem;
 
@@ -105,4 +105,4 @@ private:
     unsigned referenceDropIndex_ = 0, referenceItemIndex_ = 0;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

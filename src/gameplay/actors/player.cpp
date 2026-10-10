@@ -10,7 +10,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 constexpr float kSpeed = 6.5F;
 constexpr float kFocusSpeed = 2.8F;
@@ -228,4 +228,4 @@ bool Player::TryUseBomb() {
     return true;
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

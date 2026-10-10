@@ -10,7 +10,7 @@
 #include <numbers>
 #include <utility>
 
-namespace redmist {
+namespace koumakyou {
 using namespace game_math;
 
 void Game::UpdateEnemies(float deltaTime) {
@@ -43,7 +43,7 @@ void Game::ResolveCollisions() {
         switch (player_.ContactEnemyBullet(bullet)) {
             case PlayerContact::Hit: {
                 bool canTakeDamage = true;
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
                 canTakeDamage = !debugInvincible_;
 #endif
                 if (canTakeDamage) playerWasHit = true;
@@ -73,7 +73,7 @@ void Game::ResolveCollisions() {
             }
         });
         if (enemy.health <= 0.0F) {
-#ifdef RED_MIST_DEBUG_FEATURES
+#ifdef KOUMAKYOU_DEBUG_FEATURES
             if (shotTestActive_) {
                 enemy.health = enemy.maxHealth;
                 return;
@@ -190,4 +190,4 @@ void Game::AdvanceBossPhase() {
     }
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

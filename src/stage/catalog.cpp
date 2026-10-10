@@ -6,7 +6,7 @@
 
 #include <stdexcept>
 
-namespace redmist {
+namespace koumakyou {
 
 std::unique_ptr<StageContent> CreateStageContent(StageId id) {
     switch (id) {
@@ -15,4 +15,4 @@ std::unique_ptr<StageContent> CreateStageContent(StageId id) {
     throw std::invalid_argument("Unknown StageId");
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

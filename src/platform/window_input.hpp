@@ -2,7 +2,7 @@
 
 #pragma once
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 禁用指定游戏窗口的文字合成，避免中文等输入法的候选框干扰操作。
 /// @param nativeWindow raylib GetWindowHandle 返回的 HWND（Windows）或 NSWindow*（macOS）。
@@ -11,4 +11,4 @@ namespace redmist {
 /// @return macOS/Windows 成功返回 true；空句柄、原生设置失败或不支持的平台返回 false。
 [[nodiscard]] bool DisableWindowInputMethods(void* nativeWindow);
 
-}  // namespace redmist
+}  // namespace koumakyou

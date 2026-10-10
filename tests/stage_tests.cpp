@@ -14,7 +14,7 @@
 #include <vector>
 
 namespace {
-using namespace redmist;
+using namespace koumakyou;
 
 /// @brief 验证非法事件表在绑定时被拒绝，避免运行中只执行部分波次。
 bool RejectsEvents(std::span<const StageEvent> events) {

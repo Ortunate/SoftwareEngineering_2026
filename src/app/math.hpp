@@ -4,7 +4,7 @@
 
 #include "gameplay/bullets/system.hpp"
 
-namespace redmist {
+namespace koumakyou {
 namespace game_math {
 /// @brief 对两个三维向量逐分量相加。
 /// @param left 左操作数。
@@ -52,4 +52,4 @@ inline Vector3 Normalize(Vector3 vector) {
 }
 
  }  // namespace game_math
-}  // namespace redmist
+}  // namespace koumakyou

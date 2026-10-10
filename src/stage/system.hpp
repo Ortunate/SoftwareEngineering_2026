@@ -13,7 +13,7 @@
 #include <variant>
 #include <vector>
 
-namespace redmist {
+namespace koumakyou {
 
 /// @brief 关卡事件的稳定标识；编号只在单张事件表内有效，仅需要被引用或报告结束的事件必须设置。
 using StageEventId = std::uint32_t;
@@ -117,4 +117,4 @@ private:
     std::size_t nextEvent_ = 0;
 };
 
-}  // namespace redmist
+}  // namespace koumakyou

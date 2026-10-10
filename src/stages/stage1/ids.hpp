@@ -4,7 +4,7 @@
 
 #include "resources/visual_assets.hpp"
 
-namespace redmist::stage1 {
+namespace koumakyou::stage1 {
 
 // 编号仅在 Stage 1 内有效；更换 Stage 不要求保留相同含义。
 constexpr VisualId kBlueBullet = 0;
@@ -25,4 +25,4 @@ constexpr VisualId kScorePoint = 11;
 /// @brief 满火力清弹产生的星点公告板贴图编号。
 constexpr VisualId kStarPoint = 12;
 
-}  // namespace redmist::stage1
+}  // namespace koumakyou::stage1

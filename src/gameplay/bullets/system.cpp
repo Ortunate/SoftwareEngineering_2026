@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace redmist {
+namespace koumakyou {
 namespace {
 
 /// @brief 对两个三维向量逐分量相加。
@@ -205,4 +205,4 @@ float BulletSystem::Length(Vector3 vector) {
                      vector.z * vector.z);
 }
 
-}  // namespace redmist
+}  // namespace koumakyou

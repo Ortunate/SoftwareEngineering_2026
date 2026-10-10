@@ -121,6 +121,19 @@ void UnloadMusicAsset(Music& music) {
     music = {};
 }
 
+/// @brief 将自有 UI 字体的 ASCII 数字设为等宽；居中保留原字形，分数更新时不会改变整串宽度。
+/// 只调整当前字体的运行时度量，不改 OTF，也不能传入由 raylib 借用的默认字体。
+void MakeUiDigitsTabular(Font& font) {
+    int advance = 0;
+    for (int codepoint = '0'; codepoint <= '9'; ++codepoint)
+        advance = std::max(advance, font.glyphs[GetGlyphIndex(font, codepoint)].advanceX);
+    for (int codepoint = '0'; codepoint <= '9'; ++codepoint) {
+        GlyphInfo& glyph = font.glyphs[GetGlyphIndex(font, codepoint)];
+        glyph.offsetX += (advance - glyph.advanceX) / 2;
+        glyph.advanceX = advance;
+    }
+}
+
 }  // namespace
 
 AssetManager::AssetManager(std::filesystem::path root) : root_(std::move(root)) {}
@@ -146,10 +159,13 @@ void AssetManager::LoadCommon() {
         if (charset) {
             int count = 0;
             int* codepoints = LoadCodepoints(charset, &count);
-            common_.uiFont = LoadFontEx(fontPath.string().c_str(), 64, codepoints, count);
+            // 128 像素字形供最大 61 逻辑像素标题使用，在 2× Retina 窗口避免过度放大。
+            common_.uiFont = LoadFontEx(fontPath.string().c_str(), 128, codepoints, count);
             UnloadCodepoints(codepoints);
             UnloadFileText(charset);
             SetTextureFilter(common_.uiFont.texture, TEXTURE_FILTER_BILINEAR);
+            if (common_.uiFont.texture.id != GetFontDefault().texture.id)
+                MakeUiDigitsTabular(common_.uiFont);
         }
     }
 

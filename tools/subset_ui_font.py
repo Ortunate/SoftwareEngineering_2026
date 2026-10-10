@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 本文件从 Noto Serif CJK SC 裁出源码使用的中文与 ASCII 字符，并同步运行时字符表。
+# 本文件从 Noto Serif CJK SC SemiBold 裁出源码使用的中文与 ASCII 字符，并同步运行时字符表。
 """需要 fonttools；参数依次为官方原字体、src 目录与 assets/runtime/common 目录。"""
 import argparse
 from pathlib import Path

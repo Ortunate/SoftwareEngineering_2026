@@ -6,6 +6,7 @@
 #include "config/settings.hpp"
 #include "stages/stage1/scenery.hpp"
 #include "render/gameplay_layout.hpp"
+#include "render/ui_typography.hpp"
 
 #include <algorithm>
 #include <array>
@@ -141,8 +142,8 @@ void Game::DrawHud() const {
     const GameplayLayout l(GetScreenWidth(),GetScreenHeight());
     const Font font=assets_.Common().uiFont;
     const auto text=[&](const char* value,float x,float y,float size,Color color) {
-        DrawTextEx(font,value,l.Point(x+1.5F,y+1.5F),size*l.scale,0,Color{0,0,0,220});
-        DrawTextEx(font,value,l.Point(x,y),size*l.scale,0,color);
+        ui::DrawText(font,value,l.Point(x+1.5F,y+1.5F),size*l.scale,Color{0,0,0,220});
+        ui::DrawText(font,value,l.Point(x,y),size*l.scale,color);
     };
     text("（普通难度）",1550,6,22,RAYWHITE);
     text("NORMAL",1490,30,52,Color{210,230,255,255});
@@ -194,16 +195,15 @@ void Game::DrawHud() const {
 }
 
 void Game::DrawOverlay() const {
+    const Font font = assets_.Common().uiFont;
     if (messageTimer_ > 0.0F) {
         const int fontSize = 29;
-        const int width = MeasureText(message_.c_str(), fontSize);
-        const int x = (GetScreenWidth() - width) / 2;
-        const int y = GetScreenHeight() / 2 - 105;
-        DrawRectangle(x - 24, y - 12, width + 48, fontSize + 24,
-                      Color{5, 7, 18, 185});
-        DrawText(message_.c_str(), x + 2, y + 2, fontSize,
-                 Color{80, 20, 40, 230});
-        DrawText(message_.c_str(), x, y, fontSize, RAYWHITE);
+        const float width = ui::MeasureText(font, message_.c_str(), fontSize).x;
+        const float x = (GetScreenWidth() - width) / 2;
+        const float y = GetScreenHeight() / 2 - 105;
+        DrawRectangleRec({x - 24, y - 12, width + 48, fontSize + 24.0F}, Color{5, 7, 18, 185});
+        ui::DrawText(font, message_.c_str(), {x + 2, y + 2}, fontSize, Color{80, 20, 40, 230});
+        ui::DrawText(font, message_.c_str(), {x, y}, fontSize, RAYWHITE);
     }
 
     DrawDialogue();
@@ -214,10 +214,8 @@ void Game::DrawOverlay() const {
                       Color{0, 0, 0, 155});
         const float centerX = GetScreenWidth() * 0.5F;
         const float centerY = GetScreenHeight() * 0.5F;
-        const Font font = assets_.Common().uiFont;
         const auto centered = [&](const char* text, float y, float size, Color color) {
-            const float width = MeasureTextEx(font, text, size, 1).x;
-            DrawTextEx(font, text, {centerX - width / 2, y}, size, 1, color);
+            ui::DrawCentered(font, text, centerX, y, size, color);
         };
         DrawRectangleRounded({centerX - 245, centerY - 130, 490, 310}, 0.1F, 12, Color{38, 12, 25, 225});
         centered("暂停", centerY - 110, 43, RAYWHITE);
@@ -232,17 +230,16 @@ void Game::DrawOverlay() const {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{0, 0, 0, 175});
         const char* title = state_ == RunState::Won ? stageContent_->ClearTitle() : "GAME OVER";
-        DrawText(title, (GetScreenWidth() - MeasureText(title, 56)) / 2,
-                 GetScreenHeight() / 2 - 75, 56,
+        ui::DrawCentered(font, title, GetScreenWidth() / 2.0F, GetScreenHeight() / 2.0F - 75, 56,
                  state_ == RunState::Won ? GOLD : Color{255, 90, 110, 255});
         const int center = GetScreenWidth() / 2;
         const int y = GetScreenHeight() / 2;
         const char* detail = TextFormat("SCORE %09lld   GRAZE %d   MISS %d   BOMB %d", score_, graze_, missCount_, bombCount_);
-        DrawText(detail, center - MeasureText(detail, 22) / 2, y, 22, RAYWHITE);
+        ui::DrawCentered(font, detail, center, y, 22, RAYWHITE);
         const char* mode = spellPractice_ ? "SPELL PRACTICE" : practiceMode_ ? "STAGE PRACTICE" : challengeMode_ ? "CHALLENGE" : "NORMAL";
-        DrawText(mode, center - MeasureText(mode, 18) / 2, y + 40, 18, GOLD);
+        ui::DrawCentered(font, mode, center, y + 40, 18, GOLD);
         const char* retry = "R Restart     Esc / M Main Menu";
-        DrawText(retry, center - MeasureText(retry, 22) / 2, y + 85, 22, RAYWHITE);
+        ui::DrawCentered(font, retry, center, y + 85, 22, RAYWHITE);
     }
 
     if (screenFlashTimer_ > 0.0F) {
@@ -273,13 +270,13 @@ void Game::DrawDialogue() const {
     if(elapsed>=line.textDelay) {
         const Rectangle panel=l.Rect(620,845,670,144);
         DrawRectangleRounded(panel,0.45F,16,Color{12,6,22,215});
-        DrawTextEx(font,line.text,l.Point(650,872),31*l.scale,0,RAYWHITE);
+        ui::DrawText(font,line.text,l.Point(650,872),31*l.scale,RAYWHITE);
         if(elapsed>=line.textDelay+line.line2Delay)
-            DrawTextEx(font,line.secondLine,l.Point(650,918),31*l.scale,0,RAYWHITE);
+            ui::DrawText(font,line.secondLine,l.Point(650,918),31*l.scale,RAYWHITE);
     }
     if(line.introduce) {
-        DrawTextEx(font,"宵暗的妖怪",l.Point(1035,480),33*l.scale,0,Color{225,220,255,255});
-        DrawTextEx(font,"露米娅",l.Point(1100,525),53*l.scale,0,RAYWHITE);
+        ui::DrawText(font,"宵暗的妖怪",l.Point(1035,480),33*l.scale,Color{225,220,255,255});
+        ui::DrawText(font,"露米娅",l.Point(1100,525),53*l.scale,RAYWHITE);
     }
 }
 
@@ -299,21 +296,20 @@ void Game::DrawSpellCutIn() const {
         EndScissorMode();
     }
     DrawRectangleRec(l.Rect(820,660,550,55),Color{10,5,30,static_cast<unsigned char>(opacity*180)});
-    DrawTextEx(assets_.Common().uiFont,boss_->SpellName(),l.Point(850,670),32*l.scale,0,Fade(Color{190,185,255,255},opacity));
+    ui::DrawText(assets_.Common().uiFont,boss_->SpellName(),l.Point(850,670),32*l.scale,Fade(Color{190,185,255,255},opacity));
 }
 void Game::DrawKeyBindings() const {
+    const Font font = assets_.Common().uiFont;
     const int screenWidth = GetScreenWidth();
     const int screenHeight = GetScreenHeight();
     const float centerX = static_cast<float>(screenWidth) * 0.5F;
     DrawRectangle(0, 0, screenWidth, screenHeight, Color{2, 4, 14, 205});
 
     const char* title = "KEY BINDINGS";
-    DrawText(title, (screenWidth - MeasureText(title, 42)) / 2,
-             45, 42, RAYWHITE);
+    ui::DrawCentered(font, title, centerX, 45, 42, RAYWHITE);
     const char* instruction =
         "Select an action, then press a key or mouse button";
-    DrawText(instruction, (screenWidth - MeasureText(instruction, 18)) / 2,
-             101, 18, Color{155, 190, 215, 255});
+    ui::DrawCentered(font, instruction, centerX, 101, 18, Color{155, 190, 215, 255});
 
     for (int index = 0; index < static_cast<int>(kBindingNames.size()); ++index) {
         const Rectangle row{centerX - 270.0F,
@@ -326,14 +322,11 @@ void Game::DrawKeyBindings() const {
         DrawRectangleRoundedLinesEx(row, 0.16F, 8, selected ? 2.0F : 1.0F,
                                     selected ? Color{255, 110, 145, 255}
                                              : Color{58, 95, 125, 210});
-        DrawText(kBindingNames[index], static_cast<int>(row.x + 15.0F),
-                 static_cast<int>(row.y + 6.0F), 17,
+        ui::DrawText(font, kBindingNames[index], {row.x + 15.0F, row.y + 6.0F}, 17,
                  selected ? RAYWHITE : Color{175, 195, 210, 255});
         const std::string keyName = KeyLabel(BindingAt(index));
-        DrawText(keyName.c_str(),
-                 static_cast<int>(row.x + row.width - 16.0F) -
-                     MeasureText(keyName.c_str(), 17),
-                 static_cast<int>(row.y + 6.0F), 17,
+        ui::DrawText(font, keyName.c_str(),
+                 {row.x + row.width - 16.0F - ui::MeasureText(font, keyName.c_str(), 17).x, row.y + 6.0F}, 17,
                  selected ? Color{120, 215, 255, 255}
                           : Color{110, 160, 195, 255});
     }
@@ -354,15 +347,12 @@ void Game::DrawKeyBindings() const {
                                     selected ? 2.0F : 1.0F,
                                     selected ? Color{255, 110, 145, 255}
                                              : Color{58, 95, 125, 210});
-        DrawText(labels[index],
-                 static_cast<int>(buttons[index].x + buttons[index].width * 0.5F) -
-                     MeasureText(labels[index], 18) / 2,
-                 static_cast<int>(buttons[index].y + 12.0F), 18, RAYWHITE);
+        ui::DrawCentered(font, labels[index], buttons[index].x + buttons[index].width * 0.5F,
+                         buttons[index].y + 12.0F, 18, RAYWHITE);
     }
 
     const char* footer = "Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options";
-    DrawText(footer, (screenWidth - MeasureText(footer, 17)) / 2,
-             screenHeight - 42, 17, Color{145, 175, 198, 235});
+    ui::DrawCentered(font, footer, centerX, screenHeight - 42, 17, Color{145, 175, 198, 235});
 
     if (waitingForBinding_) {
         DrawRectangle(0, 0, screenWidth, screenHeight, Color{0, 0, 0, 185});
@@ -373,15 +363,11 @@ void Game::DrawKeyBindings() const {
         DrawRectangleRoundedLinesEx(modal, 0.16F, 10, 2.0F,
                                     Color{255, 110, 145, 255});
         const char* prompt = "PRESS KEY / MOUSE BUTTON";
-        DrawText(prompt, (screenWidth - MeasureText(prompt, 24)) / 2,
-                 static_cast<int>(modal.y + 32.0F), 24, RAYWHITE);
-        DrawText(kBindingNames[selectedBinding_],
-                 (screenWidth - MeasureText(kBindingNames[selectedBinding_], 20)) / 2,
-                 static_cast<int>(modal.y + 78.0F), 20,
+        ui::DrawCentered(font, prompt, centerX, modal.y + 32.0F, 24, RAYWHITE);
+        ui::DrawCentered(font, kBindingNames[selectedBinding_], centerX, modal.y + 78.0F, 20,
                  Color{120, 215, 255, 255});
         const char* cancel = "Esc: cancel   F3-F6: reserved   Release, then press";
-        DrawText(cancel, (screenWidth - MeasureText(cancel, 16)) / 2,
-                 static_cast<int>(modal.y + 120.0F), 16,
+        ui::DrawCentered(font, cancel, centerX, modal.y + 120.0F, 16,
                  Color{145, 165, 185, 255});
     }
 }

@@ -23,7 +23,7 @@ struct CommonAssets {
     Texture2D titleBackground{};
     Texture2D reimuPortrait{};
     Texture2D referenceFrame{}, referenceStage1{}; // 管理器独占的原作侧栏图集与一面题签。
-    Font uiFont{}; // 管理器持有；缺失时借用 raylib 默认字体，不能重复释放。
+    Font uiFont{}; // 全 UI 共用 SemiBold 衬线字体与等宽数字；管理器持有，缺失时借用默认字体，不能重复释放。
 };
 
 /// @brief 单个关卡使用的图形素材；由 AssetManager 独占所有权。

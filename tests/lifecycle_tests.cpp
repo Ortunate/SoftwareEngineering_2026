@@ -3,6 +3,7 @@
 #include "app/game.hpp"
 #include "rlgl.h"
 #include "stages/stage1/enemies.hpp"
+#include "render/ui_typography.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -16,6 +17,16 @@ namespace koumakyou {
 
 /// @brief 仅此测试定义的友元探针；调用正式游戏路径验证效果不重复奖励或保留战斗对象。
 struct GameLifecycleProbe {
+    /// @brief 确认正式资源加载了中英文字形且数字等宽，避免界面静默退回默认像素字体。
+    static void TestUiFont(const Game& game) {
+        const Font font = game.assets_.Common().uiFont;
+        assert(font.texture.id != GetFontDefault().texture.id);
+        for (int codepoint : std::array<int, 6>{'0', '9', 'Z', 0x4e2d, 0x300c, 0x2605})
+            assert(font.glyphs[GetGlyphIndex(font, codepoint)].value == codepoint);
+        const float zeroWidth = ui::MeasureText(font, "000000000", 38).x;
+        assert(std::abs(zeroWidth - ui::MeasureText(font, "111111111", 38).x) < 0.001F);
+        assert(std::abs(zeroWidth - ui::MeasureText(font, "987654321", 38).x) < 0.001F);
+    }
     static std::size_t EnemyCount(const Game& game) {
         std::size_t count = 0;
         game.enemies_.ForEachActive([&](const Enemy&) { ++count; });
@@ -173,6 +184,7 @@ struct GameLifecycleProbe {
     }
 
     static void Run(Game& game, const std::string& prefix) {
+        TestUiFont(game);
         TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
         // 经过真实 Game 更新验证高帧率入场，不能把轨道首帧偏移锁定为退场。

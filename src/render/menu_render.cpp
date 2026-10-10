@@ -2,6 +2,7 @@
 #include "app/game.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
+#include "render/ui_typography.hpp"
 
 #include <array>
 #include <cmath>
@@ -17,8 +18,8 @@ constexpr Color kGold{233, 204, 139, 255};
 void Text(const menu::Canvas& canvas, Font font, const char* text,
           float x, float y, float size, Color color, bool center = false) {
     auto point = canvas.Point(x, y);
-    if (center) point.x -= MeasureTextEx(font, text, size * canvas.scale, canvas.scale).x / 2;
-    DrawTextEx(font, text, point, size * canvas.scale, canvas.scale, color);
+    if (center) point.x -= ui::MeasureText(font, text, size * canvas.scale).x / 2;
+    ui::DrawText(font, text, point, size * canvas.scale, color);
 }
 
 /// @brief 按设计像素 width/height 绘制回纹边框；标题使用窗口全幅，其他页采用默认设计尺寸。
@@ -56,8 +57,8 @@ void PageButton(const menu::Canvas& canvas, Font font, Rectangle bounds, const c
     DrawRectangleRec(bounds, CheckCollisionPointRec(GetMousePosition(), bounds)
         ? Color{120, 56, 46, 255} : Color{69, 32, 32, 255});
     DrawRectangleLinesEx(bounds, canvas.scale, kGold);
-    DrawTextEx(font, label, {bounds.x + 12 * canvas.scale, bounds.y + 8 * canvas.scale},
-               22 * canvas.scale, canvas.scale, kIvory);
+    ui::DrawText(font, label, {bounds.x + 12 * canvas.scale, bounds.y + 8 * canvas.scale},
+                 22 * canvas.scale, kIvory);
 }
 }  // namespace
 

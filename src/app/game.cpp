@@ -241,6 +241,27 @@ void Game::TogglePause() {
 
 void Game::Update(float deltaTime) {
     assets_.UpdateAudio();
+    UpdateState(deltaTime);
+    UpdateUiMotion(deltaTime);
+}
+
+void Game::UpdateUiMotion(float deltaTime) {
+    int detail = 0, selection = -1;
+    if (state_ == RunState::MainMenu) { detail = titleIntro_ ? 1 : 0; selection = selectedMenuItem_; }
+    else if (state_ == RunState::Options) {
+        detail = optionsPage_ == OptionsPage::KeyBindings ? 1 : 0;
+        selection = detail ? selectedBinding_ : selectedOption_;
+    } else if (state_ == RunState::StartSetup) {
+        detail = setupStep_;
+        selection = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
+            : setupStep_ == 3 ? (practicePhase_ == 2 ? 0 : 1) : 0;
+    } else if (state_ == RunState::MusicRoom) selection = selectedTrack_;
+    else if (state_ == RunState::Paused) selection = selectedPauseItem_;
+    // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
+    menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
+}
+
+void Game::UpdateState(float deltaTime) {
     if (state_ == RunState::MainMenu) {
         UpdateMainMenu();
         return;

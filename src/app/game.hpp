@@ -15,6 +15,7 @@
 #include "stage/content.hpp"
 #include "stage/catalog.hpp"
 #include "render/sprite_renderer.hpp"
+#include "render/ui_motion.hpp"
 
 #include "raylib.h"
 
@@ -92,6 +93,10 @@ private:
     void SaveSettings() const;
     /// @brief 处理主菜单的移动、点击与确认输入。
     void UpdateMainMenu();
+    /// @brief 处理状态输入与战斗；由 Update 包装，确保所有提前返回后仍推进 UI 展示。
+    void UpdateState(float deltaTime);
+    /// @brief 在输入生效后同步页面、选择和动效，deltaTime 单位为秒；不推进战斗时间轴。
+    void UpdateUiMotion(float deltaTime);
     /// @brief 处理一面 Normal 的灵梦机体/标准或挑战模式选择，以及成绩、音乐和制作信息页。
     void UpdateMenuPage();
     /// @brief 处理 FPS、音量、灵敏度、开局资源与设置菜单页面的输入。
@@ -228,6 +233,7 @@ private:
     mutable std::vector<PickupSprite> pickupSprites_;
     std::string message_;
     int selectedMenuItem_ = 0;
+    ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。
     OptionsPage optionsPage_ = OptionsPage::General;
     int selectedOption_ = 0;
     int selectedBinding_ = 0;

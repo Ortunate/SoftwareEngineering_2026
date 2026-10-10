@@ -17,6 +17,7 @@ void Game::UpdateMainMenu() {
     if (titleIntro_) {
         if (confirm || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             titleIntro_ = false;
+            menuMotion_.Confirm();
             assets_.PlaySoundEffect("menu_confirm");
         }
         return;
@@ -45,6 +46,7 @@ void Game::UpdateMainMenu() {
     }
     if (selectedMenuItem_ != previous) assets_.PlaySoundEffect("menu_move");
     if (!confirm && !(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) return;
+    menuMotion_.Confirm();
     assets_.PlaySoundEffect("menu_confirm");
     switch (selectedMenuItem_) {
         case 0:
@@ -95,38 +97,49 @@ void Game::UpdateMenuPage() {
                    clicked(canvas.Rect(775, 675, 250, 42));
     if (state_ == RunState::StartSetup) {
         if (setupStep_ > 0) {
+            const int previous = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
+                : (practicePhase_ == 2 ? 0 : 1);
             for (int index = 0; index < 2; ++index) {
-                if (clicked(canvas.Rect(640, 300 + index * 125, 385, 105))) {
+                const bool hover=CheckCollisionPointRec(GetMousePosition(),canvas.Rect(640,300+index*125,385,105));
+                const bool moved=GetMouseDelta().x!=0 || GetMouseDelta().y!=0;
+                if (hover && (moved || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
                     if (setupStep_ == 1) selectedShot_ = index;
                     else if (setupStep_ == 2) challengeMode_ = index == 1;
                     else practicePhase_ = index == 0 ? 2 : 4;
-                    assets_.PlaySoundEffect("menu_move");
                 }
             }
             if (direction != 0) {
                 if (setupStep_ == 1) selectedShot_ = 1 - selectedShot_;
                 else if (setupStep_ == 2) challengeMode_ = !challengeMode_;
                 else practicePhase_ = practicePhase_ == 2 ? 4 : 2;
-                assets_.PlaySoundEffect("menu_move");
             }
+            const int current = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
+                : (practicePhase_ == 2 ? 0 : 1);
+            if (previous != current) assets_.PlaySoundEffect("menu_move");
         }
         if (confirm) {
+            menuMotion_.Confirm();
             assets_.PlaySoundEffect("menu_confirm");
             if (setupStep_ < 2) ++setupStep_;
             else StartRun();
         }
     } else if (state_ == RunState::MusicRoom) {
+        const int previous = selectedTrack_;
         if (direction != 0) {
             selectedTrack_ = (selectedTrack_ + 3 + direction) % 3;
-            assets_.PlaySoundEffect("menu_move");
         }
         for (int index = 0; index < 3; ++index) {
-            if (clicked(canvas.Rect(280, 260 + index * 95, 680, 70))) {
+            const auto row=canvas.Rect(280,260+index*95,680,70);
+            if (CheckCollisionPointRec(GetMousePosition(),row) &&
+                (GetMouseDelta().x!=0 || GetMouseDelta().y!=0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
                 selectedTrack_ = index;
-                confirm = true;
+                confirm = confirm || IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
             }
         }
+        if (selectedTrack_ != previous) assets_.PlaySoundEffect("menu_move");
         if (confirm) {
+            menuMotion_.Confirm();
+            assets_.PlaySoundEffect("menu_confirm");
             if (selectedTrack_ == 0) assets_.PlayMenuMusic();
             else if (selectedTrack_ == 1) assets_.PlayStageMusic();
             else assets_.PlayBossMusic();
@@ -184,11 +197,13 @@ void Game::UpdateOptions() {
             AdjustOption(1);
         }
     } else if (selectedOption_ == menu::kBindingsIndex) {
+        menuMotion_.Confirm();
         assets_.PlaySoundEffect("menu_confirm");
         optionsPage_ = OptionsPage::KeyBindings;
         selectedBinding_ = 0;
         waitingForBinding_ = false;
     } else if (selectedOption_ == menu::kResetIndex) {
+        menuMotion_.Confirm();
         const GameSettings defaults;
         bindings_ = defaults.bindings;
         fpsLimitIndex_ = 1;
@@ -203,6 +218,7 @@ void Game::UpdateOptions() {
         SaveSettings();
         assets_.PlaySoundEffect("menu_confirm");
     } else {
+        assets_.PlaySoundEffect("menu_cancel");
         state_ = RunState::MainMenu;
         selectedMenuItem_ = 8;
     }
@@ -215,7 +231,9 @@ void Game::UpdateKeyBindings() {
     constexpr int itemCount = bindingCount + 2;
 
     if (waitingForBinding_) {
-        if (IsKeyPressed(KEY_ESCAPE)) { waitingForBinding_ = false; return; }
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            assets_.PlaySoundEffect("menu_cancel"); waitingForBinding_ = false; return;
+        }
         if (!bindingCaptureReady_) {
             // 清空进入弹窗时的旧键盘队列，所有鼠标键释放后才开始收集新输入。
             while (GetKeyPressed() != KEY_NULL) {}
@@ -231,16 +249,20 @@ void Game::UpdateKeyBindings() {
         }
         if (IsValidBinding(code)) {
             SetBinding(selectedBinding_, code);
+            menuMotion_.Confirm();
+            assets_.PlaySoundEffect("menu_confirm");
             waitingForBinding_ = false;
         }
         return;
     }
 
     if (IsKeyPressed(KEY_ESCAPE)) {
+        assets_.PlaySoundEffect("menu_cancel");
         optionsPage_ = OptionsPage::General;
         selectedOption_ = menu::kBindingsIndex;
         return;
     }
+    const int previous = selectedBinding_;
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
         selectedBinding_ = (selectedBinding_ + itemCount - 1) % itemCount;
     }
@@ -275,8 +297,11 @@ void Game::UpdateKeyBindings() {
 
     const bool mouseConfirmed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
                                 hoveringItem;
+    if (selectedBinding_ != previous) assets_.PlaySoundEffect("menu_move");
     const bool confirmed = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_Z) || mouseConfirmed;
     if (!confirmed) return;
+    menuMotion_.Confirm();
+    assets_.PlaySoundEffect("menu_confirm");
 
     if (selectedBinding_ < bindingCount) {
         waitingForBinding_ = true;
@@ -298,7 +323,8 @@ void Game::AdjustFpsLimit(int offset) {
 }
 
 void Game::AdjustOption(int offset) {
-    if (selectedOption_ == 0) { AdjustFpsLimit(offset); return; }
+    menuMotion_.Confirm();
+    if (selectedOption_ == 0) { AdjustFpsLimit(offset); assets_.PlaySoundEffect("menu_move"); return; }
     if (selectedOption_ == 1) {
         musicVolume_ = std::clamp(musicVolume_ + offset * 5, 0, 100);
         assets_.SetMusicVolumePercent(musicVolume_);

@@ -37,8 +37,9 @@ void Click(koumakyou::Game& game, int x, int y) {
     Event(7, x, y); Event(6, MOUSE_BUTTON_LEFT); Frame(game);
     Event(5, MOUSE_BUTTON_LEFT); Frame(game);
 }
-/// @brief 按当前窗口逻辑尺寸保存页面，保证比例截图和实际布局使用同一坐标系。
-void Capture(koumakyou::Game& game, const char* path) {
+/// @brief 按当前窗口逻辑尺寸保存页面；settleFrames 默认等待进场结束，传零可保存过渡帧。
+void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24) {
+    for (int frame=0;frame<settleFrames;++frame) Frame(game);
     RenderTexture2D target = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
     BeginTextureMode(target);
     ClearBackground(BLACK);
@@ -74,7 +75,13 @@ int main(int argc, char** argv) {
             SetTargetFPS(0);
             Capture(game, (screenshots / "title.png").string().c_str());
             Key(game, KEY_Z);
+            Capture(game,(screenshots / "menu-enter.png").string().c_str(),0);
+            Capture(game,(screenshots / "menu-enter-mid.png").string().c_str(),6);
             Capture(game, (screenshots / "menu.png").string().c_str());
+            Key(game,KEY_DOWN);
+            Capture(game,(screenshots / "menu-selection-mid.png").string().c_str(),0);
+            Capture(game,(screenshots / "menu-selection.png").string().c_str());
+            Key(game,KEY_UP);
             // 比例变化必须同时移动绘制和鼠标命中；仅保证原画布在窗口内不能算适配。
             constexpr std::array<Vector2, 6> titleSizes{{{1100, 760}, {1280, 720}, {1440, 1080},
                                                        {1920, 820}, {900, 900}, {900, 1400}}};

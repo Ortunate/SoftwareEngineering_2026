@@ -7,6 +7,7 @@
 #include "stages/stage1/scenery.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/ui_typography.hpp"
+#include "render/ui_effects.hpp"
 
 #include <algorithm>
 #include <array>
@@ -221,10 +222,12 @@ void Game::DrawOverlay() const {
         centered("暂停", centerY - 110, 43, RAYWHITE);
         constexpr std::array<const char*, 4> labels{"解除暂停", "返回开局选择", "返回主菜单", "从头再来"};
         for (int index = 0; index < 4; ++index) {
-            const bool selected = index == selectedPauseItem_;
-            if (selected) DrawRectangle(centerX - 210, centerY - 40 + index * 48, 420, 42, Color{114, 42, 53, 190});
-            centered(labels[index], centerY - 36 + index * 48, 25,
-                     selected ? GOLD : Color{190, 153, 164, 255});
+            const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
+            const float width=ui::MeasureText(font,labels[index],25).x;
+            ui::GlowText(font,labels[index],{centerX-width/2-8*weight+16*(1-reveal),centerY-36+index*48},25,
+                         Fade(ui::Blend(Color{190,153,164,255},GOLD,weight),reveal),GOLD,weight*menuMotion_.Pulse());
+            ui::FocusLine({centerX-190,centerY+index*48},{centerX+190,centerY+index*48},1,
+                          GOLD,weight*reveal,menuMotion_.Phase());
         }
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
@@ -303,32 +306,30 @@ void Game::DrawKeyBindings() const {
     const int screenWidth = GetScreenWidth();
     const int screenHeight = GetScreenHeight();
     const float centerX = static_cast<float>(screenWidth) * 0.5F;
-    DrawRectangle(0, 0, screenWidth, screenHeight, Color{2, 4, 14, 205});
+    DrawRectangleGradientV(0,0,screenWidth,screenHeight,Color{18,16,19,255},Color{62,17,25,255});
 
     const char* title = "KEY BINDINGS";
     ui::DrawCentered(font, title, centerX, 45, 42, RAYWHITE);
     const char* instruction =
         "Select an action, then press a key or mouse button";
-    ui::DrawCentered(font, instruction, centerX, 101, 18, Color{155, 190, 215, 255});
+    ui::DrawCentered(font, instruction, centerX, 101, 18, Color{193,162,150,255});
 
     for (int index = 0; index < static_cast<int>(kBindingNames.size()); ++index) {
         const Rectangle row{centerX - 270.0F,
                             kBindingsTop + static_cast<float>(index) * kBindingsSpacing,
                             540.0F, kBindingsHeight};
-        const bool selected = selectedBinding_ == index;
-        DrawRectangleRounded(row, 0.16F, 8,
-                             selected ? Color{90, 24, 50, 235}
-                                      : Color{8, 15, 30, 220});
-        DrawRectangleRoundedLinesEx(row, 0.16F, 8, selected ? 2.0F : 1.0F,
-                                    selected ? Color{255, 110, 145, 255}
-                                             : Color{58, 95, 125, 210});
-        ui::DrawText(font, kBindingNames[index], {row.x + 15.0F, row.y + 6.0F}, 17,
-                 selected ? RAYWHITE : Color{175, 195, 210, 255});
+        const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.009F);
+        const Color gold{233,204,139,255};
+        DrawRectangleRec(row,Fade(ui::Blend(Color{32,17,22,170},Color{84,38,34,180},weight),reveal));
+        ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},1,
+                      gold,weight*reveal,menuMotion_.Phase());
+        ui::GlowText(font,kBindingNames[index],{row.x+15-6*weight+12*(1-reveal),row.y+6},17,
+                     Fade(ui::Blend(Color{193,162,150,255},gold,weight),reveal),gold,weight*menuMotion_.Pulse());
         const std::string keyName = KeyLabel(BindingAt(index));
-        ui::DrawText(font, keyName.c_str(),
+        ui::GlowText(font, keyName.c_str(),
                  {row.x + row.width - 16.0F - ui::MeasureText(font, keyName.c_str(), 17).x, row.y + 6.0F}, 17,
-                 selected ? Color{120, 215, 255, 255}
-                          : Color{110, 160, 195, 255});
+                 Fade(ui::Blend(Color{212,190,184,255},gold,weight),reveal),gold,
+                 weight*(menuMotion_.Pulse()+menuMotion_.Flash()));
     }
 
     constexpr int resetIndex = static_cast<int>(kBindingNames.size());
@@ -339,36 +340,34 @@ void Game::DrawKeyBindings() const {
     const char* labels[2] = {"RESET DEFAULTS", "BACK"};
     for (int index = 0; index < 2; ++index) {
         const int selection = index == 0 ? resetIndex : backIndex;
-        const bool selected = selectedBinding_ == selection;
-        DrawRectangleRounded(buttons[index], 0.18F, 8,
-                             selected ? Color{90, 24, 50, 235}
-                                      : Color{8, 15, 30, 220});
-        DrawRectangleRoundedLinesEx(buttons[index], 0.18F, 8,
-                                    selected ? 2.0F : 1.0F,
-                                    selected ? Color{255, 110, 145, 255}
-                                             : Color{58, 95, 125, 210});
-        ui::DrawCentered(font, labels[index], buttons[index].x + buttons[index].width * 0.5F,
-                         buttons[index].y + 12.0F, 18, RAYWHITE);
+        const float weight=menuMotion_.Weight(selection);
+        const auto button=buttons[index];
+        DrawRectangleRec(button,Color{55,30,29,180});
+        ui::FocusLine({button.x,button.y+button.height},{button.x+button.width,button.y+button.height},1,
+                      GOLD,weight,menuMotion_.Phase());
+        const float width=ui::MeasureText(font,labels[index],18).x;
+        ui::GlowText(font,labels[index],{button.x+(button.width-width)/2,button.y+12},18,
+                     ui::Blend(RAYWHITE,GOLD,weight),GOLD,weight*menuMotion_.Pulse());
     }
 
     const char* footer = "Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options";
-    ui::DrawCentered(font, footer, centerX, screenHeight - 42, 17, Color{145, 175, 198, 235});
+    ui::DrawCentered(font, footer, centerX, screenHeight - 42, 17, Color{193,162,150,235});
 
     if (waitingForBinding_) {
         DrawRectangle(0, 0, screenWidth, screenHeight, Color{0, 0, 0, 185});
         const Rectangle modal{centerX - 250.0F,
                               static_cast<float>(screenHeight) * 0.5F - 82.0F,
                               500.0F, 164.0F};
-        DrawRectangleRounded(modal, 0.16F, 10, Color{12, 18, 36, 250});
+        DrawRectangleRounded(modal, 0.16F, 10, Color{38,12,25,250});
         DrawRectangleRoundedLinesEx(modal, 0.16F, 10, 2.0F,
-                                    Color{255, 110, 145, 255});
+                                    Color{233,204,139,255});
         const char* prompt = "PRESS KEY / MOUSE BUTTON";
         ui::DrawCentered(font, prompt, centerX, modal.y + 32.0F, 24, RAYWHITE);
         ui::DrawCentered(font, kBindingNames[selectedBinding_], centerX, modal.y + 78.0F, 20,
-                 Color{120, 215, 255, 255});
+                 Color{233,204,139,255});
         const char* cancel = "Esc: cancel   F3-F6: reserved   Release, then press";
         ui::DrawCentered(font, cancel, centerX, modal.y + 120.0F, 16,
-                 Color{145, 165, 185, 255});
+                 Color{193,162,150,255});
     }
 }
 

@@ -118,7 +118,7 @@ void Game::DrawMainMenu() const {
             const bool locked = index == 1 || index == 4;
             if (weight > 0.01F) {
                 const auto center = canvas.Point(layout.menuLeft + 15 + 16*(1-reveal), rowY + 20);
-                ui::YinYang(center,7.5F*canvas.scale,Fade(kScarlet,weight*reveal),
+                ui::YinYang(center,9.0F*canvas.scale,Fade(kScarlet,weight*reveal),
                            Fade(kIvory,weight*reveal),menuMotion_.Phase());
             }
             ChoiceText(canvas,common.uiFont,labels[index],layout.menuLeft+45,rowY+2,locked?23:28,

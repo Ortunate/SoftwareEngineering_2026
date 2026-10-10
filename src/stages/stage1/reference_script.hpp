@@ -1,4 +1,4 @@
-// 本文件负责新典一面 Normal 的帧脚本上下文、坐标映射与原作移动/发弹状态。
+// 本文件负责新典一面 Normal 的帧脚本、坐标映射及保留 Z 轨迹的三维走位与发弹扩展。
 #pragma once
 #include "stages/stage1/reference_program.hpp"
 #include "gameplay/bullets/system.hpp"
@@ -21,13 +21,17 @@ inline Vector3 ReferenceSourcePosition(Vector3 world) {
     return {world.x/kReferenceScale+192, (10-world.z)/kReferenceScale,
             -world.y/kReferenceScale};
 }
+/// @brief 几何模式；Planar 用于原脚本对照，Spatial 为正式一面的三维走位与弹幕，均不修改帧节点或演员 Z 轨迹。
+enum class ReferenceGeometry { Planar, Spatial };
 /// @brief 单个演员的 Normal ECL 上下文；固定 60 Hz，调用栈最多 32 层，寄存器属于各层而非演员共享。
-/// 移动在原作像素坐标求解，发弹保留 X/Z 投影，并沿 Y 增加朝玩家的高度速度；不增加弹数或改变投影角间距。
+/// 原作像素轨迹始终独立求解；Spatial 只在世界 X/Y 叠加走位，弹幕数量、速度层和特效时窗沿用原脚本。
 class ReferenceScript {
 public:
     /// @brief 初始化 Normal 子程序、像素出生点、原作 HP 与独立随机种子；mirrored 仅反转移动的 X 分量。
+    /// geometry 选择三维扩展或原图案对照；扩展相位由 seed 确定，不消耗 ECL 的随机序列。
     /// 越界编号抛 invalid_argument；表中未用于 Normal 的特殊指令在执行时抛 runtime_error。
-    void Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored = false);
+    void Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored = false,
+               ReferenceGeometry geometry = ReferenceGeometry::Planar);
     /// @brief 推进非负秒数；跨帧补算 60 Hz 指令，回调到期后停止，等待 Transition。
     void Update(float seconds, Vector3 player, BulletSystem& bullets);
     /// @brief 切换到生命/超时回调，保留演员位置与发弹属性，清空旧调用栈并重新计时。
@@ -45,7 +49,8 @@ public:
     std::vector<int> soundEvents;
     /// @brief 本次更新 ins_119 的散落道具数量；下一次更新清空，Game 负责按当前 Power 实际生成。
     std::vector<int> dropEvents;
-    [[nodiscard]] Vector3 Position() const { return ReferencePosition(sourcePosition); }
+    /// @brief 当前判定中心（世界单位）；Spatial 的 Z 与 ReferencePosition(sourcePosition).z 逐帧相等。
+    [[nodiscard]] Vector3 Position() const;
 private:
     struct Context { int sub = 0, pc = 0, frame = 0, compare = 0; std::array<float,12> variables{}; };
     Context context_{};
@@ -53,6 +58,10 @@ private:
     std::uint32_t random_ = 1;
     double remainingFrames_ = 0;
     bool mirrored_ = false, clamped_ = false, interpolating_ = false;
+    ReferenceGeometry geometry_ = ReferenceGeometry::Planar;
+    // 扩展时钟是演员出生后的 60 Hz 帧数，跨子程序循环和阶段回调连续，避免 Boss 切阶段时瞬移。
+    int spatialFrames_ = 0, initialSub_ = 0, beamIndex_ = 0;
+    float spatialPhase_ = 0;
     float angle_ = 0, speed_ = 0, acceleration_ = 0, angularVelocity_ = 0;
     Vector3 velocity_{}, offset_{}, interpolationStart_{}, interpolationDelta_{};
     int interpolationFrames_ = 0, interpolationLeft_ = 0, interpolationPower_ = 1;

@@ -1,4 +1,4 @@
-// 本文件实现新典一面使用的 ECL 指令，包括调用/循环、镜像移动、速度层、瞄准和延迟转向。
+// 本文件实现新典一面的 ECL 时间轴，并在原轨迹上叠加 X/Y 走位与三维锥束、球壳、转向环和光束。
 #include "stages/stage1/reference_script.hpp"
 #include "stages/stage1/ids.hpp"
 #include "gameplay/bullets/patterns.hpp"
@@ -15,12 +15,45 @@ constexpr std::array<Color,16> kColors{{{190,190,200,255},{140,35,60,255},{255,6
  {170,140,30,255},{255,220,85,255},{255,155,75,255},{250,245,235,255}}};
 Vector3 Add(Vector3 a, Vector3 b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 Vector3 Multiply(Vector3 v, float n) { return {v.x*n,v.y*n,v.z*n}; }
+/// @brief 绕给定单位轴建立锥面方向；angle/roll 为弧度，返回单位向量，极端仰角仍使用正交基。
+Vector3 ConeDirection(Vector3 axis, float angle, float roll) {
+    axis=pattern::Normalize(axis);
+    const Vector3 reference=std::abs(axis.y)<0.9F ? Vector3{0,1,0} : Vector3{1,0,0};
+    const Vector3 right=pattern::Normalize(pattern::Cross(reference,axis));
+    const Vector3 up=pattern::Cross(axis,right);
+    return Add(Multiply(axis,std::cos(angle)),Add(Multiply(right,std::sin(angle)*std::cos(roll)),
+                                                 Multiply(up,std::sin(angle)*std::sin(roll))));
 }
-void ReferenceScript::Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored) {
+/// @brief 同时倾斜环方向和其转向轴；两次旋转均为弧度，保持单位长度与旋转手性。
+Vector3 TiltRing(Vector3 direction, float tilt, float bank) {
+    return BulletSystem::RotateAroundAxis(BulletSystem::RotateAroundAxis(direction,{1,0,0},tilt),{0,0,1},bank);
+}
+}
+void ReferenceScript::Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored,
+                            ReferenceGeometry geometry) {
     *this = ReferenceScript{};
     if (sub < 0 || sub >= 38) throw std::invalid_argument("Invalid Stage 1 subprogram");
     context_.sub = sub; sourcePosition = source; health = maxHealth = sourceHealth;
     random_ = seed ? seed : 1; mirrored_ = mirrored;
+    geometry_=geometry; initialSub_=sub;
+    spatialPhase_=static_cast<float>((seed*2654435761U)>>8)/16777216.0F*2*kPi;
+}
+Vector3 ReferenceScript::Position() const {
+    Vector3 world=ReferencePosition(sourcePosition);
+    if(geometry_==ReferenceGeometry::Planar)return world;
+    const float seconds=spatialFrames_/60.0F;
+    const float fade=std::clamp(seconds/0.75F,0.0F,1.0F);
+    const float envelope=fade*fade*(3-2*fade);
+    const bool boss=initialSub_>=5;
+    const bool dark=initialSub_==3 || initialSub_==4;
+    const float phase=boss ? 0 : spatialPhase_;
+    const float xOffset=(boss ? 1.4F : dark ? 1.2F : 0.85F)*std::sin(seconds*(boss ? 0.85F : 1.9F)+phase);
+    const float yOffset=(boss ? 3.0F : dark ? 3.8F : 2.7F)*std::sin(seconds*(boss ? 0.68F : dark ? 0.95F : 1.4F)+phase)
+                        +0.65F*std::sin(seconds*1.4F);
+    // 仅约束新增的横向/高度偏移；原始 sourcePosition 和 Z 不参与变形，退场仍按原脚本边界判断。
+    world.x=std::clamp(world.x+xOffset*envelope*(mirrored_ ? -1 : 1),-9.0F,9.0F);
+    world.y=std::clamp(world.y+yOffset*envelope,-8.5F,8.5F);
+    return world;
 }
 float ReferenceScript::Random(float range) {
     random_ ^= random_ << 13; random_ ^= random_ >> 17; random_ ^= random_ << 5;
@@ -58,6 +91,7 @@ void ReferenceScript::Transition() {
     lifeThreshold_ = -1; timeoutFrames = -1; phaseFrames = 0;
 }
 void ReferenceScript::Tick(Vector3 player, BulletSystem& bullets) {
+    ++spatialFrames_;
     // 原作先采用上一帧算出的位移，再解释本帧指令；保留此顺序才能复现转折帧的位置。
     sourcePosition.x += velocity_.x * (mirrored_ ? -1 : 1);
     sourcePosition.y += velocity_.y; sourcePosition.z += velocity_.z;
@@ -137,8 +171,14 @@ void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, B
     case 81: offset_ = {v(0),v(1),v(2)}; break;
     case 82: for (int n=0;n<8;++n) effects_[n]=v(n); break;
     case 86: {
-        const Vector3 origin = ReferencePosition(Add(sourcePosition,offset_));
-        Bullet* beam = bullets.SpawnBeam(origin,BulletSystem::DirectionTo(origin,player),
+        const Vector3 origin = Add(Position(),{offset_.x*kReferenceScale,-offset_.z*kReferenceScale,-offset_.y*kReferenceScale});
+        Vector3 direction=BulletSystem::DirectionTo(origin,player);
+        if(geometry_==ReferenceGeometry::Spatial) {
+            // 每组六道光束保留一条直接瞄准，其余五条围绕视线展开；方向在预警开始时锁定，允许玩家脱离扇面。
+            const int index=beamIndex_++%6;
+            if(index!=0)direction=ConeDirection(direction,0.18F,(index-1)*2*kPi/5+spatialFrames_/60.0F*0.4F);
+        }
+        Bullet* beam = bullets.SpawnBeam(origin,direction,
                 a[6]*kReferenceScale,a[7]*kReferenceScale/2,a[8]/60,a[9]/60,kColors[static_cast<int>(a[1])%16]);
         if (beam) { beam->warningSeconds = a[11]/60; beam->dangerEndSeconds = (a[8]+a[9]-a[12])/60;
                     beam->maxAge=(a[8]+a[9]+a[10])/60; beam->beamGrowSeconds=a[8]/60;
@@ -172,9 +212,9 @@ void ReferenceScript::Emit(const reference::Instruction& i, Vector3 player, Bull
     const float influence=rankInfluence_[0]+rank_*(rankInfluence_[1]-rankInfluence_[0])/32;
     const float first=Value(a[4])==0 ? 0 : std::max(0.3F,Value(a[4])+influence);
     const float last=std::max(0.3F,Value(a[5])+influence/2);
-    const Vector3 origin=ReferencePosition(Add(sourcePosition,offset_));
-    // 原作二维角度与位移完整保留在 X/Z 投影；源 Y 向下对应世界 -Z，源正角度因此绕世界 +Y。
-    // 整轮在发射时锁定高度坡度，各速度层沿 Y 同步扩展，玩家升降不会改变原扇形或环的投影结构。
+    const Vector3 origin=Add(Position(),{offset_.x*kReferenceScale,-offset_.z*kReferenceScale,-offset_.y*kReferenceScale});
+    // Planar 对照模式保留 X/Z 图案与发射时锁定的高度坡度；源正角度对应绕世界 +Y 旋转。
+    // Spatial 在下方按原扇形/环/速度层生成三维单位方向，仍共用原弹速、弹数和时序。
     const float planarDistance=std::hypot(player.x-origin.x,player.z-origin.z);
     const float heightSlope=std::clamp((player.y-origin.y)/std::max(planarDistance,4.0F),-3.0F,3.0F);
     const float heightFactor=std::sqrt(1+heightSlope*heightSlope);
@@ -186,20 +226,51 @@ void ReferenceScript::Emit(const reference::Instruction& i, Vector3 player, Bull
             if(n%2)fan=-fan;
             angle+=fan+(i.opcode==67 ? aim : 0);
         } else angle+=n*2*kPi/count+layer*Value(a[7])+(i.opcode==69 ? aim : 0);
-        const Vector3 direction{std::cos(angle),heightSlope,-std::sin(angle)};
+        Vector3 direction{std::cos(angle),heightSlope,-std::sin(angle)};
+        Vector3 rotationAxis{0,1,0};
+        float speedFactor=heightFactor;
+        if(geometry_==ReferenceGeometry::Spatial) {
+            const float seconds=spatialFrames_/60.0F;
+            if(i.opcode<=68) {
+                const Vector3 axis=i.opcode==67 ? BulletSystem::DirectionTo(origin,player) :
+                    Vector3{std::cos(Value(a[6])),0,-std::sin(Value(a[6]))};
+                if(count>1) {
+                    const bool hasCenter=count%2!=0;
+                    const int ringIndex=n-(hasCenter ? 1 : 0), ringCount=count-(hasCenter ? 1 : 0);
+                    const float aperture=std::clamp(std::abs(Value(a[7]))*count/2,0.18F,0.65F);
+                    direction=hasCenter && n==0 ? axis : ConeDirection(axis,aperture,
+                        ringIndex*2*kPi/ringCount+seconds*0.7F+layer*0.55F+Value(a[6]));
+                } else {
+                    // 多速度层展开为螺旋束，最快层保留瞄准中心；单颗连射用连续相位织出 Night Bird 的空间螺旋。
+                    const float aperture=layers>1 ? 0.22F*std::sqrt(static_cast<float>(layer)/(layers-1)) :
+                        std::min(0.45F,0.18F+std::abs(Value(a[6]))*0.4F);
+                    direction=ConeDirection(axis,aperture,seconds*2.4F+layer*2.3999632F+Value(a[6])*3);
+                }
+            } else {
+                const float tilt=0.55F*std::sin(seconds*0.7F+spatialPhase_);
+                const float bank=0.4F*std::cos(seconds*0.53F+spatialPhase_);
+                // 多层环变成不同纬度的球壳；单层环加入双波高度，避免所有弹仍落在同一倾斜平面。
+                const float latitude=layers>1 ? -0.75F+1.5F*layer/(layers-1) : 0.28F*std::sin(2*angle+seconds);
+                direction=TiltRing({std::cos(angle)*std::cos(latitude),std::sin(latitude),
+                                    -std::sin(angle)*std::cos(latitude)},tilt,bank);
+                rotationAxis=TiltRing({0,1,0},tilt,bank);
+            }
+            // 扩展使用单位方向，实际弹速沿用各原始速度层；不随高度或锥角增大而提速。
+            speedFactor=1;
+        }
         const float speed=first-(first-last)*layer/layers;
         const VisualId visual=color<=4 ? kRedBullet : color<=8 ? kBlueBullet : kGreenSphere;
         Bullet* bullet=bullets.Spawn(BulletOwner::Enemy,origin,Multiply(direction,speed*60*kReferenceScale),
                 (type==2 ? 5.0F : 2.0F)*kReferenceScale,kColors[color],visual);
         if(!bullet) continue;
-        bullet->rotationAxis={0,1,0};
+        bullet->rotationAxis=rotationAxis;
         const int flags=static_cast<int>(a[8]);
         if(flags&16)bullet->acceleration=Multiply(direction,effects_[4]*3600*kReferenceScale);
-        if(flags&1) { bullet->launchBoost=5*60*kReferenceScale*heightFactor; bullet->launchBoostSeconds=16.0F/60;
+        if(flags&1) { bullet->launchBoost=5*60*kReferenceScale*speedFactor; bullet->launchBoostSeconds=16.0F/60;
                      bullet->baseVelocity=bullet->velocity; }
         if(flags&(64|128)) {
             bullet->turnDelaySeconds=effects_[0]/60;
-            bullet->turnAngle=effects_[4]; bullet->turnSpeed=effects_[5]*60*kReferenceScale*heightFactor;
+            bullet->turnAngle=effects_[4]; bullet->turnSpeed=effects_[5]*60*kReferenceScale*speedFactor;
             bullet->turnAimed=(flags&128)!=0; bullet->baseVelocity=bullet->velocity;
         }
         // etama3.anm 的显现脚本结束于 10/16/32 帧；ECL 运动特效在显现结束后才起算。

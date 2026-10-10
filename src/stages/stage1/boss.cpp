@@ -1,18 +1,18 @@
-// 本文件将新典原始脚本的 HP/超时回调接入公共 Boss 生命周期；不重新编写弹幕或移动路径。
+// 本文件将新典帧脚本的 HP/超时回调接入 Boss 生命周期，并启用保留 Z 轨迹的三维走位与弹幕。
 #include "stages/stage1/boss.hpp"
 #include "stages/stage1/ids.hpp"
 namespace redmist::stage1 {
 void RumiaBoss::StartMidboss() {
     encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
-    script_.Reset(9,{192,-32,0},6000,1882);
+    script_.Reset(9,{192,-32,0},6000,1882,false,ReferenceGeometry::Spatial);
     script_.damageable=false;
     position=script_.Position(); health=maxHealth=6000/kReferenceHealthUnit;
 }
 void RumiaBoss::StartFinalBoss() {
     encounter_=Encounter::Final; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
-    script_.Reset(14,{192,96,0},7000,5093);
+    script_.Reset(14,{192,96,0},7000,5093,false,ReferenceGeometry::Spatial);
     script_.damageable=false;
     position=script_.Position(); health=maxHealth=7000/kReferenceHealthUnit;
 }

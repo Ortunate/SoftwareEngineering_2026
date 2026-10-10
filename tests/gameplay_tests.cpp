@@ -25,82 +25,6 @@
 #include <vector>
 
 namespace {
-/// @brief 对比原脚本与扩展模式的逐帧轨迹、出生弹数和阶段回调；扩展不得污染 Z、ECL 随机数或时钟。
-void TestSpatialStageTimeline() {
-    using namespace redmist::stage1;
-    auto baselineBullets=std::make_unique<redmist::BulletSystem>();
-    auto spatialBullets=std::make_unique<redmist::BulletSystem>();
-    for(int sub: {0,1,2,3,4,9,14}) {
-        ReferenceScript baseline,spatial;
-        const Vector3 start{192,sub==14 ? 96.0F : -32.0F,0};
-        const float hp=sub==9 ? 6000 : sub==14 ? 7000 : 256;
-        baseline.Reset(sub,start,hp,31);
-        spatial.Reset(sub,start,hp,31,false,ReferenceGeometry::Spatial);
-        bool movedX=false,movedY=false,volumetric=false;
-        int callbacks=0;
-        for(int frame=0;frame<(sub>=5 ? 9000 : 400);++frame) {
-            baselineBullets->Reset(); spatialBullets->Reset();
-            baseline.Update(1.0F/60,{2,3,-6.5F},*baselineBullets);
-            spatial.Update(1.0F/60,{2,3,-6.5F},*spatialBullets);
-            assert(baseline.sourcePosition.x==spatial.sourcePosition.x);
-            assert(baseline.sourcePosition.y==spatial.sourcePosition.y);
-            assert(baseline.sourcePosition.z==spatial.sourcePosition.z);
-            assert(baseline.Position().z==spatial.Position().z);
-            assert(baseline.phaseFrames==spatial.phaseFrames && baseline.pendingCallback==spatial.pendingCallback);
-            assert(baseline.soundEvents==spatial.soundEvents && baseline.dropEvents==spatial.dropEvents);
-            assert(baseline.health==spatial.health && baseline.finished==spatial.finished);
-            assert(baselineBullets->Pool().ActiveCount()==spatialBullets->Pool().ActiveCount());
-            movedX|=std::abs(baseline.Position().x-spatial.Position().x)>0.1F;
-            movedY|=std::abs(baseline.Position().y-spatial.Position().y)>1;
-            assert(std::abs(spatial.Position().x)<=9 && std::abs(spatial.Position().y)<=8.5F);
-            std::vector<Vector3> directions;
-            spatialBullets->Pool().ForEachActive([&](const redmist::Bullet& bullet) {
-                if(bullet.beamLength==0)directions.push_back(redmist::pattern::Normalize(bullet.velocity));
-            });
-            // 三个方向的混合积非零，才能证明弹幕不只是把一个平面整体倾斜。
-            if(directions.size()>=3)for(std::size_t n=2;n<directions.size();++n) {
-                const Vector3 normal=redmist::pattern::Cross(directions[0],directions[1]);
-                if(std::abs(normal.x*directions[n].x+normal.y*directions[n].y+normal.z*directions[n].z)>0.01F)
-                    volumetric=true;
-            }
-            if(baseline.pendingCallback>=0) {
-                ++callbacks;
-                const Vector3 before=spatial.Position();
-                baseline.Transition(); spatial.Transition();
-                const Vector3 after=spatial.Position();
-                assert(before.x==after.x && before.y==after.y && before.z==after.z);
-            }
-            if(baseline.finished)break;
-        }
-        assert(movedX && movedY);
-        if(sub==3 || sub>=5)assert(volumetric);
-        if(sub==9)assert(callbacks==1 && spatial.finished);
-        if(sub==14)assert(callbacks==5 && spatial.finished);
-    }
-    // 几何相位不受渲染帧率影响；30/60/240 Hz 推进相同时间应得到同一扩展位置。
-    std::array<Vector3,3> results{};
-    int index=0;
-    for(int fps: {30,60,240}) {
-        ReferenceScript script;
-        script.Reset(3,{192,-32,0},256,72,false,ReferenceGeometry::Spatial);
-        spatialBullets->Reset();
-        for(int frame=0;frame<fps*2;++frame)script.Update(1.0F/fps,{},*spatialBullets);
-        results[index++]=script.Position();
-    }
-    for(Vector3 result:results) {
-        assert(std::abs(result.x-results[0].x)<0.0001F);
-        assert(std::abs(result.y-results[0].y)<0.0001F);
-        assert(std::abs(result.z-results[0].z)<0.0001F);
-    }
-    ReferenceScript left,right;
-    left.Reset(0,{60,-32,0},32,72,false,ReferenceGeometry::Spatial);
-    right.Reset(0,{324,-32,0},32,72,true,ReferenceGeometry::Spatial);
-    for(int frame=0;frame<180;++frame) {
-        left.Update(1.0F/60,{},*spatialBullets); right.Update(1.0F/60,{},*spatialBullets);
-        assert(std::abs(left.Position().x+right.Position().x)<0.001F);
-        assert(left.Position().y==right.Position().y && left.Position().z==right.Position().z);
-    }
-}
 /// @brief 验证暗色妖精的 Z 轴往返、单次稀疏球面散射以及跨帧阶段切换。
 void TestDarkFairyBehavior() {
     using redmist::Bullet;
@@ -352,7 +276,6 @@ void RunGameplayTests() {
     bullets.Reset();
 
     TestDarkFairyBehavior();
-    TestSpatialStageTimeline();
 
     redmist::stage1::FairyEnemy helixFairy(
         {{0.0F, 0.0F, 5.0F}, redmist::stage1::FairyParams::Movement::Helix});
@@ -381,7 +304,7 @@ void RunGameplayTests() {
     assert(exit.y==0 && std::abs(exit.z+10)<0.0001F);
     redmist::stage1::ReferenceEnemy entryEnemy({entry});
     entryEnemy.Update(2.0F/60,{},bullets);
-    assert(entryEnemy.active && entryEnemy.position.z<entry.z && std::abs(entryEnemy.position.y)<0.03F);
+    assert(entryEnemy.active && entryEnemy.position.z<entry.z && entryEnemy.position.y==0);
     // 带高度的世界出生点经过演员的逆映射后仍保留该高度，避免构造路径混用旧坐标系。
     redmist::stage1::ReferenceEnemy elevatedEnemy({{entry.x,2,entry.z}});
     assert(std::abs(elevatedEnemy.position.y-2)<0.0001F);
@@ -425,9 +348,6 @@ void RunGameplayTests() {
     assert(bullets.Pool().ActiveCount()==0);
     boss.Update(1.0F/60,{},bullets);
     assert(bullets.Pool().ActiveCount()==48);
-    bullets.Pool().ForEachActive([&](const redmist::Bullet& b){
-        assert(std::abs(b.position.y-boss.position.y)<0.0001F); // 发弹高度必须跟随实际三维判定中心。
-    });
     assert(std::abs(boss.TimeLimit()-24)<0.001F && boss.SpellName()==nullptr);
     bullets.Reset();
     for (int frame=161;frame<1441;++frame) boss.Update(1.0F/60,{},bullets);
@@ -451,22 +371,17 @@ void RunGameplayTests() {
     assert(boss.AdvancePhase() && boss.SpellName()==nullptr);
     bullets.Reset();
     for (int frame=0;frame<261;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
-    int beams=0,centerBeams=0;
-    std::vector<Vector3> beamDirections;
+    int beams=0;
     bullets.Pool().ForEachActive([&](const redmist::Bullet& b){
         if(b.beamLength<=0)return;
         ++beams;
         const Vector3 expected=redmist::BulletSystem::DirectionTo(b.position,raisedPlayer);
-        assert(b.beamDirection.z<0);
-        const float alignment=b.beamDirection.x*expected.x+b.beamDirection.y*expected.y+b.beamDirection.z*expected.z;
-        if(alignment>0.99999F)++centerBeams;
-        else assert(std::abs(alignment-std::cos(0.18F))<0.0001F);
-        for(Vector3 direction:beamDirections)
-            assert(redmist::BulletSystem::Length({direction.x-b.beamDirection.x,direction.y-b.beamDirection.y,
-                                                 direction.z-b.beamDirection.z})>0.01F);
-        beamDirections.push_back(b.beamDirection);
+        assert(b.beamDirection.y>0 && b.beamDirection.z<0);
+        assert(std::abs(b.beamDirection.x-expected.x)<0.0001F);
+        assert(std::abs(b.beamDirection.y-expected.y)<0.0001F);
+        assert(std::abs(b.beamDirection.z-expected.z)<0.0001F);
     });
-    assert(beams==6 && centerBeams==1 && std::abs(boss.TimeLimit()-30)<0.001F);
+    assert(beams==6 && std::abs(boss.TimeLimit()-30)<0.001F);
     assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="暗符「Demarcation」");
     bullets.Reset();
     for (int frame=0;frame<121;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
@@ -474,18 +389,17 @@ void RunGameplayTests() {
     bullets.Pool().ForEachActive([](const redmist::Bullet& b){
         assert(std::abs(b.turnDelaySeconds-40.0F/60)<0.0001F);
         assert(std::abs(std::abs(b.turnAngle)-std::numbers::pi_v<float>/2)<0.0001F);
-        assert(std::abs(redmist::BulletSystem::Length(b.rotationAxis)-1)<0.0001F);
+        assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
     });
-    // 倾斜环仍绕其自身法向完成 90°，轴向分量保持不变；不能仅旋转画面而保留旧 Y 转向轴。
+    // 实际延迟转向必须在 X/Z 内完成 90°，Y 坡度保持不变，避免只修正出生位置。
     bullets.Update(1.1F,{},raisedPlayer);
     assert(bullets.Pool().ActiveCount()==34);
     bullets.Pool().ForEachActive([](const redmist::Bullet& b){
         assert(b.turnApplied && !b.turnAimed);
         const Vector3 before=redmist::pattern::Normalize(b.baseVelocity);
         const Vector3 after=redmist::pattern::Normalize(b.velocity);
-        const Vector3 expected=redmist::BulletSystem::RotateAroundAxis(before,b.rotationAxis,b.turnAngle);
-        assert(std::abs(after.x-expected.x)<0.0001F);
-        assert(std::abs(after.y-expected.y)<0.0001F);
-        assert(std::abs(after.z-expected.z)<0.0001F);
+        assert(std::abs(before.y-after.y)<0.0001F);
+        assert(std::abs(before.x*after.x+before.z*after.z)<0.0001F);
+        assert((before.z*after.x-before.x*after.z)*b.turnAngle>0);
     });
 }

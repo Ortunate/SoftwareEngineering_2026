@@ -4,7 +4,6 @@
 #include "stages/stage1/reference_script.hpp"
 namespace redmist::stage1 {
 /// @brief 露米娅遭遇；原作 HP 与生命阈值统一换算，阶段包含受保护的准备期与脚本退场。
-/// X/Y 走位与弹幕使用 Spatial 扩展，Z 与原脚本逐帧相同；攻击时刻和阶段上限不随几何扩展变化。
 class RumiaBoss final : public Boss {
 public:
     enum class Encounter { Midboss, Final };

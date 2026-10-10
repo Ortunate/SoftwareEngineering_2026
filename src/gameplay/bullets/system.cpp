@@ -60,15 +60,32 @@ Vector3 Normalize(Vector3 vector) {
 
 void BulletSystem::Reset() { bullets_.Clear(); }
 
-void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets) {
-    bullets_.ForEachActive([deltaTime, targets](Bullet& bullet) {
+void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget) {
+    bullets_.ForEachActive([deltaTime, targets, enemyAimTarget](Bullet& bullet) {
         bullet.age += deltaTime;
+        const float spawnDelta=std::clamp(bullet.spawnVisualSeconds-(bullet.age-deltaTime),0.0F,deltaTime);
+        bullet.position=Add(bullet.position,Scale(bullet.baseVelocity,spawnDelta*bullet.spawnMoveScale));
+        const float motionDelta=deltaTime-spawnDelta;
+        const float motionAge=std::max(0.0F,bullet.age-bullet.spawnVisualSeconds);
         // 先更新速度，再按新速度推进位置；角速度使弹道在三维空间转弯。
-        bullet.velocity = Add(bullet.velocity, Scale(bullet.acceleration, deltaTime));
+        if (bullet.launchBoostSeconds > 0 && motionAge <= bullet.launchBoostSeconds) {
+            const float speed = Length(bullet.baseVelocity) + bullet.launchBoost *
+                (1 - motionAge / bullet.launchBoostSeconds);
+            bullet.velocity = Scale(Normalize(bullet.baseVelocity), speed);
+        } else bullet.velocity = Add(bullet.velocity, Scale(bullet.acceleration, motionDelta));
+        if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
+            if (motionAge >= bullet.turnDelaySeconds) {
+                const Vector3 direction = bullet.turnAimed
+                    ? DirectionTo(bullet.position, enemyAimTarget) : Normalize(bullet.baseVelocity);
+                bullet.velocity = Scale(RotateAroundAxis(direction, bullet.rotationAxis,
+                    bullet.turnAngle), bullet.turnSpeed);
+                bullet.turnApplied = true;
+            } else bullet.velocity = Scale(bullet.baseVelocity, 1 - motionAge / bullet.turnDelaySeconds);
+        }
         if (bullet.angularVelocity != 0.0F) {
             bullet.velocity = RotateAroundAxis(
                 bullet.velocity, bullet.rotationAxis,
-                bullet.angularVelocity * deltaTime);
+                bullet.angularVelocity * motionDelta);
         }
         if (bullet.homingTurnRate > 0.0F && !targets.empty()) {
             const Vector3* nearest = nullptr;
@@ -99,14 +116,14 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets) {
                                 axis = Cross(current, {1.0F, 0.0F, 0.0F});
                         }
                         const float turn = std::min(angle,
-                            bullet.homingTurnRate * deltaTime);
+                            bullet.homingTurnRate * motionDelta);
                         bullet.velocity = Scale(RotateAroundAxis(current, axis,
                                                                    turn), speed);
                     }
                 }
             }
         }
-        bullet.position = Add(bullet.position, Scale(bullet.velocity, deltaTime));
+        bullet.position = Add(bullet.position, Scale(bullet.velocity, motionDelta));
 
         constexpr float margin = 3.0F;
         if (bullet.age > bullet.maxAge ||
@@ -134,6 +151,22 @@ Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
     bullet->color = color;
     bullet->maxAge = owner == BulletOwner::Player ? 3.0F : 14.0F;
     return bullet;
+}
+
+Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
+                                float radius, float warning, float duration, Color color) {
+    if (!std::isfinite(length) || !std::isfinite(radius) || !std::isfinite(warning) ||
+        !std::isfinite(duration) || !std::isfinite(warning + duration) ||
+        !std::isfinite(origin.x + origin.y + origin.z) ||
+        !std::isfinite(direction.x + direction.y + direction.z) ||
+        length <= 0 || radius <= 0 || warning < 0 || duration <= 0) return nullptr;
+    Bullet* beam = Spawn(BulletOwner::Enemy, origin, {}, radius, color, kInvalidVisualId);
+    if (!beam) return nullptr;
+    beam->beamDirection = Normalize(direction);
+    beam->beamLength = length;
+    beam->warningSeconds = warning;
+    beam->maxAge = warning + duration;
+    return beam;
 }
 
 void BulletSystem::ClearEnemyBullets() {

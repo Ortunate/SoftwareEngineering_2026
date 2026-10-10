@@ -1,4 +1,4 @@
-// 本文件负责实现 FPS、音量、鼠标灵敏度与统一绑定设置文件的读取、校验和保存。
+// 本文件负责显示、音量、开局资源、成绩与统一绑定设置的读取、校验和保存。
 
 #include "config/settings.hpp"
 
@@ -115,13 +115,25 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
 
         if (name == "version") {
             version = *value;
-            shouldRewrite = shouldRewrite || version != 2;
+            shouldRewrite = shouldRewrite || version != 3;
         } else if (name == "music_volume") {
             if (*value >= 0 && *value <= 100) settings.musicVolume = *value;
             else shouldRewrite = true;
         } else if (name == "mouse_sensitivity") {
             if (*value >= kMinMouseSensitivity && *value <= kMaxMouseSensitivity)
                 settings.mouseSensitivity = *value;
+            else shouldRewrite = true;
+        } else if (name == "sound_volume") {
+            if (*value >= 0 && *value <= 100) settings.soundVolume = *value;
+            else shouldRewrite = true;
+        } else if (name == "initial_lives") {
+            if (*value >= 1 && *value <= 5) settings.initialLives = *value;
+            else shouldRewrite = true;
+        } else if (name == "initial_bombs") {
+            if (*value >= 0 && *value <= 3) settings.initialBombs = *value;
+            else shouldRewrite = true;
+        } else if (name == "best_score") {
+            if (*value >= 0 && *value <= 2000000000) settings.bestScore = *value;
             else shouldRewrite = true;
         } else if (name == "fps_limit") {
             if (IsSupportedFpsLimit(*value)) {
@@ -163,10 +175,14 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     if (!output) return false;
 
     output << "# Red Mist 3D local settings\n";
-    output << "version=2\n";
+    output << "version=3\n";
     output << "fps_limit=" << settings.fpsLimit << '\n';
     output << "music_volume=" << settings.musicVolume << '\n';
     output << "mouse_sensitivity=" << settings.mouseSensitivity << '\n';
+    output << "sound_volume=" << settings.soundVolume << '\n';
+    output << "initial_lives=" << settings.initialLives << '\n';
+    output << "initial_bombs=" << settings.initialBombs << '\n';
+    output << "best_score=" << settings.bestScore << '\n';
     for (const BindingField& field : kBindingFields) {
         output << field.name << '=' << settings.bindings.*(field.member) << '\n';
     }

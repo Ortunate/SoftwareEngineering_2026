@@ -1,226 +1,61 @@
-// 本文件负责实现第一面露米娅道中与关底战的移动、阶段和弹幕技能。
-
+// 本文件将新典原始脚本的 HP/超时回调接入公共 Boss 生命周期；不重新编写弹幕或移动路径。
 #include "stages/stage1/boss.hpp"
 #include "stages/stage1/ids.hpp"
-
-#include "gameplay/bullets/patterns.hpp"
-
-#include <algorithm>
-#include <array>
-#include <cmath>
-
 namespace redmist::stage1 {
-namespace {
-constexpr Color kRed{245, 76, 96, 255};
-constexpr Color kWhite{235, 228, 239, 255};
-constexpr Color kBlue{88, 108, 255, 255};
-constexpr Color kCyan{68, 230, 239, 255};
-constexpr Color kGreen{120, 235, 153, 255};
-constexpr std::array<float, 5> kMidbossX{3.0F, 0.0F, -3.0F, 0.0F, 3.0F};
-constexpr float kMidbossStep = 3.8F;
-constexpr float kCutInDuration = 2.6F;
-
-/// @brief 查询关底 Boss 指定阶段的超时时长。
-/// @param phase 从 1 开始的阶段序号。
-/// @return 阶段时长，单位为秒。
-float PhaseDuration(int phase) {
-    switch (phase) {
-        case 1: return 14.0F;
-        case 2: return 18.0F;
-        case 3: return 15.0F;
-        default: return 22.0F;
-    }
-}
-}
-
 void RumiaBoss::StartMidboss() {
-    visual = kRumia;
-    encounter_ = Encounter::Midboss;
-    active = true;
-    phase = 1;
-    position = {kMidbossX.front(), 2.0F, 7.2F};
-    health = maxHealth = 145.0F;
-    phaseTimer = moveClock = starRotation = 0.0F;
-    fireTimer = 0.9F;
+    encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
+    presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
+    script_.Reset(9,{192,-32,0},6000,1882);
+    script_.damageable=false;
+    position=script_.Position(); health=maxHealth=6000/kReferenceHealthUnit;
 }
-
 void RumiaBoss::StartFinalBoss() {
-    visual = kRumia;
-    encounter_ = Encounter::Final;
-    active = true;
-    phase = 1;
-    position = {0.0F, 2.5F, 7.2F};
-    health = maxHealth = 230.0F;
-    phaseTimer = moveClock = starRotation = 0.0F;
-    fireTimer = 0.8F;
+    encounter_=Encounter::Final; active=true; phase=1; retiring_=defeated_=false;
+    presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
+    script_.Reset(14,{192,96,0},7000,5093);
+    script_.damageable=false;
+    position=script_.Position(); health=maxHealth=7000/kReferenceHealthUnit;
 }
-
-bool RumiaBoss::Update(float deltaTime, Vector3 playerPosition,
-                       BulletSystem& bullets) {
-    if (!active) return false;
-    phaseTimer += deltaTime;
-    moveClock += deltaTime;
-    fireTimer -= deltaTime;
-
-    if (encounter_ == Encounter::Midboss) {
-        // 道中战按五个水平停留点往返，smoothstep 减少转向时的突变。
-        const float segment = std::min(moveClock / kMidbossStep, 4.0F);
-        const int index = std::min(static_cast<int>(segment), 3);
-        const float fraction = std::clamp(segment - static_cast<float>(index),
-                                          0.0F, 1.0F);
-        const float smooth = fraction * fraction * (3.0F - 2.0F * fraction);
-        position = {kMidbossX[index] +
-                        (kMidbossX[index + 1] - kMidbossX[index]) * smooth,
-                    2.0F + std::sin(moveClock * 1.1F) * 0.35F, 7.2F};
-        if (fireTimer <= 0.0F) {
-            FireAimedVolley(bullets, playerPosition);
-            fireTimer += 0.9F;
-        }
-        return phaseTimer >= 22.0F;
-    }
-
-    position = {std::sin(moveClock * 0.55F) * 2.15F,
-                2.5F + std::sin(moveClock * 0.75F) * 0.5F,
-                7.2F + std::sin(moveClock * 0.3F) * 0.35F};
-    if (fireTimer <= 0.0F) {
-        switch (phase) {
-            case 1:
-                FireAimedStream(bullets, playerPosition);
-                fireTimer += 0.22F;
-                break;
-            case 2:
-                CastNightBird(bullets, playerPosition);
-                fireTimer += 0.6F;
-                break;
-            case 3:
-                FireMoonlightBeam(bullets, playerPosition);
-                fireTimer += 0.75F;
-                break;
-            case 4:
-                CastDemarcation(bullets, playerPosition);
-                fireTimer += 0.65F;
-                break;
-            default: break;
-        }
-    }
-    return phaseTimer >= PhaseDuration(phase);
+bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
+    if(!active) return false;
+    presentation.Update(dt);
+    script_.health=health*kReferenceHealthUnit;
+    script_.Update(dt,player,bullets);
+    health=script_.health/kReferenceHealthUnit; maxHealth=script_.maxHealth/kReferenceHealthUnit;
+    position=script_.Position(); phaseTimer=script_.phaseFrames/60.0F;
+    return script_.pendingCallback>=0 || script_.finished;
 }
-
+bool RumiaBoss::ShouldAdvanceFromDamage() const {
+    return !retiring_ && (health<=0 || (!IsMidboss() && (phase==1 ? health<900/kReferenceHealthUnit :
+                                     phase==3 ? health<800/kReferenceHealthUnit : false)));
+}
 bool RumiaBoss::AdvancePhase() {
-    if (!active) return false;
-    if (encounter_ == Encounter::Midboss || phase >= 4) {
-        active = false;
-        phase = 0;
-        return false;
+    if(!active) return false;
+    // 玩家碰撞发生在脚本 Update 之后；回调必须看到本帧的新生命，而不是上一帧的副本。
+    script_.health=health*kReferenceHealthUnit;
+    if(script_.finished || (retiring_ && script_.pendingCallback==21)) {
+        active=false; phase=0; return false;
     }
-    ++phase;
-    phaseTimer = 0.0F;
-    starRotation = 0.0F;
-    switch (phase) {
-        case 2: health = maxHealth = 280.0F; break;
-        case 3: health = maxHealth = 230.0F; break;
-        case 4: health = maxHealth = 330.0F; break;
-        default: break;
+    if(script_.pendingCallback<0) {
+        if(IsMidboss())script_.pendingCallback=7;
+        else if(phase==1) { script_.pendingCallback=26; script_.health=900; }
+        else if(phase==2)script_.pendingCallback=19;
+        else if(phase==3) { script_.pendingCallback=29; script_.health=800; }
+        else script_.pendingCallback=20;
     }
-    // 符卡阶段先留出立绘与名称展示时间，再开始发弹。
-    fireTimer = SpellName() != nullptr ? kCutInDuration : 0.8F;
+    if(IsMidboss() || phase==4) { defeated_=health<=0; retiring_=true; }
+    else ++phase;
+    script_.SetDeathCallback(IsMidboss() ? 7 : phase<=2 ? 19 : 20);
+    // 小于 1/60 秒的帧可能还未执行回调首条 ins_105；准备期保护必须在交接时立即生效。
+    script_.damageable=false;
+    script_.Transition(); health=script_.health/kReferenceHealthUnit;
+    // 每张符卡继承前一非符的剩余 HP；HUD 在回调处重新以该阶段生命上限绘制。
+    if(phase==2 || phase==4)script_.maxHealth=script_.health;
+    maxHealth=script_.maxHealth/kReferenceHealthUnit; phaseTimer=0;
     return true;
 }
-
 const char* RumiaBoss::SpellName() const {
-    if (!active || encounter_ != Encounter::Final) return nullptr;
-    if (phase == 2) return "NIGHT SIGN  -  NIGHT BIRD";
-    if (phase == 4) return "BOUNDARY SIGN  -  DEMARCATION";
-    return nullptr;
+    if(!active || IsMidboss() || retiring_) return nullptr;
+    return phase==2 ? "夜符「Night Bird」" : phase==4 ? "暗符「Demarcation」" : nullptr;
 }
-
-void RumiaBoss::FireAimedVolley(BulletSystem& bullets,
-                                Vector3 playerPosition) {
-    const Vector3 muzzle = MuzzlePosition(playerPosition);
-    const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
-    pattern::ForEachConeDirection(axis, 2, 10, 0.42F, starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 3.25F), 0.15F, kRed,
-                          kRedBullet);
-        });
-    bullets.Spawn(BulletOwner::Enemy, muzzle, pattern::Scale(axis, 3.6F),
-                  0.14F, kWhite, kBlueBullet);
-    starRotation += 0.27F;
-}
-
-void RumiaBoss::FireAimedStream(BulletSystem& bullets,
-                                Vector3 playerPosition) {
-    const Vector3 muzzle = MuzzlePosition(playerPosition);
-    const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
-    bullets.Spawn(BulletOwner::Enemy, muzzle, pattern::Scale(axis, 5.2F),
-                  0.13F, kRed, kRedBullet);
-    if (static_cast<int>(phaseTimer * 4.5F) % 6 == 0) {
-        pattern::ForEachConeDirection(axis, 1, 8, 0.48F, starRotation,
-            [muzzle, &bullets](Vector3 direction) {
-                bullets.Spawn(BulletOwner::Enemy, muzzle,
-                              pattern::Scale(direction, 2.75F), 0.14F, kBlue,
-                              kBlueBullet);
-            });
-    }
-    starRotation += 0.23F;
-}
-
-void RumiaBoss::CastNightBird(BulletSystem& bullets,
-                              Vector3 playerPosition) {
-    const Vector3 muzzle = MuzzlePosition(playerPosition);
-    const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
-    pattern::ForEachConeDirection(axis, 2, 12, 0.75F, starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 2.4F), 0.15F, kBlue,
-                          kBlueBullet);
-        });
-    pattern::ForEachConeDirection(axis, 1, 10, 0.38F, -starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 3.0F), 0.14F, kCyan,
-                          kBlueBullet);
-        });
-    starRotation += 0.37F;
-}
-
-void RumiaBoss::FireMoonlightBeam(BulletSystem& bullets,
-                                  Vector3 playerPosition) {
-    const Vector3 muzzle = MuzzlePosition(playerPosition);
-    const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
-    for (int index = 0; index < 12; ++index) {
-        const Vector3 start = pattern::Add(muzzle,
-                                           pattern::Scale(axis, index * 0.32F));
-        bullets.Spawn(BulletOwner::Enemy, start, pattern::Scale(axis, 5.0F),
-                      0.16F, kBlue, kBlueBullet);
-    }
-    pattern::ForEachConeDirection(axis, 1, 8, 0.55F, starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 2.6F), 0.13F, kGreen,
-                          kGreenSphere);
-        });
-    starRotation += 0.22F;
-}
-
-void RumiaBoss::CastDemarcation(BulletSystem& bullets,
-                                Vector3 playerPosition) {
-    const Vector3 muzzle = MuzzlePosition(playerPosition);
-    const Vector3 axis = BulletSystem::DirectionTo(muzzle, playerPosition);
-    pattern::ForEachConeDirection(axis, 2, 18, 0.95F, starRotation,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 2.25F), 0.14F, kBlue,
-                          kBlueBullet);
-        });
-    pattern::ForEachConeDirection(axis, 1, 12, 0.52F, -starRotation * 0.8F,
-        [muzzle, &bullets](Vector3 direction) {
-            bullets.Spawn(BulletOwner::Enemy, muzzle,
-                          pattern::Scale(direction, 3.15F), 0.12F, kGreen,
-                          kGreenSphere);
-        });
-    starRotation += 0.3F;
-}
-
-}  // namespace redmist::stage1
+} // namespace redmist::stage1

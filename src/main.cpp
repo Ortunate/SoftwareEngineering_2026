@@ -1,6 +1,7 @@
 // 本文件负责初始化窗口与游戏循环，并处理静默截图等启动参数。
 
 #include "app/game.hpp"
+#include "platform/window_input.hpp"
 
 #include "raylib.h"
 
@@ -50,7 +51,8 @@ int main(int argc, char** argv) {
     if (argc >= 3 && std::string_view(argv[1]) == "--capture-stage") {
         captureFrame = true;
         captureStage = true;
-        captureStageTime = std::clamp(std::strtof(argv[2], nullptr), 0.0F, 180.0F);
+        // 原文对话自动等待与所有 Boss 超时约需 301 秒，截图范围须覆盖战后独白。
+        captureStageTime = std::clamp(std::strtof(argv[2], nullptr), 0.0F, 400.0F);
         if (argc >= 4) capturePath = argv[3];
         if (argc >= 5) captureYaw = std::strtof(argv[4], nullptr);
         if (argc >= 6) capturePitch = std::strtof(argv[5], nullptr);
@@ -77,6 +79,8 @@ int main(int argc, char** argv) {
     }
     SetConfigFlags(windowFlags);
     InitWindow(screenWidth, screenHeight, "Red Mist 3D - Stage 1 Normal Demo");
+    if (!redmist::DisableWindowInputMethods(GetWindowHandle()))
+        TraceLog(LOG_WARNING, "INPUT: Could not disable window input methods");
     if (!captureFrame) InitAudioDevice();
     SetExitKey(KEY_NULL);
     if (!captureFrame) SetWindowMinSize(900, 620);

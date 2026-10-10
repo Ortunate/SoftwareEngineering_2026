@@ -1,56 +1,28 @@
-// 本文件负责第一面的出怪、道中 Boss、对话与关底 Boss 时间轴。
-
+// 本文件将新典一面 60 Hz 出生表转换为时间轴；道中战期间时间继续走，到点的杂鱼由 Game 跳过。
 #include "stages/stage1/data.hpp"
-#include "stages/stage1/ids.hpp"
-
-#include <array>
-
+#include "stages/stage1/reference_births.hpp"
+#include "stages/stage1/reference_script.hpp"
+#include <vector>
 namespace redmist::stage1 {
 namespace {
-constexpr std::uint16_t A(Action action) { return static_cast<std::uint16_t>(action); }
-constexpr std::uint16_t E(EnemyType enemy) { return static_cast<std::uint16_t>(enemy); }
-constexpr StageEventId kMidbossEventId = 1;
-constexpr StageEventId kDialogueEventId = 2;
-constexpr StageEventId kFinalBossEventId = 3;
-
-// 普通波次相对上一事件启动；道中战及对话后的事件等待其真实结束。
-constexpr std::array<StageEvent, 21> kEvents{{
-    {0.2F, A(Action::ShowMessage)},
-    {0.8F, A(Action::SpawnLine), E(EnemyType::Fairy), 8,
-     {0.0F, 1.2F, 8.8F}, 1.15F},
-    {3.5F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 8},
-    {3.5F, A(Action::SpawnLine), E(EnemyType::DarkFairy), 6,
-     {0.0F, 2.0F, 8.8F}, 1.5F},
-    {3.5F, A(Action::SpawnCrossingPair), E(EnemyType::DarkFairy), 6},
-    {3.5F, A(Action::SpawnLine), E(EnemyType::Fairy), 8,
-     {0.0F, -0.5F, 8.8F}, 1.2F},
-    {3.5F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 8},
-    {3.5F, A(Action::SpawnLine), E(EnemyType::Fairy), 10,
-     {0.0F, 1.5F, 8.8F}, 1.0F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 10},
-    {.time = 4.0F, .action = A(Action::StartMidboss), .id = kMidbossEventId},
-    {.time = 3.0F, .action = A(Action::SpawnLine),
-     .archetype = E(EnemyType::DarkFairy), .count = 6,
-     .center = {0.0F, 1.2F, 8.7F}, .spacing = 1.5F,
-     .afterEndOf = kMidbossEventId},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::DarkFairy), 8},
-    {4.0F, A(Action::SpawnLine), E(EnemyType::DarkFairy), 7,
-     {0.0F, -0.8F, 8.8F}, 1.25F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::DarkFairy), 8},
-    {5.0F, A(Action::SpawnLine), E(EnemyType::Fairy), 10,
-     {0.0F, 1.2F, 8.8F}, 1.0F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 10},
-    {4.0F, A(Action::SpawnLine), E(EnemyType::Fairy), 10,
-     {0.0F, -1.0F, 8.8F}, 1.0F},
-    {4.0F, A(Action::SpawnCrossingPair), E(EnemyType::Fairy), 10},
-    {4.0F, A(Action::SpawnLine), E(EnemyType::Fairy), 8,
-     {0.0F, 1.2F, 8.8F}, 1.2F},
-    {.time = 4.0F, .action = A(Action::StartDialogue), .id = kDialogueEventId},
-    {.time = 0.0F, .action = A(Action::StartFinalBoss),
-     .id = kFinalBossEventId, .afterEndOf = kDialogueEventId},
-}};
-
- }  // namespace
-
+const std::vector<StageEvent> kEvents = [] {
+    std::vector<StageEvent> events;
+    bool midbossAdded=false;
+    for (const auto& birth:reference::kBirths) {
+        if(!midbossAdded && birth.frame>1882) {
+            events.push_back({.atFrame=1882,.action=StartBoss{},.id=1});
+            midbossAdded=true;
+        }
+        ReferenceEnemyParams params{ReferencePosition({birth.x==-999 ? 192 : birth.x,-32,0}),
+            birth.sub,birth.mirrored,birth.x==-999,birth.health,birth.score,
+            static_cast<unsigned>(birth.frame*31+events.size()),birth.item};
+        events.push_back({.atFrame=birth.frame,.action=SpawnEnemies{params,1,0}});
+    }
+    events.push_back({.atFrame=5092,.action=StartDialogue{},.id=2});
+    events.push_back({.action=StartBoss{BossEncounter::Final},.id=3,.afterEndOf=2});
+    events.push_back({.action=StartDialogue{true},.id=4,.afterEndOf=3});
+    return events;
+}();
+}
 std::span<const StageEvent> Stage1Timeline() { return kEvents; }
-}  // namespace redmist::stage1
+} // namespace redmist::stage1

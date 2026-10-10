@@ -3,6 +3,7 @@
 #pragma once
 
 #include "gameplay/bullets/system.hpp"
+#include "gameplay/effects/actor_effects.hpp"
 
 namespace redmist {
 
@@ -12,14 +13,15 @@ public:
     /// @brief 通过基类指针安全销毁具体 Boss。
     virtual ~Boss() = default;
     /// @brief 推进当前阶段的移动与攻击。
+    /// 子类同时推进 presentation；只在整场遭遇启动时重置视觉时钟。
     /// @param deltaTime 本帧经过的秒数。
     /// @param playerPosition 玩家判定中心。
     /// @param bullets 接收技能弹幕的系统。
-    /// @return 当前阶段到达时间上限时返回 true。
+    /// @return 到达生命/时间回调或脚本结束时返回 true，调用方需执行 AdvancePhase。
     virtual bool Update(float deltaTime, Vector3 playerPosition,
                         BulletSystem& bullets) = 0;
     /// @brief 当前阶段结束后尝试进入下一阶段。
-    /// @return 成功进入下一阶段返回 true；退场或战斗结束返回 false。
+    /// @return 演员仍需继续更新（下一阶段或退场）时返回 true；整场结束返回 false。
     virtual bool AdvancePhase() = 0;
     /// @brief 查询当前阶段需要展示的符卡名。
     /// @return 符卡名指针；非符卡阶段返回 nullptr。
@@ -29,7 +31,23 @@ public:
     /// @brief HUD 中展示的 Boss 名称。
     [[nodiscard]] virtual const char* DisplayName() const = 0;
 
+    /// @brief 当前准备/退场期是否接受玩家弹和 Bomb 伤害。
+    [[nodiscard]] virtual bool CanTakeDamage() const { return true; }
+    /// @brief 生命耗尽或达到下一阶段阈值时返回 true；Game 统一清弹并调用 AdvancePhase。
+    [[nodiscard]] virtual bool ShouldAdvanceFromDamage() const { return health <= 0; }
+    /// @brief 当前阶段原始时间上限（秒）；负值表示退场或无计时阶段。
+    [[nodiscard]] virtual float TimeLimit() const { return -1; }
+    /// @brief 接收关卡自适应难度值 10…32；普通演员默认忽略，原作脚本演员用于弹速/弹数。
+    virtual void SetChallengeRank(int) {}
+    /// @brief 借用本帧脚本产生的音效编号；下次更新失效，普通演员返回空表。
+    [[nodiscard]] virtual std::span<const int> SoundEvents() const { return {}; }
+    /// @brief 借用本帧脚本要求散落的道具数量；调用方按当前玩家 Power 决定 P 点或点数。
+    [[nodiscard]] virtual std::span<const int> DropEvents() const { return {}; }
+    /// @brief 整场退场是由击破触发还是超时触发；退场结束后仍保留结果。
+    [[nodiscard]] virtual bool Defeated() const { return health <= 0; }
     bool active = false;
+    /// @brief 整场遭遇的视觉时钟；阶段切换不能重置入场。
+    ActorPresentation presentation{ActorKind::Boss};
     VisualId visual = kInvalidVisualId;
     Vector3 position{0.0F, 2.0F, 7.2F};
     float health = 0.0F;

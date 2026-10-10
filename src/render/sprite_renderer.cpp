@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace redmist {
 namespace {
@@ -101,23 +102,84 @@ const VisualResource& FindVisual(std::span<const VisualResource> visuals,
     return id < visuals.size() ? visuals[id] : empty;
 }
 
+/// @brief 用相机平面中的实心圆环提供入退场光效；不依赖额外纹理。
+void DrawActorRing(const Camera3D& camera, Vector3 up, Vector3 position,
+                   float radius, Color color) {
+    const Vector3 right = Normalized(Cross(
+        Normalized(Subtract(camera.target, camera.position)), up));
+    const auto point = [&](float angle, float size) {
+        const float x = std::cos(angle) * size;
+        const float y = std::sin(angle) * size;
+        return Vector3{position.x + right.x * x + up.x * y,
+                       position.y + right.y * x + up.y * y,
+                       position.z + right.z * x + up.z * y};
+    };
+    constexpr int segments = 48;
+    for (int i = 0; i < segments; ++i) {
+        const float a = 2.0F * std::numbers::pi_v<float> * i / segments;
+        const float b = 2.0F * std::numbers::pi_v<float> * (i + 1) / segments;
+        const Vector3 outerA = point(a, radius), outerB = point(b, radius);
+        const Vector3 innerA = point(a, radius * 0.92F), innerB = point(b, radius * 0.92F);
+        DrawTriangle3D(outerA, outerB, innerA, color);
+        DrawTriangle3D(innerA, outerB, innerB, color);
+    }
+}
+
+/// @brief 在三维球面分布爆散粒子，远近观察均有体积；progress 为 [0,1]。
+void DrawActorBurst(Vector3 position, float radius, float progress, Color color,
+                    ActorKind kind) {
+    const int count = kind == ActorKind::Boss ? 24 : 12;
+    for (int i = 0; i < count; ++i) {
+        const float y = 1.0F - 2.0F * (i + 0.5F) / count;
+        const float horizontal = std::sqrt(1.0F - y * y);
+        const float angle = i * 2.39996323F;
+        const float distance = radius * (0.4F + progress * 4.0F);
+        // 远景粒子只占几像素，低细分避免整池击破时放大几何开销。
+        DrawSphereEx({position.x + horizontal * std::cos(angle) * distance,
+                      position.y + y * distance,
+                      position.z + horizontal * std::sin(angle) * distance},
+                     radius * 0.10F * (1.0F - progress), 4, 6, color);
+    }
+    // 很短的中心闪光衔接受击，之后只剩扩散的环与粒子。
+    if (progress < 0.2F)
+        DrawSphereEx(position, radius * 0.6F * (1.0F - progress / 0.2F), 8, 12, color);
+}
+
 }  // namespace
 
 void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                           std::span<const Enemy*> enemies, const Boss* boss,
                           std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
-                          const SpriteShaders& shaders) const {
+                          const SpriteShaders& shaders,
+                          const ActorEffectSystem& effects) const {
     const Vector3 screenUp = ScreenUp(camera);
     bulletGroups_.resize(visuals.size());
     for (auto& group : bulletGroups_) group.clear();
     translucentPlayerBullets_.clear();
+    translucentActors_.clear();
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+        if (bullet.beamLength > 0) return;
         if (bullet.visual < bulletGroups_.size()) {
             bulletGroups_[bullet.visual].push_back(&bullet);
             if (bullet.owner == BulletOwner::Player &&
                 visuals[bullet.visual].mode == VisualMode::Bullet)
                 translucentPlayerBullets_.push_back(&bullet);
+        }
+    });
+
+    // 光束亮芯和判定共用轴线；原作预警最后 30 帧开始展开，但命中仍等待 hitboxStartTime。
+    bullets.Pool().ForEachActive([](const Bullet& bullet) {
+        if (bullet.beamLength <= 0) return;
+        const auto end = bullet.BeamEnd();
+        const float width=bullet.radius*bullet.BeamVisualScale();
+        if (!bullet.Dangerous() && bullet.beamGrowSeconds<=0) {
+            DrawLine3D(bullet.position, end, Fade(bullet.color, 0.7F));
+            DrawCylinderWiresEx(bullet.position, end, bullet.radius * 0.3F,
+                                bullet.radius * 0.3F, 6, Fade(bullet.color, 0.4F));
+        } else {
+            DrawCylinderEx(bullet.position, end, width * 0.45F,
+                           width * 0.45F, 10, WHITE);
         }
     });
 
@@ -148,19 +210,27 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     if (hasBulletShader) EndShaderMode();
 
     if (hasCutoutShader) BeginShaderMode(shaders.cutout);
-    for (const Enemy* enemy : enemies) {
-        const VisualResource& visual = FindVisual(visuals, enemy->visual);
+    const auto drawActor = [&](Vector3 position, VisualId id, float hitRadius,
+                               ActorKind kind, ActorAppearance appearance) {
+        // 第一人称穿过近处角色时逐渐淡去贴图，避免巨幅裙摆遮住整屏弹幕；判定不变。
+        const float nearOpacity = std::clamp((std::sqrt(DistanceSquared(position, camera.position)) - 0.6F) / 1.2F, 0.0F, 1.0F);
+        appearance.alpha *= nearOpacity;
+        if (appearance.alpha < 0.999F || appearance.ringAlpha > 0.001F) {
+            translucentActors_.push_back({position, id, hitRadius, kind, appearance});
+            return;
+        }
+        const VisualResource& visual = FindVisual(visuals, id);
         if (IsTextureValid(visual.texture))
-            DrawSprite(camera, screenUp, Spec(visual, visual.worldHeight),
-                       enemy->position);
-        else DrawSphere(enemy->position, enemy->hitRadius, SKYBLUE);
+            DrawSprite(camera, screenUp, Spec(visual, visual.worldHeight), position);
+        else DrawSphere(position, hitRadius, kind == ActorKind::Boss ? RED : SKYBLUE);
+    };
+    for (const Enemy* enemy : enemies) {
+        drawActor(enemy->position, enemy->visual, enemy->hitRadius,
+                  ActorKind::Enemy, enemy->presentation.Sample());
     }
     if (boss && boss->active) {
-        const VisualResource& visual = FindVisual(visuals, boss->visual);
-        if (IsTextureValid(visual.texture))
-            DrawSprite(camera, screenUp, Spec(visual, visual.worldHeight),
-                       boss->position);
-        else DrawSphere(boss->position, boss->hitRadius, RED);
+        drawActor(boss->position, boss->visual, boss->hitRadius,
+                  ActorKind::Boss, boss->presentation.Sample());
     }
     for (const PickupSprite& pickup : pickups) {
         const VisualResource& visual = FindVisual(visuals, pickup.visual);
@@ -170,17 +240,57 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         else DrawSphere(pickup.position, height * 0.35F, RED);
     }
     if (hasCutoutShader) EndShaderMode();
+    effects.Pool().ForEachActive([&](const ActorExitEffect& effect) {
+        translucentActors_.push_back({effect.position, effect.visual, effect.hitRadius,
+                                      effect.kind, effect.Sample()});
+    });
 
-    // 玩家符卡保留贴图及 tint 的透明度；从远到近混合且不写入深度。
+    // 玩家符卡与过渡角色保留连续透明度；分别排序后合并为同一远近序列。
     std::sort(translucentPlayerBullets_.begin(), translucentPlayerBullets_.end(),
               [&camera](const Bullet* left, const Bullet* right) {
                   return DistanceSquared(left->position, camera.position) >
                          DistanceSquared(right->position, camera.position);
               });
+    std::sort(translucentActors_.begin(), translucentActors_.end(),
+              [&camera](const ActorSprite& left, const ActorSprite& right) {
+                  return DistanceSquared(left.position, camera.position) >
+                         DistanceSquared(right.position, camera.position);
+              });
     rlDrawRenderBatchActive();
     rlDisableDepthMask();
+    rlDisableBackfaceCulling();
     BeginBlendMode(BLEND_ALPHA);
+    const auto drawTransparentActor = [&](const ActorSprite& actor) {
+        const ActorAppearance& appearance = actor.appearance;
+        const VisualResource& visual = FindVisual(visuals, actor.visual);
+        const unsigned char opacity = static_cast<unsigned char>(appearance.alpha * 255.0F);
+        if (opacity != 0) {
+            if (IsTextureValid(visual.texture))
+                DrawSprite(camera, screenUp,
+                           Spec(visual, visual.worldHeight * appearance.scale),
+                           actor.position, Color{255, 255, 255, opacity});
+            else DrawSphere(actor.position, actor.hitRadius * appearance.scale,
+                            Fade(SKYBLUE, appearance.alpha));
+        }
+        const Color color = appearance.burstAlpha > 0.0F ? GOLD
+            : actor.kind == ActorKind::Boss ? Color{230, 140, 255, 255}
+                                          : Color{150, 215, 255, 255};
+        if (appearance.ringAlpha > 0.001F)
+            DrawActorRing(camera, screenUp, actor.position,
+                          actor.hitRadius * appearance.ringRadius,
+                          Fade(color, appearance.ringAlpha));
+        if (appearance.burstAlpha > 0.001F)
+            DrawActorBurst(actor.position, actor.hitRadius, appearance.burst,
+                           Fade(color, appearance.burstAlpha), actor.kind);
+    };
+    // 淡入淡出角色、退场快照与玩家透明弹合并远近顺序，不写深度；
+    // 默认 shader 保留连续 alpha，不能让 cutout 的阈值截断淡出尾部。
+    std::size_t actorIndex = 0;
     for (const Bullet* bullet : translucentPlayerBullets_) {
+        while (actorIndex < translucentActors_.size() &&
+               DistanceSquared(translucentActors_[actorIndex].position, camera.position) >
+               DistanceSquared(bullet->position, camera.position))
+            drawTransparentActor(translucentActors_[actorIndex++]);
         const VisualResource& visual = visuals[bullet->visual];
         if (!IsTextureValid(visual.texture) ||
             DistanceSquared(bullet->position, camera.position) < 0.7F * 0.7F)
@@ -189,13 +299,29 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                    Spec(visual, bullet->radius * visual.bulletDiameterScale),
                    bullet->position, Color{255, 255, 255, bullet->color.a});
     }
+    while (actorIndex < translucentActors_.size())
+        drawTransparentActor(translucentActors_[actorIndex++]);
     EndBlendMode();
     rlDrawRenderBatchActive();
     rlEnableDepthMask();
+    rlEnableBackfaceCulling();
 
     // 光晕只做视觉叠加，不写深度以免遮挡后续透明层；每种外观最多绘制 2048 个近景光晕。
     rlDisableDepthMask();
     BeginBlendMode(BLEND_ADDITIVE);
+    bullets.Pool().ForEachActive([](const Bullet& bullet) {
+        if (bullet.beamLength > 0 && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
+            // 色壳在亮芯之后叠加，不能用不透明外柱挡住内部白芯；镜头进入光束也可见。
+            rlDisableBackfaceCulling();
+            const float width=bullet.radius*bullet.BeamVisualScale();
+            DrawCylinderEx(bullet.position, bullet.BeamEnd(), width,
+                           width, 12, Fade(bullet.color, 0.7F));
+            DrawCylinderEx(bullet.position, bullet.BeamEnd(), width * 1.5F,
+                           width * 1.5F, 12, Fade(bullet.color, 0.2F));
+            rlDrawRenderBatchActive();
+            rlEnableBackfaceCulling();
+        }
+    });
     constexpr float glowDistanceSquared = 8.0F * 8.0F;
     for (std::size_t id = 0; id < visuals.size(); ++id) {
         const VisualResource& visual = visuals[id];
@@ -234,6 +360,11 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
     int shownBullets = 0;
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         if (shownBullets++ >= 256) return;
+        if (bullet.beamLength > 0) {
+            DrawCylinderWiresEx(bullet.position, bullet.BeamEnd(), bullet.radius, bullet.radius,
+                                10, Color{255, 230, 90, 230});
+            return;
+        }
         DrawSphereWires(bullet.position, bullet.radius, 7, 10,
                         Color{255, 230, 90, 230});
     });

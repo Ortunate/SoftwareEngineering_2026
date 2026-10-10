@@ -1,10 +1,8 @@
-// 本文件负责定义第一面局部使用的外观、敌人、编队和事件编号。
+// 本文件负责定义第一面局部使用的外观编号。
 
 #pragma once
 
 #include "resources/visual_assets.hpp"
-
-#include <cstdint>
 
 namespace redmist::stage1 {
 
@@ -26,20 +24,5 @@ constexpr VisualId kPowerPoint = 10;
 constexpr VisualId kScorePoint = 11;
 /// @brief 满火力清弹产生的星点公告板贴图编号。
 constexpr VisualId kStarPoint = 12;
-
-/// @brief 传给 Stage1Content::CreateEnemy 的第一面局部敌人原型编号。
-enum class EnemyType : std::uint16_t { Fairy, DarkFairy, Orb };
-/// @brief 关卡编队形状；具体敌人内部决定如何沿该编队移动。
-enum class Formation : std::uint16_t { Line, Star, CrossingPair };
-/// @brief Stage1Content::HandleEvent 解释的第一面局部动作编号。
-enum class Action : std::uint16_t {
-    ShowMessage,
-    SpawnLine,
-    SpawnStarFormation,
-    SpawnCrossingPair,
-    StartMidboss,
-    StartDialogue,
-    StartFinalBoss,
-};
 
 }  // namespace redmist::stage1

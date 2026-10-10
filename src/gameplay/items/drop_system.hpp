@@ -35,6 +35,7 @@ struct Pickup {
 
 /// @brief 本帧拾取所得，由 Game 应用到玩家和分数状态。
 struct PickupReward {
+    int pointItems = 0; // 本次拾取的普通蓝色点数道具数量，不包含清弹星点。
     int power = 0;
     long long score = 0;
 };
@@ -62,10 +63,16 @@ public:
     /// @note 单次生成每种道具最多 32 个，池满时多余道具被丢弃。
     void SpawnEnemyDrops(Vector3 position,
                          std::span<const DropOutcome> distribution);
-    /// @brief 暂时保留道中 Boss 的固定大 P 点奖励；Boss 专属掉落规则留待后续实现。
+    /// @brief 为调试或自定义关卡生成单个给定 Power 值的 P 点。
     /// @param position 退场位置，使用世界坐标。
     /// @param power 增加的 Power 点数；非正值不生成。
     void SpawnFixedPower(Vector3 position, int power);
+    /// @brief 原作敌人掉落；item=0 固定小 P，-1 每三次击破按 32 项表轮换；其他值不生成。
+    /// 满 Power 时生成点数；计数属于整关，Clear 随机初始化两个表偏移。
+    void SpawnReferenceDrop(Vector3 position, int item, bool fullPower);
+    /// @brief 执行 ins_119；count 限制在 0…32，未满 Power 时首个大 P（8），其余小 P（1）。
+    /// 散落范围为 X/Z 各 ±72 原作像素，Y 保持敌人高度，满 Power 时全部转为点数。
+    void SpawnReferenceBurst(Vector3 position, int count, bool fullPower);
     /// @brief 将当前全部活动敌弹在原位置转成立即追踪玩家的星点，保留玩家弹。
     /// @param bullets 借用的弹幕系统；转换的敌弹失活，不再参与碰撞。
     /// @note 不受普通道具池容量限制，已有星点也会继续追踪。
@@ -95,6 +102,7 @@ private:
     // 星点使用可增长容器，确保弹幕池满或普通道具池满时也能逐弹转换；拾取/清场后回收。
     std::vector<Pickup> stars_;
     std::mt19937 random_;
+    unsigned referenceDropIndex_ = 0, referenceItemIndex_ = 0;
 };
 
 }  // namespace redmist

@@ -3,6 +3,8 @@
 #include "app/game.hpp"
 #include "app/constants.hpp"
 #include "config/settings.hpp"
+#include "render/menu_layout.hpp"
+#include "stages/stage1/content.hpp"
 
 #include <algorithm>
 #include <array>
@@ -11,52 +13,124 @@
 namespace redmist {
 
 void Game::UpdateMainMenu() {
-#ifdef RED_MIST_DEBUG_FEATURES
-    constexpr int itemCount = 4;
-#else
-    constexpr int itemCount = 3;
-#endif
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-        selectedMenuItem_ = (selectedMenuItem_ + itemCount - 1) % itemCount;
+    const bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
+    if (titleIntro_) {
+        if (confirm || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            titleIntro_ = false;
+            assets_.PlaySoundEffect("menu_confirm");
+        }
+        return;
     }
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-        selectedMenuItem_ = (selectedMenuItem_ + 1) % itemCount;
+    constexpr int itemCount = menu::kTitleRowCount;
+    const int previous = selectedMenuItem_;
+    const auto available = [](int index) { return index != 1 && index != 4; };
+    int offset = 0;
+    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) offset = -1;
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) offset = 1;
+    if (offset != 0) {
+        do { selectedMenuItem_ = (selectedMenuItem_ + itemCount + offset) % itemCount; }
+        while (!available(selectedMenuItem_));
     }
-
-    const float centerX = static_cast<float>(GetScreenWidth()) * 0.5F;
-#ifdef RED_MIST_DEBUG_FEATURES
-    const float startY = static_cast<float>(GetScreenHeight()) * 0.5F + 10.0F;
-#else
-    const float startY = static_cast<float>(GetScreenHeight()) * 0.5F + 50.0F;
-#endif
+    if (IsKeyPressed(KEY_ESCAPE)) selectedMenuItem_ = 9;
+    const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), itemCount);
     const Vector2 mouse = GetMousePosition();
-    bool hoveringItem = false;
+    const Vector2 movement = GetMouseDelta();
+    bool hovered = false;
     for (int index = 0; index < itemCount; ++index) {
-        const Rectangle button{centerX - 170.0F,
-                               startY + static_cast<float>(index) * 70.0F,
-                               340.0F, 52.0F};
-        if (CheckCollisionPointRec(mouse, button)) {
-            selectedMenuItem_ = index;
-            hoveringItem = true;
+        if (available(index) && CheckCollisionPointRec(mouse, layout.Row(index))) {
+            hovered = true;
+            if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                selectedMenuItem_ = index;
         }
     }
-
-    const bool mouseConfirmed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                                hoveringItem;
-    const bool confirmed = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
-                           mouseConfirmed;
-    if (confirmed && selectedMenuItem_ == 0) {
-        StartRun();
-    } else if (confirmed && selectedMenuItem_ == 1) {
-        OpenOptions();
+    if (selectedMenuItem_ != previous) assets_.PlaySoundEffect("menu_move");
+    if (!confirm && !(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) return;
+    assets_.PlaySoundEffect("menu_confirm");
+    switch (selectedMenuItem_) {
+        case 0:
+        case 2:
+        case 3:
+            practiceMode_ = selectedMenuItem_ != 0;
+            spellPractice_ = selectedMenuItem_ == 3;
+            setupStep_ = spellPractice_ ? 3 : 0;
+            challengeMode_ = false;
+            state_ = RunState::StartSetup;
+            break;
+        case 5: state_ = RunState::Score; break;
+        case 6: {
+            // 音乐页借用 Stage 1 的流，离开时 EnterMainMenu 统一停止并释放。
+            stage1::Stage1Content content;
+            assets_.LoadStage(content.Assets());
+            selectedTrack_ = 0;
+            state_ = RunState::MusicRoom;
+            break;
+        }
+        case 7: state_ = RunState::Credit; break;
+        case 8: OpenOptions(); break;
+        case 9: shouldQuit_ = true; break;
 #ifdef RED_MIST_DEBUG_FEATURES
-    } else if (confirmed && selectedMenuItem_ == 2) {
-        StartShotTest();
-    } else if (confirmed && selectedMenuItem_ == 3) {
-#else
-    } else if (confirmed && selectedMenuItem_ == 2) {
+        case 10: practiceMode_ = true; spellPractice_ = false; StartShotTest(); break;
 #endif
-        shouldQuit_ = true;
+        default: break;
+    }
+}
+
+void Game::UpdateMenuPage() {
+    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+    const auto clicked = [&](Rectangle bounds) {
+        return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), bounds);
+    };
+    const bool back = IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X) ||
+                      clicked(canvas.Rect(70, 675, 170, 42));
+    if (back) {
+        assets_.PlaySoundEffect("menu_cancel");
+        if (state_ == RunState::StartSetup && setupStep_ > 0 && setupStep_ < 3) --setupStep_;
+        else { EnterMainMenu(); titleIntro_ = false; }
+        return;
+    }
+    int direction = 0;
+    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_LEFT)) direction = -1;
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT)) direction = 1;
+    bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
+                   clicked(canvas.Rect(775, 675, 250, 42));
+    if (state_ == RunState::StartSetup) {
+        if (setupStep_ > 0) {
+            for (int index = 0; index < 2; ++index) {
+                if (clicked(canvas.Rect(640, 300 + index * 125, 385, 105))) {
+                    if (setupStep_ == 1) selectedShot_ = index;
+                    else if (setupStep_ == 2) challengeMode_ = index == 1;
+                    else practicePhase_ = index == 0 ? 2 : 4;
+                    assets_.PlaySoundEffect("menu_move");
+                }
+            }
+            if (direction != 0) {
+                if (setupStep_ == 1) selectedShot_ = 1 - selectedShot_;
+                else if (setupStep_ == 2) challengeMode_ = !challengeMode_;
+                else practicePhase_ = practicePhase_ == 2 ? 4 : 2;
+                assets_.PlaySoundEffect("menu_move");
+            }
+        }
+        if (confirm) {
+            assets_.PlaySoundEffect("menu_confirm");
+            if (setupStep_ < 2) ++setupStep_;
+            else StartRun();
+        }
+    } else if (state_ == RunState::MusicRoom) {
+        if (direction != 0) {
+            selectedTrack_ = (selectedTrack_ + 3 + direction) % 3;
+            assets_.PlaySoundEffect("menu_move");
+        }
+        for (int index = 0; index < 3; ++index) {
+            if (clicked(canvas.Rect(280, 260 + index * 95, 680, 70))) {
+                selectedTrack_ = index;
+                confirm = true;
+            }
+        }
+        if (confirm) {
+            if (selectedTrack_ == 0) assets_.PlayMenuMusic();
+            else if (selectedTrack_ == 1) assets_.PlayStageMusic();
+            else assets_.PlayBossMusic();
+        }
     }
 }
 
@@ -66,10 +140,12 @@ void Game::UpdateOptions() {
         return;
     }
 
-    constexpr int itemCount = 5;
-    if (IsKeyPressed(KEY_ESCAPE)) {
+    constexpr int itemCount = menu::kOptionsCount;
+    const int previous = selectedOption_;
+    if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)) {
+        assets_.PlaySoundEffect("menu_cancel");
         state_ = RunState::MainMenu;
-        selectedMenuItem_ = 1;
+        selectedMenuItem_ = 8;
         return;
     }
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
@@ -77,42 +153,58 @@ void Game::UpdateOptions() {
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
         selectedOption_ = (selectedOption_ + 1) % itemCount;
 
-    const float centerX = GetScreenWidth() * 0.5F;
+    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
     const Vector2 mouse = GetMousePosition();
     const Vector2 movement = GetMouseDelta();
     bool hoveringItem = false;
     // 鼠标静止时不抢回键盘选择；点击仍可以直接选择当前指向的行。
     for (int index = 0; index < itemCount; ++index) {
-        Rectangle row{centerX - 270.0F, kOptionsTop + index * kOptionsSpacing, 540.0F, 50.0F};
+        const Rectangle row = menu::OptionRow(canvas, index);
         if (CheckCollisionPointRec(mouse, row)) {
             hoveringItem = true;
             if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 selectedOption_ = index;
         }
     }
-    if (selectedOption_ < kBindingsOptionIndex) {
+    if (selectedOption_ < menu::kNumericOptions) {
         if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) AdjustOption(-1);
         else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) AdjustOption(1);
     }
     const bool mouseConfirmed = hoveringItem && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-    if (!IsKeyPressed(KEY_ENTER) && !mouseConfirmed) return;
-    if (selectedOption_ < kBindingsOptionIndex) {
+    if (selectedOption_ != previous) assets_.PlaySoundEffect("menu_move");
+    if (!IsKeyPressed(KEY_ENTER) && !IsKeyPressed(KEY_Z) && !mouseConfirmed) return;
+    if (selectedOption_ < menu::kNumericOptions) {
         // 绘制与命中测试共用按钮矩形；点击标签、数值或行内空白只选择，不调整。
         if (mouseConfirmed) {
             for (const int direction : {-1, 1}) {
-                if (CheckCollisionPointRec(mouse, OptionArrowBounds(centerX, selectedOption_, direction)))
+                if (CheckCollisionPointRec(mouse, menu::OptionArrow(canvas, selectedOption_, direction)))
                     AdjustOption(direction);
             }
         } else {
             AdjustOption(1);
         }
-    } else if (selectedOption_ == kBindingsOptionIndex) {
+    } else if (selectedOption_ == menu::kBindingsIndex) {
+        assets_.PlaySoundEffect("menu_confirm");
         optionsPage_ = OptionsPage::KeyBindings;
         selectedBinding_ = 0;
         waitingForBinding_ = false;
+    } else if (selectedOption_ == menu::kResetIndex) {
+        const GameSettings defaults;
+        bindings_ = defaults.bindings;
+        fpsLimitIndex_ = 1;
+        musicVolume_ = defaults.musicVolume;
+        mouseSensitivity_ = defaults.mouseSensitivity;
+        soundVolume_ = defaults.soundVolume;
+        initialLives_ = defaults.initialLives;
+        initialBombs_ = defaults.initialBombs;
+        SetTargetFPS(60);
+        assets_.SetMusicVolumePercent(musicVolume_);
+        assets_.SetSoundVolumePercent(soundVolume_);
+        SaveSettings();
+        assets_.PlaySoundEffect("menu_confirm");
     } else {
         state_ = RunState::MainMenu;
-        selectedMenuItem_ = 1;
+        selectedMenuItem_ = 8;
     }
 }
 
@@ -127,7 +219,7 @@ void Game::UpdateKeyBindings() {
         if (!bindingCaptureReady_) {
             // 清空进入弹窗时的旧键盘队列，所有鼠标键释放后才开始收集新输入。
             while (GetKeyPressed() != KEY_NULL) {}
-            bool held = IsKeyDown(KEY_ENTER);
+            bool held = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_Z);
             for (int button = MOUSE_BUTTON_LEFT; button <= MOUSE_BUTTON_BACK; ++button)
                 held = held || IsMouseButtonDown(button);
             bindingCaptureReady_ = !held;
@@ -146,7 +238,7 @@ void Game::UpdateKeyBindings() {
 
     if (IsKeyPressed(KEY_ESCAPE)) {
         optionsPage_ = OptionsPage::General;
-        selectedOption_ = kBindingsOptionIndex;
+        selectedOption_ = menu::kBindingsIndex;
         return;
     }
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
@@ -183,7 +275,7 @@ void Game::UpdateKeyBindings() {
 
     const bool mouseConfirmed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
                                 hoveringItem;
-    const bool confirmed = IsKeyPressed(KEY_ENTER) || mouseConfirmed;
+    const bool confirmed = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_Z) || mouseConfirmed;
     if (!confirmed) return;
 
     if (selectedBinding_ < bindingCount) {
@@ -194,7 +286,7 @@ void Game::UpdateKeyBindings() {
         SaveSettings();
     } else {
         optionsPage_ = OptionsPage::General;
-        selectedOption_ = kBindingsOptionIndex;
+        selectedOption_ = menu::kBindingsIndex;
     }
 }
 
@@ -214,6 +306,12 @@ void Game::AdjustOption(int offset) {
         mouseSensitivity_ = std::clamp(mouseSensitivity_ + offset * 10,
                                      kMinMouseSensitivity, kMaxMouseSensitivity);
     }
+    if (selectedOption_ == 3) {
+        soundVolume_ = std::clamp(soundVolume_ + offset * 5, 0, 100);
+        assets_.SetSoundVolumePercent(soundVolume_);
+    } else if (selectedOption_ == 4) initialLives_ = std::clamp(initialLives_ + offset, 1, 5);
+    else if (selectedOption_ == 5) initialBombs_ = std::clamp(initialBombs_ + offset, 0, 3);
+    assets_.PlaySoundEffect("menu_move");
     SaveSettings();
 }
 
@@ -231,6 +329,11 @@ void Game::UpdatePlayer(float deltaTime) {
         .fire = BindingDown(bindings_.fire) || BindingDown(bindings_.fireAlt),
         .bomb = BindingPressed(bindings_.bomb) || BindingPressed(bindings_.bombAlt),
     };
+    shotSoundTimer_ = std::max(0.0F, shotSoundTimer_ - deltaTime);
+    if (input.fire && !dialogueActive_ && shotSoundTimer_ <= 0) {
+        assets_.PlaySoundEffect("shoot");
+        shotSoundTimer_ = 0.10F;
+    }
     if (player_.Update(deltaTime, input, bullets_,
                        stageContent_->PlayerBulletVisual(),
                        stageContent_->PlayerHomingVisual(), !dialogueActive_)) {

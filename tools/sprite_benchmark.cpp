@@ -19,11 +19,12 @@ double DrawFrames(redmist::SpriteRenderer& renderer,
                   const redmist::SpriteShaders& shaders,
                   const Camera3D& camera, int frames) {
     const double start = GetTime();
+    const redmist::ActorEffectSystem effects;
     for (int frame = 0; frame < frames; ++frame) {
         BeginDrawing();
         ClearBackground(BLACK);
         BeginMode3D(camera);
-        renderer.Draw(camera, bullets, {}, nullptr, visuals, shaders);
+        renderer.Draw(camera, bullets, {}, nullptr, {}, visuals, shaders, effects);
         EndMode3D();
         EndDrawing();
     }

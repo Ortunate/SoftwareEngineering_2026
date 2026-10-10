@@ -21,7 +21,8 @@ public:
     /// @brief 按速度、加速度与角速度推进弹幕，追踪弹朝最近目标转向，并清除过期或越界者。
     /// @param deltaTime 本帧经过的秒数。
     /// @param targets 当前可攻击目标的世界坐标；仅在本次调用期间借用。
-    void Update(float deltaTime, std::span<const Vector3> targets = {});
+    /// @param enemyAimTarget 敌弹延迟重新瞄准时的玩家世界坐标，普通弹不使用。
+    void Update(float deltaTime, std::span<const Vector3> targets = {}, Vector3 enemyAimTarget = {});
 
     /// @brief 从定长池申请并初始化单颗弹幕。
     /// @param owner 弹幕所属阵营。
@@ -36,7 +37,13 @@ public:
                   float radius, Color color, VisualId visual,
                   Vector3 acceleration = {});
 
-    /// @brief 清除敌方弹幕，保留玩家弹幕。
+    /// @brief 生成固定三维敌方光束；方向在生成时锁定，预警后才有胶囊碰撞。
+    /// direction 自动归一化；length/radius 为正世界单位，warning/duration 为非负/正秒数。
+    /// @return 池持有的光束；容量不足、尺寸或时间非法时返回 nullptr；生命期与 Spawn 一致。
+    Bullet* SpawnBeam(Vector3 origin, Vector3 direction, float length, float radius,
+                      float warning, float duration, Color color);
+
+    /// @brief 清除敌方弹幕和光束，保留玩家弹幕。
     void ClearEnemyBullets();
     /// @brief 获取可修改的弹幕池。
     /// @return 弹幕池引用。

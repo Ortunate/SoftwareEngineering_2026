@@ -64,6 +64,8 @@ public:
     [[nodiscard]] bool ShouldQuit() const { return shouldQuit_; }
 
 private:
+    // 独立离屏集成测试通过此探针检查生命周期，正式程序不暴露可修改的战斗状态。
+    friend struct GameLifecycleProbe;
     /// @brief 同时可保有的最多敌人数。
     static constexpr std::size_t kEnemyCapacity = 128;
     /// @brief 设置界面的普通设置页与按键设置页。
@@ -77,16 +79,22 @@ private:
     void StartRun(bool captureCursor = true);
     /// @brief 切换主菜单并清除战斗中的临时状态。
     void EnterMainMenu();
-    /// @brief 结算关卡并卸载专属素材。
+    /// @brief 停止战斗并播放剩余退场效果；池空后才结算、卸载专属素材。
     /// @param result 胜利或失败后的游戏状态。
     void EndStage(RunState result);
+    /// @brief 在 Playing/Finishing 与 Paused 间切换，并同步音乐和鼠标状态。
+    void TogglePause();
+    /// @brief 立即取消全部小怪并生成清场快照，不给予击破奖励。
+    void ClearEnemiesWithEffects();
     /// @brief 从本地文件读取全部设置并应用音量、灵敏度。
     void LoadSettings();
     /// @brief 将当前 FPS、音量、灵敏度和绑定写入本地文件。
     void SaveSettings() const;
     /// @brief 处理主菜单的移动、点击与确认输入。
     void UpdateMainMenu();
-    /// @brief 处理 FPS、音量、灵敏度与设置菜单页面的输入。
+    /// @brief 处理一面 Normal 的灵梦机体/标准或挑战模式选择，以及成绩、音乐和制作信息页。
+    void UpdateMenuPage();
+    /// @brief 处理 FPS、音量、灵敏度、开局资源与设置菜单页面的输入。
     void UpdateOptions();
     /// @brief 处理按键绑定列表与新按键录入。
     void UpdateKeyBindings();
@@ -117,12 +125,12 @@ private:
     bool HandleStageEvent(const StageEvent& event);
 
     /// @brief 委托当前 Stage 工厂构造敌人并加入敌人池。
-    /// @param archetype Stage 局部敌人原型。
-    /// @param spawn 出生位置、延迟与编队上下文。
-    void SpawnStageEnemy(std::uint16_t archetype,
-                         const EnemySpawn& spawn) override;
+    /// @param spec 携带具体敌人类型、出生位置和显式轨迹的配置。
+    void SpawnStageEnemy(const EnemySpec& spec) override;
+    /// @brief 开始 Boss 战并停止旧批次后续出怪，保留现存小怪、弹幕、道具及效果。
     void BeginStageBoss(bool final, StageEventId id) override;
-    void BeginStageDialogue(StageEventId id) override;
+    /// @brief 开始原文对话；战后先结算当前一面的 Bonus，待独白结束再进入胜利状态。
+    void BeginStageDialogue(StageEventId id, bool afterBattle = false) override;
     void StageMessage(std::string_view message, float duration) override;
     /// @brief 玩家已消耗 Bomb 后清弹、伤害敌人并展示反馈。
     void ApplyBombEffect();
@@ -162,7 +170,9 @@ private:
     void DrawDialogue() const;
     /// @brief 绘制开始菜单。
     void DrawMainMenu() const;
-    /// @brief 绘制 FPS、音量、灵敏度和按键设置入口。
+    /// @brief 绘制启动选择、音乐、成绩或制作信息页，保持通用素材生命周期。
+    void DrawMenuPage() const;
+    /// @brief 绘制 FPS、音量、灵敏度、开局资源和按键设置入口。
     void DrawOptions() const;
     /// @brief 绘制可重新绑定的战斗按键列表。
     void DrawKeyBindings() const;
@@ -173,10 +183,16 @@ private:
 
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
+    // 暂停要记住战斗或收尾，不能一律恢复 Playing；finishResult_ 仅在收尾结束时应用。
+    RunState pausedState_ = RunState::Playing;
+    RunState finishResult_ = RunState::Won;
+    // 当前一局是否捕获鼠标，预览和离屏测试在恢复暂停时仍不捕获。
+    bool captureCursor_ = true;
     Player player_{};
     std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
+    ActorEffectSystem actorEffects_{};
     DropSystem drops_{};
     StageDirector stage_{};
     std::unique_ptr<StageContent> stageContent_{};
@@ -185,10 +201,24 @@ private:
     AssetManager assets_;
 
     long long score_ = 0;
+    /// @brief 按原作每 100 subrank 提升一个 rank；Normal 限制 10…32，初始 16。
+    void AdjustReferenceRank(int subrank);
+    int referenceRank_ = 16, referenceSubrank_ = 0;
+    float rankTime_ = 0;
     int graze_ = 0;
+    int pointItems_ = 0; // 本局普通蓝色道具累计数量，供原作点数栏显示。
     float messageTimer_ = 0.0F;
     float screenFlashTimer_ = 0.0F;
     float spellCutInTimer_ = 0.0F;
+    float spellBonusTimer_ = 0; // 秒；暂停时冻结，捕获反馈最多显示 280 原作帧。
+    long long spellBonus_ = 0, stageBonus_ = 0;
+    /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
+    [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
+    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，Z 仍只推进一句。
+    [[nodiscard]] int DialogueIndex(float* lineStart = nullptr) const;
+    [[nodiscard]] float DialogueDuration() const;
+    bool dialogueAfterBattle_ = false;
+    bool dialogueBossMusic_ = false;
     float dialogueTimer_ = 0.0F;
     bool dialogueActive_ = false;
     std::optional<StageEventId> bossEventId_;
@@ -204,6 +234,26 @@ private:
     int fpsLimitIndex_ = 1;
     int musicVolume_ = 50;
     int mouseSensitivity_ = 100;
+    int soundVolume_ = 60;
+    int initialLives_ = 2;
+    int initialBombs_ = 3;
+    int bestScore_ = 0;
+    // 标题开场只在首次启动显示；返回标题后保持展开菜单。
+    bool titleIntro_ = true;
+    int setupStep_ = 0; // 0: 难度确认，1: 灵梦机体，2: 模式，3: 符卡练习；仅提供一面 Normal。
+    int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
+    bool challengeMode_ = false;
+    bool practiceMode_ = false;
+    bool previewMode_ = false; // 静默截图不写入本机通关成绩，StartRun 会恢复普通记录规则。
+    int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
+    bool spellPractice_ = false;
+    int selectedTrack_ = 0;
+    int selectedPauseItem_ = 0; // 暂停项：继续、开局选择、主菜单、重开。
+    int missCount_ = 0;
+    int bombCount_ = 0;
+    // 每张符卡开始时保存计数；发生 Miss、Bomb 或超时则不能获得捕获奖励。
+    int spellStartMisses_ = 0, spellStartBombs_ = 0;
+    float shotSoundTimer_ = 0.0F; // 秒；射击声音最多每 0.10 秒触发一次。
     bool waitingForBinding_ = false;
     /// @brief 激活录入后须先释放确认键/鼠标按钮，避免把打开弹窗的点击录入为绑定。
     bool bindingCaptureReady_ = false;

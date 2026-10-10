@@ -4,6 +4,7 @@
 
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/items/drop_table.hpp"
+#include "gameplay/effects/actor_effects.hpp"
 
 
 #include <array>
@@ -14,28 +15,37 @@
 
 namespace redmist {
 
-/// @brief 小怪抽象基类：仅处理入场与边界，移动和技能计时由具体敌人实现。
+/// @brief 小怪抽象基类：处理出生年龄、独立视觉时钟与边界，移动和技能由具体敌人实现。
 class Enemy {
 public:
     /// @brief 通过基类指针安全销毁具体敌人。
     virtual ~Enemy() = default;
-    /// @brief 更新入场延迟，并委托子类执行移动和各技能计时。
+    /// @brief 更新出生年龄与视觉时钟，委托子类执行移动和技能；自然退场只设置 active=false。
+    /// 调用方须在失活的当帧保存退场快照，然后停止更新；效果不承担战斗对象所有权。
     /// @param deltaTime 本帧经过的秒数。
     /// @param playerPosition 玩家判定中心，用于瞄准。
     /// @param bullets 接收技能生成的弹幕。
     virtual void Update(float deltaTime, Vector3 playerPosition,
                         BulletSystem& bullets);
 
+    /// @brief 接收关卡自适应难度值 10…32；普通演员默认忽略，原作脚本演员用于弹速/弹数。
+    virtual void SetChallengeRank(int) {}
+    /// @brief 借用本帧脚本产生的音效编号；下次更新失效，普通演员返回空表。
+    [[nodiscard]] virtual std::span<const int> SoundEvents() const { return {}; }
+    /// @brief 原作掉落编号；-1 为轮换掉落，0 为小 P 点，-3 表示使用 DropDistribution。
+    [[nodiscard]] virtual int ReferenceDropKind() const { return -3; }
     bool active = true;
     const VisualId visual;
     Vector3 position;
     Vector3 origin;
-    /// @brief 从实际入场起算的秒数；延迟期间为负，达到零后才移动和发弹。
-    float age;
+    /// @brief 从实例出生起算的非负秒数；出怪调度不在敌人内部等待。
+    float age = 0.0F;
     float health = 10.0F;
     float maxHealth = 10.0F;
     float hitRadius = 0.55F;
     int scoreValue = 500;
+    /// @brief 独立视觉状态；不决定活动标记、判定或技能时钟。
+    ActorPresentation presentation;
     /// @brief 返回本类敌人的两类道具联合分布；表由具体敌人静态持有。
     /// @return 仅在敌人生命周期内借用的只读表，空表表示不掉落。
     [[nodiscard]] std::span<const DropOutcome> DropDistribution() const {
@@ -48,12 +58,11 @@ public:
     [[nodiscard]] Vector3 MuzzlePosition(Vector3 playerPosition) const;
 
 protected:
-    /// @brief 初始化外观、出生位置和入场延迟。
+    /// @brief 初始化外观、出生位置与掉落表；实例立即活动。
     /// @param visual 外观编号。
     /// @param position 出生位置。
-    /// @param delay 非负入场延迟（秒）。
     /// @param drops 本类敌人的静态掉落结果表；存储须覆盖敌人生命周期。
-    Enemy(VisualId visual, Vector3 position, float delay,
+    Enemy(VisualId visual, Vector3 position,
           std::span<const DropOutcome> drops);
     /// @brief Stage 子类按自身规则更新空间位置。
     virtual void Move(float deltaTime) = 0;
@@ -63,6 +72,8 @@ protected:
 
 private:
     std::span<const DropOutcome> dropDistribution_;
+    // 首次 Move 可能把 origin 转成轨道初始位置，须等后续采样才能估算真实速度。
+    bool hasMovementSample_ = false;
 };
 
 /// @brief 用固定数量的槽位持有多态敌人并统计丢弃的生成请求。

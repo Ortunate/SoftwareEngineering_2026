@@ -113,15 +113,6 @@ void Game::DrawMainMenu() const {
             ui::FocusLine(left,right,canvas.scale,Fade(kScarlet,reveal),weight,menuMotion_.Phase());
         }
     }
-    DrawRectangleRec(canvas.Rect(layout.compact ? 28 : layout.width - 770, layout.height - 84,
-        layout.compact ? layout.width - 56 : 730, 62), Color{252, 246, 236, 225});
-    Text(canvas, common.uiFont, "Z / Enter 确认   方向键选择   Esc 返回",
-        layout.compact ? layout.width / 2 : layout.width - 550, layout.height - 72, 15, kScarlet, true);
-    // 页脚放在浅色底板内，繁密插画上仍保持可读。
-    Text(canvas, common.uiFont, "Stage 1 · Normal · 3D", layout.compact ? layout.width / 2 : layout.width - 268,
-        layout.height - 52, 17, kScarlet, true);
-    Text(canvas, common.uiFont, "Fan recreation · 原作 Team Shanghai Alice",
-        layout.compact ? layout.width / 2 : layout.width - 550, layout.height - 33, 12, kScarlet, true);
 }
 
 void Game::DrawOptions() const {

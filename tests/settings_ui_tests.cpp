@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
                     const auto row = layout.Row(index);
                     Check(row.x >= 0 && row.y >= 0 && row.x + row.width <= GetScreenWidth() &&
                           row.y + row.height < (layout.height - 84) * layout.canvas.scale,
-                          "responsive title row clipped or overlapped footer");
+                          "responsive title row clipped or entered bottom margin");
                 }
                 const auto source = layout.BackgroundSource(1536, 1024);
                 Check(source.x >= 0 && source.y >= 0 && source.x + source.width <= 1536.01F &&

@@ -124,7 +124,7 @@ struct TitleLayout {
         height = windowHeight / canvas.scale;
         menuWidth = compact ? 390.0F : 315.0F;
         menuLeft = width - menuWidth - (compact ? 28.0F : 40.0F);
-        // 窄屏先为标题保留 240 像素；最后一行和页脚之间始终留出操作空间。
+        // 窄屏先为标题保留 240 像素；最后一行与窗口底部之间保留留白，避免菜单贴住边框。
         menuTop = compact ? std::max(240.0F, (height - count * 45 - 100 + 240) / 2)
                           : 172 + (height - 760) / 2;
     }

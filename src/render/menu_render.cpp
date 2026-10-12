@@ -77,7 +77,7 @@ void Game::DrawMainMenu() const {
     }
     menu::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
     if (IsTextureValid(common.titleLogo)) {
-        // 字标自身带英文副标题和“新典”饰线，保留透明区域，不叠加重复的普通文字。
+        // 字标自身带英文副标题和“异典”饰线，保留透明区域，不叠加重复的普通文字。
         DrawTexturePro(common.titleLogo,
             {0, 0, static_cast<float>(common.titleLogo.width), static_cast<float>(common.titleLogo.height)},
             layout.Logo(common.titleLogo.width, common.titleLogo.height), {}, 0, WHITE);

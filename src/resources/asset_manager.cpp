@@ -149,7 +149,7 @@ void AssetManager::LoadCommon() {
     common_.referenceFrame = LoadTextureAsset(root_ / "common/reference_frame.png");
     common_.referenceStage1 = LoadTextureAsset(root_ / "common/reference_stage1.png");
     common_.titleBackground = LoadTextureAsset(root_ / "common/title_reimu_modern.png");
-    common_.titleLogo = LoadTextureAsset(root_ / "common/title_logo_newchronicle.png");
+    common_.titleLogo = LoadTextureAsset(root_ / "common/title_logo_yidian.png");
     if (IsTextureValid(common_.titleLogo)) {
         // 高分辨率字标会随窗口缩小；mipmap 避免细笔画和装饰线在缩放时跳动、锯齿化。
         GenTextureMipmaps(&common_.titleLogo);

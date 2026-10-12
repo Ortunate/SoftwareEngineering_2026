@@ -19,7 +19,7 @@ struct BindingField {
     int KeyBindings::*member;
 };
 
-constexpr std::array<BindingField, 12> kBindingFields{{
+constexpr std::array<BindingField, 10> kBindingFields{{
     {"forward", &KeyBindings::forward},
     {"backward", &KeyBindings::backward},
     {"move_left", &KeyBindings::moveLeft},
@@ -30,8 +30,6 @@ constexpr std::array<BindingField, 12> kBindingFields{{
     {"fire", &KeyBindings::fire},
     {"bomb", &KeyBindings::bomb},
     {"pause", &KeyBindings::pause},
-    {"fire_alt", &KeyBindings::fireAlt},
-    {"bomb_alt", &KeyBindings::bombAlt},
 }};
 
 /// @brief 去掉配置行首尾的空白字符。
@@ -115,7 +113,7 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
 
         if (name == "version") {
             version = *value;
-            shouldRewrite = shouldRewrite || version != 3;
+            shouldRewrite = shouldRewrite || version != 4;
         } else if (name == "music_volume") {
             if (*value >= 0 && *value <= 100) settings.musicVolume = *value;
             else shouldRewrite = true;
@@ -155,10 +153,21 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         }
     }
 
-    // 升级旧默认 C；旧配置中的其他自定义 Focus 键原样保留。
-    if (version == 1) {
-        if (settings.bindings.focus == KEY_C)
-            settings.bindings.focus = MouseBinding(MOUSE_BUTTON_SIDE);
+    // 旧默认迁移到单键布局；其他自定义主键保留，旧备用字段读入时忽略、重写时移除。
+    // 新默认被其他自定义动作占用时保留该旧主键，避免升级制造冲突后重置整组。
+    // version=4 后自行绑定 C、侧键、Z 或 X 不再触发迁移。
+    if (version < 4) {
+        const auto migrateDefault = [&](int KeyBindings::*member, int code) {
+            for (const auto& field : kBindingFields)
+                if (field.member != member && settings.bindings.*field.member == code) return;
+            settings.bindings.*member = code;
+        };
+        if ((version == 1 && settings.bindings.focus == KEY_C) ||
+            settings.bindings.focus == MouseBinding(MOUSE_BUTTON_SIDE))
+            migrateDefault(&KeyBindings::focus, MouseBinding(MOUSE_BUTTON_RIGHT));
+        if (settings.bindings.fire == KEY_Z)
+            migrateDefault(&KeyBindings::fire, MouseBinding(MOUSE_BUTTON_LEFT));
+        if (settings.bindings.bomb == KEY_X) migrateDefault(&KeyBindings::bomb, KEY_F);
         shouldRewrite = true;
     }
     if (!HasUniqueBindings(settings.bindings)) {
@@ -175,7 +184,7 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     if (!output) return false;
 
     output << "# koumakyou local settings\n";
-    output << "version=3\n";
+    output << "version=4\n";
     output << "fps_limit=" << settings.fpsLimit << '\n';
     output << "music_volume=" << settings.musicVolume << '\n';
     output << "mouse_sensitivity=" << settings.mouseSensitivity << '\n';

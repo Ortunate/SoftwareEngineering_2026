@@ -352,8 +352,8 @@ void Game::UpdatePlayer(float deltaTime) {
         .ascend = BindingDown(bindings_.ascend),
         .descend = BindingDown(bindings_.descend),
         .focus = BindingDown(bindings_.focus),
-        .fire = BindingDown(bindings_.fire) || BindingDown(bindings_.fireAlt),
-        .bomb = BindingPressed(bindings_.bomb) || BindingPressed(bindings_.bombAlt),
+        .fire = BindingDown(bindings_.fire),
+        .bomb = BindingPressed(bindings_.bomb),
     };
     shotSoundTimer_ = std::max(0.0F, shotSoundTimer_ - deltaTime);
     if (input.fire && !dialogueActive_ && shotSoundTimer_ <= 0) {

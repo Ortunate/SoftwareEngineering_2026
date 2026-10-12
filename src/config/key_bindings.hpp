@@ -38,7 +38,7 @@ inline bool BindingPressed(int code) {
     return IsMouseBinding(code) ? IsMouseButtonPressed(code - kMouseBindingBase)
                                : (IsValidBinding(code) && IsKeyPressed(code));
 }
-/// @brief 可持久化的战斗键位；射击/Bomb 各有两个可编辑入口，均参与冲突交换。
+/// @brief 可持久化的十个战斗动作；每个动作只有一个键位，统一参与冲突交换。
 struct KeyBindings {
     int forward = KEY_W;
     int backward = KEY_S;
@@ -46,19 +46,16 @@ struct KeyBindings {
     int moveRight = KEY_D;
     int ascend = KEY_SPACE;
     int descend = KEY_LEFT_SHIFT;
-    int focus = MouseBinding(MOUSE_BUTTON_SIDE);
-    int fire = KEY_Z;
-    int bomb = KEY_X;
+    int focus = MouseBinding(MOUSE_BUTTON_RIGHT);
+    int fire = MouseBinding(MOUSE_BUTTON_LEFT);
+    int bomb = KEY_F;
     int pause = KEY_P;
-    int fireAlt = MouseBinding(MOUSE_BUTTON_LEFT);
-    int bombAlt = MouseBinding(MOUSE_BUTTON_RIGHT);
 };
-/// @brief 设置列表/配置文件共用的成员顺序；前十项与旧版一致。
-inline constexpr std::array<int KeyBindings::*, 12> kBindingMembers{
+/// @brief 设置列表/配置文件共用的十项成员顺序；编号与旧版前十项一致。
+inline constexpr std::array<int KeyBindings::*, 10> kBindingMembers{
     &KeyBindings::forward, &KeyBindings::backward, &KeyBindings::moveLeft,
     &KeyBindings::moveRight, &KeyBindings::ascend, &KeyBindings::descend,
     &KeyBindings::focus, &KeyBindings::fire, &KeyBindings::bomb, &KeyBindings::pause,
-    &KeyBindings::fireAlt, &KeyBindings::bombAlt,
 };
 /// @brief 为动作设置合法键码；冲突时交换原键，不触发保存；无效索引/键返回 false。
 inline bool Rebind(KeyBindings& bindings, int index, int code) {

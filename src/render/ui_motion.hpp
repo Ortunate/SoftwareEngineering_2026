@@ -45,6 +45,6 @@ public:
 private:
     int page_ = -1;
     float age_ = 0, phase_ = 0, flash_ = 0;
-    std::array<float, 16> weights_{}; // 最大按键设置页含 12 个动作和 2 个按钮。
+    std::array<float, 16> weights_{}; // 容量覆盖按键设置页的 10 个动作和 2 个按钮。
 };
 } // namespace koumakyou::ui

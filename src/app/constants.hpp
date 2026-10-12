@@ -7,8 +7,8 @@
 namespace koumakyou {
 inline constexpr float kSpellCutInDuration = 2.0F;
 // 中文操作名与 kBindingMembers 的持久化成员顺序一一对应，显示翻译不得改变键位编号。
-inline constexpr std::array<const char*, 12> kBindingNames{
+inline constexpr std::array<const char*, 10> kBindingNames{
     "前进", "后退", "向左移动", "向右移动", "上升",
-    "下降", "低速移动", "射击", "使用符卡", "暂停", "射击（备用）", "符卡（备用）",
+    "下降", "低速移动", "射击", "使用符卡", "暂停",
 };
 }  // namespace koumakyou

@@ -281,20 +281,20 @@ int main(int argc, char** argv) {
             const koumakyou::menu::BindingsLayout bindingLayout(GetScreenWidth(),GetScreenHeight());
             const auto focus=bindingLayout.Row(6);
             Event(7,focus.x+focus.width/2,focus.y+focus.height/2); Event(6,MOUSE_BUTTON_LEFT); Frame(game); Frame(game);
-            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_SIDE), "opening click captured");
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_RIGHT), "opening click captured");
             Capture(game, (screenshots / "binding-prompt.png").string().c_str());
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);
             Event(6, MOUSE_BUTTON_EXTRA); Frame(game);
             Event(5, MOUSE_BUTTON_EXTRA); Frame(game);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse side binding failed");
-            // 将 Focus 改成左键后，射击副键应交换为刚才的侧键，不能保留硬编码左键。
+            // 将 Focus 改成左键后，射击主键应交换为刚才的侧键，不能保留硬编码左键。
             Event(6, MOUSE_BUTTON_LEFT); Frame(game);
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);
             Event(6, MOUSE_BUTTON_LEFT); Frame(game);
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);
             settings = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
             Check(settings.bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_LEFT), "left binding failed");
-            Check(settings.bindings.fireAlt == koumakyou::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse conflict swap failed");
+            Check(settings.bindings.fire == koumakyou::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse conflict swap failed");
             Capture(game, (screenshots / "bindings.png").string().c_str());
             Event(7, 0, 0); Frame(game);
             // Esc 取消不会修改绑定；静止鼠标不应抢走键盘列表选择。
@@ -302,16 +302,24 @@ int main(int argc, char** argv) {
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == settings.bindings.focus, "cancel altered binding");
             Key(game, KEY_DOWN); Key(game, KEY_ENTER); Key(game, KEY_F1);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.fire == KEY_F1, "keyboard rebind failed");
+            // 列表只有十个动作，恢复按钮必须紧随暂停；恢复后写入新的单键默认布局。
+            for (int i=0;i<3;++i) Key(game,KEY_DOWN);
+            Key(game,KEY_ENTER);
+            const auto reset=koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings;
+            Check(reset.focus == koumakyou::MouseBinding(MOUSE_BUTTON_RIGHT) &&
+                  reset.fire == koumakyou::MouseBinding(MOUSE_BUTTON_LEFT) &&
+                  reset.bomb == KEY_F && reset.pause == KEY_P, "default binding reset failed");
+            Capture(game,(screenshots / "bindings-defaults.png").string().c_str());
             AllPageSizes(game,screenshots);
             game.Start(false); Frame(game);
             // 统一编码必须正确分发到鼠标查询；按住/首次按下分别用于移动和 Bomb。
             Event(6, MOUSE_BUTTON_EXTRA);
-            Check(koumakyou::BindingDown(settings.bindings.fireAlt), "mouse held dispatch failed");
-            Check(koumakyou::BindingPressed(settings.bindings.fireAlt), "mouse press dispatch failed");
+            Check(koumakyou::BindingDown(settings.bindings.fire), "mouse held dispatch failed");
+            Check(koumakyou::BindingPressed(settings.bindings.fire), "mouse press dispatch failed");
             Frame(game);
-            Check(!koumakyou::BindingPressed(settings.bindings.fireAlt), "mouse press repeated while held");
+            Check(!koumakyou::BindingPressed(settings.bindings.fire), "mouse press repeated while held");
             Event(5, MOUSE_BUTTON_EXTRA); Frame(game);
-            Check(!koumakyou::BindingDown(settings.bindings.fireAlt), "mouse release failed");
+            Check(!koumakyou::BindingDown(settings.bindings.fire), "mouse release failed");
         }
         // 第二个实例模拟重启：读取配置后仍可加载关卡音乐与进入游戏。
         {

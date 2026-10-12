@@ -1,4 +1,5 @@
 // 本文件负责运行按领域拆分的核心测试。
+#include "app/constants.hpp"
 #include "render/ui_motion.hpp"
 #include "render/menu_layout.hpp"
 #include "render/gameplay_layout.hpp"
@@ -27,7 +28,7 @@ void TestResponsiveLayouts() {
         const koumakyou::menu::BindingsLayout bindings(size.x,size.y);
         const auto bindingsFull=bindings.canvas.Rect(0,0,bindings.canvas.width,bindings.canvas.height);
         assert(bindingsFull.x==0 && bindingsFull.y==0 && std::abs(bindingsFull.width-size.x)<0.001F && std::abs(bindingsFull.height-size.y)<0.001F);
-        for(int index=0;index<12;++index)fits(bindings.Row(index));
+        for(int index=0;index<static_cast<int>(koumakyou::kBindingNames.size());++index)fits(bindings.Row(index));
         fits(bindings.Button(0)); fits(bindings.Button(1)); fits(bindings.Modal());
         const koumakyou::menu::PageLayout page(size.x,size.y);
         fits(page.Back()); fits(page.Forward());

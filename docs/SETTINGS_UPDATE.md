@@ -10,7 +10,7 @@
 
 | 模块 | 修改 |
 |---|---|
-| config/key_bindings.hpp | 键盘/鼠标统一编码、合法性校验、输入查询、冲突交换；Focus 默认 Mouse 4；射击/Bomb 副键可编辑 |
+| config/key_bindings.hpp | 键盘/鼠标统一编码、合法性校验、输入查询、冲突交换；十个单键动作，Focus 默认右键、射击默认左键、Bomb 默认 F、暂停默认 P |
 | config/settings.* | BGM 音量、灵敏度保存；version=1 升级；无效值回退 |
 | app/game.*、app/input.cpp、app/constants.hpp | 设置应用、玩家重置后保持灵敏度、鼠标录入防误触、设置页布局 |
 | resources/asset_manager.* | 当前及未来加载的三类 BGM 统一应用音量 |
@@ -31,8 +31,8 @@
 
 1. 在 OPTIONS 调整音乐为 0%，确认静音；恢复 50%，确认标题音乐恢复。开始关卡并进入 Boss，确认音量设置保持。
 2. 比较 0.5x/1.0x/2.0x 下相同鼠标位移的视角变化；重开、返回主菜单再开始，设置应保持。
-3. 按住默认 Mouse 4，确认 Focus 低速；松开恢复。无侧键时在 KEY BINDINGS 改为 C。
-4. 将 Focus 改成左键：FIRE (ALTERNATE) 应与原 Focus 键交换，左键不应同时触发射击。
+3. 按住默认鼠标右键，确认 Focus 低速；松开恢复。在按键设置中可更改为其他键。
+4. 将 Focus 改成左键：射击主键应与原 Focus 键交换，左键不应同时触发射击。
 5. 测试鼠标右键、中键和另一颗侧键录入，Esc 取消不改变原绑定。
 6. 关闭后从同一目录重启，确认全部设置恢复。RESET DEFAULTS 只恢复绑定。
 

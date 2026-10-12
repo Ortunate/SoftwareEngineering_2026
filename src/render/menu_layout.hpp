@@ -79,13 +79,13 @@ struct PageLayout {
 };
 
 /// @brief 改键列表及录入弹窗共用布局；构造参数为窗口逻辑像素，所有方法返回屏幕矩形。
-/// 14 项局部编号含 12 个动作、恢复和返回，只有动作使用 Row。
+/// 12 项局部编号含 10 个动作、恢复和返回，只有动作使用 Row。
 struct BindingsLayout {
     Canvas canvas;
     bool compact;
     BindingsLayout(int width,int height)
         :canvas(PageCanvas(width,height)),compact(canvas.width<1000) {}
-    /// @brief 动作行的屏幕矩形，index 为 0～11。
+    /// @brief 动作行的屏幕矩形，index 为 0～9。
     [[nodiscard]] Rectangle Row(int index) const { return canvas.Rect(compact?48:240,(compact?220:176)+index*(compact?52:31),compact?664:620,compact?48:28); }
     /// @brief 页面底部按钮，index 为 0（恢复）或 1（返回）。
     [[nodiscard]] Rectangle Button(int index) const { return canvas.Rect(compact?48+index*342:240+index*320,canvas.height-130,compact?322:300,42); }

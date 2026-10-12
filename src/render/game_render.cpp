@@ -311,7 +311,7 @@ void Game::DrawKeyBindings() const {
     const float scale=canvas.scale;
     const Color gold=menu::kPageGold;
     menu::DrawPageSurface(canvas,menuMotion_);
-    menu::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","按键设置");
+    menu::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","Key Bindings");
     for(int index=0;index<static_cast<int>(kBindingNames.size());++index) {
         const auto row=layout.Row(index);
         const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.009F);

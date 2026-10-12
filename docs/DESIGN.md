@@ -49,13 +49,13 @@
 - W/S 沿观察方向移动，A/D 横移，Space 上升，Left Shift 下降。
 - 玩家不能越过长方体六个表面。
 
-所有战斗键位都保存在 `KeyBindings` 中。OPTIONS 一级页面调节 FPS、BGM 音量、鼠标灵敏度，KEY BINDINGS 二级页面编辑绑定。键盘沿用 raylib 键码，鼠标使用 1000+按钮编号（0～6）避免编码冲突。12 个入口包含原有十个动作与射击/Bomb 的第二绑定，所有入口统一参与冲突交换；Focus 默认 Mouse 4。Esc 和 F3～F6 保留，录入需先释放激活弹窗的按钮，避免误录。
+所有战斗键位都保存在 `KeyBindings` 中。OPTIONS 一级页面调节 FPS、BGM 音量、鼠标灵敏度，按键设置二级页面编辑绑定。键盘沿用 raylib 键码，鼠标使用 1000+按钮编号（0～6）避免编码冲突。十个动作各只有一个入口，统一参与冲突交换；Focus 默认右键、射击默认左键、Bomb 默认 F、暂停默认 P。Esc 和 F3～F6 保留，录入需先释放激活弹窗的按钮，避免误录。
 
 `main` 在 `InitWindow` 后、处理首帧事件前调用 `DisableWindowInputMethods(GetWindowHandle())`，整个游戏窗口只用于按键操作，不接受文字合成。Windows 用 `ImmAssociateContextEx(HWND, nullptr, 0)` 解除本窗口的 IMM 上下文，链接 `imm32`；macOS 获取 `NSWindow.contentView`，给该实例设置无新增 ivar 的运行时子类，将 `inputContext` 返回值设为 nil 并阻断 `interpretKeyEvents:`。子类保留原 GLFW `keyDown:`、`keyUp:` 与 `flagsChanged:`；当前 raylib 5.5 内置 GLFW 在调用文字解释前已报告物理按键。升级窗口后端时必须复核这一次序。类由 Objective-C runtime 持有直到进程结束，不替换原 GLFW 类的全局方法，也不持有已销毁的窗口。重复调用安全，窗口重建后重新应用；该策略不修改系统输入源，未来增加文字输入需要明确启用文字录入策略。
 
 FPS 上限提供 30、60、120、144、240 和 Unlimited 六档，通过 raylib 的 `SetTargetFPS` 即时应用。窗口未强制启用垂直同步，因此各档位不会被 VSync 设置覆盖。
 
-设置持久化由独立的 `settings` 模块负责。程序启动时先使用 `std::filesystem::exists` 检查当前运行目录中的 `koumakyou_settings.cfg`：文件不存在时构造默认 `GameSettings` 并创建文件；文件存在时逐项读取 FPS、BGM 音量（0～100）、灵敏度（10～300，100 为原速度）和 `KeyBindings`。修改后立即保存 version=2 配置，校验数值范围及键位唯一性。旧版默认 C 迁移为 Mouse 4，其他自定义值保留。AssetManager 把音量同步到菜单、道中、Boss 已有音乐流，并在加载新流后重新应用；静音不停止流的计时。Game 保存灵敏度设置，每帧通过 PlayerInput 的倍率传入 Player，玩家重置不会丢失设置。
+设置持久化由独立的 `settings` 模块负责。程序启动时先使用 `std::filesystem::exists` 检查当前运行目录中的 `koumakyou_settings.cfg`：文件不存在时构造默认 `GameSettings` 并创建文件；文件存在时逐项读取 FPS、BGM 音量（0～100）、灵敏度（10～300，100 为原速度）和 `KeyBindings`。修改后立即保存 version=4 配置，校验数值范围及键位唯一性。旧版默认低速移动（version=1 的 C 或侧键）、射击 Z、Bomb X 升级为右键、左键、F，备用字段移除，其他自定义主键保留；新默认已被其他自定义动作占用时保留该旧主键。AssetManager 把音量同步到菜单、道中、Boss 已有音乐流，并在加载新流后重新应用；静音不停止流的计时。Game 保存灵敏度设置，每帧通过 PlayerInput 的倍率传入 Player，玩家重置不会丢失设置。
 
 长方体边框和六个表面的空间网格帮助玩家判断深度、速度和朝向。
 

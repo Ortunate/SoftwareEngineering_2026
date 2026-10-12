@@ -16,6 +16,8 @@ void TestResponsiveLayouts() {
         const koumakyou::menu::TitleLayout title(size.x,size.y,koumakyou::menu::kTitleRowCount);
         for(int index=0;index<title.rowCount;++index)fits(title.Row(index));
         const auto options=koumakyou::menu::PageCanvas(size.x,size.y);
+        const auto full=options.Rect(0,0,options.width,options.height);
+        assert(full.x==0 && full.y==0 && std::abs(full.width-size.x)<0.001F && std::abs(full.height-size.y)<0.001F);
         for(int index=0;index<koumakyou::menu::kOptionsCount;++index) {
             fits(koumakyou::menu::OptionRow(options,index));
             if(index<koumakyou::menu::kNumericOptions) {
@@ -23,6 +25,8 @@ void TestResponsiveLayouts() {
             }
         }
         const koumakyou::menu::BindingsLayout bindings(size.x,size.y);
+        const auto bindingsFull=bindings.canvas.Rect(0,0,bindings.canvas.width,bindings.canvas.height);
+        assert(bindingsFull.x==0 && bindingsFull.y==0 && std::abs(bindingsFull.width-size.x)<0.001F && std::abs(bindingsFull.height-size.y)<0.001F);
         for(int index=0;index<12;++index)fits(bindings.Row(index));
         fits(bindings.Button(0)); fits(bindings.Button(1)); fits(bindings.Modal());
         const koumakyou::menu::PageLayout page(size.x,size.y);

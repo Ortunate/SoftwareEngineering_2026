@@ -1,4 +1,4 @@
-// 本文件定义所有菜单和弹窗共用的绘制/点击布局，横屏等比缩放，窄屏重排，坐标使用设计像素。
+// 本文件定义菜单/弹窗共用的绘制与点击布局；二级页面按窗口双轴铺满，文字和图案仍等比缩放。
 #pragma once
 
 #include "raylib.h"
@@ -6,32 +6,42 @@
 #include <array>
 
 namespace koumakyou::menu {
-/// @brief 可配置设计尺寸的等比居中画布；窗口及设计尺寸按至少 1 像素处理，最小化时不除零。
+/// @brief 设计画布的窗口映射；默认等比居中，Full 将布局双轴铺满，scale 始终用于等比的文字与图案。
+/// 窗口及设计尺寸按至少 1 像素处理，最小化时不除零；调用方不得用 xScale/yScale 拉伸立绘。
 struct Canvas {
     float scale;
+    float xScale, yScale;
     Vector2 origin;
     float width, height;
     Canvas(int windowWidth, int windowHeight, float designWidth = 1100, float designHeight = 760)
         : scale(std::min(std::max(1,windowWidth)/std::max(1.0F,designWidth),
                          std::max(1,windowHeight)/std::max(1.0F,designHeight))),
-          origin{},width(std::max(1.0F,designWidth)),height(std::max(1.0F,designHeight)) {
+          xScale(scale),yScale(scale),origin{},width(std::max(1.0F,designWidth)),height(std::max(1.0F,designHeight)) {
         origin={(std::max(1,windowWidth)-width*scale)/2,(std::max(1,windowHeight)-height*scale)/2};
+    }
+    /// @brief 铺满窗口的设计画布；参数均为逻辑像素，控件矩形使用双轴比例，字体/圆形使用 scale。
+    [[nodiscard]] static Canvas Full(int windowWidth,int windowHeight,float designWidth,float designHeight) {
+        Canvas canvas(windowWidth,windowHeight,designWidth,designHeight);
+        canvas.origin={};
+        canvas.xScale=std::max(1,windowWidth)/canvas.width;
+        canvas.yScale=std::max(1,windowHeight)/canvas.height;
+        return canvas;
     }
     /// @brief 将设计像素坐标转换为窗口逻辑像素，不改变画布状态。
     [[nodiscard]] Vector2 Point(float x, float y) const {
-        return {origin.x + x * scale, origin.y + y * scale};
+        return {origin.x+x*xScale,origin.y+y*yScale};
     }
     /// @brief 将设计像素矩形转换为窗口逻辑像素，供绘制和鼠标命中共同使用。
     [[nodiscard]] Rectangle Rect(float x, float y, float width, float height) const {
         const auto point = Point(x, y);
-        return {point.x, point.y, width * scale, height * scale};
+        return {point.x,point.y,width*xScale,height*yScale};
     }
 };
 
-/// @brief 根据窗口逻辑像素宽高选择纵向/横向设计画布，绘制与点击必须使用相同实例配置。
+/// @brief 根据窗口逻辑像素宽高选择纵向/横向铺满画布，绘制与点击必须使用相同实例配置。
 inline Canvas PageCanvas(int width,int height) {
     const bool compact=std::max(1,width)<std::max(1,height)*1.15F;
-    return Canvas(width,height,compact?760:1100,compact?1100:760);
+    return Canvas::Full(width,height,compact?760:1100,compact?1100:760);
 }
 
 inline constexpr int kOptionsCount = 9;
@@ -74,11 +84,11 @@ struct BindingsLayout {
     Canvas canvas;
     bool compact;
     BindingsLayout(int width,int height)
-        :canvas(width,height,width<height*1.15F?760:900,width<height*1.15F?1100:620),compact(canvas.width<900) {}
+        :canvas(PageCanvas(width,height)),compact(canvas.width<1000) {}
     /// @brief 动作行的屏幕矩形，index 为 0～11。
-    [[nodiscard]] Rectangle Row(int index) const { return canvas.Rect(compact?48:180,(compact?220:136)+index*(compact?52:28),compact?664:540,compact?48:25); }
+    [[nodiscard]] Rectangle Row(int index) const { return canvas.Rect(compact?48:240,(compact?220:176)+index*(compact?52:31),compact?664:620,compact?48:28); }
     /// @brief 页面底部按钮，index 为 0（恢复）或 1（返回）。
-    [[nodiscard]] Rectangle Button(int index) const { return canvas.Rect(compact?48+index*342:180+index*280,compact?920:500,compact?322:260,42); }
+    [[nodiscard]] Rectangle Button(int index) const { return canvas.Rect(compact?48+index*342:240+index*320,canvas.height-130,compact?322:300,42); }
     [[nodiscard]] Rectangle Modal() const { return canvas.Rect((canvas.width-600)/2,canvas.height/2-100,600,200); }
 };
 
@@ -108,6 +118,7 @@ struct TitleLayout {
         : canvas(windowWidth, windowHeight), compact(std::max(1,windowWidth)<std::max(1,windowHeight)*1.2F), rowCount(count) {
         windowWidth=std::max(1,windowWidth); windowHeight=std::max(1,windowHeight);
         if (compact) canvas.scale = std::min(windowWidth / 900.0F, windowHeight / 900.0F);
+        canvas.xScale=canvas.yScale=canvas.scale;
         canvas.origin = {};
         width = windowWidth / canvas.scale;
         height = windowHeight / canvas.scale;

@@ -2,6 +2,7 @@
 #include "app/game.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
+#include "render/menu_page.hpp"
 #include "render/ui_typography.hpp"
 #include "render/ui_effects.hpp"
 
@@ -33,49 +34,12 @@ void ChoiceText(const menu::Canvas& canvas, Font font, const char* text, float x
                  Fade(selected,reveal),weight*pulse);
 }
 
-/// @brief 按设计像素 width/height 绘制回纹边框；标题使用窗口全幅，其他页采用默认设计尺寸。
-void Frame(const menu::Canvas& canvas, Color color, float width = 1100, float height = 760) {
-    DrawRectangleLinesEx(canvas.Rect(18, 18, width - 36, height - 36), canvas.scale, color);
-    for (float x : {18.0F, width - 38}) {
-        for (float y : {18.0F, height - 38}) {
-            DrawRectangleRec(canvas.Rect(x, y, 20, 20), color);
-            DrawRectangleRec(canvas.Rect(x + 4, y + 4, 12, 12), kIvory);
-            DrawRectangleRec(canvas.Rect(x + 6, y + 6, 8, 8), color);
-        }
-    }
-}
-
-/// @brief 深红花纹页；面板由中心展开，边缘装饰低对比，交互区域保持最终位置。
-void DarkPage(const menu::Canvas& canvas, const ui::MenuMotion& motion) {
-    const float phase=motion.Phase(),reveal=motion.Reveal();
-    ClearBackground(Color{21, 13, 18, 255});
-    DrawRectangleGradientV(static_cast<int>(canvas.origin.x), static_cast<int>(canvas.origin.y+40*(1-reveal)*canvas.scale),
-        static_cast<int>(canvas.width * canvas.scale), static_cast<int>((canvas.height-80*(1-reveal))*canvas.scale),
-        Color{18, 16, 19, 255}, Color{62, 17, 25, 255});
-    for (int index = 0; index < 18; ++index) {
-        const float x = index % 2 == 0 ? 80 + (index % 4) * 38.0F : canvas.width-140 + (index % 3) * 32.0F;
-        const float y = 65 + index * (canvas.height-100)/18;
-        for (int petal = 0; petal < 5; ++petal) {
-            const float angle = petal * 1.256637F + index * 0.3F + phase * 0.035F;
-            const auto center = canvas.Point(x + std::cos(angle) * 13, y + std::sin(angle) * 13);
-            DrawCircleV(center, 10 * canvas.scale, Color{208, 158, 126, 15});
-        }
-    }
-    // 边缘环纹缓慢转动，延续新典花纹页的背景动感，不覆盖设置行。
-    for (Vector2 center : {canvas.Point(-110,130),canvas.Point(canvas.width+110,canvas.height-110)})
-        DrawRing(center,220*canvas.scale,221*canvas.scale,phase*3,phase*3+300,80,Color{208,158,126,18});
-    Frame(canvas,Color{149,113,84,180},canvas.width,canvas.height);
-}
-
-/// @brief 页面操作按钮；hover 只影响外观，点击区域由 UpdateMenuPage 使用相同矩形。
-void PageButton(const menu::Canvas& canvas, Font font, Rectangle bounds, const char* label,
-                const ui::MenuMotion& motion) {
-    const float hover=CheckCollisionPointRec(GetMousePosition(),bounds) ? 1.0F : 0.0F;
-    DrawRectangleRec(bounds, Color{69,32,32,170});
-    ui::FocusLine({bounds.x,bounds.y+bounds.height},{bounds.x+bounds.width,bounds.y+bounds.height},
-                  canvas.scale,kGold,hover,motion.Phase());
-    ui::GlowText(font,label,{bounds.x+12*canvas.scale,bounds.y+8*canvas.scale},22*canvas.scale,
-                 ui::Blend(kIvory,kGold,hover),kGold,hover*motion.Pulse());
+/// @brief 将借用的立绘等比放入屏幕矩形，布局铺满时仍保持人物原始比例。
+void Portrait(Texture2D texture,Rectangle slot,Color color) {
+    const float scale=std::min(slot.width/texture.width,slot.height/texture.height);
+    const float width=texture.width*scale,height=texture.height*scale;
+    DrawTexturePro(texture,{0,0,static_cast<float>(texture.width),static_cast<float>(texture.height)},
+                   {slot.x+(slot.width-width)/2,slot.y+(slot.height-height)/2,width,height},{},0,color);
 }
 }  // namespace
 
@@ -95,7 +59,7 @@ void Game::DrawMainMenu() const {
         DrawRectangleRec(canvas.Rect(layout.menuLeft - 12, layout.menuTop + (titleIntro_ ? 250 : -10),
             layout.menuWidth + 24, titleIntro_ ? 94 : layout.rowCount * 45 + 12), Color{252, 246, 236, 228});
     }
-    Frame(canvas, Color{134, 50, 57, 210}, layout.width, layout.height);
+    menu::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
     const float titleX = layout.compact ? layout.width / 2 : layout.width - 650;
     Text(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet, layout.compact);
     Text(canvas, common.uiFont, "the Embodiment of Scarlet Devil", titleX + (layout.compact ? 0 : 5),
@@ -144,10 +108,8 @@ void Game::DrawOptions() const {
     const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
     const bool compact=canvas.width<1000;
     const Font font=assets_.Common().uiFont;
-    DarkPage(canvas,menuMotion_);
-    Text(canvas,font,"OPTION",compact?64:100,compact?942:590,52,Color{173,61,65,255});
-    Text(canvas,font,"游戏设置",canvas.width/2,compact?90:72,35,kIvory,true);
-    Text(canvas,font,"设置自动保存 · Player 为额外残机",canvas.width/2,compact?146:116,17,kGold,true);
+    menu::DrawPageSurface(canvas,menuMotion_);
+    menu::DrawPageHeader(canvas,font,"游戏设置","设置自动保存 · Player 为额外残机","OPTION");
     const std::array<std::string,6> values{
         kSupportedFpsLimits[fpsLimitIndex_]==0 ? "Unlimited" : std::to_string(kSupportedFpsLimits[fpsLimitIndex_]),
         std::to_string(musicVolume_)+"%",std::string(TextFormat("%.1fx",mouseSensitivity_/100.0F)),
@@ -161,8 +123,7 @@ void Game::DrawOptions() const {
         ChoiceText(canvas,font,menu::kOptionLabels[index],compact?64:322,y,compact?24:22,
                    Color{177,150,143,255},kGold,weight,reveal,menuMotion_.Pulse());
         const auto row=menu::OptionRow(canvas,index);
-        ui::FocusLine({row.x+12*canvas.scale,row.y+row.height},{row.x+row.width-12*canvas.scale,row.y+row.height},
-                      canvas.scale,Fade(kGold,reveal),weight,menuMotion_.Phase());
+        menu::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
         if(index>=menu::kNumericOptions)continue;
         ChoiceText(canvas,font,values[index].c_str(),compact?552:795,y,23,kIvory,kGold,
                    weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash(),true);
@@ -174,8 +135,7 @@ void Game::DrawOptions() const {
             ui::DrawCentered(font,direction<0?"<":">",arrow.x+arrow.width/2,arrow.y+2*canvas.scale,23*canvas.scale,color);
         }
     }
-    Text(canvas,font,"方向键选择 / 调整   Z / Enter 确认   Esc 返回",canvas.width/2,compact?1036:692,18,kGold,true);
-    Text(canvas,font,"开局资源在下一局生效",canvas.width/2,compact?1069:722,15,Color{163,133,121,255},true);
+    menu::DrawPageFooter(canvas,font,"方向键选择 / 调整   Z / Enter 确认   Esc 返回","开局资源在下一局生效");
 }
 
 void Game::DrawMenuPage() const {
@@ -184,13 +144,13 @@ void Game::DrawMenuPage() const {
     const bool compact=layout.compact;
     const auto& common = assets_.Common();
     const Font font = common.uiFont;
-    DarkPage(canvas,menuMotion_);
-    PageButton(canvas, font, layout.Back(), "返回 / Esc",menuMotion_);
+    menu::DrawPageSurface(canvas,menuMotion_);
+    menu::DrawPageButton(canvas,font,layout.Back(),"返回 / Esc",menuMotion_);
     if (state_ == RunState::StartSetup) {
         if (common.reimuPortrait.id != 0) {
             const auto texture = common.reimuPortrait;
-            DrawTexturePro(texture, {0, 0, static_cast<float>(texture.width), static_cast<float>(texture.height)},
-                canvas.Rect((compact?244:130)-35*(1-menuMotion_.Reveal()),compact?142:82,compact?272:357,compact?434:570),{},0,Fade(WHITE,menuMotion_.Reveal()));
+            Portrait(texture,canvas.Rect((compact?244:130)-35*(1-menuMotion_.Reveal()),compact?142:82,
+                     compact?272:357,compact?434:570),Fade(WHITE,menuMotion_.Reveal()));
         }
         Text(canvas, font, "博丽 灵梦", compact?380:260, compact?584:598, 37, kIvory, true);
         Text(canvas, font, "Stage 1 · Mystic Flier", compact?380:790, compact?86:100, 25, kGold, true);
@@ -227,7 +187,7 @@ void Game::DrawMenuPage() const {
                     ui::Blend(kGold,kScarlet,weight),weight*reveal,menuMotion_.Phase());
             }
         }
-        PageButton(canvas, font, layout.Forward(), setupStep_ >= 2 ? "开始游戏 / Z" : "下一步 / Z",menuMotion_);
+        menu::DrawPageButton(canvas,font,layout.Forward(),setupStep_>=2?"开始游戏 / Z":"下一步 / Z",menuMotion_);
     } else if (state_ == RunState::MusicRoom) {
         Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);
         constexpr std::array<const char*, 3> names{"比赤色更鲜红的梦", "宛如鬼灯的鲜红之魂", "妖魔夜行"};

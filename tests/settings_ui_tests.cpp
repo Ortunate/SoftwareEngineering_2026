@@ -80,8 +80,8 @@ void Click(koumakyou::Game& game, int x, int y) {
     Event(7, x, y); Event(6, MOUSE_BUTTON_LEFT); Frame(game);
     Event(5, MOUSE_BUTTON_LEFT); Frame(game);
 }
-/// @brief 按当前窗口逻辑尺寸保存页面；settleFrames 默认等待进场结束，传零可保存过渡帧。
-void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24) {
+/// @brief 保存当前窗口；settleFrames 可为零，filled 检查页顶/页底渐变抵达窗口边缘，防止退回居中留边。
+void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, bool filled = false) {
     for (int frame=0;frame<settleFrames;++frame) Frame(game);
     RenderTexture2D target = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
     BeginTextureMode(target);
@@ -90,6 +90,13 @@ void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24) {
     EndTextureMode();
     Image image = LoadImageFromTexture(target.texture);
     ImageFlipVertical(&image);
+    if(filled) {
+        const Color top=GetImageColor(image,image.width/2,0),bottom=GetImageColor(image,image.width/2,image.height-1);
+        Check(std::abs(top.r-18)<=2 && std::abs(top.g-16)<=2 && std::abs(top.b-19)<=2,
+              "secondary page top has letterboxing or wrong template");
+        Check(std::abs(bottom.r-62)<=2 && std::abs(bottom.g-17)<=2 && std::abs(bottom.b-25)<=2,
+              "secondary page bottom has letterboxing or wrong template");
+    }
     Check(ExportImage(image, path), "screenshot export failed");
     UnloadImage(image);
     UnloadRenderTexture(target);
@@ -105,7 +112,8 @@ void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots
         const std::string dimensions=std::to_string(GetScreenWidth())+"x"+std::to_string(GetScreenHeight());
         for(int page=0;page<static_cast<int>(names.size());++page) {
             koumakyou::GameLifecycleProbe::Show(game,page);
-            Capture(game,(screenshots/(dimensions+"-"+names[page]+".png")).string().c_str(),0);
+            Capture(game,(screenshots/(dimensions+"-"+names[page]+".png")).string().c_str(),0,
+                    page>=2 && page<=11 && page!=4);
         }
         koumakyou::GameLifecycleProbe::Show(game,3);
         const koumakyou::menu::BindingsLayout bindings(GetScreenWidth(),GetScreenHeight());
@@ -194,10 +202,10 @@ int main(int argc, char** argv) {
             Capture(game, (screenshots / "mode.png").string().c_str());
             game.OpenOptions();
             Event(7, 0, 0); Frame(game);
-            // 在最小/默认窗口宽度下，数字、文字、按钮外一像素及行空白均不能调值。
+            // 在两种横屏宽度下，数字、文字、按钮外一像素及行空白均不能调值。
             for (int width : {900, 1100}) {
                 SetWindowSize(width, 620); Frame(game);
-                const koumakyou::menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+                const auto canvas=koumakyou::menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
                 for (int row = 0; row < 3; ++row) {
                     const auto bounds = koumakyou::menu::OptionRow(canvas, row);
                     const auto left = koumakyou::menu::OptionArrow(canvas, row, -1);
@@ -249,7 +257,9 @@ int main(int argc, char** argv) {
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).initialBombs == 2, "bomb count not saved");
             Key(game, KEY_DOWN); Key(game, KEY_Z);
             // 点击 Focus 行打开录入；持续按住的激活点击不能立即变成新绑定。
-            Event(7, 300, 316); Event(6, MOUSE_BUTTON_LEFT); Frame(game); Frame(game);
+            const koumakyou::menu::BindingsLayout bindingLayout(GetScreenWidth(),GetScreenHeight());
+            const auto focus=bindingLayout.Row(6);
+            Event(7,focus.x+focus.width/2,focus.y+focus.height/2); Event(6,MOUSE_BUTTON_LEFT); Frame(game); Frame(game);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_SIDE), "opening click captured");
             Capture(game, (screenshots / "binding-prompt.png").string().c_str());
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);

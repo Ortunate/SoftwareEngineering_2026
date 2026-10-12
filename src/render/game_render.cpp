@@ -7,6 +7,7 @@
 #include "stages/stage1/scenery.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/menu_layout.hpp"
+#include "render/menu_page.hpp"
 #include "render/ui_typography.hpp"
 #include "render/ui_effects.hpp"
 
@@ -307,21 +308,15 @@ void Game::DrawKeyBindings() const {
     const Font font=assets_.Common().uiFont;
     const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto& canvas=layout.canvas;
-    const float scale=canvas.scale,center=canvas.Point(canvas.width/2,0).x;
-    const Color gold{233,204,139,255};
-    DrawRectangleGradientV(0,0,GetScreenWidth(),GetScreenHeight(),Color{18,16,19,255},Color{62,17,25,255});
-    const auto centered=[&](const char* text,float y,float size,Color color) {
-        ui::DrawCentered(font,text,center,canvas.Point(0,y).y,
-                         ui::FittedSize(font,text,size*scale,(canvas.width-80)*scale),color);
-    };
-    centered("KEY BINDINGS",layout.compact?70:45,42,RAYWHITE);
-    centered("Select an action, then press a key or mouse button",layout.compact?145:101,18,Color{193,162,150,255});
+    const float scale=canvas.scale;
+    const Color gold=menu::kPageGold;
+    menu::DrawPageSurface(canvas,menuMotion_);
+    menu::DrawPageHeader(canvas,font,"KEY BINDINGS","Select an action, then press a key or mouse button","KEY BINDINGS");
     for(int index=0;index<static_cast<int>(kBindingNames.size());++index) {
         const auto row=layout.Row(index);
         const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.009F);
         const float size=(layout.compact?20:17)*scale,y=row.y+(layout.compact?10:6)*scale;
-        DrawRectangleRec(row,Fade(ui::Blend(Color{32,17,22,170},Color{84,38,34,180},weight),reveal));
-        ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},scale,gold,weight*reveal,menuMotion_.Phase());
+        menu::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
         ui::GlowText(font,kBindingNames[index],{row.x+(15-6*weight+12*(1-reveal))*scale,y},size,
                      Fade(ui::Blend(Color{193,162,150,255},gold,weight),reveal),gold,weight*menuMotion_.Pulse());
         const auto key=KeyLabel(BindingAt(index));
@@ -333,23 +328,18 @@ void Game::DrawKeyBindings() const {
     for(int index=0;index<2;++index) {
         const float weight=menuMotion_.Weight(static_cast<int>(kBindingNames.size())+index);
         const auto button=layout.Button(index);
-        DrawRectangleRec(button,Color{55,30,29,180});
-        ui::FocusLine({button.x,button.y+button.height},{button.x+button.width,button.y+button.height},scale,gold,weight,menuMotion_.Phase());
-        const float size=18*scale,width=ui::MeasureText(font,buttons[index],size).x;
-        ui::GlowText(font,buttons[index],{button.x+(button.width-width)/2,button.y+12*scale},size,
-                     ui::Blend(RAYWHITE,gold,weight),gold,weight*menuMotion_.Pulse());
+        menu::DrawPageButton(canvas,font,button,buttons[index],menuMotion_,weight);
     }
-    if(layout.compact) {
-        centered("Arrow Keys / W / S: Select   Enter: Rebind",1010,20,Color{193,162,150,235});
-        centered("Esc: Options",1050,20,Color{193,162,150,235});
-    } else centered("Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options",578,17,Color{193,162,150,235});
+    if(layout.compact)
+        menu::DrawPageFooter(canvas,font,"Arrow Keys / W / S: Select   Enter: Rebind","Esc: Options");
+    else menu::DrawPageFooter(canvas,font,"Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options");
     if(waitingForBinding_) {
         DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,185});
         const auto modal=layout.Modal();
         DrawRectangleRounded(modal,0.16F,10,Color{38,12,25,250});
         DrawRectangleRoundedLinesEx(modal,0.16F,10,2*scale,gold);
         const auto modalText=[&](const char* text,float offset,float size,Color color) {
-            ui::DrawCentered(font,text,modal.x+modal.width/2,modal.y+offset*scale,
+            ui::DrawCentered(font,text,modal.x+modal.width/2,modal.y+offset*canvas.yScale,
                              ui::FittedSize(font,text,size*scale,modal.width-40*scale),color);
         };
         modalText("PRESS KEY / MOUSE BUTTON",32,24,RAYWHITE);

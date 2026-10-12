@@ -152,6 +152,36 @@ struct TitleLayout {
         const float sourceHeight = height / cover;
         return {0, (textureHeight - sourceHeight) * 0.25F, sourceWidth, sourceHeight};
     }
+    /// @brief 分层背景的屏幕矩形；尺寸为正数纹理像素，relativeScale/offset 相对于铺满窗口的场景画布。
+    /// 环境允许越过窗口边缘以等比覆盖，左边固定；offset 的 x/y 分别以场景宽/高为单位。
+    [[nodiscard]] Rectangle LayerFrame(int textureWidth, int textureHeight,
+                                       float relativeScale = 1, Vector2 offset = {}) const {
+        const float factor = std::max(width / textureWidth, height / textureHeight);
+        const float sceneWidth = textureWidth * factor, sceneHeight = textureHeight * factor;
+        return canvas.Rect(offset.x * sceneWidth, (height - sceneHeight) * 0.25F + offset.y * sceneHeight,
+                           sceneWidth * relativeScale, sceneHeight * relativeScale);
+    }
+    /// @brief 红月的屏幕矩形；logo 为当前字标屏幕矩形，月球中心与字标中心重合。
+    /// 透明素材中月球中心为画布的 (0.34,0.42)、直径约为高度的 0.62；不能用整张透明画布中心定位。
+    [[nodiscard]] Rectangle MoonFrame(int textureWidth, int textureHeight, Rectangle logo) const {
+        const float diameter = std::min({320 * canvas.scale, logo.width * 0.65F, logo.height * 1.3F});
+        const float factor = diameter / (textureHeight * 0.62F);
+        const float frameWidth = textureWidth * factor, frameHeight = textureHeight * factor;
+        return {logo.x + logo.width / 2 - frameWidth * 0.34F,
+                logo.y + logo.height / 2 - frameHeight * 0.42F, frameWidth, frameHeight};
+    }
+    /// @brief 灵梦层独立等比定位；透明画布左侧约 58% 为人物，窄屏缩小以保留完整人物轮廓。
+    [[nodiscard]] Rectangle ReimuFrame(int textureWidth, int textureHeight) const {
+        auto frame = LayerFrame(textureWidth, textureHeight, 0.73F, {0.025F, 0.16F});
+        if (compact) {
+            const float factor = std::min(1.0F, (canvas.Rect(0,0,width-56,1).width) / (frame.width * 0.58F));
+            frame.width *= factor;
+            frame.height *= factor;
+            frame.x = canvas.Point(28,0).x;
+            frame.y = canvas.Point(0,220).y;
+        }
+        return frame;
+    }
 };
 #ifdef KOUMAKYOU_DEBUG_FEATURES
 inline constexpr int kTitleRowCount = 11;

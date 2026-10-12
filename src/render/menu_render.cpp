@@ -63,8 +63,20 @@ void Game::DrawMainMenu() const {
     const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), menu::kTitleRowCount);
     const auto& canvas = layout.canvas;
     const auto& common = assets_.Common();
+    const auto logoBounds = layout.Logo(IsTextureValid(common.titleLogo) ? common.titleLogo.width : 2019,
+                                       IsTextureValid(common.titleLogo) ? common.titleLogo.height : 779);
     ClearBackground(kIvory);
-    if (common.titleBackground.id != 0) {
+    if (IsTextureValid(common.titleMoon) && IsTextureValid(common.titleShrine) && IsTextureValid(common.titleReimu)) {
+        DrawRectangleGradientV(0,0,GetScreenWidth(),GetScreenHeight(),kIvory,Color{246,221,208,255});
+        const auto layer = [](Texture2D texture, Rectangle frame) {
+            DrawTexturePro(texture,{0,0,static_cast<float>(texture.width),static_cast<float>(texture.height)},
+                           frame,{},0,WHITE);
+        };
+        // 透明纹理由远到近合成；人物与神社独立定位，石阶不会被重复烘焙进人物层。
+        layer(common.titleMoon,layout.MoonFrame(common.titleMoon.width,common.titleMoon.height,logoBounds));
+        layer(common.titleShrine,layout.LayerFrame(common.titleShrine.width,common.titleShrine.height));
+        layer(common.titleReimu,layout.ReimuFrame(common.titleReimu.width,common.titleReimu.height));
+    } else if (common.titleBackground.id != 0) {
         DrawTexturePro(common.titleBackground,
             layout.BackgroundSource(common.titleBackground.width, common.titleBackground.height),
             canvas.Rect(0, 0, layout.width, layout.height), {}, 0, WHITE);
@@ -80,7 +92,7 @@ void Game::DrawMainMenu() const {
         // 字标自身带英文副标题和“异典”饰线，保留透明区域，不叠加重复的普通文字。
         DrawTexturePro(common.titleLogo,
             {0, 0, static_cast<float>(common.titleLogo.width), static_cast<float>(common.titleLogo.height)},
-            layout.Logo(common.titleLogo.width, common.titleLogo.height), {}, 0, WHITE);
+            logoBounds, {}, 0, WHITE);
     } else {
         const float titleX = layout.width / 2;
         TitleText(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet);

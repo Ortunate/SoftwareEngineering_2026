@@ -14,6 +14,12 @@
 namespace koumakyou {
 /// @brief 仅图形测试使用的友元探针；复用已加载的关卡素材创建各 UI 展示状态，不替代正式流程回归。
 struct GameLifecycleProbe {
+    /// @brief 检查运行时确实加载三张独立纹理，没有因路径错误回退到旧合成图。
+    static bool HasTitleLayers(const Game& game) {
+        const auto& common = game.assets_.Common();
+        return IsTextureValid(common.titleMoon) && IsTextureValid(common.titleShrine) &&
+               IsTextureValid(common.titleReimu) && !IsTextureValid(common.titleBackground);
+    }
     /// @brief 检查汉化后的操作与所有合法按键名称都在实际加载字体中，防止更新字库后仍出现缺字。
     static bool HasLocalizedGlyphs(const Game& game) {
         const Font font=game.assets_.Common().uiFont;
@@ -174,6 +180,7 @@ int main(int argc, char** argv) {
         {
             koumakyou::Game game;
             Check(koumakyou::GameLifecycleProbe::HasLocalizedGlyphs(game),"localized binding label glyph missing");
+            Check(koumakyou::GameLifecycleProbe::HasTitleLayers(game),"separate title layer loading failed");
             SetTargetFPS(0);
             Capture(game, (screenshots / "title.png").string().c_str());
             Key(game, KEY_Z);

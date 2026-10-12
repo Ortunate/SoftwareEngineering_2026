@@ -20,7 +20,8 @@ struct CommonAssets {
     Model skyboxModel{};
     TextureCubemap skyboxTexture{};
     Shader skyboxShader{};
-    Texture2D titleBackground{};
+    Texture2D titleBackground{}; // 三图层缺失时才加载的旧合成背景，由管理器独占。
+    Texture2D titleMoon{}, titleShrine{}, titleReimu{}; // 首页独立透明图层；分别持有纹理，不与关卡立绘共用句柄。
     Texture2D titleLogo{}; // 管理器独占的透明首页字标，随通用素材加载/释放；无效时绘制文字替代。
     Texture2D reimuPortrait{};
     Texture2D referenceFrame{}, referenceStage1{}; // 管理器独占的原作侧栏图集与一面题签。

@@ -4,7 +4,10 @@
 
 | 文件 | 用途与生成提示 |
 |---|---|
-| `assets/runtime/common/title_reimu_modern.png` | 宽幅现代动画插画：象牙白与朱红色调，红月、神社、樱花，灵梦坐在左侧；右侧留出菜单空间，无文字 |
+| `assets/runtime/common/title_reimu_modern.png` | 旧合成首页插画，仅在独立图层缺失时回退使用 |
+| `assets/runtime/common/title_layers/moon.png` | 红月和半透明云雾，周围保留 Alpha |
+| `assets/runtime/common/title_layers/shrine.png` | 神社、鸟居、石阶与植被，不含人物或月亮 |
+| `assets/runtime/common/title_layers/reimu.png` | 独立灵梦透明层，托腮及膝上手部已按反馈重绘；完整提示见 `TITLE_BACKGROUND_LAYERS.md` |
 | `assets/runtime/stages/stage1/reimu_cutout.png` | 以项目既有灵梦立绘为参考，保留服装、姿势和御币，移除背景，输出真实透明通道 |
 | `assets/runtime/stages/stage1/rumia_cutout.png` | 以项目既有露米娅立绘为参考，保留角色轮廓和服装，移除背景，输出真实透明通道 |
 

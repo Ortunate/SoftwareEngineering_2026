@@ -132,6 +132,19 @@ struct TitleLayout {
     [[nodiscard]] Rectangle Row(int index) const {
         return canvas.Rect(menuLeft, menuTop + index * 45, menuWidth, 40);
     }
+    /// @brief 透明字标的屏幕矩形；纹理尺寸为正数像素，按窗口中心等比缩放。
+    /// 宽屏可使用菜单左侧空间放大字标；较窄窗口只占菜单上方，始终避开菜单和边框。
+    [[nodiscard]] Rectangle Logo(int textureWidth, int textureHeight) const {
+        const float top = compact ? 38.0F : 32.0F;
+        const float sideWidth = 2 * (menuLeft - width / 2 - 20);
+        const bool besideMenu = !compact && sideWidth >= 400;
+        const float maximumWidth = std::min(width - 112, besideMenu ? std::min(680.0F, sideWidth) : 680.0F);
+        const float maximumHeight = besideMenu ? 240.0F :
+            std::min(compact ? 168.0F : 180.0F, menuTop - top - 12);
+        const float factor = std::min(maximumWidth / textureWidth, maximumHeight / textureHeight);
+        const float logoWidth = textureWidth * factor, logoHeight = textureHeight * factor;
+        return canvas.Rect((width - logoWidth) / 2, top, logoWidth, logoHeight);
+    }
     /// @brief 等比铺满窗口的素材裁剪矩形（纹理像素）；纹理尺寸须为正，保留左侧人物。
     [[nodiscard]] Rectangle BackgroundSource(int textureWidth, int textureHeight) const {
         const float cover = std::max(width / textureWidth, height / textureHeight);

@@ -149,6 +149,12 @@ void AssetManager::LoadCommon() {
     common_.referenceFrame = LoadTextureAsset(root_ / "common/reference_frame.png");
     common_.referenceStage1 = LoadTextureAsset(root_ / "common/reference_stage1.png");
     common_.titleBackground = LoadTextureAsset(root_ / "common/title_reimu_modern.png");
+    common_.titleLogo = LoadTextureAsset(root_ / "common/title_logo_newchronicle.png");
+    if (IsTextureValid(common_.titleLogo)) {
+        // 高分辨率字标会随窗口缩小；mipmap 避免细笔画和装饰线在缩放时跳动、锯齿化。
+        GenTextureMipmaps(&common_.titleLogo);
+        SetTextureFilter(common_.titleLogo, TEXTURE_FILTER_TRILINEAR);
+    }
     common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/reimu_cutout.png");
     const auto fontPath = root_ / "common/ui_font.otf";
     common_.uiFont = GetFontDefault();
@@ -268,6 +274,7 @@ void AssetManager::UnloadCommon() {
     UnloadTextureAsset(common_.referenceFrame);
     UnloadTextureAsset(common_.referenceStage1);
     UnloadTextureAsset(common_.titleBackground);
+    UnloadTextureAsset(common_.titleLogo);
     UnloadTextureAsset(common_.reimuPortrait);
     if (common_.uiFont.texture.id != 0 &&
         common_.uiFont.texture.id != GetFontDefault().texture.id)

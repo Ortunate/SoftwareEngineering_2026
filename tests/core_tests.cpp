@@ -16,6 +16,11 @@ void TestResponsiveLayouts() {
         };
         const koumakyou::menu::TitleLayout title(size.x,size.y,koumakyou::menu::kTitleRowCount);
         for(int index=0;index<title.rowCount;++index)fits(title.Row(index));
+        const auto logo = title.Logo(2019,779);
+        fits(logo);
+        assert(std::abs(logo.x + logo.width / 2 - size.x / 2) < 0.001F);
+        assert(std::abs(logo.width / logo.height - 2019.0F / 779) < 0.001F);
+        assert(logo.y + logo.height < title.Row(0).y || logo.x + logo.width < title.Row(0).x);
         const auto options=koumakyou::menu::PageCanvas(size.x,size.y);
         const auto full=options.Rect(0,0,options.width,options.height);
         assert(full.x==0 && full.y==0 && std::abs(full.width-size.x)<0.001F && std::abs(full.height-size.y)<0.001F);

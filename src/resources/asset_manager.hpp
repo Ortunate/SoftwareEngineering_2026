@@ -21,6 +21,7 @@ struct CommonAssets {
     TextureCubemap skyboxTexture{};
     Shader skyboxShader{};
     Texture2D titleBackground{};
+    Texture2D titleLogo{}; // 管理器独占的透明首页字标，随通用素材加载/释放；无效时绘制文字替代。
     Texture2D reimuPortrait{};
     Texture2D referenceFrame{}, referenceStage1{}; // 管理器独占的原作侧栏图集与一面题签。
     Font uiFont{}; // 全 UI 共用 SemiBold 衬线字体与等宽数字；管理器持有，缺失时借用默认字体，不能重复释放。

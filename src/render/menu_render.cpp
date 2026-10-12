@@ -76,10 +76,17 @@ void Game::DrawMainMenu() const {
             layout.menuWidth + 24, titleIntro_ ? 94 : layout.rowCount * 45 + 12), Color{252, 246, 236, 228});
     }
     menu::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
-    const float titleX = layout.width / 2;
-    TitleText(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet);
-    TitleText(canvas, common.uiFont, "the Embodiment of Scarlet Devil", titleX,
-              layout.compact ? 125 : 171, 18, kScarlet);
+    if (IsTextureValid(common.titleLogo)) {
+        // 字标自身带英文副标题和“新典”饰线，保留透明区域，不叠加重复的普通文字。
+        DrawTexturePro(common.titleLogo,
+            {0, 0, static_cast<float>(common.titleLogo.width), static_cast<float>(common.titleLogo.height)},
+            layout.Logo(common.titleLogo.width, common.titleLogo.height), {}, 0, WHITE);
+    } else {
+        const float titleX = layout.width / 2;
+        TitleText(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet);
+        TitleText(canvas, common.uiFont, "the Embodiment of Scarlet Devil", titleX,
+                  layout.compact ? 125 : 171, 18, kScarlet);
+    }
     if (titleIntro_) {
         const float pulse = menuMotion_.Pulse();
         Text(canvas, common.uiFont, "PRESS Z / ENTER", layout.menuLeft + layout.menuWidth / 2,

@@ -6,6 +6,7 @@
 #include "config/settings.hpp"
 #include "stages/stage1/scenery.hpp"
 #include "render/gameplay_layout.hpp"
+#include "render/menu_layout.hpp"
 #include "render/ui_typography.hpp"
 #include "render/ui_effects.hpp"
 
@@ -21,6 +22,8 @@ using namespace game_math;
 #include "rlgl.h"
 
 void Game::Draw() const {
+    // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
+    if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
     if (state_ == RunState::MainMenu) {
         DrawMainMenu();
     } else if (state_ == RunState::Options) {
@@ -197,14 +200,16 @@ void Game::DrawHud() const {
 
 void Game::DrawOverlay() const {
     const Font font = assets_.Common().uiFont;
+    const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto& canvas=layout.canvas;
     if (messageTimer_ > 0.0F) {
-        const int fontSize = 29;
-        const float width = ui::MeasureText(font, message_.c_str(), fontSize).x;
-        const float x = (GetScreenWidth() - width) / 2;
-        const float y = GetScreenHeight() / 2 - 105;
-        DrawRectangleRec({x - 24, y - 12, width + 48, fontSize + 24.0F}, Color{5, 7, 18, 185});
-        ui::DrawText(font, message_.c_str(), {x + 2, y + 2}, fontSize, Color{80, 20, 40, 230});
-        ui::DrawText(font, message_.c_str(), {x, y}, fontSize, RAYWHITE);
+        const float size=ui::FittedSize(font,message_.c_str(),29*canvas.scale,(canvas.width-100)*canvas.scale);
+        const float width=ui::MeasureText(font,message_.c_str(),size).x;
+        const auto center=canvas.Point(canvas.width/2,205);
+        const float x=center.x-width/2;
+        DrawRectangleRec({x-24*canvas.scale,center.y-12*canvas.scale,width+48*canvas.scale,size+24*canvas.scale},Color{5,7,18,185});
+        ui::DrawText(font,message_.c_str(),{x+2*canvas.scale,center.y+2*canvas.scale},size,Color{80,20,40,230});
+        ui::DrawText(font,message_.c_str(),{x,center.y},size,RAYWHITE);
     }
 
     DrawDialogue();
@@ -213,36 +218,33 @@ void Game::DrawOverlay() const {
     if (state_ == RunState::Paused) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{0, 0, 0, 155});
-        const float centerX = GetScreenWidth() * 0.5F;
-        const float centerY = GetScreenHeight() * 0.5F;
-        const auto centered = [&](const char* text, float y, float size, Color color) {
-            ui::DrawCentered(font, text, centerX, y, size, color);
-        };
-        DrawRectangleRounded({centerX - 245, centerY - 130, 490, 310}, 0.1F, 12, Color{38, 12, 25, 225});
-        centered("暂停", centerY - 110, 43, RAYWHITE);
-        constexpr std::array<const char*, 4> labels{"解除暂停", "返回开局选择", "返回主菜单", "从头再来"};
-        for (int index = 0; index < 4; ++index) {
+        const auto center=canvas.Point(380,310);
+        DrawRectangleRounded(layout.PausePanel(),0.1F,12,Color{38,12,25,225});
+        ui::DrawCentered(font,"暂停",center.x,canvas.Point(0,200).y,43*canvas.scale,RAYWHITE);
+        constexpr std::array<const char*,4> labels{"解除暂停","返回开局选择","返回主菜单","从头再来"};
+        for(int index=0;index<4;++index) {
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            const float width=ui::MeasureText(font,labels[index],25).x;
-            ui::GlowText(font,labels[index],{centerX-width/2-8*weight+16*(1-reveal),centerY-36+index*48},25,
+            const float size=25*canvas.scale,width=ui::MeasureText(font,labels[index],size).x;
+            const auto row=layout.PauseRow(index);
+            ui::GlowText(font,labels[index],{center.x-width/2+(-8*weight+16*(1-reveal))*canvas.scale,row.y+4*canvas.scale},size,
                          Fade(ui::Blend(Color{190,153,164,255},GOLD,weight),reveal),GOLD,weight*menuMotion_.Pulse());
-            ui::FocusLine({centerX-190,centerY+index*48},{centerX+190,centerY+index*48},1,
+            ui::FocusLine({row.x+20*canvas.scale,row.y+row.height},{row.x+row.width-20*canvas.scale,row.y+row.height},canvas.scale,
                           GOLD,weight*reveal,menuMotion_.Phase());
         }
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
-        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                      Color{0, 0, 0, 175});
-        const char* title = state_ == RunState::Won ? stageContent_->ClearTitle() : "GAME OVER";
-        ui::DrawCentered(font, title, GetScreenWidth() / 2.0F, GetScreenHeight() / 2.0F - 75, 56,
-                 state_ == RunState::Won ? GOLD : Color{255, 90, 110, 255});
-        const int center = GetScreenWidth() / 2;
-        const int y = GetScreenHeight() / 2;
-        const char* detail = TextFormat("SCORE %09lld   GRAZE %d   MISS %d   BOMB %d", score_, graze_, missCount_, bombCount_);
-        ui::DrawCentered(font, detail, center, y, 22, RAYWHITE);
-        const char* mode = spellPractice_ ? "SPELL PRACTICE" : practiceMode_ ? "STAGE PRACTICE" : challengeMode_ ? "CHALLENGE" : "NORMAL";
-        ui::DrawCentered(font, mode, center, y + 40, 18, GOLD);
-        const char* retry = "R Restart     Esc / M Main Menu";
-        ui::DrawCentered(font, retry, center, y + 85, 22, RAYWHITE);
+        DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,175});
+        const float center=canvas.Point(380,0).x;
+        const auto centered=[&](const char* text,float y,float size,Color color) {
+            const float fitted=ui::FittedSize(font,text,size*canvas.scale,660*canvas.scale);
+            ui::DrawCentered(font,text,center,canvas.Point(0,y).y,fitted,color);
+        };
+        const char* title=state_==RunState::Won ? stageContent_->ClearTitle() : "GAME OVER";
+        centered(title,205,56,state_==RunState::Won?GOLD:Color{255,90,110,255});
+        // 统计拆成两行，最大分数/擦弹数也不会挤出窄窗口或与重试提示重叠。
+        centered(TextFormat("SCORE %09lld",score_),295,26,RAYWHITE);
+        centered(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),337,22,RAYWHITE);
+        centered(spellPractice_?"SPELL PRACTICE":practiceMode_?"STAGE PRACTICE":challengeMode_?"CHALLENGE":"NORMAL",382,18,GOLD);
+        centered("R Restart     Esc / M Main Menu",430,22,RAYWHITE);
     }
 
     if (screenFlashTimer_ > 0.0F) {
@@ -302,72 +304,57 @@ void Game::DrawSpellCutIn() const {
     ui::DrawText(assets_.Common().uiFont,boss_->SpellName(),l.Point(850,670),32*l.scale,Fade(Color{190,185,255,255},opacity));
 }
 void Game::DrawKeyBindings() const {
-    const Font font = assets_.Common().uiFont;
-    const int screenWidth = GetScreenWidth();
-    const int screenHeight = GetScreenHeight();
-    const float centerX = static_cast<float>(screenWidth) * 0.5F;
-    DrawRectangleGradientV(0,0,screenWidth,screenHeight,Color{18,16,19,255},Color{62,17,25,255});
-
-    const char* title = "KEY BINDINGS";
-    ui::DrawCentered(font, title, centerX, 45, 42, RAYWHITE);
-    const char* instruction =
-        "Select an action, then press a key or mouse button";
-    ui::DrawCentered(font, instruction, centerX, 101, 18, Color{193,162,150,255});
-
-    for (int index = 0; index < static_cast<int>(kBindingNames.size()); ++index) {
-        const Rectangle row{centerX - 270.0F,
-                            kBindingsTop + static_cast<float>(index) * kBindingsSpacing,
-                            540.0F, kBindingsHeight};
+    const Font font=assets_.Common().uiFont;
+    const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto& canvas=layout.canvas;
+    const float scale=canvas.scale,center=canvas.Point(canvas.width/2,0).x;
+    const Color gold{233,204,139,255};
+    DrawRectangleGradientV(0,0,GetScreenWidth(),GetScreenHeight(),Color{18,16,19,255},Color{62,17,25,255});
+    const auto centered=[&](const char* text,float y,float size,Color color) {
+        ui::DrawCentered(font,text,center,canvas.Point(0,y).y,
+                         ui::FittedSize(font,text,size*scale,(canvas.width-80)*scale),color);
+    };
+    centered("KEY BINDINGS",layout.compact?70:45,42,RAYWHITE);
+    centered("Select an action, then press a key or mouse button",layout.compact?145:101,18,Color{193,162,150,255});
+    for(int index=0;index<static_cast<int>(kBindingNames.size());++index) {
+        const auto row=layout.Row(index);
         const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.009F);
-        const Color gold{233,204,139,255};
+        const float size=(layout.compact?20:17)*scale,y=row.y+(layout.compact?10:6)*scale;
         DrawRectangleRec(row,Fade(ui::Blend(Color{32,17,22,170},Color{84,38,34,180},weight),reveal));
-        ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},1,
-                      gold,weight*reveal,menuMotion_.Phase());
-        ui::GlowText(font,kBindingNames[index],{row.x+15-6*weight+12*(1-reveal),row.y+6},17,
+        ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},scale,gold,weight*reveal,menuMotion_.Phase());
+        ui::GlowText(font,kBindingNames[index],{row.x+(15-6*weight+12*(1-reveal))*scale,y},size,
                      Fade(ui::Blend(Color{193,162,150,255},gold,weight),reveal),gold,weight*menuMotion_.Pulse());
-        const std::string keyName = KeyLabel(BindingAt(index));
-        ui::GlowText(font, keyName.c_str(),
-                 {row.x + row.width - 16.0F - ui::MeasureText(font, keyName.c_str(), 17).x, row.y + 6.0F}, 17,
-                 Fade(ui::Blend(Color{212,190,184,255},gold,weight),reveal),gold,
-                 weight*(menuMotion_.Pulse()+menuMotion_.Flash()));
+        const auto key=KeyLabel(BindingAt(index));
+        const float keySize=ui::FittedSize(font,key.c_str(),size,row.width*0.45F);
+        ui::GlowText(font,key.c_str(),{row.x+row.width-16*scale-ui::MeasureText(font,key.c_str(),keySize).x,y},keySize,
+                     Fade(ui::Blend(Color{212,190,184,255},gold,weight),reveal),gold,weight*(menuMotion_.Pulse()+menuMotion_.Flash()));
     }
-
-    constexpr int resetIndex = static_cast<int>(kBindingNames.size());
-    constexpr int backIndex = resetIndex + 1;
-    const Rectangle resetButton{centerX - 270.0F, 500.0F, 260.0F, 42.0F};
-    const Rectangle backButton{centerX + 10.0F, 500.0F, 260.0F, 42.0F};
-    const Rectangle buttons[2] = {resetButton, backButton};
-    const char* labels[2] = {"RESET DEFAULTS", "BACK"};
-    for (int index = 0; index < 2; ++index) {
-        const int selection = index == 0 ? resetIndex : backIndex;
-        const float weight=menuMotion_.Weight(selection);
-        const auto button=buttons[index];
+    constexpr std::array<const char*,2> buttons{"RESET DEFAULTS","BACK"};
+    for(int index=0;index<2;++index) {
+        const float weight=menuMotion_.Weight(static_cast<int>(kBindingNames.size())+index);
+        const auto button=layout.Button(index);
         DrawRectangleRec(button,Color{55,30,29,180});
-        ui::FocusLine({button.x,button.y+button.height},{button.x+button.width,button.y+button.height},1,
-                      GOLD,weight,menuMotion_.Phase());
-        const float width=ui::MeasureText(font,labels[index],18).x;
-        ui::GlowText(font,labels[index],{button.x+(button.width-width)/2,button.y+12},18,
-                     ui::Blend(RAYWHITE,GOLD,weight),GOLD,weight*menuMotion_.Pulse());
+        ui::FocusLine({button.x,button.y+button.height},{button.x+button.width,button.y+button.height},scale,gold,weight,menuMotion_.Phase());
+        const float size=18*scale,width=ui::MeasureText(font,buttons[index],size).x;
+        ui::GlowText(font,buttons[index],{button.x+(button.width-width)/2,button.y+12*scale},size,
+                     ui::Blend(RAYWHITE,gold,weight),gold,weight*menuMotion_.Pulse());
     }
-
-    const char* footer = "Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options";
-    ui::DrawCentered(font, footer, centerX, screenHeight - 42, 17, Color{193,162,150,235});
-
-    if (waitingForBinding_) {
-        DrawRectangle(0, 0, screenWidth, screenHeight, Color{0, 0, 0, 185});
-        const Rectangle modal{centerX - 250.0F,
-                              static_cast<float>(screenHeight) * 0.5F - 82.0F,
-                              500.0F, 164.0F};
-        DrawRectangleRounded(modal, 0.16F, 10, Color{38,12,25,250});
-        DrawRectangleRoundedLinesEx(modal, 0.16F, 10, 2.0F,
-                                    Color{233,204,139,255});
-        const char* prompt = "PRESS KEY / MOUSE BUTTON";
-        ui::DrawCentered(font, prompt, centerX, modal.y + 32.0F, 24, RAYWHITE);
-        ui::DrawCentered(font, kBindingNames[selectedBinding_], centerX, modal.y + 78.0F, 20,
-                 Color{233,204,139,255});
-        const char* cancel = "Esc: cancel   F3-F6: reserved   Release, then press";
-        ui::DrawCentered(font, cancel, centerX, modal.y + 120.0F, 16,
-                 Color{193,162,150,255});
+    if(layout.compact) {
+        centered("Arrow Keys / W / S: Select   Enter: Rebind",1010,20,Color{193,162,150,235});
+        centered("Esc: Options",1050,20,Color{193,162,150,235});
+    } else centered("Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options",578,17,Color{193,162,150,235});
+    if(waitingForBinding_) {
+        DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,185});
+        const auto modal=layout.Modal();
+        DrawRectangleRounded(modal,0.16F,10,Color{38,12,25,250});
+        DrawRectangleRoundedLinesEx(modal,0.16F,10,2*scale,gold);
+        const auto modalText=[&](const char* text,float offset,float size,Color color) {
+            ui::DrawCentered(font,text,modal.x+modal.width/2,modal.y+offset*scale,
+                             ui::FittedSize(font,text,size*scale,modal.width-40*scale),color);
+        };
+        modalText("PRESS KEY / MOUSE BUTTON",32,24,RAYWHITE);
+        modalText(kBindingNames[selectedBinding_],84,20,gold);
+        modalText("Esc: cancel   F3-F6: reserved   Release, then press",142,16,Color{193,162,150,255});
     }
 }
 

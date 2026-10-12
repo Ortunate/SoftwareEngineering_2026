@@ -1,4 +1,4 @@
-// 本文件定义标题菜单和选项的绘制/点击布局，防止窗口缩放后交互区域与文字错位。
+// 本文件定义所有菜单和弹窗共用的绘制/点击布局，横屏等比缩放，窄屏重排，坐标使用设计像素。
 #pragma once
 
 #include "raylib.h"
@@ -6,21 +6,33 @@
 #include <array>
 
 namespace koumakyou::menu {
-/// @brief 以 1100×760 为设计画布，等比缩放并居中；坐标单位为设计像素。
+/// @brief 可配置设计尺寸的等比居中画布；窗口及设计尺寸按至少 1 像素处理，最小化时不除零。
 struct Canvas {
     float scale;
     Vector2 origin;
-    Canvas(int width, int height)
-        : scale(std::min(width / 1100.0F, height / 760.0F)),
-          origin{(width - 1100 * scale) / 2, (height - 760 * scale) / 2} {}
+    float width, height;
+    Canvas(int windowWidth, int windowHeight, float designWidth = 1100, float designHeight = 760)
+        : scale(std::min(std::max(1,windowWidth)/std::max(1.0F,designWidth),
+                         std::max(1,windowHeight)/std::max(1.0F,designHeight))),
+          origin{},width(std::max(1.0F,designWidth)),height(std::max(1.0F,designHeight)) {
+        origin={(std::max(1,windowWidth)-width*scale)/2,(std::max(1,windowHeight)-height*scale)/2};
+    }
+    /// @brief 将设计像素坐标转换为窗口逻辑像素，不改变画布状态。
     [[nodiscard]] Vector2 Point(float x, float y) const {
         return {origin.x + x * scale, origin.y + y * scale};
     }
+    /// @brief 将设计像素矩形转换为窗口逻辑像素，供绘制和鼠标命中共同使用。
     [[nodiscard]] Rectangle Rect(float x, float y, float width, float height) const {
         const auto point = Point(x, y);
         return {point.x, point.y, width * scale, height * scale};
     }
 };
+
+/// @brief 根据窗口逻辑像素宽高选择纵向/横向设计画布，绘制与点击必须使用相同实例配置。
+inline Canvas PageCanvas(int width,int height) {
+    const bool compact=std::max(1,width)<std::max(1,height)*1.15F;
+    return Canvas(width,height,compact?760:1100,compact?1100:760);
+}
 
 inline constexpr int kOptionsCount = 9;
 inline constexpr int kNumericOptions = 6;
@@ -33,12 +45,52 @@ inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
     "KEY BINDINGS", "RESET DEFAULTS", "Quit"};
 /// @brief 第 index 行的屏幕矩形；index 为 0～8，菜单的文字与命中共用此处定义。
 inline Rectangle OptionRow(const Canvas& canvas, int index) {
-    return canvas.Rect(310, 160 + index * 48, 625, 42);
+    return canvas.width<1000 ? canvas.Rect(48,220+index*76,664,64)
+                             : canvas.Rect(310,160+index*48,625,42);
 }
-/// @brief 数值行独立箭头按钮；direction 为 -1（减小）或 1（增大）。
+/// @brief 数值行的屏幕箭头矩形；index 为 0～5，direction 为 -1（减小）或 1（增大）。
 inline Rectangle OptionArrow(const Canvas& canvas, int index, int direction) {
-    return canvas.Rect(direction < 0 ? 670 : 886, 165 + index * 48, 32, 32);
+    return canvas.width<1000 ? canvas.Rect(direction<0?420:664,230+index*76,40,40)
+                             : canvas.Rect(direction<0?670:886,165+index*48,32,32);
 }
+
+/// @brief 开局、音乐、成绩和制作信息的响应式布局；构造参数为窗口逻辑像素。
+/// 操作按钮和音乐行返回屏幕矩形；Choice 返回设计矩形供动画与文字定位。
+struct PageLayout {
+    Canvas canvas;
+    bool compact;
+    PageLayout(int width,int height):canvas(PageCanvas(width,height)),compact(canvas.width<1000) {}
+    [[nodiscard]] Rectangle Back() const { return canvas.Rect(compact?40:70,compact?1010:675,compact?210:170,42); }
+    [[nodiscard]] Rectangle Forward() const { return canvas.Rect(compact?380:775,compact?1010:675,compact?340:250,42); }
+    /// @brief 选择卡片的设计矩形，index 为 0/1；动画和文字使用它的设计坐标，输入转换后命中。
+    [[nodiscard]] Rectangle Choice(int index) const { return {compact?48.0F:640.0F,(compact?680.0F:300.0F)+index*125,compact?664.0F:385.0F,105}; }
+    /// @brief 音乐行的屏幕矩形，index 为 0～2。
+    [[nodiscard]] Rectangle Track(int index) const { return canvas.Rect(compact?48:280,(compact?280:260)+index*(compact?150:95),compact?664:680,compact?100:70); }
+};
+
+/// @brief 改键列表及录入弹窗共用布局；构造参数为窗口逻辑像素，所有方法返回屏幕矩形。
+/// 14 项局部编号含 12 个动作、恢复和返回，只有动作使用 Row。
+struct BindingsLayout {
+    Canvas canvas;
+    bool compact;
+    BindingsLayout(int width,int height)
+        :canvas(width,height,width<height*1.15F?760:900,width<height*1.15F?1100:620),compact(canvas.width<900) {}
+    /// @brief 动作行的屏幕矩形，index 为 0～11。
+    [[nodiscard]] Rectangle Row(int index) const { return canvas.Rect(compact?48:180,(compact?220:136)+index*(compact?52:28),compact?664:540,compact?48:25); }
+    /// @brief 页面底部按钮，index 为 0（恢复）或 1（返回）。
+    [[nodiscard]] Rectangle Button(int index) const { return canvas.Rect(compact?48+index*342:180+index*280,compact?920:500,compact?322:260,42); }
+    [[nodiscard]] Rectangle Modal() const { return canvas.Rect((canvas.width-600)/2,canvas.height/2-100,600,200); }
+};
+
+/// @brief 游戏叠加层的缩放与暂停命中区域；构造参数为窗口逻辑像素，返回矩形亦为屏幕像素。
+/// 独立于 3D 视口，窄屏仍居中且完整显示。
+struct OverlayLayout {
+    Canvas canvas;
+    OverlayLayout(int width,int height):canvas(width,height,760,620) {}
+    [[nodiscard]] Rectangle PausePanel() const { return canvas.Rect(135,180,490,310); }
+    /// @brief 暂停操作行，index 为 0～3，绘制与点击共用。
+    [[nodiscard]] Rectangle PauseRow(int index) const { return canvas.Rect(170,270+index*48,420,42); }
+};
 /// @brief 标题页的响应式布局；使用完整窗口，方形/竖屏将标题放到菜单上方。
 /// width/height 为窗口逻辑像素，须为正数；行数包含 Debug 专用项，绘制和点击必须共用。
 /// canvas 坐标原点在窗口左上角，不采用其他菜单页的固定画布居中留边。
@@ -53,7 +105,8 @@ struct TitleLayout {
     int rowCount;
 
     TitleLayout(int windowWidth, int windowHeight, int count)
-        : canvas(windowWidth, windowHeight), compact(windowWidth < windowHeight * 1.2F), rowCount(count) {
+        : canvas(windowWidth, windowHeight), compact(std::max(1,windowWidth)<std::max(1,windowHeight)*1.2F), rowCount(count) {
+        windowWidth=std::max(1,windowWidth); windowHeight=std::max(1,windowHeight);
         if (compact) canvas.scale = std::min(windowWidth / 900.0F, windowHeight / 900.0F);
         canvas.origin = {};
         width = windowWidth / canvas.scale;

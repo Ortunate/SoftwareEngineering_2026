@@ -10,6 +10,49 @@
 #include <array>
 #include <cmath>
 
+namespace koumakyou {
+/// @brief 仅图形测试使用的友元探针；复用已加载的关卡素材创建各 UI 展示状态，不替代正式流程回归。
+struct GameLifecycleProbe {
+    /// @brief 设置 page=0～18 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
+    static void Show(Game& game,int page) {
+        game.dialogueActive_=false; game.spellCutInTimer_=0; game.messageTimer_=0;
+        game.waitingForBinding_=false; game.titleIntro_=false; game.optionsPage_=Game::OptionsPage::General;
+        game.boss_.reset(); game.state_=RunState::MainMenu;
+        game.selectedBinding_=6; game.selectedOption_=0; game.selectedPauseItem_=0;
+        switch(page) {
+            case 0: game.titleIntro_=true; break;
+            case 1: break;
+            case 2: game.state_=RunState::Options; break;
+            case 3: case 4:
+                game.state_=RunState::Options; game.optionsPage_=Game::OptionsPage::KeyBindings;
+                game.waitingForBinding_=page==4; break;
+            case 5: case 6: case 7: case 8:
+                game.state_=RunState::StartSetup; game.setupStep_=page-5; break;
+            case 9: game.state_=RunState::MusicRoom; break;
+            case 10: game.state_=RunState::Score; break;
+            case 11: game.state_=RunState::Credit; break;
+            case 12: game.state_=RunState::Playing; break;
+            case 13:
+                game.state_=RunState::Playing; game.dialogueActive_=true; game.dialogueAfterBattle_=false;
+                game.dialogueTimer_=31; break;
+            case 14:
+                game.state_=RunState::Playing; game.BeginStageBoss(true,3); game.boss_->AdvancePhase();
+                game.spellCutInTimer_=1.5F; break;
+            case 15: game.state_=RunState::Paused; game.pausedState_=RunState::Playing; break;
+            case 16: game.state_=RunState::Won; break;
+            case 17: game.state_=RunState::GameOver; break;
+            case 18:
+                game.state_=RunState::Playing;
+                game.SetMessage("FULL POWER MODE / STAGE 1 / SPELL CARD BONUS 999999999 / SHOT TEST / SETTINGS",3); break;
+        }
+        game.UpdateUiMotion(0.5F);
+    }
+    static bool Waiting(const Game& game) { return game.waitingForBinding_; }
+    static bool General(const Game& game) { return game.optionsPage_==Game::OptionsPage::General; }
+    static bool Playing(const Game& game) { return game.state_==RunState::Playing; }
+};
+}
+
 namespace {
 /// @brief 检查可观察结果；失败抛出异常，由 main 输出错误并返回非零值。
 void Check(bool condition, const char* message) {
@@ -50,6 +93,36 @@ void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24) {
     Check(ExportImage(image, path), "screenshot export failed");
     UnloadImage(image);
     UnloadRenderTexture(target);
+}
+
+/// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的弹窗与暂停按钮。
+void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots) {
+    constexpr std::array<const char*,19> names{"intro","title","options","bindings","binding-modal","difficulty","shot","mode",
+        "spell-practice","music","score","credit","playing","dialogue","spell-cutin","pause","won","gameover","message"};
+    for(const Vector2 size : {Vector2{320,240},{390,844},{900,900},{1600,400},{1280,720}}) {
+        SetWindowSize(size.x,size.y); Event(7,0,0); Frame(game);
+        game.StartPreview();
+        const std::string dimensions=std::to_string(GetScreenWidth())+"x"+std::to_string(GetScreenHeight());
+        for(int page=0;page<static_cast<int>(names.size());++page) {
+            koumakyou::GameLifecycleProbe::Show(game,page);
+            Capture(game,(screenshots/(dimensions+"-"+names[page]+".png")).string().c_str(),0);
+        }
+        koumakyou::GameLifecycleProbe::Show(game,3);
+        const koumakyou::menu::BindingsLayout bindings(GetScreenWidth(),GetScreenHeight());
+        const auto row=bindings.Row(6);
+        Click(game,row.x+row.width/2,row.y+row.height/2);
+        Check(koumakyou::GameLifecycleProbe::Waiting(game),"resized binding row missed");
+        Key(game,KEY_ESCAPE);
+        const auto back=bindings.Button(1);
+        Click(game,back.x+back.width/2,back.y+back.height/2);
+        Check(koumakyou::GameLifecycleProbe::General(game),"resized bindings Back missed");
+        game.StartPreview(); koumakyou::GameLifecycleProbe::Show(game,15);
+        const koumakyou::menu::OverlayLayout overlay(GetScreenWidth(),GetScreenHeight());
+        const auto resume=overlay.PauseRow(0);
+        Click(game,resume.x+resume.width/2,resume.y+resume.height/2);
+        Check(koumakyou::GameLifecycleProbe::Playing(game),"resized pause Resume missed");
+    }
+    SetWindowSize(900,620); Event(7,0,0); Frame(game);
 }
 }
 
@@ -198,6 +271,7 @@ int main(int argc, char** argv) {
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == settings.bindings.focus, "cancel altered binding");
             Key(game, KEY_DOWN); Key(game, KEY_ENTER); Key(game, KEY_F1);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.fire == KEY_F1, "keyboard rebind failed");
+            AllPageSizes(game,screenshots);
             game.Start(false); Frame(game);
             // 统一编码必须正确分发到鼠标查询；按住/首次按下分别用于移动和 Bomb。
             Event(6, MOUSE_BUTTON_EXTRA);

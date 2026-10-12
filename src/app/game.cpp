@@ -2,6 +2,7 @@
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
+#include "render/menu_layout.hpp"
 #include "config/settings.hpp"
 #include "stages/stage1/ids.hpp"
 
@@ -296,10 +297,9 @@ void Game::UpdateState(float deltaTime) {
         if (IsKeyPressed(KEY_DOWN)) selectedPauseItem_ = (selectedPauseItem_ + 1) % 4;
         if (selectedPauseItem_ != previous) assets_.PlaySoundEffect("menu_move");
         bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
-        const float centerX = GetScreenWidth() * 0.5F;
-        const float centerY = GetScreenHeight() * 0.5F;
+        const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         for (int index = 0; index < 4; ++index) {
-            const Rectangle row{centerX - 210, centerY - 40 + index * 48, 420, 42};
+            const auto row=layout.PauseRow(index);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), row)) {
                 selectedPauseItem_ = index;
                 confirm = true;

@@ -1,9 +1,44 @@
 // 本文件负责运行按领域拆分的核心测试。
 #include "render/ui_motion.hpp"
+#include "render/menu_layout.hpp"
+#include "render/gameplay_layout.hpp"
 #include <cassert>
 #include <cmath>
 
 namespace {
+/// @brief 检查从极小窗口到超宽/竖屏的所有交互矩形及 3D 视口都在窗口内，且不会退化为零缩放。
+void TestResponsiveLayouts() {
+    for(const Vector2 size : {Vector2{1,1},{320,180},{320,240},{390,844},{900,900},{1600,400},{180,900},{3840,2160}}) {
+        const auto fits=[&](Rectangle rect) {
+            assert(rect.x>=-0.001F && rect.y>=-0.001F && rect.width>0 && rect.height>0);
+            assert(rect.x+rect.width<=size.x+0.001F && rect.y+rect.height<=size.y+0.001F);
+        };
+        const koumakyou::menu::TitleLayout title(size.x,size.y,koumakyou::menu::kTitleRowCount);
+        for(int index=0;index<title.rowCount;++index)fits(title.Row(index));
+        const auto options=koumakyou::menu::PageCanvas(size.x,size.y);
+        for(int index=0;index<koumakyou::menu::kOptionsCount;++index) {
+            fits(koumakyou::menu::OptionRow(options,index));
+            if(index<koumakyou::menu::kNumericOptions) {
+                fits(koumakyou::menu::OptionArrow(options,index,-1)); fits(koumakyou::menu::OptionArrow(options,index,1));
+            }
+        }
+        const koumakyou::menu::BindingsLayout bindings(size.x,size.y);
+        for(int index=0;index<12;++index)fits(bindings.Row(index));
+        fits(bindings.Button(0)); fits(bindings.Button(1)); fits(bindings.Modal());
+        const koumakyou::menu::PageLayout page(size.x,size.y);
+        fits(page.Back()); fits(page.Forward());
+        for(int index=0;index<2;++index) {
+            const auto r=page.Choice(index);fits(page.canvas.Rect(r.x,r.y,r.width,r.height));
+        }
+        for(int index=0;index<3;++index)fits(page.Track(index));
+        const koumakyou::menu::OverlayLayout overlay(size.x,size.y);
+        fits(overlay.PausePanel());
+        for(int index=0;index<4;++index)fits(overlay.PauseRow(index));
+        fits(koumakyou::GameplayLayout(size.x,size.y).Viewport());
+    }
+    const koumakyou::menu::Canvas minimized(0,0);
+    assert(std::isfinite(minimized.scale) && minimized.scale>0);
+}
 /// @brief 检查同一真实时长在 30/240 FPS 下的选择效果一致，以及快速切换不会保留上一页行号。
 void TestMenuMotion() {
     koumakyou::ui::MenuMotion slow, fast;
@@ -38,6 +73,7 @@ void RunStageTests();
 void RunActorEffectTests();
 
 int main() {
+    TestResponsiveLayouts();
     TestMenuMotion();
     RunSettingsTests();
     RunGameplayTests();

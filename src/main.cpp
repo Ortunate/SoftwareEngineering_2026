@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
         TraceLog(LOG_WARNING, "INPUT: Could not disable window input methods");
     if (!captureFrame) InitAudioDevice();
     SetExitKey(KEY_NULL);
-    if (!captureFrame) SetWindowMinSize(900, 620);
+    // 页面布局按实际窗口尺寸缩放/重排，不再用最小窗口限制掩盖裁切问题。
     SetTargetFPS(60);
 
     RenderTexture2D captureTarget{};

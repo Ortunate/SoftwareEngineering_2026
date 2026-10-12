@@ -3,13 +3,14 @@
 #include "raylib.h"
 #include <algorithm>
 namespace koumakyou {
-/// @brief 参考界面以 16:9 等比居中；宽窄窗口均留边，避免拉伸纹理或改变游戏视口纵横比。
+/// @brief 参考界面以 16:9 等比居中；参数为窗口逻辑像素，零尺寸按 1 像素处理。
+/// 宽窄窗口均留边，避免拉伸纹理或改变游戏视口纵横比。
 struct GameplayLayout {
     float scale;
     Vector2 origin;
     GameplayLayout(float width, float height)
-        : scale(std::min(width/1920.0F,height/1080.0F)),
-          origin{(width-1920*scale)/2,(height-1080*scale)/2} {}
+        : scale(std::min(std::max(1.0F,width)/1920.0F,std::max(1.0F,height)/1080.0F)),
+          origin{(std::max(1.0F,width)-1920*scale)/2,(std::max(1.0F,height)-1080*scale)/2} {}
     [[nodiscard]] Vector2 Point(float x,float y) const { return {origin.x+x*scale,origin.y+y*scale}; }
     [[nodiscard]] Rectangle Rect(float x,float y,float width,float height) const {
         return {origin.x+x*scale,origin.y+y*scale,width*scale,height*scale};

@@ -78,12 +78,13 @@ void Game::UpdateMainMenu() {
 }
 
 void Game::UpdateMenuPage() {
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+    const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto& canvas=layout.canvas;
     const auto clicked = [&](Rectangle bounds) {
         return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), bounds);
     };
     const bool back = IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X) ||
-                      clicked(canvas.Rect(70, 675, 170, 42));
+                      clicked(layout.Back());
     if (back) {
         assets_.PlaySoundEffect("menu_cancel");
         if (state_ == RunState::StartSetup && setupStep_ > 0 && setupStep_ < 3) --setupStep_;
@@ -94,13 +95,14 @@ void Game::UpdateMenuPage() {
     if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_LEFT)) direction = -1;
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT)) direction = 1;
     bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
-                   clicked(canvas.Rect(775, 675, 250, 42));
+                   clicked(layout.Forward());
     if (state_ == RunState::StartSetup) {
         if (setupStep_ > 0) {
             const int previous = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
                 : (practicePhase_ == 2 ? 0 : 1);
             for (int index = 0; index < 2; ++index) {
-                const bool hover=CheckCollisionPointRec(GetMousePosition(),canvas.Rect(640,300+index*125,385,105));
+                const auto card=layout.Choice(index);
+                const bool hover=CheckCollisionPointRec(GetMousePosition(),canvas.Rect(card.x,card.y,card.width,card.height));
                 const bool moved=GetMouseDelta().x!=0 || GetMouseDelta().y!=0;
                 if (hover && (moved || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
                     if (setupStep_ == 1) selectedShot_ = index;
@@ -129,7 +131,7 @@ void Game::UpdateMenuPage() {
             selectedTrack_ = (selectedTrack_ + 3 + direction) % 3;
         }
         for (int index = 0; index < 3; ++index) {
-            const auto row=canvas.Rect(280,260+index*95,680,70);
+            const auto row=layout.Track(index);
             if (CheckCollisionPointRec(GetMousePosition(),row) &&
                 (GetMouseDelta().x!=0 || GetMouseDelta().y!=0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
                 selectedTrack_ = index;
@@ -166,7 +168,7 @@ void Game::UpdateOptions() {
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
         selectedOption_ = (selectedOption_ + 1) % itemCount;
 
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+    const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
     const Vector2 mouse = GetMousePosition();
     const Vector2 movement = GetMouseDelta();
     bool hoveringItem = false;
@@ -270,21 +272,19 @@ void Game::UpdateKeyBindings() {
         selectedBinding_ = (selectedBinding_ + 1) % itemCount;
     }
 
-    const float centerX = static_cast<float>(GetScreenWidth()) * 0.5F;
+    const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
     const Vector2 mouse = GetMousePosition();
     bool hoveringItem = false;
     for (int index = 0; index < bindingCount; ++index) {
-        const Rectangle row{centerX - 270.0F,
-                            kBindingsTop + static_cast<float>(index) * kBindingsSpacing,
-                            540.0F, kBindingsHeight};
+        const auto row=layout.Row(index);
         if (CheckCollisionPointRec(mouse, row)) {
             if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 selectedBinding_ = index;
             hoveringItem = true;
         }
     }
-    const Rectangle resetButton{centerX - 270.0F, 500.0F, 260.0F, 42.0F};
-    const Rectangle backButton{centerX + 10.0F, 500.0F, 260.0F, 42.0F};
+    const auto resetButton=layout.Button(0);
+    const auto backButton=layout.Button(1);
     if (CheckCollisionPointRec(mouse, resetButton)) {
         if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
             selectedBinding_ = resetIndex;

@@ -50,11 +50,11 @@ void DarkPage(const menu::Canvas& canvas, const ui::MenuMotion& motion) {
     const float phase=motion.Phase(),reveal=motion.Reveal();
     ClearBackground(Color{21, 13, 18, 255});
     DrawRectangleGradientV(static_cast<int>(canvas.origin.x), static_cast<int>(canvas.origin.y+40*(1-reveal)*canvas.scale),
-        static_cast<int>(1100 * canvas.scale), static_cast<int>((760-80*(1-reveal))*canvas.scale),
+        static_cast<int>(canvas.width * canvas.scale), static_cast<int>((canvas.height-80*(1-reveal))*canvas.scale),
         Color{18, 16, 19, 255}, Color{62, 17, 25, 255});
     for (int index = 0; index < 18; ++index) {
-        const float x = index % 2 == 0 ? 80 + (index % 4) * 38.0F : 960 + (index % 3) * 32.0F;
-        const float y = 65 + index * 36.0F;
+        const float x = index % 2 == 0 ? 80 + (index % 4) * 38.0F : canvas.width-140 + (index % 3) * 32.0F;
+        const float y = 65 + index * (canvas.height-100)/18;
         for (int petal = 0; petal < 5; ++petal) {
             const float angle = petal * 1.256637F + index * 0.3F + phase * 0.035F;
             const auto center = canvas.Point(x + std::cos(angle) * 13, y + std::sin(angle) * 13);
@@ -62,9 +62,9 @@ void DarkPage(const menu::Canvas& canvas, const ui::MenuMotion& motion) {
         }
     }
     // 边缘环纹缓慢转动，延续新典花纹页的背景动感，不覆盖设置行。
-    for (Vector2 center : {canvas.Point(-110,130),canvas.Point(1210,650)})
+    for (Vector2 center : {canvas.Point(-110,130),canvas.Point(canvas.width+110,canvas.height-110)})
         DrawRing(center,220*canvas.scale,221*canvas.scale,phase*3,phase*3+300,80,Color{208,158,126,18});
-    Frame(canvas, Color{149, 113, 84, 180});
+    Frame(canvas,Color{149,113,84,180},canvas.width,canvas.height);
 }
 
 /// @brief 页面操作按钮；hover 只影响外观，点击区域由 UpdateMenuPage 使用相同矩形。
@@ -141,66 +141,70 @@ void Game::DrawMainMenu() const {
 
 void Game::DrawOptions() const {
     if (optionsPage_ == OptionsPage::KeyBindings) { DrawKeyBindings(); return; }
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
-    const Font font = assets_.Common().uiFont;
+    const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
+    const bool compact=canvas.width<1000;
+    const Font font=assets_.Common().uiFont;
     DarkPage(canvas,menuMotion_);
-    Text(canvas, font, "OPTION", 100, 590, 52, Color{173, 61, 65, 255});
-    Text(canvas, font, "游戏设置", 550, 72, 35, kIvory, true);
-    Text(canvas, font, "设置自动保存 · Player 为额外残机", 550, 116, 17, kGold, true);
-    const std::array<std::string, 6> values{
-        kSupportedFpsLimits[fpsLimitIndex_] == 0 ? "Unlimited" : std::to_string(kSupportedFpsLimits[fpsLimitIndex_]),
-        std::to_string(musicVolume_) + "%", std::string(TextFormat("%.1fx", mouseSensitivity_ / 100.0F)),
-        std::to_string(soundVolume_) + "%", std::to_string(initialLives_), std::to_string(initialBombs_)};
-    const std::array<int, 6> levels{fpsLimitIndex_, musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_};
-    constexpr std::array<int, 6> minimum{0, 0, kMinMouseSensitivity, 0, 1, 0};
-    constexpr std::array<int, 6> maximum{5, 100, kMaxMouseSensitivity, 100, 5, 3};
-    for (int index = 0; index < menu::kOptionsCount; ++index) {
-        const float weight=menuMotion_.Weight(index), reveal=menuMotion_.Reveal(index*0.012F);
-        ChoiceText(canvas,font,menu::kOptionLabels[index],322,168+index*48,22,
+    Text(canvas,font,"OPTION",compact?64:100,compact?942:590,52,Color{173,61,65,255});
+    Text(canvas,font,"游戏设置",canvas.width/2,compact?90:72,35,kIvory,true);
+    Text(canvas,font,"设置自动保存 · Player 为额外残机",canvas.width/2,compact?146:116,17,kGold,true);
+    const std::array<std::string,6> values{
+        kSupportedFpsLimits[fpsLimitIndex_]==0 ? "Unlimited" : std::to_string(kSupportedFpsLimits[fpsLimitIndex_]),
+        std::to_string(musicVolume_)+"%",std::string(TextFormat("%.1fx",mouseSensitivity_/100.0F)),
+        std::to_string(soundVolume_)+"%",std::to_string(initialLives_),std::to_string(initialBombs_)};
+    const std::array<int,6> levels{fpsLimitIndex_,musicVolume_,mouseSensitivity_,soundVolume_,initialLives_,initialBombs_};
+    constexpr std::array<int,6> minimum{0,0,kMinMouseSensitivity,0,1,0};
+    constexpr std::array<int,6> maximum{5,100,kMaxMouseSensitivity,100,5,3};
+    for(int index=0;index<menu::kOptionsCount;++index) {
+        const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.012F);
+        const float y=(compact?230:168)+index*(compact?76:48);
+        ChoiceText(canvas,font,menu::kOptionLabels[index],compact?64:322,y,compact?24:22,
                    Color{177,150,143,255},kGold,weight,reveal,menuMotion_.Pulse());
-        const auto from = canvas.Point(322, 202 + index * 48);
-        const auto to = canvas.Point(920, 202 + index * 48);
-        ui::FocusLine(from,to,canvas.scale,Fade(kGold,reveal),weight,menuMotion_.Phase());
-        if (index >= menu::kNumericOptions) continue;
-        ChoiceText(canvas,font,values[index].c_str(),795,168+index*48,23,kIvory,kGold,
+        const auto row=menu::OptionRow(canvas,index);
+        ui::FocusLine({row.x+12*canvas.scale,row.y+row.height},{row.x+row.width-12*canvas.scale,row.y+row.height},
+                      canvas.scale,Fade(kGold,reveal),weight,menuMotion_.Phase());
+        if(index>=menu::kNumericOptions)continue;
+        ChoiceText(canvas,font,values[index].c_str(),compact?552:795,y,23,kIvory,kGold,
                    weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash(),true);
-        for (int direction : {-1, 1}) {
-            const auto arrow = menu::OptionArrow(canvas, index, direction);
-            const bool disabled = direction < 0 ? levels[index] == minimum[index] : levels[index] == maximum[index];
-            DrawRectangleLinesEx(arrow, canvas.scale, Fade(disabled ? Color{92,71,65,255}
-                : ui::Blend(Color{137,103,82,255},kGold,weight),reveal));
-            Text(canvas, font, direction < 0 ? "<" : ">", direction < 0 ? 680 : 896,
-                 167 + index * 48, 23, Fade(disabled ? Color{92,71,65,255} : kGold,reveal));
+        for(int direction : {-1,1}) {
+            const auto arrow=menu::OptionArrow(canvas,index,direction);
+            const bool disabled=direction<0 ? levels[index]==minimum[index] : levels[index]==maximum[index];
+            const Color color=Fade(disabled?Color{92,71,65,255}:ui::Blend(Color{137,103,82,255},kGold,weight),reveal);
+            DrawRectangleLinesEx(arrow,canvas.scale,color);
+            ui::DrawCentered(font,direction<0?"<":">",arrow.x+arrow.width/2,arrow.y+2*canvas.scale,23*canvas.scale,color);
         }
     }
-    Text(canvas, font, "方向键选择 / 调整   Z / Enter 确认   Esc 返回", 550, 692, 18, kGold, true);
-    Text(canvas, font, "开局资源在下一局生效", 550, 722, 15, Color{163, 133, 121, 255}, true);
+    Text(canvas,font,"方向键选择 / 调整   Z / Enter 确认   Esc 返回",canvas.width/2,compact?1036:692,18,kGold,true);
+    Text(canvas,font,"开局资源在下一局生效",canvas.width/2,compact?1069:722,15,Color{163,133,121,255},true);
 }
 
 void Game::DrawMenuPage() const {
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
+    const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto& canvas=layout.canvas;
+    const bool compact=layout.compact;
     const auto& common = assets_.Common();
     const Font font = common.uiFont;
     DarkPage(canvas,menuMotion_);
-    PageButton(canvas, font, canvas.Rect(70, 675, 170, 42), "返回 / Esc",menuMotion_);
+    PageButton(canvas, font, layout.Back(), "返回 / Esc",menuMotion_);
     if (state_ == RunState::StartSetup) {
         if (common.reimuPortrait.id != 0) {
             const auto texture = common.reimuPortrait;
             DrawTexturePro(texture, {0, 0, static_cast<float>(texture.width), static_cast<float>(texture.height)},
-                canvas.Rect(130-35*(1-menuMotion_.Reveal()),82,357,570),{},0,Fade(WHITE,menuMotion_.Reveal()));
+                canvas.Rect((compact?244:130)-35*(1-menuMotion_.Reveal()),compact?142:82,compact?272:357,compact?434:570),{},0,Fade(WHITE,menuMotion_.Reveal()));
         }
-        Text(canvas, font, "博丽 灵梦", 260, 598, 37, kIvory, true);
-        Text(canvas, font, "Stage 1 · Mystic Flier", 790, 100, 25, kGold, true);
+        Text(canvas, font, "博丽 灵梦", compact?380:260, compact?584:598, 37, kIvory, true);
+        Text(canvas, font, "Stage 1 · Mystic Flier", compact?380:790, compact?86:100, 25, kGold, true);
         constexpr std::array<const char*, 4> titles{"请选择难度", "请选择使用的御札", "要以哪一种模式开始游戏？", "符卡练习"};
-        Text(canvas, font, titles[setupStep_], 825, 178, 28, kIvory, true);
+        Text(canvas, font, titles[setupStep_], compact?380:825, compact?630:178, 28, kIvory, true);
         if (setupStep_ == 0) {
-            const auto card = canvas.Rect(640+30*(1-menuMotion_.Reveal()),300,385,220);
+            const auto design=layout.Choice(0);
+            const auto card=canvas.Rect(design.x+30*(1-menuMotion_.Reveal()),design.y,design.width,220);
             DrawRectangleRec(card, kIvory);
-            ChoiceText(canvas,font,"NORMAL",832,338,45,Color{40,69,91,255},kScarlet,
+            ChoiceText(canvas,font,"NORMAL",design.x+design.width/2,design.y+38,45,Color{40,69,91,255},kScarlet,
                        1,menuMotion_.Reveal(),menuMotion_.Pulse(),true);
-            ui::FocusLine(canvas.Point(662,398),canvas.Point(1004,398),canvas.scale,kScarlet,1,menuMotion_.Phase());
-            Text(canvas, font, "第一面 · 红雾异变的开端", 832, 414, 22, kScarlet, true);
-            Text(canvas, font, "三维自由移动与球形判定", 832, 455, 18, kScarlet, true);
+            ui::FocusLine(canvas.Point(design.x+22,design.y+98),canvas.Point(design.x+design.width-22,design.y+98),canvas.scale,kScarlet,1,menuMotion_.Phase());
+            Text(canvas, font, "第一面 · 红雾异变的开端", design.x+design.width/2, design.y+114, 22, kScarlet, true);
+            Text(canvas, font, "三维自由移动与球形判定", design.x+design.width/2, design.y+155, 18, kScarlet, true);
         } else {
             const std::array<const char*, 2> names = setupStep_ == 1
                 ? std::array<const char*, 2>{"灵之御札 · Homing Amulet", "梦之御札 · Persuasion Needle"}
@@ -212,43 +216,45 @@ void Game::DrawMenuPage() const {
                 : std::array<const char*, 2>{"旋转交错的三维双层弹幕", "多层边界环与交替开口"};
             for (int index = 0; index < 2; ++index) {
                 const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.04F);
-                const auto card=canvas.Rect(640+16*(1-reveal)-8*weight,300+index*125,385,105);
+                const auto design=layout.Choice(index);
+                const auto card=canvas.Rect(design.x+16*(1-reveal)-8*weight,design.y,design.width,design.height);
                 DrawRectangleRec(card,Fade(ui::Blend(Color{77,38,36,160},Color{248,236,214,255},weight),reveal));
                 DrawRectangleLinesEx(card,canvas.scale,Fade(kGold,0.3F+weight*0.7F));
-                ChoiceText(canvas,font,names[index],660,318+index*125,23,kGold,kScarlet,weight,reveal,menuMotion_.Pulse());
-                ChoiceText(canvas,font,hints[index],660,364+index*125,18,Color{193,162,150,255},kScarlet,weight,reveal,menuMotion_.Pulse());
+                ChoiceText(canvas,font,names[index],design.x+20,design.y+18,23,kGold,kScarlet,weight,reveal,menuMotion_.Pulse());
+                ChoiceText(canvas,font,hints[index],design.x+20,design.y+64,18,Color{193,162,150,255},kScarlet,weight,reveal,menuMotion_.Pulse());
                 ui::FocusLine({card.x+20*canvas.scale,card.y+card.height-8*canvas.scale},
                     {card.x+card.width-20*canvas.scale,card.y+card.height-8*canvas.scale},canvas.scale,
                     ui::Blend(kGold,kScarlet,weight),weight*reveal,menuMotion_.Phase());
             }
         }
-        PageButton(canvas, font, canvas.Rect(775, 675, 250, 42), setupStep_ >= 2 ? "开始游戏 / Z" : "下一步 / Z",menuMotion_);
+        PageButton(canvas, font, layout.Forward(), setupStep_ >= 2 ? "开始游戏 / Z" : "下一步 / Z",menuMotion_);
     } else if (state_ == RunState::MusicRoom) {
-        Text(canvas, font, "MUSIC ROOM", 550, 100, 46, kGold, true);
+        Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);
         constexpr std::array<const char*, 3> names{"比赤色更鲜红的梦", "宛如鬼灯的鲜红之魂", "妖魔夜行"};
         constexpr std::array<const char*, 3> roles{"Title", "Stage 1", "Rumia"};
         for (int index = 0; index < 3; ++index) {
-            const auto row = canvas.Rect(280, 260 + index * 95, 680, 70);
+            const auto row=layout.Track(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.025F);
             DrawRectangleRec(row,Fade(Color{55,30,29,100},reveal));
-            ChoiceText(canvas,font,names[index],300,274+index*95,26,kIvory,kGold,weight,reveal,menuMotion_.Pulse());
-            ChoiceText(canvas,font,roles[index],825,285+index*95,19,kGold,kGold,weight,reveal,menuMotion_.Pulse());
+            ui::GlowText(font,names[index],{row.x+20*canvas.scale,row.y+14*canvas.scale},26*canvas.scale,
+                         Fade(ui::Blend(kIvory,kGold,weight),reveal),kGold,weight*menuMotion_.Pulse());
+            ui::DrawText(font,roles[index],{row.x+row.width-135*canvas.scale,row.y+(compact?60:25)*canvas.scale},19*canvas.scale,Fade(kGold,reveal));
             ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},canvas.scale,
                           kGold,weight*reveal,menuMotion_.Phase());
         }
-        Text(canvas, font, "方向键选择 · Z 播放", 550, 598, 22, kGold, true);
+        Text(canvas, font, "方向键选择 · Z 播放", canvas.width/2, compact?900:598, 22, kGold, true);
     } else if (state_ == RunState::Score) {
-        Text(canvas, font, "SCORE", 550, 110, 50, kGold, true);
-        Text(canvas, font, "Stage 1 · Normal · 标准模式", 550, 250, 28, kIvory, true);
+        Text(canvas, font, "SCORE", canvas.width/2, 110, 50, kGold, true);
+        Text(canvas, font, "Stage 1 · Normal · 标准模式", canvas.width/2, compact?360:250, 28, kIvory, true);
         const std::string score = TextFormat("%09d", bestScore_);
-        Text(canvas, font, score.c_str(), 550, 345, 65, kGold, true);
-        Text(canvas, font, "最高通关分数", 550, 444, 23, kIvory, true);
+        Text(canvas, font, score.c_str(), canvas.width/2, compact?460:345, 65, kGold, true);
+        Text(canvas, font, "最高通关分数", canvas.width/2, compact?574:444, 23, kIvory, true);
     } else {
-        Text(canvas, font, "CREDIT", 550, 110, 50, kGold, true);
-        Text(canvas, font, "原作 · 东方红魔乡：新典", 550, 260, 30, kIvory, true);
-        Text(canvas, font, "Team Shanghai Alice", 550, 320, 28, kGold, true);
-        Text(canvas, font, "三维扩展与现代化重绘", 550, 430, 27, kIvory, true);
-        Text(canvas, font, "koumakyou · Fan recreation", 550, 480, 23, kGold, true);
+        Text(canvas, font, "CREDIT", canvas.width/2, 110, 50, kGold, true);
+        Text(canvas, font, "原作 · 东方红魔乡：新典", canvas.width/2, compact?330:260, 30, kIvory, true);
+        Text(canvas, font, "Team Shanghai Alice", canvas.width/2, compact?420:320, 28, kGold, true);
+        Text(canvas, font, "三维扩展与现代化重绘", canvas.width/2, compact?620:430, 27, kIvory, true);
+        Text(canvas, font, "koumakyou · Fan recreation", canvas.width/2, compact?710:480, 23, kGold, true);
     }
 }
 }  // namespace koumakyou

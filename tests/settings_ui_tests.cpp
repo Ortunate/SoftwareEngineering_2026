@@ -1,5 +1,6 @@
 // 本文件以隐藏窗口回放键鼠输入，检查标题比例适配、设置界面、录入防误触及配置保存。
 #include "app/game.hpp"
+#include "app/constants.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
 #include "raylib.h"
@@ -13,6 +14,25 @@
 namespace koumakyou {
 /// @brief 仅图形测试使用的友元探针；复用已加载的关卡素材创建各 UI 展示状态，不替代正式流程回归。
 struct GameLifecycleProbe {
+    /// @brief 检查汉化后的操作与所有合法按键名称都在实际加载字体中，防止更新字库后仍出现缺字。
+    static bool HasLocalizedGlyphs(const Game& game) {
+        const Font font=game.assets_.Common().uiFont;
+        if(font.texture.id==GetFontDefault().texture.id)return false;
+        const auto contains=[&](const char* text) {
+            int count=0;
+            int* codepoints=LoadCodepoints(text,&count);
+            if(!codepoints)return false;
+            bool valid=true;
+            for(int index=0;index<count;++index)
+                valid=valid && font.glyphs[GetGlyphIndex(font,codepoints[index])].value==codepoints[index];
+            UnloadCodepoints(codepoints);
+            return valid;
+        };
+        for(const char* name:kBindingNames)if(!contains(name))return false;
+        for(int key=KEY_SPACE;key<=MouseBinding(MOUSE_BUTTON_BACK);++key)
+            if(IsValidBinding(key) && !contains(Game::KeyLabel(key).c_str()))return false;
+        return contains("按键设置") && contains("恢复默认键位");
+    }
     /// @brief 设置 page=0～18 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
     static void Show(Game& game,int page) {
         game.dialogueActive_=false; game.spellCutInTimer_=0; game.messageTimer_=0;
@@ -153,6 +173,7 @@ int main(int argc, char** argv) {
     try {
         {
             koumakyou::Game game;
+            Check(koumakyou::GameLifecycleProbe::HasLocalizedGlyphs(game),"localized binding label glyph missing");
             SetTargetFPS(0);
             Capture(game, (screenshots / "title.png").string().c_str());
             Key(game, KEY_Z);

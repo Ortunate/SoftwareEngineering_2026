@@ -380,55 +380,65 @@ void Game::SetBinding(int index, int key) {
 std::string Game::KeyLabel(int key) {
     if (IsMouseBinding(key)) {
         constexpr std::array<const char*, 7> labels{
-            "MOUSE LEFT", "MOUSE RIGHT", "MOUSE MIDDLE", "MOUSE 4 / SIDE 1",
-            "MOUSE 5 / SIDE 2", "MOUSE 6", "MOUSE 7"};
+            "鼠标左键", "鼠标右键", "鼠标中键", "鼠标侧键 1（4）",
+            "鼠标侧键 2（5）", "鼠标按键 6", "鼠标按键 7"};
         return labels[key - kMouseBindingBase];
     }
-    if (key >= KEY_A && key <= KEY_Z) {
-        return std::string(1, static_cast<char>('A' + key - KEY_A));
-    }
-    if (key >= KEY_ZERO && key <= KEY_NINE) {
-        return std::string(1, static_cast<char>('0' + key - KEY_ZERO));
-    }
+    // 字母、数字和功能键沿用实体键帽标识；小键盘单独标注，避免与主键区数字混淆。
+    if (key >= KEY_A && key <= KEY_Z) return std::string(1,static_cast<char>('A'+key-KEY_A));
+    if (key >= KEY_ZERO && key <= KEY_NINE) return std::string(1,static_cast<char>('0'+key-KEY_ZERO));
+    if (key >= KEY_F1 && key <= KEY_F12) return TextFormat("F%d",key-KEY_F1+1);
+    if (key >= KEY_KP_0 && key <= KEY_KP_9) return TextFormat("小键盘 %d",key-KEY_KP_0);
     switch (key) {
-        case KEY_SPACE: return "SPACE";
-        case KEY_ENTER: return "ENTER";
-        case KEY_TAB: return "TAB";
-        case KEY_BACKSPACE: return "BACKSPACE";
-        case KEY_INSERT: return "INSERT";
-        case KEY_DELETE: return "DELETE";
-        case KEY_RIGHT: return "RIGHT";
-        case KEY_LEFT: return "LEFT";
-        case KEY_DOWN: return "DOWN";
-        case KEY_UP: return "UP";
-        case KEY_PAGE_UP: return "PAGE UP";
-        case KEY_PAGE_DOWN: return "PAGE DOWN";
-        case KEY_HOME: return "HOME";
-        case KEY_END: return "END";
-        case KEY_CAPS_LOCK: return "CAPS LOCK";
-        case KEY_SCROLL_LOCK: return "SCROLL LOCK";
-        case KEY_NUM_LOCK: return "NUM LOCK";
-        case KEY_PRINT_SCREEN: return "PRINT SCREEN";
-        case KEY_PAUSE: return "PAUSE";
-        case KEY_LEFT_SHIFT: return "LEFT SHIFT";
-        case KEY_LEFT_CONTROL: return "LEFT CTRL";
-        case KEY_LEFT_ALT: return "LEFT ALT";
-        case KEY_RIGHT_SHIFT: return "RIGHT SHIFT";
-        case KEY_RIGHT_CONTROL: return "RIGHT CTRL";
-        case KEY_RIGHT_ALT: return "RIGHT ALT";
-        case KEY_F1: return "F1";
-        case KEY_F2: return "F2";
-        case KEY_F3: return "F3";
-        case KEY_F4: return "F4";
-        case KEY_F5: return "F5";
-        case KEY_F6: return "F6";
-        case KEY_F7: return "F7";
-        case KEY_F8: return "F8";
-        case KEY_F9: return "F9";
-        case KEY_F10: return "F10";
-        case KEY_F11: return "F11";
-        case KEY_F12: return "F12";
-        default: return TextFormat("KEY %d", key);
+        case KEY_NULL: return "未设置";
+        case KEY_SPACE: return "空格";
+        case KEY_ESCAPE: return "Esc";
+        case KEY_ENTER: return "回车";
+        case KEY_TAB: return "Tab";
+        case KEY_BACKSPACE: return "退格";
+        case KEY_INSERT: return "插入";
+        case KEY_DELETE: return "删除";
+        case KEY_RIGHT: return "向右";
+        case KEY_LEFT: return "向左";
+        case KEY_DOWN: return "向下";
+        case KEY_UP: return "向上";
+        case KEY_PAGE_UP: return "上翻页";
+        case KEY_PAGE_DOWN: return "下翻页";
+        case KEY_HOME: return "Home（行首）";
+        case KEY_END: return "End（行尾）";
+        case KEY_CAPS_LOCK: return "大写锁定";
+        case KEY_SCROLL_LOCK: return "滚动锁定";
+        case KEY_NUM_LOCK: return "数字锁定";
+        case KEY_PRINT_SCREEN: return "截屏";
+        case KEY_PAUSE: return "暂停键";
+        case KEY_LEFT_SHIFT: return "左 Shift";
+        case KEY_LEFT_CONTROL: return "左 Ctrl";
+        case KEY_LEFT_ALT: return "左 Alt";
+        case KEY_RIGHT_SHIFT: return "右 Shift";
+        case KEY_RIGHT_CONTROL: return "右 Ctrl";
+        case KEY_RIGHT_ALT: return "右 Alt";
+        case KEY_LEFT_SUPER: return "左系统键";
+        case KEY_RIGHT_SUPER: return "右系统键";
+        case KEY_KB_MENU: return "菜单键";
+        case KEY_KP_DECIMAL: return "小键盘 .";
+        case KEY_KP_DIVIDE: return "小键盘 /";
+        case KEY_KP_MULTIPLY: return "小键盘 *";
+        case KEY_KP_SUBTRACT: return "小键盘 -";
+        case KEY_KP_ADD: return "小键盘 +";
+        case KEY_KP_ENTER: return "小键盘回车";
+        case KEY_KP_EQUAL: return "小键盘 =";
+        case KEY_APOSTROPHE: return "'";
+        case KEY_COMMA: return ",";
+        case KEY_MINUS: return "-";
+        case KEY_PERIOD: return ".";
+        case KEY_SLASH: return "/";
+        case KEY_SEMICOLON: return ";";
+        case KEY_EQUAL: return "=";
+        case KEY_LEFT_BRACKET: return "[";
+        case KEY_BACKSLASH: return "\\";
+        case KEY_RIGHT_BRACKET: return "]";
+        case KEY_GRAVE: return "`";
+        default: return TextFormat("按键 %d",key);
     }
 }
 

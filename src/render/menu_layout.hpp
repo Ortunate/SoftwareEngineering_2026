@@ -52,7 +52,7 @@ inline constexpr int kBackIndex = 8;
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
     "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
-    "KEY BINDINGS", "RESET DEFAULTS", "Quit"};
+    "按键设置", "恢复默认设置", "Quit"};
 /// @brief 第 index 行的屏幕矩形；index 为 0～8，菜单的文字与命中共用此处定义。
 inline Rectangle OptionRow(const Canvas& canvas, int index) {
     return canvas.width<1000 ? canvas.Rect(48,220+index*76,664,64)

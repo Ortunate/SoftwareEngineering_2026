@@ -158,7 +158,7 @@ private:
     void SetBinding(int index, int key);
     /// @brief 将统一键盘/鼠标编码转换为界面可读文字。
     /// @param key 统一键盘/鼠标编码。
-    /// @return 用于设置界面的键名。
+    /// @return 中文界面键名，保留字母、数字与 Shift/Ctrl/Alt 等键帽标识；未知编码显示按键编号。
     [[nodiscard]] static std::string KeyLabel(int key);
 
     /// @brief 绘制天空盒、战场与空间中的敌人和弹幕。

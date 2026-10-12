@@ -311,7 +311,7 @@ void Game::DrawKeyBindings() const {
     const float scale=canvas.scale;
     const Color gold=menu::kPageGold;
     menu::DrawPageSurface(canvas,menuMotion_);
-    menu::DrawPageHeader(canvas,font,"KEY BINDINGS","Select an action, then press a key or mouse button","KEY BINDINGS");
+    menu::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","按键设置");
     for(int index=0;index<static_cast<int>(kBindingNames.size());++index) {
         const auto row=layout.Row(index);
         const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.009F);
@@ -324,15 +324,15 @@ void Game::DrawKeyBindings() const {
         ui::GlowText(font,key.c_str(),{row.x+row.width-16*scale-ui::MeasureText(font,key.c_str(),keySize).x,y},keySize,
                      Fade(ui::Blend(Color{212,190,184,255},gold,weight),reveal),gold,weight*(menuMotion_.Pulse()+menuMotion_.Flash()));
     }
-    constexpr std::array<const char*,2> buttons{"RESET DEFAULTS","BACK"};
+    constexpr std::array<const char*,2> buttons{"恢复默认键位","返回"};
     for(int index=0;index<2;++index) {
         const float weight=menuMotion_.Weight(static_cast<int>(kBindingNames.size())+index);
         const auto button=layout.Button(index);
         menu::DrawPageButton(canvas,font,button,buttons[index],menuMotion_,weight);
     }
     if(layout.compact)
-        menu::DrawPageFooter(canvas,font,"Arrow Keys / W / S: Select   Enter: Rebind","Esc: Options");
-    else menu::DrawPageFooter(canvas,font,"Arrow Keys / W / S: Select     Enter: Rebind     Esc: Options");
+        menu::DrawPageFooter(canvas,font,"方向键 / W / S：选择   Z / 回车：修改","Esc：返回选项");
+    else menu::DrawPageFooter(canvas,font,"方向键 / W / S：选择   Z / 回车：修改   Esc：返回选项");
     if(waitingForBinding_) {
         DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,185});
         const auto modal=layout.Modal();
@@ -342,9 +342,9 @@ void Game::DrawKeyBindings() const {
             ui::DrawCentered(font,text,modal.x+modal.width/2,modal.y+offset*canvas.yScale,
                              ui::FittedSize(font,text,size*scale,modal.width-40*scale),color);
         };
-        modalText("PRESS KEY / MOUSE BUTTON",32,24,RAYWHITE);
+        modalText("请按下键盘或鼠标按键",32,24,RAYWHITE);
         modalText(kBindingNames[selectedBinding_],84,20,gold);
-        modalText("Esc: cancel   F3-F6: reserved   Release, then press",142,16,Color{193,162,150,255});
+        modalText("Esc：取消   F3～F6：保留   请先松开，再按下新键",142,16,Color{193,162,150,255});
     }
 }
 

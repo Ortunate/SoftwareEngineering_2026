@@ -24,6 +24,22 @@ void Text(const menu::Canvas& canvas, Font font, const char* text,
     ui::DrawText(font, text, point, size * canvas.scale, color);
 }
 
+/// @brief 首页标题居中加粗；x/y/size 为设计像素，保留共用宋体的字形与字距。
+/// 对称扩展笔画而不偏移文字中心，加粗半径随字号缩放，小窗口不会出现固定像素粗边。
+void TitleText(const menu::Canvas& canvas, Font font, const char* text,
+               float x, float y, float size, Color color) {
+    const float pixels = size * canvas.scale;
+    const Vector2 origin = canvas.Point(x, y);
+    const Vector2 position{origin.x - ui::MeasureText(font, text, pixels).x / 2, origin.y};
+    const float stroke = pixels * 0.02F;
+    for (int index = 0; index < 8; ++index) {
+        const float angle = index * PI / 4;
+        ui::DrawText(font, text, {position.x + std::cos(angle) * stroke,
+                                position.y + std::sin(angle) * stroke}, pixels, color);
+    }
+    ui::DrawText(font, text, position, pixels, color);
+}
+
 /// @brief 菜单选项的文字强调；weight 为选中强度，reveal 为进场进度，坐标/字号为设计像素。
 /// 动画只偏移绘制位置，命中区域始终使用 menu_layout 中的最终矩形。
 void ChoiceText(const menu::Canvas& canvas, Font font, const char* text, float x, float y, float size,
@@ -60,12 +76,10 @@ void Game::DrawMainMenu() const {
             layout.menuWidth + 24, titleIntro_ ? 94 : layout.rowCount * 45 + 12), Color{252, 246, 236, 228});
     }
     menu::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
-    const float titleX = layout.compact ? layout.width / 2 : layout.width - 650;
-    Text(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet, layout.compact);
-    Text(canvas, common.uiFont, "the Embodiment of Scarlet Devil", titleX + (layout.compact ? 0 : 5),
-         layout.compact ? 125 : 171, 18, kScarlet, layout.compact);
-    Text(canvas, common.uiFont, "三维新绘 · 第一面", titleX + (layout.compact ? 0 : 5),
-         layout.compact ? 163 : 205, 23, kScarlet, layout.compact);
+    const float titleX = layout.width / 2;
+    TitleText(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet);
+    TitleText(canvas, common.uiFont, "the Embodiment of Scarlet Devil", titleX,
+              layout.compact ? 125 : 171, 18, kScarlet);
     if (titleIntro_) {
         const float pulse = menuMotion_.Pulse();
         Text(canvas, common.uiFont, "PRESS Z / ENTER", layout.menuLeft + layout.menuWidth / 2,

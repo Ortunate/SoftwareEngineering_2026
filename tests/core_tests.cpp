@@ -1,6 +1,7 @@
 // 本文件负责运行按领域拆分的核心测试。
 #include "app/constants.hpp"
 #include "render/ui_motion.hpp"
+#include "render/title_entrance.hpp"
 #include "render/menu_layout.hpp"
 #include "render/gameplay_layout.hpp"
 #include <cassert>
@@ -71,6 +72,34 @@ void TestMenuMotion() {
     slow.Confirm(); slow.Advance(1,1,0.2F);
     assert(slow.Flash()==0);
 }
+/// @brief 验证四层及菜单严格顺序、时间推进与帧率无关，菜单完成后才解锁。
+void TestTitleEntrance() {
+    using koumakyou::ui::TitleElement;
+    koumakyou::ui::TitleEntrance entrance;
+    entrance.Advance(0.275F);
+    assert(entrance.Progress(TitleElement::Moon)>0 && entrance.Progress(TitleElement::Moon)<1);
+    assert(entrance.Progress(TitleElement::Title)==0 && entrance.Progress(TitleElement::Shrine)==0);
+    entrance.Advance(0.5F);
+    assert(entrance.Progress(TitleElement::Moon)==1 && entrance.Progress(TitleElement::Title)>0);
+    assert(entrance.Progress(TitleElement::Shrine)==0 && entrance.Progress(TitleElement::Reimu)==0);
+    entrance.Advance(0.5F);
+    assert(entrance.Progress(TitleElement::Title)==1 && entrance.Progress(TitleElement::Shrine)>0);
+    assert(entrance.Progress(TitleElement::Reimu)==0);
+    entrance.Advance(0.575F);
+    assert(entrance.Progress(TitleElement::Shrine)==1 && entrance.Progress(TitleElement::Reimu)>0);
+    assert(entrance.Progress(TitleElement::Menu)==0 && !entrance.Finished());
+    entrance.Advance(0.5F);
+    assert(entrance.Progress(TitleElement::Reimu)==1 && entrance.Progress(TitleElement::Menu)>0);
+    assert(entrance.MenuProgress(0)>entrance.MenuProgress(10) && !entrance.Finished());
+    koumakyou::ui::TitleEntrance slow,fast;
+    for(int frame=0;frame<54;++frame)slow.Advance(1.0F/30);
+    for(int frame=0;frame<432;++frame)fast.Advance(1.0F/240);
+    assert(std::abs(slow.Progress(TitleElement::Reimu)-fast.Progress(TitleElement::Reimu))<0.0001F);
+    entrance.Complete(); entrance.Advance(-1);
+    for(const auto element : {TitleElement::Moon,TitleElement::Title,TitleElement::Shrine,TitleElement::Reimu,TitleElement::Menu})
+        assert(entrance.Progress(element)==1);
+    assert(entrance.Finished() && entrance.MenuProgress(10)==1);
+}
 }
 
 /// @brief 运行设置读写和键位校验用例，断言失败时终止进程。
@@ -89,6 +118,7 @@ void RunActorEffectTests();
 int main() {
     TestResponsiveLayouts();
     TestMenuMotion();
+    TestTitleEntrance();
     RunSettingsTests();
     RunGameplayTests();
     RunDropTests();

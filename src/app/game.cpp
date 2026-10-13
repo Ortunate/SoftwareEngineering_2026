@@ -248,8 +248,11 @@ void Game::Update(float deltaTime) {
 
 void Game::UpdateUiMotion(float deltaTime) {
     int detail = 0, selection = -1;
-    if (state_ == RunState::MainMenu) { detail = titleIntro_ ? 1 : 0; selection = selectedMenuItem_; }
-    else if (state_ == RunState::Options) {
+    if (state_ != RunState::MainMenu) titleEntrance_.Complete();
+    if (state_ == RunState::MainMenu) {
+        selection = selectedMenuItem_;
+        titleEntrance_.Advance(deltaTime);
+    } else if (state_ == RunState::Options) {
         detail = optionsPage_ == OptionsPage::KeyBindings ? 1 : 0;
         selection = detail ? selectedBinding_ : selectedOption_;
     } else if (state_ == RunState::StartSetup) {

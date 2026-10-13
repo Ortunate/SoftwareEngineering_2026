@@ -65,65 +65,78 @@ void Game::DrawMainMenu() const {
     const auto& common = assets_.Common();
     const auto logoBounds = layout.Logo(IsTextureValid(common.titleLogo) ? common.titleLogo.width : 2019,
                                        IsTextureValid(common.titleLogo) ? common.titleLogo.height : 779);
+    const float moonProgress = titleEntrance_.Progress(ui::TitleElement::Moon);
+    const float titleProgress = titleEntrance_.Progress(ui::TitleElement::Title);
+    const float shrineProgress = titleEntrance_.Progress(ui::TitleElement::Shrine);
+    const float reimuProgress = titleEntrance_.Progress(ui::TitleElement::Reimu);
+    const float menuProgress = titleEntrance_.Progress(ui::TitleElement::Menu);
     ClearBackground(kIvory);
     if (IsTextureValid(common.titleMoon) && IsTextureValid(common.titleShrine) && IsTextureValid(common.titleReimu)) {
         DrawRectangleGradientV(0,0,GetScreenWidth(),GetScreenHeight(),kIvory,Color{246,221,208,255});
-        const auto layer = [](Texture2D texture, Rectangle frame) {
+        const auto layer = [](Texture2D texture, Rectangle frame, float opacity) {
             DrawTexturePro(texture,{0,0,static_cast<float>(texture.width),static_cast<float>(texture.height)},
-                           frame,{},0,WHITE);
+                           frame,{},0,Fade(WHITE,opacity));
         };
         // 透明纹理由远到近合成；人物与神社独立定位，石阶不会被重复烘焙进人物层。
-        layer(common.titleMoon,layout.MoonFrame(common.titleMoon.width,common.titleMoon.height,logoBounds));
-        layer(common.titleShrine,layout.LayerFrame(common.titleShrine.width,common.titleShrine.height));
-        layer(common.titleReimu,layout.ReimuFrame(common.titleReimu.width,common.titleReimu.height));
+        auto moon = layout.MoonFrame(common.titleMoon.width,common.titleMoon.height,logoBounds);
+        const float moonScale = 0.92F + 0.08F * moonProgress;
+        // 绕月球真实中心缩放；透明画布中心偏在右下，不能作为缩放支点。
+        moon.x += moon.width * 0.34F * (1-moonScale);
+        moon.y += moon.height * 0.42F * (1-moonScale);
+        moon.width *= moonScale; moon.height *= moonScale;
+        auto shrine = layout.LayerFrame(common.titleShrine.width,common.titleShrine.height);
+        shrine.x -= 24 * canvas.scale * (1-shrineProgress);
+        auto reimu = layout.ReimuFrame(common.titleReimu.width,common.titleReimu.height);
+        reimu.x -= 32 * canvas.scale * (1-reimuProgress);
+        reimu.y += 12 * canvas.scale * (1-reimuProgress);
+        layer(common.titleMoon,moon,moonProgress);
+        layer(common.titleShrine,shrine,shrineProgress);
+        layer(common.titleReimu,reimu,reimuProgress);
     } else if (common.titleBackground.id != 0) {
         DrawTexturePro(common.titleBackground,
             layout.BackgroundSource(common.titleBackground.width, common.titleBackground.height),
-            canvas.Rect(0, 0, layout.width, layout.height), {}, 0, WHITE);
+            canvas.Rect(0, 0, layout.width, layout.height), {}, 0, Fade(WHITE,reimuProgress));
     }
     // 方形/竖屏的背景裁剪会移除右侧留白，底板保障插画上方的标题和菜单对比度。
     if (layout.compact) {
-        DrawRectangleRec(canvas.Rect(28, 28, layout.width - 56, 188), Color{252, 246, 236, 225});
-        DrawRectangleRec(canvas.Rect(layout.menuLeft - 12, layout.menuTop + (titleIntro_ ? 250 : -10),
-            layout.menuWidth + 24, titleIntro_ ? 94 : layout.rowCount * 45 + 12), Color{252, 246, 236, 228});
+        DrawRectangleRec(canvas.Rect(28, 28, layout.width - 56, 188), Fade(Color{252,246,236,225},titleProgress));
+        DrawRectangleRec(canvas.Rect(layout.menuLeft - 12, layout.menuTop - 10,
+            layout.menuWidth + 24, layout.rowCount * 45 + 12), Fade(Color{252,246,236,228},menuProgress));
     }
     menu::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
     if (IsTextureValid(common.titleLogo)) {
         // 字标自身带英文副标题和“异典”饰线，保留透明区域，不叠加重复的普通文字。
         DrawTexturePro(common.titleLogo,
             {0, 0, static_cast<float>(common.titleLogo.width), static_cast<float>(common.titleLogo.height)},
-            logoBounds, {}, 0, WHITE);
+            {logoBounds.x,logoBounds.y + 18 * canvas.scale * (1-titleProgress),logoBounds.width,logoBounds.height},
+            {},0,Fade(WHITE,titleProgress));
     } else {
         const float titleX = layout.width / 2;
-        TitleText(canvas, common.uiFont, "东方红魔乡", titleX, layout.compact ? 46 : 94, 61, kScarlet);
+        const float offset = 18 * (1-titleProgress);
+        TitleText(canvas, common.uiFont, "东方红魔乡", titleX, (layout.compact ? 46 : 94) + offset, 61, Fade(kScarlet,titleProgress));
         TitleText(canvas, common.uiFont, "the Embodiment of Scarlet Devil", titleX,
-                  layout.compact ? 125 : 171, 18, kScarlet);
+                  (layout.compact ? 125 : 171) + offset, 18, Fade(kScarlet,titleProgress));
     }
-    if (titleIntro_) {
-        const float pulse = menuMotion_.Pulse();
-        Text(canvas, common.uiFont, "PRESS Z / ENTER", layout.menuLeft + layout.menuWidth / 2,
-             layout.menuTop + 280, 29, Fade(kScarlet, pulse), true);
-    } else {
-        constexpr std::array<const char*, 11> labels{
-            "Start", "Extra Start", "Practice Start", "Spell Practice", "Replay",
-            "Score", "Music Room", "Credit", "Option", "Quit", "Shot Test"};
-        constexpr int count = menu::kTitleRowCount;
-        for (int index = 0; index < count; ++index) {
-            const float rowY = layout.menuTop + index * 45;
-            const float weight = menuMotion_.Weight(index);
-            const float reveal = menuMotion_.Reveal(index*0.012F);
-            const bool locked = index == 1 || index == 4;
-            if (weight > 0.01F) {
-                const auto center = canvas.Point(layout.menuLeft + 15 + 16*(1-reveal), rowY + 20);
-                ui::YinYang(center,9.0F*canvas.scale,Fade(kScarlet,weight*reveal),
-                           Fade(kIvory,weight*reveal),menuMotion_.Phase());
-            }
-            ChoiceText(canvas,common.uiFont,labels[index],layout.menuLeft+45,rowY+2,locked?23:28,
-                locked?Color{155,116,117,80}:Color{160,87,94,160},kScarlet,weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash());
-            const auto left = canvas.Point(layout.menuLeft + 30, rowY + 41);
-            const auto right = canvas.Point(layout.menuLeft + layout.menuWidth - 13, rowY + 41);
-            ui::FocusLine(left,right,canvas.scale,Fade(kScarlet,reveal),weight,menuMotion_.Phase());
+    constexpr std::array<const char*, 11> labels{
+        "Start", "Extra Start", "Practice Start", "Spell Practice", "Replay",
+        "Score", "Music Room", "Credit", "Option", "Quit", "Shot Test"};
+    constexpr int count = menu::kTitleRowCount;
+    for (int index = 0; index < count; ++index) {
+        const float rowY = layout.menuTop + index * 45;
+        const float weight = menuMotion_.Weight(index);
+        const float reveal = menuMotion_.Reveal(index*0.012F) * titleEntrance_.MenuProgress(index);
+        if (reveal <= 0) continue;
+        const bool locked = index == 1 || index == 4;
+        if (weight > 0.01F) {
+            const auto center = canvas.Point(layout.menuLeft + 15 + 16*(1-reveal), rowY + 20);
+            ui::YinYang(center,9.0F*canvas.scale,Fade(kScarlet,weight*reveal),
+                       Fade(kIvory,weight*reveal),menuMotion_.Phase());
         }
+        ChoiceText(canvas,common.uiFont,labels[index],layout.menuLeft+45,rowY+2,locked?23:28,
+            locked?Color{155,116,117,80}:Color{160,87,94,160},kScarlet,weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash());
+        const auto left = canvas.Point(layout.menuLeft + 30, rowY + 41);
+        const auto right = canvas.Point(layout.menuLeft + layout.menuWidth - 13, rowY + 41);
+        ui::FocusLine(left,right,canvas.scale,Fade(kScarlet,reveal),weight,menuMotion_.Phase());
     }
 }
 

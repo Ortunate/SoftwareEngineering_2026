@@ -16,6 +16,7 @@
 #include "stage/catalog.hpp"
 #include "render/sprite_renderer.hpp"
 #include "render/ui_motion.hpp"
+#include "render/title_entrance.hpp"
 
 #include "raylib.h"
 
@@ -234,6 +235,7 @@ private:
     std::string message_;
     int selectedMenuItem_ = 0;
     ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。
+    ui::TitleEntrance titleEntrance_{}; // 首次首页的五段顺序展示，完成前屏蔽首页输入。
     OptionsPage optionsPage_ = OptionsPage::General;
     int selectedOption_ = 0;
     int selectedBinding_ = 0;
@@ -244,8 +246,6 @@ private:
     int initialLives_ = 2;
     int initialBombs_ = 3;
     int bestScore_ = 0;
-    // 标题开场只在首次启动显示；返回标题后保持展开菜单。
-    bool titleIntro_ = true;
     int setupStep_ = 0; // 0: 难度确认，1: 灵梦机体，2: 模式，3: 符卡练习；仅提供一面 Normal。
     int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
     bool challengeMode_ = false;

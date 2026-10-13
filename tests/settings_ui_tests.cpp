@@ -42,11 +42,12 @@ struct GameLifecycleProbe {
     /// @brief 设置 page=0～18 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
     static void Show(Game& game,int page) {
         game.dialogueActive_=false; game.spellCutInTimer_=0; game.messageTimer_=0;
-        game.waitingForBinding_=false; game.titleIntro_=false; game.optionsPage_=Game::OptionsPage::General;
+        game.waitingForBinding_=false; game.optionsPage_=Game::OptionsPage::General;
+        game.titleEntrance_.Complete();
         game.boss_.reset(); game.state_=RunState::MainMenu;
         game.selectedBinding_=6; game.selectedOption_=0; game.selectedPauseItem_=0;
         switch(page) {
-            case 0: game.titleIntro_=true; break;
+            case 0: game.titleEntrance_={}; break;
             case 1: break;
             case 2: game.state_=RunState::Options; break;
             case 3: case 4:
@@ -73,6 +74,14 @@ struct GameLifecycleProbe {
         }
         game.UpdateUiMotion(0.5F);
     }
+    /// @brief 设置启动展示的可重复截图时刻；仅推进展示，不执行菜单输入或修改玩家配置。
+    static void StartupAt(Game& game,float seconds) {
+        game.titleEntrance_={}; game.menuMotion_={}; game.UpdateUiMotion(seconds);
+    }
+    static bool Setup(const Game& game) { return game.state_==RunState::StartSetup; }
+    static bool MainMenu(const Game& game) { return game.state_==RunState::MainMenu; }
+    static bool EntranceComplete(const Game& game) { return game.titleEntrance_.Finished(); }
+    static int MenuSelection(const Game& game) { return game.selectedMenuItem_; }
     static bool Waiting(const Game& game) { return game.waitingForBinding_; }
     static bool General(const Game& game) { return game.optionsPage_==Game::OptionsPage::General; }
     static bool Playing(const Game& game) { return game.state_==RunState::Playing; }
@@ -130,7 +139,7 @@ void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, boo
 
 /// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的弹窗与暂停按钮。
 void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots) {
-    constexpr std::array<const char*,19> names{"intro","title","options","bindings","binding-modal","difficulty","shot","mode",
+    constexpr std::array<const char*,19> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
         "spell-practice","music","score","credit","playing","dialogue","spell-cutin","pause","won","gameover","message"};
     for(const Vector2 size : {Vector2{320,240},{390,844},{900,900},{1600,400},{1280,720}}) {
         SetWindowSize(size.x,size.y); Event(7,0,0); Frame(game);
@@ -182,8 +191,30 @@ int main(int argc, char** argv) {
             Check(koumakyou::GameLifecycleProbe::HasLocalizedGlyphs(game),"localized binding label glyph missing");
             Check(koumakyou::GameLifecycleProbe::HasTitleLayers(game),"separate title layer loading failed");
             SetTargetFPS(0);
-            Capture(game, (screenshots / "title.png").string().c_str());
+            // 初始确认被动画门禁忽略；不能把旧等待页替换成一个可提前误触的隐藏菜单。
             Key(game, KEY_Z);
+            Check(koumakyou::GameLifecycleProbe::MainMenu(game) && !koumakyou::GameLifecycleProbe::EntranceComplete(game),
+                  "startup accepted early confirmation");
+            // 菜单已部分显示时仍屏蔽键盘选择、返回和鼠标点击。
+            koumakyou::GameLifecycleProbe::StartupAt(game,2.3F);
+            const koumakyou::menu::TitleLayout locked(GetScreenWidth(),GetScreenHeight(),koumakyou::menu::kTitleRowCount);
+            const auto options=locked.Row(8);
+            Key(game,KEY_DOWN); Key(game,KEY_ESCAPE);
+            Click(game,options.x+options.width/2,options.y+options.height/2);
+            Check(koumakyou::GameLifecycleProbe::MainMenu(game) && koumakyou::GameLifecycleProbe::MenuSelection(game)==0,
+                  "incomplete menu accepted input");
+            Event(7,0,0); Frame(game);
+            constexpr std::array<float,7> times{0,0.275F,0.775F,1.275F,1.85F,2.375F,2.6F};
+            constexpr std::array<const char*,7> shots{"startup-00","startup-moon","startup-title","startup-shrine","startup-reimu","startup-menu","title"};
+            for(std::size_t index=0;index<times.size();++index) {
+                koumakyou::GameLifecycleProbe::StartupAt(game,times[index]);
+                Capture(game,(screenshots/(std::string(shots[index])+".png")).string().c_str(),0);
+            }
+            Key(game,KEY_Z);
+            Check(koumakyou::GameLifecycleProbe::Setup(game),"completed startup did not accept confirmation");
+            Key(game,KEY_ESCAPE);
+            Check(koumakyou::GameLifecycleProbe::MainMenu(game) && koumakyou::GameLifecycleProbe::EntranceComplete(game),
+                  "returning to title replayed startup");
             Capture(game,(screenshots / "menu-enter.png").string().c_str(),0);
             Capture(game,(screenshots / "menu-enter-mid.png").string().c_str(),6);
             Capture(game, (screenshots / "menu.png").string().c_str());

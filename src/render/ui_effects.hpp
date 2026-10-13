@@ -6,6 +6,11 @@
 #include <cmath>
 
 namespace koumakyou::ui {
+/// @brief 在已有 RGBA 透明度上叠加 opacity；须为有限值，钳制到 0～1，不能重新显露已完全透明的元素。
+inline Color WithOpacity(Color color,float opacity) {
+    color.a = static_cast<unsigned char>(color.a * std::clamp(opacity,0.0F,1.0F));
+    return color;
+}
 /// @brief 按 amount（0～1）混合 RGBA，供选择颜色渐变使用。
 inline Color Blend(Color from, Color to, float amount) {
     amount = std::clamp(amount, 0.0F, 1.0F);
@@ -19,7 +24,7 @@ inline void GlowText(Font font, const char* text, Vector2 position, float size,
         for (int ring = 2; ring >= 1; --ring) {
             const float radius = size * 0.035F * ring;
             for (Vector2 offset : {Vector2{radius,0}, Vector2{-radius,0}, Vector2{0,radius}, Vector2{0,-radius}})
-                DrawText(font,text,{position.x+offset.x,position.y+offset.y},size,Fade(glow,strength*0.11F/ring));
+                DrawText(font,text,{position.x+offset.x,position.y+offset.y},size,WithOpacity(glow,strength*0.11F/ring));
         }
     }
     DrawText(font,text,position,size,ink);
@@ -33,12 +38,12 @@ inline void Spark(Vector2 center, float radius, Color color) {
 }
 /// @brief 带流动星芒的细线；amount（0～1）控制选中强调，phase 为秒，scale 为画布缩放比例。
 inline void FocusLine(Vector2 left, Vector2 right, float scale, Color color, float amount, float phase) {
-    DrawLineEx(left,right,std::max(0.6F,scale),Fade(color,0.18F+0.7F*amount));
+    DrawLineEx(left,right,std::max(0.6F,scale),WithOpacity(color,0.18F+0.7F*amount));
     if(amount<=0.01F)return;
     const float drift=0.90F+0.025F*std::sin(phase*2.4F);
     const Vector2 star{left.x+(right.x-left.x)*drift,left.y};
-    DrawLineEx({star.x-10*scale,star.y},{star.x+10*scale,star.y},scale,Fade(color,amount*0.35F));
-    Spark(star,5*scale,Fade(color,amount));
+    DrawLineEx({star.x-10*scale,star.y},{star.x+10*scale,star.y},scale,WithOpacity(color,amount*0.35F));
+    Spark(star,5*scale,WithOpacity(color,amount));
 }
 /// @brief 将太极局部坐标转换为屏幕像素；x/y 以主体半径为单位，angle 为弧度。
 inline Vector2 TaijiPoint(Vector2 center, float radius, float angle, float x, float y) {
@@ -77,12 +82,12 @@ inline void YinYang(Vector2 center, float radius, Color color, Color background,
     DrawCircleSector(TaijiPoint(center,radius,angle,0,0.5F),radius*0.17F,0,360,32,color);
     // 细双圈与四处短刻线保持印章感；最小窗口也为主体留出清楚的留白。
     DrawRing(center,radius*1.01F,radius*1.075F,0,360,80,color);
-    DrawRing(center,radius*1.19F,radius*1.23F,0,360,80,Fade(color,0.55F));
+    DrawRing(center,radius*1.19F,radius*1.23F,0,360,80,WithOpacity(color,0.55F));
     for(int index=0;index<4;++index) {
         const float turn=angle*0.35F+index*PI/2;
         const auto inner=TaijiPoint(center,radius,turn,1.32F,0);
         const auto outer=TaijiPoint(center,radius,turn,1.45F,0);
-        DrawLineEx(inner,outer,std::max(0.55F,radius*0.055F),Fade(color,0.65F));
+        DrawLineEx(inner,outer,std::max(0.55F,radius*0.055F),WithOpacity(color,0.65F));
     }
 }
 } // namespace koumakyou::ui

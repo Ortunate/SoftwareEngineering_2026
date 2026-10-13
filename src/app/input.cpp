@@ -13,15 +13,9 @@
 namespace koumakyou {
 
 void Game::UpdateMainMenu() {
+    // 键盘与鼠标使用同一门禁；不缓存动画期间的确认，避免最后一帧突然跳入开局页。
+    if (!titleEntrance_.Finished()) return;
     const bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
-    if (titleIntro_) {
-        if (confirm || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            titleIntro_ = false;
-            menuMotion_.Confirm();
-            assets_.PlaySoundEffect("menu_confirm");
-        }
-        return;
-    }
     constexpr int itemCount = menu::kTitleRowCount;
     const int previous = selectedMenuItem_;
     const auto available = [](int index) { return index != 1 && index != 4; };
@@ -88,7 +82,7 @@ void Game::UpdateMenuPage() {
     if (back) {
         assets_.PlaySoundEffect("menu_cancel");
         if (state_ == RunState::StartSetup && setupStep_ > 0 && setupStep_ < 3) --setupStep_;
-        else { EnterMainMenu(); titleIntro_ = false; }
+        else EnterMainMenu();
         return;
     }
     int direction = 0;

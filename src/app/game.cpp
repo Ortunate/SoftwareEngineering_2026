@@ -190,7 +190,9 @@ void Game::EnterMainMenu() {
     dialogueEventId_.reset();
     player_.ResetPose();
     player_.SyncCamera(camera_);
-    EnableCursor();
+    // GLFW 后端的 ShowCursor 同时解除捕获，且不会像 EnableCursor 一样强制居中。
+    // 已显示光标时不重复切换模式；更换窗口后端时需保持释放捕获但不移动指针的行为。
+    if (IsCursorHidden()) ShowCursor();
 }
 
 void Game::EndStage(RunState result) {

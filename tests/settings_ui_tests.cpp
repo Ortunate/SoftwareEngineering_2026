@@ -187,7 +187,9 @@ int main(int argc, char** argv) {
     int result = 0;
     try {
         {
+            Event(7,83,147);
             koumakyou::Game game;
+            Check(GetMousePosition().x==83 && GetMousePosition().y==147,"title startup recentered mouse");
             Check(koumakyou::GameLifecycleProbe::HasLocalizedGlyphs(game),"localized binding label glyph missing");
             Check(koumakyou::GameLifecycleProbe::HasTitleLayers(game),"separate title layer loading failed");
             SetTargetFPS(0);
@@ -215,6 +217,7 @@ int main(int argc, char** argv) {
             Key(game,KEY_ESCAPE);
             Check(koumakyou::GameLifecycleProbe::MainMenu(game) && koumakyou::GameLifecycleProbe::EntranceComplete(game),
                   "returning to title replayed startup");
+            Check(GetMousePosition().x==0 && GetMousePosition().y==0,"returning to title recentered mouse");
             Capture(game,(screenshots / "menu-enter.png").string().c_str(),0);
             Capture(game,(screenshots / "menu-enter-mid.png").string().c_str(),6);
             Capture(game, (screenshots / "menu.png").string().c_str());
@@ -358,6 +361,11 @@ int main(int argc, char** argv) {
             Check(!koumakyou::BindingPressed(settings.bindings.fire), "mouse press repeated while held");
             Event(5, MOUSE_BUTTON_EXTRA); Frame(game);
             Check(!koumakyou::BindingDown(settings.bindings.fire), "mouse release failed");
+            // 从捕获鼠标的战斗返回仍须释放光标；取消居中不能变成无法点击首页。
+            game.Start(true);
+            Check(IsCursorHidden(),"gameplay did not capture cursor");
+            game.Reset();
+            Check(!IsCursorHidden(),"returning to title left cursor captured");
         }
         // 第二个实例模拟重启：读取配置后仍可加载关卡音乐与进入游戏。
         {

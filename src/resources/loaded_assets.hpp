@@ -13,6 +13,7 @@ struct VisualResource {
     Vector2 pivot{0.5F, 0.5F};
     float bulletDiameterScale = 2.6F;
     bool glow = false;
+    Rectangle dialogueCrop{0, 0, 1, 1}; // 从清单复制的归一化裁剪区域，仅供对话绘制使用。
 };
 
 /// @brief 由素材管理器持有、绘制器仅借用的透明处理着色器。

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "resources/visual_assets.hpp"
+#include <array>
 
 namespace koumakyou::stage1 {
 
@@ -24,5 +25,10 @@ constexpr VisualId kPowerPoint = 10;
 constexpr VisualId kScorePoint = 11;
 /// @brief 满火力清弹产生的星点公告板贴图编号。
 constexpr VisualId kStarPoint = 12;
+
+/// @brief 原版表情按 a0、a1、b0、b1、c0、c1 排列；默认图沿用原有 ID，不移动玩法编号。
+constexpr std::array<VisualId, 6> kReimuPortraits{kReimuPortrait, 13, 14, 15, 16, 17};
+/// @brief 露米娅的 a0、a1、b0、b1 差分；a0 与世界角色共用纹理，路径缓存仅释放一次。
+constexpr std::array<VisualId, 4> kRumiaPortraits{kRumia, 18, 19, 20};
 
 }  // namespace koumakyou::stage1

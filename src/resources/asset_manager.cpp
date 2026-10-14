@@ -166,7 +166,7 @@ void AssetManager::LoadCommon() {
         GenTextureMipmaps(&common_.titleLogo);
         SetTextureFilter(common_.titleLogo, TEXTURE_FILTER_TRILINEAR);
     }
-    common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/reimu_cutout.png");
+    common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/portraits/reimu/face00a_1.png");
     const auto fontPath = root_ / "common/ui_font.otf";
     common_.uiFont = GetFontDefault();
     if (FileExists(fontPath.string().c_str())) {
@@ -239,7 +239,7 @@ void AssetManager::LoadStage(const StageAssetManifest& manifest) {
         }
         stage_.visuals[definition.id] = {texture, definition.mode,
             definition.worldHeight, definition.pivot,
-            definition.bulletDiameterScale, definition.glow};
+            definition.bulletDiameterScale, definition.glow, definition.dialogueCrop};
     }
     const std::filesystem::path shaders = root_ / "common/shaders";
     stage_.shaders.bulletCore = LoadShaderAsset({}, shaders / "bullet_core.fs");

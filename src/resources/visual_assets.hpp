@@ -30,6 +30,9 @@ struct VisualDefinition {
     Vector2 pivot{0.5F, 0.5F};
     float bulletDiameterScale = 2.6F;
     bool glow = false;
+    /// @brief 对话专用的归一化裁剪矩形，限定在 [0,1]；世界公告板和符卡仍显示完整图。
+    /// 全身差分裁到上半身，使脸部尺寸接近半身差分，底部藏在台词面板之后。
+    Rectangle dialogueCrop{0, 0, 1, 1};
 };
 
 /// @brief 声音清单项，路径相对 assets 根目录；name 是播放时使用的查找键。

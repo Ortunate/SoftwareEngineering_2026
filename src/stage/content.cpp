@@ -1,4 +1,4 @@
-// 本文件负责把带参关卡事件分派为游戏总控的单次生成与演出请求。
+// 本文件负责关卡事件分派，以及按台词恢复双方的对话表情状态。
 
 #include "stage/content.hpp"
 
@@ -6,6 +6,15 @@
 #include <stdexcept>
 
 namespace koumakyou {
+
+std::array<int, 2> DialogueExpressionsAt(
+    std::span<const DialogueLine> lines, std::size_t lineIndex) {
+    std::array<int, 2> expressions{};
+    // 从台词重建状态，保证跳句、战后独白和截图跳转都不继承上一次对话的表情。
+    for (std::size_t index = 0; index < lines.size() && index <= lineIndex; ++index)
+        expressions[lines[index].bossSpeaking ? 1 : 0] = lines[index].expression;
+    return expressions;
+}
 namespace {
 // 各重载明确列出动作类型；新增 variant 分支而未补充执行器时必须编译失败。
 struct EventExecutor {

@@ -21,8 +21,10 @@ public:
     [[nodiscard]] VisualId PowerPickupVisual() const override { return kPowerPoint; }
     [[nodiscard]] VisualId ScorePickupVisual() const override { return kScorePoint; }
     [[nodiscard]] VisualId StarPickupVisual() const override { return kStarPoint; }
-    [[nodiscard]] VisualId HeroPortraitVisual() const override { return kReimuPortrait; }
-    [[nodiscard]] VisualId BossPortraitVisual() const override { return kRumia; }
+    [[nodiscard]] VisualId HeroPortraitVisual(int expression = 0) const override;
+    [[nodiscard]] VisualId BossPortraitVisual(int expression = 0) const override;
+    /// @brief 第一面符卡演出使用张口笑的露米娅全身差分，表情编号为 2。
+    [[nodiscard]] VisualId SpellPortraitVisual() const override { return BossPortraitVisual(2); }
     [[nodiscard]] const char* StartTitle() const override {
         return "Stage 1  Mystic Flier  Normal";
     }

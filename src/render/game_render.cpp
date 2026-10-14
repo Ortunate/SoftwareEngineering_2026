@@ -260,18 +260,33 @@ void Game::DrawDialogue() const {
     if(!dialogueActive_)return;
     const GameplayLayout l(GetScreenWidth(),GetScreenHeight());
     const auto lines=CurrentDialogue(); float start=0;
-    const DialogueLine& line=lines[DialogueIndex(&start)];
+    const int lineIndex=DialogueIndex(&start);
+    const DialogueLine& line=lines[lineIndex];
+    const auto expressions=DialogueExpressionsAt(lines,lineIndex);
     const float elapsed=dialogueTimer_-start;
     const auto portrait=[&](VisualId id,bool right,bool speaking) {
-        const Texture2D texture=assets_.GetVisual(id).texture;
+        const auto& visual=assets_.GetVisual(id);
+        const Texture2D texture=visual.texture;
         if(!texture.id)return;
-        const float height=640, width=height*texture.width/texture.height;
-        DrawTexturePro(texture,{0,0,static_cast<float>(texture.width),static_cast<float>(texture.height)},
+        const auto crop=visual.dialogueCrop;
+        const Rectangle source{crop.x*texture.width,crop.y*texture.height,
+                               crop.width*texture.width,crop.height*texture.height};
+        if(source.width<=0 || source.height<=0)return;
+        const float height=640, width=height*source.width/source.height;
+        DrawTexturePro(texture,source,
             l.Rect(right ? 1388-width : 532,1042-height,width,height),{},0,
             speaking ? WHITE : Color{115,115,130,255});
     };
-    portrait(stageContent_->HeroPortraitVisual(),false,!line.bossSpeaking);
-    if(line.showBoss)portrait(stageContent_->BossPortraitVisual(),true,line.bossSpeaking);
+    // 平伸手臂会横跨另一方；先画未发言者，避免暗色立绘盖住当前说话人的脸。
+    const auto hero=stageContent_->HeroPortraitVisual(expressions[0]);
+    const auto boss=stageContent_->BossPortraitVisual(expressions[1]);
+    if(line.bossSpeaking) {
+        portrait(hero,false,false);
+        if(line.showBoss)portrait(boss,true,true);
+    } else {
+        if(line.showBoss)portrait(boss,true,false);
+        portrait(hero,false,true);
+    }
     const Font font=assets_.Common().uiFont;
     if(elapsed>=line.textDelay) {
         const Rectangle panel=l.Rect(620,845,670,144);
@@ -281,8 +296,8 @@ void Game::DrawDialogue() const {
             ui::DrawText(font,line.secondLine,l.Point(650,918),31*l.scale,RAYWHITE);
     }
     if(line.introduce) {
-        ui::DrawText(font,"宵暗的妖怪",l.Point(1035,480),33*l.scale,Color{225,220,255,255});
-        ui::DrawText(font,"露米娅",l.Point(1100,525),53*l.scale,RAYWHITE);
+        ui::DrawText(font,"宵暗的妖怪",l.Point(1035,280),33*l.scale,Color{225,220,255,255});
+        ui::DrawText(font,"露米娅",l.Point(1100,325),53*l.scale,RAYWHITE);
     }
 }
 
@@ -291,7 +306,8 @@ void Game::DrawSpellCutIn() const {
     const GameplayLayout l(GetScreenWidth(),GetScreenHeight());
     const float elapsed=kSpellCutInDuration-spellCutInTimer_;
     const float opacity=std::clamp(std::min(elapsed/0.2F,spellCutInTimer_/0.4F),0.0F,1.0F);
-    const Texture2D texture=assets_.GetVisual(stageContent_->BossPortraitVisual()).texture;
+    // 符卡差分由关卡决定；不套用对话裁剪，完整图仍沿用原有滑入和淡出时序。
+    const Texture2D texture=assets_.GetVisual(stageContent_->SpellPortraitVisual()).texture;
     if(texture.id) {
         const float height=760, width=height*texture.width/texture.height;
         const float offset=(1-std::clamp(elapsed/0.4F,0.0F,1.0F))*400;

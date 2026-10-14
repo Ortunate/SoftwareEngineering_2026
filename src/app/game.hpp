@@ -172,7 +172,7 @@ private:
     void DrawOverlay() const;
     /// @brief 绘制符卡开始时的立绘与名称展示。
     void DrawSpellCutIn() const;
-    /// @brief 根据对话计时器绘制当前说话人和台词。
+    /// @brief 根据对话计时器绘制台词及双方最近一次表情，按素材裁剪区域等比展示立绘。
     void DrawDialogue() const;
     /// @brief 绘制开始菜单。
     void DrawMainMenu() const;

@@ -187,9 +187,10 @@ void Game::DrawMenuPage() const {
         if (common.reimuPortrait.id != 0) {
             const auto texture = common.reimuPortrait;
             Portrait(texture,canvas.Rect((compact?244:130)-35*(1-menuMotion_.Reveal()),compact?142:82,
-                     compact?272:357,compact?434:570),Fade(WHITE,menuMotion_.Reveal()));
+                     compact?272:357,compact?434:500),Fade(WHITE,menuMotion_.Reveal()));
         }
-        Text(canvas, font, "博丽 灵梦", compact?380:260, compact?584:598, 37, kIvory, true);
+        // 全身图的鞋子必须停在名字之上；名字与人物展示槽共用水平中心。
+        Text(canvas, font, "博丽 灵梦", compact?380:308.5F, compact?584:598, 37, kIvory, true);
         Text(canvas, font, "Stage 1 · Mystic Flier", compact?380:790, compact?86:100, 25, kGold, true);
         constexpr std::array<const char*, 4> titles{"请选择难度", "请选择使用的御札", "要以哪一种模式开始游戏？", "符卡练习"};
         Text(canvas, font, titles[setupStep_], compact?380:825, compact?630:178, 28, kIvory, true);

@@ -58,6 +58,52 @@ struct GameLifecycleProbe {
         UnloadRenderTexture(target);
     }
 
+    /// @brief 实际加载十个差分，渲染逐句切换及菜单/符卡，验证离开关卡不释放通用立绘。
+    static void TestPortraits(Game& game, const std::string& prefix) {
+        game.StartPreview();
+        const auto menuTexture=game.assets_.Common().reimuPortrait;
+        assert(IsTextureValid(menuTexture) && menuTexture.width==976 && menuTexture.height==1612);
+        for(int index=0;index<6;++index)
+            assert(IsTextureValid(game.assets_.GetVisual(game.stageContent_->HeroPortraitVisual(index)).texture));
+        for(int index=0;index<4;++index) {
+            const auto& visual=game.assets_.GetVisual(game.stageContent_->BossPortraitVisual(index));
+            assert(IsTextureValid(visual.texture) && visual.texture.width==887 && visual.texture.height==1774);
+            assert(visual.dialogueCrop.height<1);
+        }
+        const int width=GetScreenWidth(),height=GetScreenHeight();
+        game.BeginStageDialogue(1);
+        const auto lines=game.CurrentDialogue();
+        float start=0;
+        for(std::size_t index=0;index<lines.size();++index) {
+            game.dialogueTimer_=start+std::max(1.1F,lines[index].textDelay+lines[index].line2Delay+0.1F);
+            assert(game.DialogueIndex()==static_cast<int>(index));
+            const auto name="portrait-dialogue-"+std::to_string(index);
+            Capture(game,prefix,name.c_str());
+            start+=lines[index].duration;
+        }
+        // 重建计时器时应恢复双方表情，而不是只设置当前说话人的图。
+        game.dialogueTimer_=31;
+        for(const auto size:std::array<Vector2,2>{{{1280,720},{390,844}}}) {
+            SetWindowSize(size.x,size.y);
+            const auto name="portrait-dialogue-"+std::to_string(static_cast<int>(size.x));
+            Capture(game,prefix,name.c_str());
+        }
+        SetWindowSize(width,height);
+        game.dialogueActive_=false;
+        game.state_=RunState::StartSetup;
+        game.UpdateUiMotion(1);
+        Capture(game,prefix,"portrait-menu");
+        game.state_=RunState::Playing;
+        game.BeginStageBoss(true,2);
+        game.boss_->AdvancePhase();
+        game.spellCutInTimer_=1.5F;
+        Capture(game,prefix,"portrait-spell");
+        game.EnterMainMenu();
+        assert(game.assets_.Stage().visuals.empty());
+        assert(IsTextureValid(game.assets_.Common().reimuPortrait));
+        assert(game.assets_.Common().reimuPortrait.id==menuTexture.id);
+    }
+
     /// @brief 道中与关底 Boss 入场均保留现存战斗对象，并继续推进其运动。
     static void TestBossEntryPreservesField(Game& game) {
         for (const bool final : {false, true}) {
@@ -185,6 +231,7 @@ struct GameLifecycleProbe {
 
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
+        TestPortraits(game,prefix);
         TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
         // 经过真实 Game 更新验证高帧率入场，不能把轨道首帧偏移锁定为退场。

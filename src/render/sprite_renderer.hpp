@@ -20,6 +20,7 @@ struct PickupSprite {
     Vector3 position{};
     VisualId visual = kInvalidVisualId;
     float heightScale = 1.0F;
+    const anm::Frame* animation = nullptr; // 借用道具的当前帧，只在本次 Draw 内有效。
 };
 
 /// @brief 绘制角色、弹幕和道具的公告板与光晕；不持有传入的战斗对象或 GPU 资源。
@@ -58,12 +59,13 @@ private:
         float hitRadius;
         ActorKind kind;
         ActorAppearance appearance;
+        anm::Frame animation{};
     };
     mutable std::vector<ActorSprite> translucentActors_;
     /// @brief 按外观分组，避免每种弹幕都重新扫描固定容量弹池。
     mutable std::vector<std::vector<const Bullet*>> bulletGroups_;
-    /// @brief 玩家半透明弹按距离从远到近绘制，避免重叠时混合顺序错误。
-    mutable std::vector<const Bullet*> translucentPlayerBullets_;
+    /// @brief 原始弹幕与玩家半透明弹按距离从远到近绘制，避免重叠时混合顺序错误。
+    mutable std::vector<const Bullet*> translucentBullets_;
 };
 
 }  // namespace koumakyou

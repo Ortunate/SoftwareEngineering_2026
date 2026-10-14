@@ -1,6 +1,6 @@
 # 一面新增素材
 
-本批素材用于现代化重绘版本。标题与立绘使用内置 ImageGen 生成；游戏界面文字由程序绘制，战斗边框与花纹使用本机参考游戏的原始图集。
+标题与对话立绘使用内置 ImageGen 生成；游戏界面文字由程序绘制，战斗角色、弹幕、道具、击破动画及边框花纹使用本机新典的原始素材。战斗 DDS/ANM 的完整目录与接口见 [原始战斗素材接口](NATIVE_BATTLE_ASSETS.md)。
 
 | 文件 | 用途与生成提示 |
 |---|---|
@@ -9,13 +9,13 @@
 | `assets/runtime/common/title_layers/shrine.png` | 神社、鸟居、石阶与植被，不含人物或月亮 |
 | `assets/runtime/common/title_layers/reimu.png` | 独立灵梦透明层，托腮及膝上手部已按反馈重绘；完整提示见 `TITLE_BACKGROUND_LAYERS.md` |
 | `assets/runtime/stages/stage1/portraits/reimu/*.png` | 灵梦 6 张原动作/表情的现代重绘，使用自然手指比例；a1 全身图用于开局选择 |
-| `assets/runtime/stages/stage1/portraits/rumia/*.png` | 露米娅 4 张差分，保留金发、红结、黑白服装及平伸双臂；a0 用于世界角色，b0 用于符卡 |
+| `assets/runtime/stages/stage1/portraits/rumia/*.png` | 露米娅 4 张差分，保留金发、红结、黑白服装及平伸双臂；a0 用于默认对话，b0 用于符卡 |
 
-PNG 保留透明通道，生成方式为内置 ImageGen。新典原始 DDS 仅作为重绘参考，运行时使用新绘制的 PNG；完整提示词保存在 `assets/source/portraits/prompts.json`。旧 `reimu_cutout.png`、`rumia_cutout.png` 与 `*_modern.png` 暂保留供比较，不再作为对话、菜单和 Boss 的立绘加载。
+PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS 作为重绘参考，运行时立绘使用新绘制的 PNG；完整提示词保存在 `assets/source/portraits/prompts.json`。旧 `reimu_cutout.png`、`rumia_cutout.png` 与 `*_modern.png` 暂保留供比较，不再作为对话、菜单和 Boss 的立绘加载。
 
-灵梦按 a0、a1、b0、b1、c0、c1 对应表情 0–5，露米娅按 a0、a1、b0、b1 对应 0–3。灵梦 a1 为已修正手指的样图；露米娅保留原素材右侧袖子出画面的构图。原 PNG 尺寸分别为 976×1612 和 887×1774，不重采样。对话通过清单中的 `dialogueCrop` 等比绘制上部；符卡和世界公告板使用完整图，露米娅判定中心锚点调到 `(0.70,0.36)`。
+灵梦按 a0、a1、b0、b1、c0、c1 对应表情 0–5，露米娅按 a0、a1、b0、b1 对应 0–3。灵梦 a1 为已修正手指的样图；露米娅保留原素材右侧袖子出画面的构图。原 PNG 尺寸分别为 976×1612 和 887×1774，不重采样。对话通过清单中的 `dialogueCrop` 等比绘制上部；符卡使用完整图；世界露米娅使用独立 stg1enm2 动画，判定锚点为 `(0.5,0.5)`。
 
-10 张差分在进入 Stage 1 时加载，退出时释放；世界露米娅和默认对话图按路径共用同一纹理。开局选择页独立持有通用生命周期的灵梦 a1 纹理，不受关卡卸载影响。
+10 张差分在进入 Stage 1 时加载，退出时释放；世界露米娅由 DDS/ANM 图集缓存加载，与对话 PNG 独立。开局选择页独立持有通用生命周期的灵梦 a1 纹理，不受关卡卸载影响。
 
 ## 新典界面图集
 

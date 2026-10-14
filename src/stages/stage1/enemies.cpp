@@ -195,6 +195,8 @@ void ReferenceEnemy::Update(float deltaTime, Vector3 playerPosition, BulletSyste
     age += deltaTime; presentation.Update(deltaTime);
     script_.health = health*kReferenceHealthUnit;
     script_.Update(deltaTime,playerPosition,bullets);
+    defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(script_.deathEffect,0,2));
+    animationScript=script_.animationScript;animationAge=script_.animationAge;animationRevision=script_.animationRevision;
     position = script_.Position();
     const Vector3 p = script_.sourcePosition;
     // 出生在 y=-32 的场外缓冲带；只有实际入场后再越界才回收，不能在第一帧销毁。

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "resources/visual_assets.hpp"
+#include <memory>
 
 namespace koumakyou {
 /// @brief 加载后的外观，纹理所有权仅属于 AssetManager；尺寸与锚点沿用 VisualDefinition 的单位。
@@ -14,6 +15,15 @@ struct VisualResource {
     float bulletDiameterScale = 2.6F;
     bool glow = false;
     Rectangle dialogueCrop{0, 0, 1, 1}; // 从清单复制的归一化裁剪区域，仅供对话绘制使用。
+    battle::Selection animation{};
+    VisualId defeatVisual = kInvalidVisualId; // 当前关卡的击破动画编号。
+    std::shared_ptr<const anm::Archive> archive; // 借用 GPU 纹理，共享只读 CPU 指令，不拥有图集纹理。
+};
+
+/// @brief 按需加载的战斗图集；GPU 纹理由 AssetManager 独占，所有引用在 UnloadStage 后失效。
+struct BattleAtlasResource {
+    Texture2D texture{};
+    std::shared_ptr<const anm::Archive> archive;
 };
 
 /// @brief 由素材管理器持有、绘制器仅借用的透明处理着色器。

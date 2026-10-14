@@ -18,10 +18,16 @@ void Game::UpdateEnemies(float deltaTime) {
         enemy.SetChallengeRank(referenceRank_);
         enemy.Update(deltaTime, player_.Position(), bullets_);
         for(int id:enemy.SoundEvents())assets_.PlaySoundEffect("reference_"+std::to_string(id));
+        const auto& visual=assets_.GetVisual(enemy.visual);
+        if(visual.archive) {
+            auto selected=visual.animation;
+            if(enemy.animationScript>=0)selected.script=enemy.animationScript;
+            enemy.animation.Sync(*visual.archive,selected,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,enemy.animationRevision);
+        }
         // 只处理本帧仍活动到失活的跃迁，快照不延长 Enemy 的槽位寿命。
         if (!enemy.active)
             actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
-                                enemy.presentation, ActorExitReason::Retreat);
+                                enemy.presentation, ActorExitReason::Retreat, &enemy.animation.player.Sample());
     });
 }
 
@@ -82,7 +88,7 @@ void Game::ResolveCollisions() {
             enemy.active = false;
             assets_.PlaySoundEffect("enemy_down");
             actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
-                                enemy.presentation, ActorExitReason::Defeated);
+                                enemy.presentation, ActorExitReason::Defeated, &enemy.animation.player.Sample(), enemy.defeatVisual!=kInvalidVisualId ? enemy.defeatVisual : assets_.GetVisual(enemy.visual).defeatVisual);
             score_ += enemy.scoreValue;
             if(enemy.ReferenceDropKind()==-3) drops_.SpawnEnemyDrops(enemy.position,enemy.DropDistribution());
             else drops_.SpawnReferenceDrop(enemy.position,enemy.ReferenceDropKind(),player_.Power()==Player::kMaxPower);
@@ -168,7 +174,7 @@ void Game::AdvanceBossPhase() {
         ? ActorExitReason::Defeated : ActorExitReason::Retreat;
     if (!hasNextPhase)
         actorEffects_.Spawn(boss_->visual, boss_->position, boss_->hitRadius,
-                            boss_->presentation, exitReason);
+                            boss_->presentation, exitReason, &boss_->animation.player.Sample(), boss_->defeatVisual!=kInvalidVisualId ? boss_->defeatVisual : assets_.GetVisual(boss_->visual).defeatVisual);
     // 仅整场遭遇结束时通知时间轴；阶段切换仍属于同一异步事件。
     if (!hasNextPhase && bossEventId_) {
         stage_.EndEvent(*bossEventId_);

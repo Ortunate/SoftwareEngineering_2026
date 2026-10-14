@@ -286,10 +286,11 @@ void TestStage1Content() {
     assert(finalBoss && finalBoss->active && !finalBoss->IsMidboss());
 
     const auto& visuals = content->Assets().visuals;
-    assert(visuals.size() == 21);
-    assert(visuals[stage1::kFairy].path == "stages/stage1/fairy_modern.png");
-    assert(visuals[stage1::kDarkFairy].path == "stages/stage1/dark_fairy_modern.png");
-    assert(visuals[stage1::kRumia].path == "stages/stage1/portraits/rumia/face03a_0.png");
+    assert(visuals.size() == stage1::kVisualCount);
+    assert(visuals[stage1::kFairy].animation.atlas == battle::Atlas::Stage1Enemies);
+    assert(visuals[stage1::kDarkFairy].animation.script == 3);
+    assert(visuals[stage1::kRumia].animation.atlas == battle::Atlas::Rumia);
+    assert(content->BossPortraitVisual()!=stage1::kRumia);
     const std::array<std::string_view,6> reimuFiles{
         "face00a_0.png", "face00a_1.png", "face00b_0.png", "face00b_1.png", "face00c_0.png", "face00c_1.png"};
     const std::array<std::string_view,4> rumiaFiles{
@@ -317,7 +318,7 @@ void TestStage1Content() {
     assert((DialogueExpressionsAt(before,100)==std::array<int,2>{3,2}));
     assert((DialogueExpressionsAt(content->Dialogue(true),0)==std::array<int,2>{0,0}));
     assert((DialogueExpressionsAt({},0)==std::array<int,2>{0,0}));
-    assert(visuals[stage1::kGreenSphere].mode == VisualMode::Sphere);
+    assert(visuals[stage1::kGreenSphere].mode == VisualMode::Bullet);
     assert(content->PlayerBulletVisual() == stage1::kPlayerGoldCard);
     assert(content->PlayerHomingVisual() == stage1::kPlayerCyanCard);
     assert(content->PowerPickupVisual() == stage1::kPowerPoint);

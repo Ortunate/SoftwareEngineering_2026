@@ -276,6 +276,14 @@ struct GameLifecycleProbe {
         assert(game.score_ == 500);
         assert(game.actorEffects_.Pool().ActiveCount() == 1);
         const auto pickups = PickupCount(game);
+        game.UpdateBattleAnimations();
+        game.actorEffects_.Pool().ForEachActive([&](const ActorExitEffect& effect) {
+            assert(effect.nativeDefeat);
+            const auto& visual=game.assets_.GetVisual(effect.visual);
+            assert(visual.animation.atlas==battle::Atlas::BulletEffects);
+            assert(visual.animation.script==3 && effect.animation.visible);
+            assert(effect.animation.additive && effect.animation.sprite==4);
+        });
         Capture(game, prefix, "enemy-defeat");
         game.ResolveCollisions();
         assert(game.score_ == 500 && PickupCount(game) == pickups);

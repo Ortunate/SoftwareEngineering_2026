@@ -65,6 +65,9 @@ struct ActorExitEffect {
     ActorAppearance initial{};
     float age = 0.0F;
     float duration = 0.25F;
+    anm::Frame animation{}; // 身体的最后一帧或独立击破动画的当前帧，不借用原演员。
+    bool nativeDefeat = false; // 为 true 时仅绘制独立击破动画，不叠加身体淡出。
+    battle::Cursor effectAnimation; // 借用关卡档案，必须在卸载关卡前清空效果池。
     /// @brief 采样淡出、收缩或击破爆散；不参与碰撞或索敌。
     [[nodiscard]] ActorAppearance Sample() const;
 };
@@ -75,15 +78,20 @@ class ActorEffectSystem {
 public:
     /// @brief 复制角色最后一帧外观；position 是世界坐标，hitRadius 是正的世界单位半径。
     /// 调用方须在一次实际退场时仅调用一次，传入当前关卡的 visual。
+    /// defeatVisual 仅在 Defeated 时替代身体外观；ANM 删除指令负责结束，最长保留 1 秒。
     /// @return 池满返回 false，不延长战斗对象寿命。
     bool Spawn(VisualId visual, Vector3 position, float hitRadius,
-               const ActorPresentation& presentation, ActorExitReason reason);
+               const ActorPresentation& presentation, ActorExitReason reason,
+               const anm::Frame* animation = nullptr, VisualId defeatVisual = kInvalidVisualId);
     /// @brief 推进效果并回收到期槽位；deltaTime 为非负秒数，暂停时不调用。
     void Update(float deltaTime);
     /// @brief 立即丢弃全部效果；在卸载关卡纹理之前调用。
     void Clear() { effects_.Clear(); }
     /// @brief 只读借用快照池，借用期间不得修改本系统。
     [[nodiscard]] const FixedPool<ActorExitEffect, 512>& Pool() const { return effects_; }
+
+    /// @brief 逐帧借用活动效果以同步动画；回调不能产生新效果或卸载素材。
+    template<class Function> void ForEachActive(Function&& function) { effects_.ForEachActive(function); }
 
 private:
     FixedPool<ActorExitEffect, 512> effects_;

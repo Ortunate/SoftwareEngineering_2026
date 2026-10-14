@@ -28,7 +28,18 @@ constexpr VisualId kStarPoint = 12;
 
 /// @brief 原版表情按 a0、a1、b0、b1、c0、c1 排列；默认图沿用原有 ID，不移动玩法编号。
 constexpr std::array<VisualId, 6> kReimuPortraits{kReimuPortrait, 13, 14, 15, 16, 17};
-/// @brief 露米娅的 a0、a1、b0、b1 差分；a0 与世界角色共用纹理，路径缓存仅释放一次。
-constexpr std::array<VisualId, 4> kRumiaPortraits{kRumia, 18, 19, 20};
+/// @brief 露米娅的 a0、a1、b0、b1 立绘差分，不与战斗精灵共用编号或纹理。
+constexpr std::array<VisualId, 4> kRumiaPortraits{21, 18, 19, 20};
+// 战斗露米娅 kRumia 与立绘 21 分离；22 起为十种弹幕的 16 个颜色槽，后接大 P 与激光。
+constexpr VisualId kNativeBulletBase = 22;
+constexpr VisualId kLargePowerPoint = kNativeBulletBase + 160;
+constexpr VisualId kNativeLaserBase = kLargePowerPoint + 1;
+constexpr VisualId kNativeDefeat = kNativeLaserBase + 16;
+constexpr std::size_t kVisualCount = kNativeDefeat + 3;
+/// @brief 保留 ECL 弹幕类型与颜色，非法输入回退普通蓝弹；类型内部颜色转换由战斗目录负责。
+constexpr VisualId NativeBulletVisual(int type,int color) {
+    return type>=0 && type<10 && color>=0 && color<16
+        ? static_cast<VisualId>(kNativeBulletBase+type*16+color) : kBlueBullet;
+}
 
 }  // namespace koumakyou::stage1

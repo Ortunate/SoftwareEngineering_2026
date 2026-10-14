@@ -21,6 +21,8 @@ struct Bullet {
     bool grazed = false;
     BulletOwner owner = BulletOwner::Enemy;
     VisualId visual = kInvalidVisualId;
+    battle::Cursor animation; // 对象池复用时重置，借用当前关卡 CPU 档案。
+    int nativeType = -1, nativeColor = 0; // 原 ECL 弹种 0–9、色号 0–15；负值沿用外观绑定。
     Vector3 position{};
     Vector3 velocity{};
     Vector3 acceleration{};

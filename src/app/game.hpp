@@ -98,6 +98,8 @@ private:
     void UpdateState(float deltaTime);
     /// @brief 在输入生效后同步页面、选择和动效，deltaTime 单位为秒；不推进战斗时间轴。
     void UpdateUiMotion(float deltaTime);
+    /// @brief 从演员/弹幕的逻辑年龄同步原 ANM，冻结暂停帧，不改变战斗对象寿命。
+    void UpdateBattleAnimations();
     /// @brief 处理一面 Normal 的灵梦机体/标准或挑战模式选择，以及成绩、音乐和制作信息页。
     void UpdateMenuPage();
     /// @brief 处理 FPS、音量、灵敏度、开局资源与设置菜单页面的输入。

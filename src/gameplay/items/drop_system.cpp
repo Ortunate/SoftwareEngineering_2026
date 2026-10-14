@@ -140,6 +140,7 @@ void DropSystem::ConvertEnemyBulletsToStars(BulletSystem& bullets) {
 PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
     PickupReward reward{};
     const auto updatePickup = [&](Pickup& pickup) {
+        pickup.age+=std::max(0.0F,deltaTime);
         // 吸取状态属于单个道具；玩家离开触发区域不会取消已有道具的追踪。
         if (playerPosition.z >= kAutoCollectZ) pickup.homing = true;
         if (pickup.homing) {

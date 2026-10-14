@@ -57,6 +57,9 @@ void ReferenceScript::Transition() {
     timerCallback_ = deathCallback_;
     lifeThreshold_ = -1; timeoutFrames = -1; phaseFrames = 0;
 }
+void ReferenceScript::SetAnimation(int script) {
+    animationScript=script;animationAge=0;++animationRevision;
+}
 void ReferenceScript::Tick(Vector3 player, BulletSystem& bullets) {
     // 原作先采用上一帧算出的位移，再解释本帧指令；保留此顺序才能复现转折帧的位置。
     sourcePosition.x += velocity_.x * (mirrored_ ? -1 : 1);
@@ -91,6 +94,16 @@ void ReferenceScript::Tick(Vector3 player, BulletSystem& bullets) {
         angle_ += angularVelocity_; speed_ += acceleration_;
         velocity_ = {std::cos(angle_)*speed_,std::sin(angle_)*speed_,0};
     }
+    if(poses_[3]>=0) {
+        const float horizontal=velocity_.x*(mirrored_ ? -1 : 1);
+        const int next=horizontal<0 ? -2 : horizontal>0 ? 2 : 0;
+        if(next!=pose_) {
+            const int action=next<0 ? poses_[3] : next>0 ? poses_[4] :
+                pose_==-2 ? poses_[1] : pose_==2 ? poses_[2] : poses_[0];
+            SetAnimation(action);pose_=next;
+        }
+    }
+    animationAge+=1.0/60;
     ++context_.frame; ++phaseFrames;
 }
 void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, BulletSystem& bullets) {
@@ -140,7 +153,8 @@ void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, B
         const Vector3 origin = ReferencePosition(Add(sourcePosition,offset_));
         Bullet* beam = bullets.SpawnBeam(origin,BulletSystem::DirectionTo(origin,player),
                 a[6]*kReferenceScale,a[7]*kReferenceScale/2,a[8]/60,a[9]/60,kColors[static_cast<int>(a[1])%16]);
-        if (beam) { beam->warningSeconds = a[11]/60; beam->dangerEndSeconds = (a[8]+a[9]-a[12])/60;
+        if (beam) { beam->visual=static_cast<VisualId>(kNativeLaserBase+static_cast<int>(a[1])%16);
+                    beam->warningSeconds = a[11]/60; beam->dangerEndSeconds = (a[8]+a[9]-a[12])/60;
                     beam->maxAge=(a[8]+a[9]+a[10])/60; beam->beamGrowSeconds=a[8]/60;
                     beam->beamFadeSeconds=a[10]/60; }
         break;
@@ -156,8 +170,11 @@ void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, B
     case 115: timeoutFrames=static_cast<int>(a[0]); break;
     case 116: timerCallback_=static_cast<int>(a[0]); break;
     case 119: dropEvents.push_back(static_cast<int>(a[0])); break;
-    // 下列指令控制旧版 2D 动画、全局演出或掉落；其生命周期由 Game/renderer 管理。
-    case 76: case 78: case 79: case 96: case 97: case 98: case 100: case 101: case 102:
+    case 97: SetAnimation(static_cast<int>(a[0])); break;
+    case 100: deathEffect=static_cast<int>(a[0])&255;break;
+    case 98: for(int n=0;n<5;++n)poses_[n]=static_cast<int>(a[n]);pose_=-1;break;
+    // 下列指令控制额外槽位特效、全局演出或掉落；其生命周期由 Game/renderer 管理。
+    case 76: case 78: case 79: case 96: case 101: case 102:
     case 103: case 104: case 107: case 117: case 118: case 126:
     break;
     case 131: for (int n=0;n<6;++n)rankInfluence_[n]=a[n]; break;
@@ -188,10 +205,11 @@ void ReferenceScript::Emit(const reference::Instruction& i, Vector3 player, Bull
         } else angle+=n*2*kPi/count+layer*Value(a[7])+(i.opcode==69 ? aim : 0);
         const Vector3 direction{std::cos(angle),heightSlope,-std::sin(angle)};
         const float speed=first-(first-last)*layer/layers;
-        const VisualId visual=color<=4 ? kRedBullet : color<=8 ? kBlueBullet : kGreenSphere;
+        const VisualId visual=NativeBulletVisual(type,color);
         Bullet* bullet=bullets.Spawn(BulletOwner::Enemy,origin,Multiply(direction,speed*60*kReferenceScale),
                 (type==2 ? 5.0F : 2.0F)*kReferenceScale,kColors[color],visual);
         if(!bullet) continue;
+        bullet->nativeType=type;bullet->nativeColor=color;
         bullet->rotationAxis={0,1,0};
         const int flags=static_cast<int>(a[8]);
         if(flags&16)bullet->acceleration=Multiply(direction,effects_[4]*3600*kReferenceScale);

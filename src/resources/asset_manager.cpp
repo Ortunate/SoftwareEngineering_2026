@@ -1,6 +1,7 @@
 // 本文件负责实现通用与关卡素材的加载、音频播放和资源卸载。
 
 #include "resources/asset_manager.hpp"
+#include "resources/dds_image.hpp"
 
 #include "rlgl.h"
 
@@ -230,7 +231,7 @@ void AssetManager::LoadStage(const StageAssetManifest& manifest) {
         if (stage_.visuals.size() <= definition.id)
             stage_.visuals.resize(static_cast<std::size_t>(definition.id) + 1);
         Texture2D texture{};
-        if (!definition.path.empty()) {
+        if (definition.animation.atlas==battle::Atlas::None && !definition.path.empty()) {
             const std::string path(definition.path);
             // 多个外观可以共用一张贴图，实际所有权由路径缓存统一管理。
             auto [it, inserted] = stageTextures_.try_emplace(path);
@@ -239,7 +240,14 @@ void AssetManager::LoadStage(const StageAssetManifest& manifest) {
         }
         stage_.visuals[definition.id] = {texture, definition.mode,
             definition.worldHeight, definition.pivot,
-            definition.bulletDiameterScale, definition.glow, definition.dialogueCrop};
+            definition.bulletDiameterScale, definition.glow, definition.dialogueCrop, {}, definition.defeatVisual, {}};
+        if(definition.animation.atlas!=battle::Atlas::None) {
+            const auto& atlas=LoadBattleAtlas(definition.animation.atlas);
+            auto& visual=stage_.visuals[definition.id];
+            visual.texture=atlas.texture;visual.archive=atlas.archive;visual.animation=definition.animation;
+            if(!visual.archive->FindScript(visual.animation.script))
+                throw std::runtime_error("Visual references missing native animation");
+        }
     }
     const std::filesystem::path shaders = root_ / "common/shaders";
     stage_.shaders.bulletCore = LoadShaderAsset({}, shaders / "bullet_core.fs");
@@ -259,6 +267,18 @@ const VisualResource& AssetManager::GetVisual(VisualId id) const {
     return id < stage_.visuals.size() ? stage_.visuals[id] : empty;
 }
 
+const BattleAtlasResource& AssetManager::LoadBattleAtlas(battle::Atlas id) {
+    if(const auto it=battleAtlases_.find(id);it!=battleAtlases_.end())return it->second;
+    const auto& entry=battle::Describe(id);
+    auto archive=std::make_shared<anm::Archive>(anm::LoadArchive(root_/entry.anm));
+    Image image=LoadOriginalDds(root_/entry.dds);
+    const Texture2D texture=LoadTextureFromImage(image);UnloadImage(image);
+    if(!IsTextureValid(texture))throw std::runtime_error("Cannot upload native DDS");
+    SetTextureFilter(texture,TEXTURE_FILTER_BILINEAR);
+    SetTextureWrap(texture,TEXTURE_WRAP_REPEAT); // 原 ANM 特效的 UV 滚动/越界区域使用重复采样。
+    return battleAtlases_.emplace(id,BattleAtlasResource{texture,std::move(archive)}).first->second;
+}
+
 void AssetManager::UnloadStage() {
     if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss) {
         SwitchMusic(MusicSlot::None);
@@ -273,6 +293,8 @@ void AssetManager::UnloadStage() {
         UnloadTextureAsset(texture);
     }
     stageTextures_.clear();
+    for(auto& [id,atlas]:battleAtlases_) { (void)id;UnloadTextureAsset(atlas.texture); }
+    battleAtlases_.clear();
     stage_ = {};
     stageLoaded_ = false;
 }

@@ -6,11 +6,13 @@
 #include "gameplay/bullets/types.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <span>
 
 namespace koumakyou {
 
 /// @brief 管理弹幕池中每颗弹幕的创建、运动和回收；图案由技能决定。
+/// 构造时一次性分配固定池，内存不足抛 bad_alloc；不允许复制，生成/更新不分配槽位内存。
 class BulletSystem {
 public:
     /// @brief 弹幕池可容纳的最大活动弹幕数。
@@ -47,10 +49,10 @@ public:
     void ClearEnemyBullets();
     /// @brief 获取可修改的弹幕池。
     /// @return 弹幕池引用。
-    FixedPool<Bullet, kCapacity>& Pool() { return bullets_; }
+    FixedPool<Bullet, kCapacity>& Pool() { return *bullets_; }
     /// @brief 获取只读弹幕池。
     /// @return 弹幕池常量引用。
-    const FixedPool<Bullet, kCapacity>& Pool() const { return bullets_; }
+    const FixedPool<Bullet, kCapacity>& Pool() const { return *bullets_; }
 
     /// @brief 根据视角水平角和仰俯角求朝向。
     /// @param yaw 水平角（弧度）。
@@ -74,7 +76,9 @@ public:
     static float Length(Vector3 vector);
 
 private:
-    FixedPool<Bullet, kCapacity> bullets_;
+    // 独立 ANM 实例增大了单弹状态；固定池放在堆上，避免 Windows 默认线程栈溢出。
+    std::unique_ptr<FixedPool<Bullet, kCapacity>> bullets_ =
+        std::make_unique<FixedPool<Bullet, kCapacity>>();
 };
 
 }  // namespace koumakyou

@@ -76,6 +76,8 @@ public:
     [[nodiscard]] virtual VisualId PlayerHomingVisual() const = 0;
     /// @brief 返回 Power 道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId PowerPickupVisual() const = 0;
+    /// @brief 返回大 P 道具外观；未区分大小的关卡默认复用普通 P 图。
+    [[nodiscard]] virtual VisualId LargePowerPickupVisual() const { return PowerPickupVisual(); }
     /// @brief 返回分数道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId ScorePickupVisual() const = 0;
     /// @brief 返回清弹星点的外观 ID，贴图由当前 Stage 的素材清单持有。

@@ -49,6 +49,11 @@ public:
     /// @brief 整场遭遇的视觉时钟；阶段切换不能重置入场。
     ActorPresentation presentation{ActorKind::Boss};
     VisualId visual = kInvalidVisualId;
+    battle::Cursor animation;
+    VisualId defeatVisual = kInvalidVisualId; // 可覆盖清单的击破动画，invalid 时采用清单绑定。
+    int animationScript = -1; // 关卡的主动画脚本；负值沿用清单，战斗图不使用对话表情。
+    double animationAge = 0; // 本次脚本启动后的秒数，换阶段不自动重启待机动画。
+    std::uint32_t animationRevision = 0;
     Vector3 position{0.0F, 2.0F, 7.2F};
     float health = 0.0F;
     float maxHealth = 0.0F;

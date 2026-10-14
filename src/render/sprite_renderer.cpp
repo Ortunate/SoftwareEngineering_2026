@@ -1,6 +1,7 @@
 // 本文件负责实现敌人、Boss、弹幕与道具的公告板绘制、光晕及调试图层。
 
 #include "render/sprite_renderer.hpp"
+#include "render/animated_sprite.hpp"
 
 #include "rlgl.h"
 
@@ -16,6 +17,9 @@ struct SpriteSpec {
     Texture2D texture;
     float worldHeight;
     Vector2 pivotUv;
+    const anm::Archive* archive = nullptr;
+    anm::Frame animation{};
+    Vector3 motion{};
 };
 
 /// @brief 计算两个三维向量的差。
@@ -78,6 +82,11 @@ Vector3 ScreenUp(const Camera3D& camera) {
 void DrawSprite(const Camera3D& camera, Vector3 screenUp,
                 const SpriteSpec& spec, Vector3 position, Color tint = WHITE) {
     if (!IsTextureValid(spec.texture)) return;
+    if(spec.archive) {
+        DrawAnimatedBillboard(camera,spec.texture,*spec.archive,spec.animation,position,
+                              spec.worldHeight,spec.pivotUv,tint,spec.motion);
+        return;
+    }
     const float width = spec.worldHeight *
                         static_cast<float>(spec.texture.width) /
                         static_cast<float>(spec.texture.height);
@@ -92,8 +101,18 @@ void DrawSprite(const Camera3D& camera, Vector3 screenUp,
 }
 
 /// @brief 将 Stage 外观参数转为公告板绘制参数。
-SpriteSpec Spec(const VisualResource& visual, float height) {
-    return {visual.texture, height, visual.pivot};
+SpriteSpec Spec(const VisualResource& visual,float height,const anm::Frame* frame=nullptr,Vector3 motion={}) {
+    SpriteSpec result{visual.texture,height,visual.pivot};
+    if(visual.archive) {
+        result.archive=visual.archive.get();result.motion=motion;
+        if(frame && frame->sprite>=0)result.animation=*frame;
+        else {
+            anm::Player initial;
+            initial.Start(*visual.archive,visual.animation.script,visual.animation.spriteOffset,visual.animation.initialSprite);
+            result.animation=initial.Sample();
+        }
+    }
+    return result;
 }
 
 const VisualResource& FindVisual(std::span<const VisualResource> visuals,
@@ -156,21 +175,29 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     const Vector3 screenUp = ScreenUp(camera);
     bulletGroups_.resize(visuals.size());
     for (auto& group : bulletGroups_) group.clear();
-    translucentPlayerBullets_.clear();
+    translucentBullets_.clear();
     translucentActors_.clear();
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         if (bullet.beamLength > 0) return;
         if (bullet.visual < bulletGroups_.size()) {
             bulletGroups_[bullet.visual].push_back(&bullet);
-            if (bullet.owner == BulletOwner::Player &&
+            if ((bullet.owner == BulletOwner::Player || visuals[bullet.visual].archive) &&
                 visuals[bullet.visual].mode == VisualMode::Bullet)
-                translucentPlayerBullets_.push_back(&bullet);
+                translucentBullets_.push_back(&bullet);
         }
     });
 
     // 光束亮芯和判定共用轴线；原作预警最后 30 帧开始展开，但命中仍等待 hitboxStartTime。
-    bullets.Pool().ForEachActive([](const Bullet& bullet) {
+    bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         if (bullet.beamLength <= 0) return;
+        const auto& native=FindVisual(visuals,bullet.visual);
+        if(native.archive) {
+            const auto spec=Spec(native,1,&bullet.animation.player.Sample());
+            rlDisableDepthMask();
+            DrawAnimatedBeam(camera,native.texture,*native.archive,spec.animation,bullet.position,
+                             bullet.BeamEnd(),bullet.radius*2*bullet.BeamVisualScale());
+            rlDrawRenderBatchActive();rlEnableDepthMask();return;
+        }
         const auto end = bullet.BeamEnd();
         const float width=bullet.radius*bullet.BeamVisualScale();
         if (!bullet.Dangerous() && bullet.beamGrowSeconds<=0) {
@@ -196,7 +223,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     if (hasBulletShader) BeginShaderMode(shaders.bulletCore);
     for (std::size_t id = 0; id < visuals.size(); ++id) {
         const VisualResource& visual = visuals[id];
-        if (visual.mode != VisualMode::Bullet ||
+        if (visual.mode != VisualMode::Bullet || visual.archive ||
             !IsTextureValid(visual.texture)) continue;
         for (const Bullet* bullet : bulletGroups_[id]) {
             if (bullet->owner == BulletOwner::Player) continue;
@@ -211,12 +238,13 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
 
     if (hasCutoutShader) BeginShaderMode(shaders.cutout);
     const auto drawActor = [&](Vector3 position, VisualId id, float hitRadius,
-                               ActorKind kind, ActorAppearance appearance) {
+                               ActorKind kind, ActorAppearance appearance,const anm::Frame* animation) {
         // 第一人称穿过近处角色时逐渐淡去贴图，避免巨幅裙摆遮住整屏弹幕；判定不变。
         const float nearOpacity = std::clamp((std::sqrt(DistanceSquared(position, camera.position)) - 0.6F) / 1.2F, 0.0F, 1.0F);
         appearance.alpha *= nearOpacity;
-        if (appearance.alpha < 0.999F || appearance.ringAlpha > 0.001F) {
-            translucentActors_.push_back({position, id, hitRadius, kind, appearance});
+        if (FindVisual(visuals,id).archive || appearance.alpha < 0.999F || appearance.ringAlpha > 0.001F) {
+            translucentActors_.push_back({position,id,hitRadius,kind,appearance,
+                                         animation ? *animation : anm::Frame{}});
             return;
         }
         const VisualResource& visual = FindVisual(visuals, id);
@@ -226,27 +254,31 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     };
     for (const Enemy* enemy : enemies) {
         drawActor(enemy->position, enemy->visual, enemy->hitRadius,
-                  ActorKind::Enemy, enemy->presentation.Sample());
+                  ActorKind::Enemy, enemy->presentation.Sample(),&enemy->animation.player.Sample());
     }
     if (boss && boss->active) {
         drawActor(boss->position, boss->visual, boss->hitRadius,
-                  ActorKind::Boss, boss->presentation.Sample());
+                  ActorKind::Boss, boss->presentation.Sample(),&boss->animation.player.Sample());
     }
     for (const PickupSprite& pickup : pickups) {
         const VisualResource& visual = FindVisual(visuals, pickup.visual);
         const float height = visual.worldHeight * pickup.heightScale;
         if (IsTextureValid(visual.texture))
-            DrawSprite(camera, screenUp, Spec(visual, height), pickup.position);
+            {
+                if(hasCutoutShader && visual.archive)EndShaderMode();
+                DrawSprite(camera,screenUp,Spec(visual,height,pickup.animation),pickup.position);
+                if(hasCutoutShader && visual.archive)BeginShaderMode(shaders.cutout);
+            }
         else DrawSphere(pickup.position, height * 0.35F, RED);
     }
     if (hasCutoutShader) EndShaderMode();
     effects.Pool().ForEachActive([&](const ActorExitEffect& effect) {
         translucentActors_.push_back({effect.position, effect.visual, effect.hitRadius,
-                                      effect.kind, effect.Sample()});
+                                      effect.kind, effect.Sample(),effect.animation});
     });
 
-    // 玩家符卡与过渡角色保留连续透明度；分别排序后合并为同一远近序列。
-    std::sort(translucentPlayerBullets_.begin(), translucentPlayerBullets_.end(),
+    // 原始弹幕、玩家弹与过渡角色保留连续透明度；分别排序后合并为同一远近序列。
+    std::sort(translucentBullets_.begin(), translucentBullets_.end(),
               [&camera](const Bullet* left, const Bullet* right) {
                   return DistanceSquared(left->position, camera.position) >
                          DistanceSquared(right->position, camera.position);
@@ -267,7 +299,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         if (opacity != 0) {
             if (IsTextureValid(visual.texture))
                 DrawSprite(camera, screenUp,
-                           Spec(visual, visual.worldHeight * appearance.scale),
+                           Spec(visual,visual.worldHeight*appearance.scale,&actor.animation),
                            actor.position, Color{255, 255, 255, opacity});
             else DrawSphere(actor.position, actor.hitRadius * appearance.scale,
                             Fade(SKYBLUE, appearance.alpha));
@@ -275,18 +307,18 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         const Color color = appearance.burstAlpha > 0.0F ? GOLD
             : actor.kind == ActorKind::Boss ? Color{230, 140, 255, 255}
                                           : Color{150, 215, 255, 255};
-        if (appearance.ringAlpha > 0.001F)
+        if (!visual.archive && appearance.ringAlpha > 0.001F)
             DrawActorRing(camera, screenUp, actor.position,
                           actor.hitRadius * appearance.ringRadius,
                           Fade(color, appearance.ringAlpha));
-        if (appearance.burstAlpha > 0.001F)
+        if (!visual.archive && appearance.burstAlpha > 0.001F)
             DrawActorBurst(actor.position, actor.hitRadius, appearance.burst,
                            Fade(color, appearance.burstAlpha), actor.kind);
     };
     // 淡入淡出角色、退场快照与玩家透明弹合并远近顺序，不写深度；
     // 默认 shader 保留连续 alpha，不能让 cutout 的阈值截断淡出尾部。
     std::size_t actorIndex = 0;
-    for (const Bullet* bullet : translucentPlayerBullets_) {
+    for (const Bullet* bullet : translucentBullets_) {
         while (actorIndex < translucentActors_.size() &&
                DistanceSquared(translucentActors_[actorIndex].position, camera.position) >
                DistanceSquared(bullet->position, camera.position))
@@ -296,8 +328,8 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             DistanceSquared(bullet->position, camera.position) < 0.7F * 0.7F)
             continue;
         DrawSprite(camera, screenUp,
-                   Spec(visual, bullet->radius * visual.bulletDiameterScale),
-                   bullet->position, Color{255, 255, 255, bullet->color.a});
+                   Spec(visual,bullet->radius*visual.bulletDiameterScale,&bullet->animation.player.Sample(),bullet->velocity),
+                   bullet->position,Color{255,255,255,bullet->color.a});
     }
     while (actorIndex < translucentActors_.size())
         drawTransparentActor(translucentActors_[actorIndex++]);
@@ -310,7 +342,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     rlDisableDepthMask();
     BeginBlendMode(BLEND_ADDITIVE);
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
-        if (bullet.beamLength > 0 && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
+        if (bullet.beamLength > 0 && bullet.visual==kInvalidVisualId && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
             // 色壳在亮芯之后叠加，不能用不透明外柱挡住内部白芯；镜头进入光束也可见。
             rlDisableBackfaceCulling();
             const float width=bullet.radius*bullet.BeamVisualScale();

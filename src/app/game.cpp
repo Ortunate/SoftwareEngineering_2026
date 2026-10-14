@@ -208,7 +208,7 @@ void Game::EndStage(RunState result) {
     drops_.Clear();
     if (boss_ && boss_->active) {
         actorEffects_.Spawn(boss_->visual, boss_->position, boss_->hitRadius,
-                            boss_->presentation, ActorExitReason::StageClear);
+                            boss_->presentation, ActorExitReason::StageClear, &boss_->animation.player.Sample());
         boss_->active = false;
     }
     boss_.reset();
@@ -221,7 +221,7 @@ void Game::EndStage(RunState result) {
 void Game::ClearEnemiesWithEffects() {
     enemies_.ForEachActive([this](Enemy& enemy) {
         actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
-                            enemy.presentation, ActorExitReason::StageClear);
+                            enemy.presentation, ActorExitReason::StageClear, &enemy.animation.player.Sample());
         enemy.active = false;
     });
     enemies_.Clear();
@@ -245,7 +245,47 @@ void Game::TogglePause() {
 void Game::Update(float deltaTime) {
     assets_.UpdateAudio();
     UpdateState(deltaTime);
+    if(state_==RunState::Playing || state_==RunState::Finishing)UpdateBattleAnimations();
     UpdateUiMotion(deltaTime);
+}
+
+void Game::UpdateBattleAnimations() {
+    const auto sync=[&](battle::Cursor& cursor,VisualId id,double age,int script=-1,std::uint32_t serial=0) {
+        const auto& visual=assets_.GetVisual(id);
+        if(!visual.archive)return;
+        auto selected=visual.animation;if(script>=0)selected.script=script;
+        cursor.Sync(*visual.archive,selected,std::max(0.0,age),serial);
+    };
+    actorEffects_.ForEachActive([&](ActorExitEffect& effect) {
+        if(!effect.nativeDefeat)return;
+        sync(effect.effectAnimation,effect.visual,effect.age);
+        effect.animation=effect.effectAnimation.player.Sample();
+        if(effect.effectAnimation.player.Finished())effect.active=false;
+    });
+    if(state_!=RunState::Playing)return;
+    enemies_.ForEachActive([&](Enemy& enemy) {
+        sync(enemy.animation,enemy.visual,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,
+             enemy.animationScript,enemy.animationRevision);
+    });
+    if(boss_ && boss_->active)
+        sync(boss_->animation,boss_->visual,boss_->animationAge,boss_->animationScript,boss_->animationRevision);
+    bullets_.Pool().ForEachActive([&](Bullet& bullet) {
+        const auto& visual=assets_.GetVisual(bullet.visual);
+        if(!visual.archive)return;
+        auto selected=visual.animation;
+        double age=bullet.age;
+        if(bullet.nativeType>=0 && bullet.age<bullet.spawnVisualSeconds) {
+            selected=battle::BulletSpawn(bullet.nativeType,bullet.nativeColor,static_cast<int>(std::round(bullet.spawnVisualSeconds*60)));
+        } else if(bullet.nativeType>=0)age=std::max(0.0F,bullet.age-bullet.spawnVisualSeconds);
+        const auto& atlas=assets_.LoadBattleAtlas(selected.atlas);
+        bullet.animation.Sync(*atlas.archive,selected,age);
+    });
+    drops_.ForEachActive([&](Pickup& pickup) {
+        const auto id=pickup.kind==PickupKind::Star ? stageContent_->StarPickupVisual() :
+            pickup.kind==PickupKind::Score ? stageContent_->ScorePickupVisual() :
+            pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
+        sync(pickup.animation,id,pickup.age);
+    });
 }
 
 void Game::UpdateUiMotion(float deltaTime) {
@@ -328,6 +368,8 @@ void Game::UpdateState(float deltaTime) {
     if (state_ == RunState::Finishing) {
         screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
         actorEffects_.Update(deltaTime);
+        // ANM 删除指令也会结束效果，必须先执行再判断清空，保证本帧完成结算。
+        UpdateBattleAnimations();
         if (actorEffects_.Pool().ActiveCount() == 0) {
             actorEffects_.Clear();
             assets_.UnloadStage();
@@ -395,6 +437,7 @@ void Game::UpdateState(float deltaTime) {
     });
     if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
     bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position());
+    UpdateBattleAnimations(); // 本帧击破快照读取已推进的动作，而不是上一帧的动画。
     ResolveCollisions();
     if (state_ == RunState::Playing) UpdatePickups(deltaTime);
 }

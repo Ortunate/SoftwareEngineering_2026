@@ -3,6 +3,7 @@
 #pragma once
 
 #include "raylib.h"
+#include "resources/battle_catalog.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -30,9 +31,13 @@ struct VisualDefinition {
     Vector2 pivot{0.5F, 0.5F};
     float bulletDiameterScale = 2.6F;
     bool glow = false;
-    /// @brief 对话专用的归一化裁剪矩形，限定在 [0,1]；世界公告板和符卡仍显示完整图。
+    /// @brief 对话专用的归一化裁剪矩形，限定在 [0,1]；符卡显示完整 PNG，战斗 ANM 自行选帧。
     /// 全身差分裁到上半身，使脸部尺寸接近半身差分，底部藏在台词面板之后。
     Rectangle dialogueCrop{0, 0, 1, 1};
+    /// @brief 原始战斗动画绑定；非 None 时不使用 path，纹理由图集缓存持有。
+    battle::Selection animation{};
+    /// @brief 击破时使用的独立动画外观；invalid 保留通用退场，不能用于自然离场或清场。
+    VisualId defeatVisual = kInvalidVisualId;
 };
 
 /// @brief 声音清单项，路径相对 assets 根目录；name 是播放时使用的查找键。

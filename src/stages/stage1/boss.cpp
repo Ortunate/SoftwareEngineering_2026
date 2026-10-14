@@ -1,6 +1,7 @@
 // 本文件将新典原始脚本的 HP/超时回调接入公共 Boss 生命周期；不重新编写弹幕或移动路径。
 #include "stages/stage1/boss.hpp"
 #include "stages/stage1/ids.hpp"
+#include <algorithm>
 namespace koumakyou::stage1 {
 void RumiaBoss::StartMidboss() {
     encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
@@ -21,6 +22,8 @@ bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     presentation.Update(dt);
     script_.health=health*kReferenceHealthUnit;
     script_.Update(dt,player,bullets);
+    defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(script_.deathEffect,0,2));
+    animationScript=script_.animationScript;animationAge=script_.animationAge;animationRevision=script_.animationRevision;
     health=script_.health/kReferenceHealthUnit; maxHealth=script_.maxHealth/kReferenceHealthUnit;
     position=script_.Position(); phaseTimer=script_.phaseFrames/60.0F;
     return script_.pendingCallback>=0 || script_.finished;

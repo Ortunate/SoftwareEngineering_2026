@@ -89,12 +89,12 @@ void Game::DrawWorld() const {
         drops_.ForEachActive([&](const Pickup& pickup) {
             VisualId visual = stageContent_->ScorePickupVisual();
             if (pickup.kind == PickupKind::Power)
-                visual = stageContent_->PowerPickupVisual();
+                visual = pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
             else if (pickup.kind == PickupKind::Star)
                 visual = stageContent_->StarPickupVisual();
-            const float scale = pickup.kind == PickupKind::Power &&
+            const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
-            pickupSprites_.push_back({pickup.position, visual, scale});
+            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample()});
         });
     }
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),

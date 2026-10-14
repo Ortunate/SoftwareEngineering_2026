@@ -4,6 +4,7 @@
 
 #include "core/fixed_pool.hpp"
 #include "gameplay/items/drop_table.hpp"
+#include "resources/battle_catalog.hpp"
 
 #include "raylib.h"
 
@@ -31,6 +32,8 @@ struct Pickup {
     Vector3 position{};
     int value = 1;
     float velocityZ = 0.0F;
+    float age = 0.0F; // 视觉秒数，与运动/追踪时钟独立；暂停时不推进。
+    battle::Cursor animation;
 };
 
 /// @brief 本帧拾取所得，由 Game 应用到玩家和分数状态。
@@ -93,6 +96,12 @@ public:
         pickups_.ForEachActive(function);
         for (const Pickup& star : stars_)
             if (star.active) function(star);
+    }
+    /// @brief 可修改遍历仅供统一推进视觉状态，调用期间不得生成、删除或保留引用。
+    template <typename Function>
+    void ForEachActive(Function&& function) {
+        pickups_.ForEachActive(function);
+        for(Pickup& star:stars_)if(star.active)function(star);
     }
 
 private:

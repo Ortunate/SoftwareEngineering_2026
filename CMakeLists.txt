@@ -42,7 +42,11 @@ add_library(koumakyou_engine STATIC
     src/render/menu_render.cpp
     src/render/game_render.cpp
     src/render/sprite_renderer.cpp
+    src/render/animated_sprite.cpp
     src/resources/asset_manager.cpp
+    src/resources/animation.cpp
+    src/resources/battle_catalog.cpp
+    src/resources/dds_image.cpp
     src/stage/catalog.cpp
     src/stage/content.cpp
     src/stage/enemy_spec.cpp
@@ -97,6 +101,11 @@ add_custom_target(copy_assets
 )
 add_dependencies(koumakyou copy_assets)
 
+# 全目录图形审阅工具按需构建，直接复用原始素材缓存与 ANM 播放/绘制接口。
+add_executable(native_asset_preview EXCLUDE_FROM_ALL tools/native_asset_preview.cpp)
+target_link_libraries(native_asset_preview PRIVATE koumakyou_engine)
+add_dependencies(native_asset_preview copy_assets)
+
 if(MSVC)
     target_compile_options(koumakyou_engine PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(koumakyou PRIVATE /W4 /permissive- /utf-8)
@@ -109,6 +118,7 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(koumakyou_tests
         tests/core_tests.cpp
+        tests/animation_tests.cpp
         tests/actor_effect_tests.cpp
         tests/drop_tests.cpp
         tests/gameplay_tests.cpp
@@ -116,6 +126,7 @@ if(BUILD_TESTING)
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
     target_link_libraries(koumakyou_tests PRIVATE koumakyou_engine)
+    target_compile_definitions(koumakyou_tests PRIVATE KOUMAKYOU_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime")
     # 离屏生命周期测试仍需要图形会话，手动运行，避免普通无窗口测试依赖桌面服务。
     add_executable(koumakyou_lifecycle_tests EXCLUDE_FROM_ALL tests/lifecycle_tests.cpp)
     target_link_libraries(koumakyou_lifecycle_tests PRIVATE koumakyou_engine)

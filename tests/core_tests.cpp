@@ -114,6 +114,8 @@ void RunPlayerTests();
 void RunStageTests();
 /// @brief 运行入退场曲线、快照与回收用例，断言失败时终止进程。
 void RunActorEffectTests();
+/// @brief 运行真实 DDS/ANM、固定帧序及全目录的兼容性验证。
+void RunAnimationTests();
 
 int main() {
     TestResponsiveLayouts();
@@ -125,5 +127,6 @@ int main() {
     RunPlayerTests();
     RunStageTests();
     RunActorEffectTests();
+    RunAnimationTests();
     return 0;
 }

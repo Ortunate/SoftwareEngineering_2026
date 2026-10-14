@@ -88,7 +88,7 @@ private:
     /// @brief 与当前视线正交的屏幕上方单位向量，用于将发射点保持在准星下方。
     [[nodiscard]] Vector3 Up() const;
     /// @brief gold 从前方偏下的单个模块对称散射，cyan 使用其左右两个发射点。
-    /// 金色弹沿出射方向直飞，青蓝弹以散射方向起步后追踪目标；张角随档位增大且相对当前视线。
+    /// gold 沿出射方向直飞，cyan 以散射方向起步后追踪目标；外观由关卡绑定，张角相对当前视线。
     void Fire(BulletSystem& bullets, VisualId bulletVisual,
               VisualId homingVisual);
     /// @brief 在库存和冷却允许时消耗 Bomb，并设置冷却与无敌时间。

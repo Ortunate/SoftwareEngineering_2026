@@ -60,6 +60,10 @@ public:
     /// @brief 按当前关卡的外观 ID 查询；无效 ID 返回空资源，不转移纹理所有权。
     /// @return 资源引用；下次 LoadStage 或 UnloadStage 后不得继续使用有效外观引用。
     [[nodiscard]] const VisualResource& GetVisual(VisualId id) const;
+    /// @brief 按目录编号加载原始 DDS/ANM，重复调用复用纹理；需有效图形上下文。
+    /// 不依赖当前关卡，可供未来自机/关卡或素材浏览器使用；缺失/损坏资源抛异常。
+    /// 返回借用引用，随 UnloadStage 或管理器销毁失效，调用方不得释放纹理。
+    [[nodiscard]] const BattleAtlasResource& LoadBattleAtlas(battle::Atlas id);
     /// @brief 查询当前是否持有关卡专属素材。
     [[nodiscard]] bool HasStage() const { return stageLoaded_; }
 
@@ -102,6 +106,7 @@ private:
     std::unordered_map<std::string, Sound> commonSounds_;
     std::unordered_map<std::string, Sound> stageSounds_;
     std::unordered_map<std::string, Texture2D> stageTextures_;
+    std::unordered_map<battle::Atlas, BattleAtlasResource> battleAtlases_; // 按需图集统一随关卡卸载，目录本身不占 GPU。
     MusicSlot activeMusic_ = MusicSlot::None;
     int musicVolumePercent_ = 50;
     int soundVolumePercent_ = 60;

@@ -4,10 +4,30 @@
 #include "render/title_entrance.hpp"
 #include "render/menu_layout.hpp"
 #include "render/gameplay_layout.hpp"
+#include "render/dialogue_motion.hpp"
+#include "resources/dialogue_crop.hpp"
 #include <cassert>
 #include <cmath>
 
 namespace {
+/// @brief 留白、近透明杂点与原裁剪外的实体均不能影响对话锚点；完全透明图片保留清单取景。
+void TestDialogueContent() {
+    Image image = GenImageColor(100, 120, BLANK);
+    ImageDrawPixel(&image, 0, 0, Color{255,255,255,16});
+    ImageDrawRectangle(&image, 10, 20, 60, 70, WHITE);
+    ImageDrawRectangle(&image, 90, 100, 10, 20, WHITE);
+    const auto crop = koumakyou::FindDialogueContent(image, {0,0,0.8F,0.8F});
+    assert(std::abs(crop.x - 0.1F) < 0.00001F && std::abs(crop.y - 20.0F/120) < 0.00001F);
+    assert(std::abs(crop.width - 0.6F) < 0.00001F && std::abs(crop.height - 70.0F/120) < 0.00001F);
+    const auto clipped = koumakyou::FindDialogueContent(image, {0.2F,0.3F,0.3F,0.2F});
+    assert(std::abs(clipped.x-0.2F)<0.00001F && std::abs(clipped.width-0.3F)<0.00001F);
+    assert(std::abs(clipped.y-0.3F)<0.00001F && std::abs(clipped.height-0.2F)<0.00001F);
+    UnloadImage(image);
+    image = GenImageColor(10, 10, BLANK);
+    const auto empty = koumakyou::FindDialogueContent(image, {0.1F,0.2F,0.5F,0.6F});
+    assert(empty.x==0.1F && empty.y==0.2F && empty.width==0.5F && empty.height==0.6F);
+    UnloadImage(image);
+}
 /// @brief 检查从极小窗口到超宽/竖屏的所有交互矩形及 3D 视口都在窗口内，且不会退化为零缩放。
 void TestResponsiveLayouts() {
     for(const Vector2 size : {Vector2{1,1},{320,180},{320,240},{390,844},{900,900},{1600,400},{180,900},{3840,2160}}) {
@@ -63,6 +83,12 @@ void TestResponsiveLayouts() {
                 const auto portrait=gameplay.DialoguePortrait(aspect,right);
                 fits(portrait);
                 assert(std::abs(portrait.width/portrait.height-aspect)<0.001F);
+                assert(std::abs((right ? portrait.x+portrait.width : portrait.x)-(right ? size.x : 0))<0.001F);
+                assert(std::abs(portrait.y+portrait.height-size.y)<0.001F);
+                const auto resting=gameplay.DialoguePortrait(aspect,right,0);
+                assert(std::abs(resting.width/portrait.width-0.9F)<0.001F);
+                assert(resting.y>portrait.y && resting.y+resting.height>size.y);
+                assert(right ? resting.x+resting.width>size.x : resting.x<0);
             }
             const auto spell=gameplay.SpellPortrait(aspect);
             fits(spell);
@@ -71,6 +97,40 @@ void TestResponsiveLayouts() {
     }
     const koumakyou::menu::Canvas minimized(0,0);
     assert(std::isfinite(minimized.scale) && minimized.scale>0);
+}
+/// @brief 检查精确的 30% 非发言透明度、切换中间态、快速反转、登场及不同 FPS 的时间一致性。
+void TestDialogueMotion() {
+    koumakyou::ui::DialogueMotion motion;
+    motion.Reset(false,true);
+    assert(motion.Sample(false).opacity==1 && motion.Sample(true).opacity==0.3F);
+    motion.Advance(true,true,0);
+    assert(motion.Sample(false).focus==1 && motion.Sample(true).focus==0);
+    motion.Advance(true,true,0.13F);
+    assert(std::abs(motion.Sample(false).opacity-0.65F)<0.00001F);
+    assert(std::abs(motion.Sample(true).opacity-0.65F)<0.00001F);
+    const auto before=motion.Sample(false);
+    motion.Advance(false,true,0);
+    assert(motion.Sample(false).opacity==before.opacity && motion.Sample(false).focus==before.focus);
+    motion.Advance(false,true,0.26F);
+    assert(motion.Sample(false).opacity==1 && motion.Sample(true).opacity==0.3F);
+    motion.Advance(true,true,0.26F);
+    assert(motion.Sample(false).opacity==0.3F && motion.Sample(true).opacity==1);
+    motion.Reset(false,false);
+    assert(motion.Sample(true).opacity==0);
+    motion.Advance(true,true,0);
+    assert(motion.Sample(true).opacity==0);
+    motion.Advance(true,true,0.13F);
+    assert(motion.Sample(true).opacity>0 && motion.Sample(true).opacity<1);
+    motion.Advance(true,true,0.13F);
+    assert(motion.Sample(true).opacity==1);
+    motion.Clear(); motion.Advance(false,false,0);
+    assert(motion.Sample(false).opacity==1 && motion.Sample(true).opacity==0);
+    koumakyou::ui::DialogueMotion slow, fast;
+    slow.Reset(false,true); fast.Reset(false,true);
+    for(int frame=0;frame<3;++frame)slow.Advance(true,true,1.0F/30);
+    for(int frame=0;frame<24;++frame)fast.Advance(true,true,1.0F/240);
+    assert(std::abs(slow.Sample(false).focus-fast.Sample(false).focus)<0.00001F);
+    assert(std::abs(slow.Sample(true).opacity-fast.Sample(true).opacity)<0.00001F);
 }
 /// @brief 检查同一真实时长在 30/240 FPS 下的选择效果一致，以及快速切换不会保留上一页行号。
 void TestMenuMotion() {
@@ -136,9 +196,11 @@ void RunActorEffectTests();
 void RunAnimationTests();
 
 int main() {
+    TestDialogueContent();
     TestResponsiveLayouts();
     TestMenuMotion();
     TestTitleEntrance();
+    TestDialogueMotion();
     RunSettingsTests();
     RunGameplayTests();
     RunDropTests();

@@ -16,6 +16,7 @@
 #include "stage/catalog.hpp"
 #include "render/sprite_renderer.hpp"
 #include "render/ui_motion.hpp"
+#include "render/dialogue_motion.hpp"
 #include "render/title_entrance.hpp"
 
 #include "raylib.h"
@@ -104,7 +105,7 @@ private:
     void UpdateMainMenu();
     /// @brief 处理状态输入与战斗；由 Update 包装，确保所有提前返回后仍推进 UI 展示。
     void UpdateState(float deltaTime);
-    /// @brief 在输入生效后同步页面、选择和动效，deltaTime 单位为秒；不推进战斗时间轴。
+    /// @brief 在输入生效后同步菜单及对话动效，deltaTime 为秒；对话过渡暂停时冻结，不推进战斗时钟。
     void UpdateUiMotion(float deltaTime);
     /// @brief 从演员/弹幕的逻辑年龄同步原 ANM，冻结暂停帧，不改变战斗对象寿命。
     void UpdateBattleAnimations();
@@ -182,7 +183,7 @@ private:
     void DrawOverlay() const;
     /// @brief 在窗口右侧等比滑入完整符卡立绘，独立横幅显示名称。
     void DrawSpellCutIn() const;
-    /// @brief 在窗口下方绘制台词及双方最近一次表情，按素材裁剪区域等比展示两侧立绘。
+    /// @brief 根据对话计时器绘制台词及最近表情，以预先采样的透明度和强调程度绘制贴边立绘。
     void DrawDialogue() const;
     /// @brief 绘制开始菜单。
     void DrawMainMenu() const;
@@ -245,6 +246,7 @@ private:
     bool dialogueBossMusic_ = false;
     float dialogueTimer_ = 0.0F;
     bool dialogueActive_ = false;
+    ui::DialogueMotion dialogueMotion_{}; // 只在 Playing 的对话期间推进；暂停保持当前透明度、缩放与位移。
     std::optional<StageEventId> bossEventId_;
     std::optional<StageEventId> dialogueEventId_;
     SpriteRenderer spriteRenderer_{};

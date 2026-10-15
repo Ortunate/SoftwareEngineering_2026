@@ -33,6 +33,7 @@ struct VisualDefinition {
     bool glow = false;
     /// @brief 对话专用的归一化裁剪矩形，限定在 [0,1]；符卡显示完整 PNG，战斗 ANM 自行选帧。
     /// 全身差分裁到上半身，使脸部尺寸接近半身差分，底部藏在台词面板之后。
+    /// 加载器在此区域内排除透明留白，使窗口锚点对应人物的可见边界。
     Rectangle dialogueCrop{0, 0, 1, 1};
     /// @brief 原始战斗动画绑定；非 None 时不使用 path，纹理由图集缓存持有。
     battle::Selection animation{};

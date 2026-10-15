@@ -166,7 +166,7 @@ void Game::DrawDialogue() const {
     const DialogueLine& line = lines[lineIndex];
     const auto expressions = DialogueExpressionsAt(lines, lineIndex);
     const float elapsed = dialogueTimer_ - start;
-    const auto portrait = [&](VisualId id, bool right, bool speaking) {
+    const auto portrait = [&](VisualId id, bool right) {
         const auto& visual = assets_.GetVisual(id);
         const Texture2D texture = visual.texture;
         if (!texture.id) return;
@@ -174,18 +174,19 @@ void Game::DrawDialogue() const {
         const Rectangle source{crop.x * texture.width, crop.y * texture.height,
                                crop.width * texture.width, crop.height * texture.height};
         if (source.width <= 0 || source.height <= 0) return;
-        DrawTexturePro(texture, source, l.DialoguePortrait(source.width / source.height, right), {}, 0,
-                        speaking ? WHITE : Color{115, 115, 130, 255});
+        const auto pose = dialogueMotion_.Sample(right);
+        DrawTexturePro(texture, source, l.DialoguePortrait(source.width / source.height, right, pose.focus), {}, 0,
+                        Fade(WHITE, pose.opacity));
     };
     // 先画未发言者，避免灵梦展开的手臂覆盖正在说话的角色；裁剪仍取自各差分的元数据。
     const auto hero = stageContent_->HeroPortraitVisual(expressions[0]);
     const auto boss = stageContent_->BossPortraitVisual(expressions[1]);
     if (line.bossSpeaking) {
-        portrait(hero, false, false);
-        if (line.showBoss) portrait(boss, true, true);
+        portrait(hero, false);
+        if (line.showBoss) portrait(boss, true);
     } else {
-        if (line.showBoss) portrait(boss, true, false);
-        portrait(hero, false, true);
+        if (line.showBoss) portrait(boss, true);
+        portrait(hero, false);
     }
     const Font font = assets_.Common().uiFont;
     const Rectangle panel = l.DialoguePanel();
@@ -202,7 +203,20 @@ void Game::DrawDialogue() const {
     }
     if (line.introduce) {
         const float w = std::min(l.width * 0.42F, 250 * l.scale);
-        const Rectangle nameplate{l.width - l.margin - w, panel.y - 106 * l.scale, w, 88 * l.scale};
+        float y = panel.y - 106 * l.scale;
+        // 竖屏角色靠近底角后，名牌需放在头部上方；跟随同一强调采样移动，不能盖住淡出的脸。
+        if (l.width < l.height) {
+            const auto& visual = assets_.GetVisual(boss);
+            const float sourceHeight = visual.texture.height * visual.dialogueCrop.height;
+            if (sourceHeight > 0) {
+                const float aspect = visual.texture.width * visual.dialogueCrop.width / sourceHeight;
+                if (aspect > 0) {
+                    const auto rect = l.DialoguePortrait(aspect, true, dialogueMotion_.Sample(true).focus);
+                    y = std::min(y, rect.y - 100 * l.scale);
+                }
+            }
+        }
+        const Rectangle nameplate{l.width - l.margin - w, std::max(l.margin, y), w, 88 * l.scale};
         Panel(nameplate, l.scale);
         const float x = nameplate.x + 14 * l.scale, textWidth = w - 28 * l.scale;
         Label(font, "宵暗的妖怪", {x, nameplate.y + 12 * l.scale}, 16 * l.scale, textWidth, kMuted);

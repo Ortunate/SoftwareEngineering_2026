@@ -2,6 +2,7 @@
 
 #include "resources/asset_manager.hpp"
 #include "resources/dds_image.hpp"
+#include "resources/dialogue_crop.hpp"
 
 #include "rlgl.h"
 
@@ -139,6 +140,18 @@ void MakeUiDigitsTabular(Font& font) {
     }
 }
 
+/// @brief 同一路径可以配置不同对话取景，按外观 ID 缓存可见边界；只读取调用方持有的 CPU 图片。
+std::unordered_map<VisualId, Rectangle> DialogueCrops(Image image, const std::filesystem::path& path,
+                                                  const StageAssetManifest& manifest) {
+    std::unordered_map<VisualId, Rectangle> crops;
+    for (const auto& definition : manifest.visuals) {
+        if (definition.id != kInvalidVisualId && definition.animation.atlas == battle::Atlas::None &&
+            definition.path == path.generic_string())
+            crops.emplace(definition.id, FindDialogueContent(image, definition.dialogueCrop));
+    }
+    return crops;
+}
+
 }  // namespace
 
 // 每次仅解码一张图片，限制高清图集的 CPU 峰值内存；future 不捕获 AssetManager。
@@ -151,6 +164,7 @@ struct AssetManager::StageLoad {
     struct Decoded {
         Image image{};
         std::shared_ptr<const anm::Archive> archive;
+        std::unordered_map<VisualId, Rectangle> dialogueCrops;
         ~Decoded() { if (image.data) UnloadImage(image); }
     };
     StageAssetManifest manifest;
@@ -279,6 +293,7 @@ bool AssetManager::AdvanceStageLoad() {
         const auto& item = load.items[load.uploaded];
         if (item.atlas == battle::Atlas::None) {
             stageTextures_.emplace(item.path.string(), texture);
+            stageDialogueCrops_.insert(decoded->dialogueCrops.begin(), decoded->dialogueCrops.end());
         } else {
             SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
             SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
@@ -295,10 +310,12 @@ bool AssetManager::AdvanceStageLoad() {
     }
     const auto item = load.items[load.uploaded];
     const auto root = root_;
-    load.pending = std::async(std::launch::async, [root, item] {
+    const auto manifest = load.manifest; // 清单字符串覆盖整个异步加载期，后台不捕获管理器本身。
+    load.pending = std::async(std::launch::async, [root, item, manifest] {
         auto decoded = std::make_unique<StageLoad::Decoded>();
         if (item.atlas == battle::Atlas::None) {
             decoded->image = LoadImage((root / item.path).string().c_str());
+            decoded->dialogueCrops = DialogueCrops(decoded->image, item.path, manifest);
         } else {
             const auto& entry = battle::Describe(item.atlas);
             decoded->archive = std::make_shared<anm::Archive>(anm::LoadArchive(root / entry.anm));
@@ -325,12 +342,20 @@ void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
             const std::string path(definition.path);
             // 多个外观可以共用一张贴图，实际所有权由路径缓存统一管理。
             auto [it, inserted] = stageTextures_.try_emplace(path);
-            if (inserted) it->second = LoadTextureAsset(root_ / path);
+            if (inserted) {
+                Image image = LoadImage((root_ / path).string().c_str());
+                it->second = LoadTextureFromImage(image);
+                const auto crops = DialogueCrops(image, path, manifest);
+                stageDialogueCrops_.insert(crops.begin(), crops.end());
+                if (image.data) UnloadImage(image);
+            }
             texture = it->second;
         }
         stage_.visuals[definition.id] = {texture, definition.mode,
             definition.worldHeight, definition.pivot,
             definition.bulletDiameterScale, definition.glow, definition.dialogueCrop, {}, definition.defeatVisual, {}};
+        if (const auto crop = stageDialogueCrops_.find(definition.id); crop != stageDialogueCrops_.end())
+            stage_.visuals[definition.id].dialogueCrop = crop->second;
         if(definition.animation.atlas!=battle::Atlas::None) {
             const auto& atlas=LoadBattleAtlas(definition.animation.atlas);
             auto& visual=stage_.visuals[definition.id];
@@ -385,6 +410,7 @@ void AssetManager::UnloadStage() {
         UnloadTextureAsset(texture);
     }
     stageTextures_.clear();
+    stageDialogueCrops_.clear();
     for(auto& [id,atlas]:battleAtlases_) { (void)id;UnloadTextureAsset(atlas.texture); }
     battleAtlases_.clear();
     stage_ = {};

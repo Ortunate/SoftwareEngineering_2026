@@ -42,12 +42,16 @@ struct GameplayLayout {
         const float w = std::min(width - 2 * margin, 1000 * scale);
         return {(width - w) / 2, height - margin - 122 * scale, w, 122 * scale};
     }
-    /// @brief aspect 为裁剪后宽高比，须为正；角色等比贴近左右边缘，底部藏在台词框后。
-    [[nodiscard]] Rectangle DialoguePortrait(float aspect, bool right) const {
-        const float h = std::min({height * 0.76F, 650 * scale, width * 0.54F / aspect});
-        const float w = h * aspect;
-        const float bottom = DialoguePanel().y + 25 * scale;
-        return {right ? width - margin - w : margin, std::max(margin, bottom - h), w, h};
+    /// @brief aspect 为去除透明留白后的可见取景宽高比，须为正；focus 为 0～1 的发言强调。
+    /// 发言者等比贴齐窗口左右与底边；非发言者缩至 90%，向对应底角微移，离屏部分由窗口裁切。
+    [[nodiscard]] Rectangle DialoguePortrait(float aspect, bool right, float focus = 1) const {
+        const float emphasis = std::clamp(focus, 0.0F, 1.0F);
+        const float baseHeight = std::min(height * 0.88F, width * (compact ? 0.60F : 0.46F) / aspect);
+        const float h = baseHeight * (0.90F + 0.10F * emphasis), w = h * aspect;
+        const float retreat = 1 - emphasis;
+        const float offsetX = retreat * std::min(12 * scale, width * 0.025F);
+        const float offsetY = retreat * std::min(18 * scale, height * 0.025F);
+        return {right ? width - w + offsetX : -offsetX, height - h + offsetY, w, h};
     }
     /// @brief 符卡立绘完整等比展示；slide 为 0～1 的剩余滑入比例，离屏部分由视口裁切。
     [[nodiscard]] Rectangle SpellPortrait(float aspect, float slide = 0) const {

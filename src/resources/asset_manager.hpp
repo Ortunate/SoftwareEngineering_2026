@@ -118,6 +118,7 @@ private:
     std::unordered_map<std::string, Sound> commonSounds_;
     std::unordered_map<std::string, Sound> stageSounds_;
     std::unordered_map<std::string, Texture2D> stageTextures_;
+    std::unordered_map<VisualId, Rectangle> stageDialogueCrops_; // CPU 解码时计算的可见取景，随关卡清空。
     std::unordered_map<battle::Atlas, BattleAtlasResource> battleAtlases_; // 按需图集统一随关卡卸载，目录本身不占 GPU。
     MusicSlot activeMusic_ = MusicSlot::None;
     int musicVolumePercent_ = 50;

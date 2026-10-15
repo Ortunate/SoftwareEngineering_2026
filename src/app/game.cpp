@@ -190,6 +190,7 @@ void Game::CompleteStartRun() {
     dialogueTimer_ = 0.0F;
     dialogueAfterBattle_ = dialogueBossMusic_ = false;
     dialogueActive_ = false;
+    dialogueMotion_.Clear();
     bossEventId_.reset();
     dialogueEventId_.reset();
     shouldQuit_ = false;
@@ -219,6 +220,7 @@ void Game::CompleteStartRun() {
 }
 
 void Game::EnterMainMenu() {
+    dialogueMotion_.Clear();
     actorEffects_.Clear();
     bullets_.Reset();
     enemies_.Clear();
@@ -338,6 +340,15 @@ void Game::UpdateBattleAnimations() {
 }
 
 void Game::UpdateUiMotion(float deltaTime) {
+    if (!dialogueActive_) {
+        dialogueMotion_.Clear();
+    } else if (state_ == RunState::Playing && stageContent_) {
+        const auto lines = CurrentDialogue();
+        if (!lines.empty()) {
+            const auto& line = lines[DialogueIndex()];
+            dialogueMotion_.Advance(line.bossSpeaking, line.showBoss, deltaTime);
+        }
+    }
     int detail = 0, selection = -1;
     if (state_ != RunState::MainMenu) titleEntrance_.Complete();
     if (state_ == RunState::MainMenu) {
@@ -536,6 +547,8 @@ void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
     dialogueActive_ = true;
     dialogueTimer_ = 0.0F;
     dialogueEventId_ = id;
+    const auto lines = CurrentDialogue();
+    if (!lines.empty()) dialogueMotion_.Reset(lines.front().bossSpeaking, lines.front().showBoss);
     messageTimer_ = 0.0F;
 }
 

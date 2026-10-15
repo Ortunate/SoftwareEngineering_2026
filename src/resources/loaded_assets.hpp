@@ -14,7 +14,7 @@ struct VisualResource {
     Vector2 pivot{0.5F, 0.5F};
     float bulletDiameterScale = 2.6F;
     bool glow = false;
-    Rectangle dialogueCrop{0, 0, 1, 1}; // 从清单复制的归一化裁剪区域，仅供对话绘制使用。
+    Rectangle dialogueCrop{0, 0, 1, 1}; // 清单取景内 Alpha >16 的可见边界（归一化），仅影响对话，完整纹理保留。
     battle::Selection animation{};
     VisualId defeatVisual = kInvalidVisualId; // 当前关卡的击破动画编号。
     std::shared_ptr<const anm::Archive> archive; // 借用 GPU 纹理，共享只读 CPU 指令，不拥有图集纹理。

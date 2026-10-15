@@ -4,6 +4,7 @@
 #include "rlgl.h"
 #include "stages/stage1/enemies.hpp"
 #include "render/ui_typography.hpp"
+#include "render/gameplay_layout.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -12,6 +13,8 @@
 #include <filesystem>
 #include <chrono>
 #include <array>
+#include <utility>
+#include <vector>
 
 namespace koumakyou {
 
@@ -104,6 +107,79 @@ struct GameLifecycleProbe {
         std::cout<<"Full-window world and HUD: "<<(GetTime()-start)*1000/60<<" ms/frame\n";
     }
 
+    /// @brief 用纯色纹理读取边缘像素验证透明混合、暂停冻结，并用正式立绘导出切换过渡。
+    static void TestDialogueTransitions(Game& game, const std::string& prefix) {
+        game.StartPreview();
+        game.BeginStageDialogue(1);
+        const auto lines=game.CurrentDialogue();
+        const auto at=[&](int index) {
+            float seconds=1.1F;
+            for(int line=0;line<index;++line)
+                seconds+=lines[line].duration>0 ? lines[line].duration : game.stageContent_->DialogueLineDuration();
+            return seconds;
+        };
+        // 用不透明纯色替代纹理，直接验证最终像素混合，防止把变暗 tint 误当作 30% Alpha。
+        auto& visuals=const_cast<StageAssets&>(game.assets_.Stage()).visuals;
+        std::vector<std::pair<VisualId,VisualResource>> originals;
+        Image redImage=GenImageColor(32,32,RED), greenImage=GenImageColor(32,32,GREEN);
+        const Texture2D red=LoadTextureFromImage(redImage), green=LoadTextureFromImage(greenImage);
+        UnloadImage(redImage); UnloadImage(greenImage);
+        for(int index=0;index<10;++index) {
+            const auto id=index<6 ? game.stageContent_->HeroPortraitVisual(index)
+                : game.stageContent_->BossPortraitVisual(index-6);
+            originals.emplace_back(id,visuals[id]);
+            visuals[id].texture=index<6 ? red : green;
+            visuals[id].dialogueCrop={0,0,1,1};
+        }
+        const RenderTexture2D target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+        constexpr Color background{17,31,47,255};
+        const auto pixels=[&](float leftAlpha,float rightAlpha) {
+            BeginDrawing(); BeginTextureMode(target); ClearBackground(background);
+            game.DrawDialogue();
+            EndTextureMode(); EndDrawing();
+            Image image=LoadImageFromTexture(target.texture); ImageFlipVertical(&image);
+            const auto check=[&](int x,Color ink,float alpha) {
+                // raylib 将浮点 Alpha 量化为 8 位，允许最多两级的 GPU 舍入误差。
+                const float a=static_cast<unsigned char>(alpha*255)/255.0F;
+                const Color pixel=GetImageColor(image,x,image.height*3/5);
+                assert(std::abs(int(pixel.r)-int(std::round(ink.r*a+background.r*(1-a))))<=2);
+                assert(std::abs(int(pixel.g)-int(std::round(ink.g*a+background.g*(1-a))))<=2);
+                assert(std::abs(int(pixel.b)-int(std::round(ink.b*a+background.b*(1-a))))<=2);
+            };
+            check(0,RED,leftAlpha); check(image.width-1,GREEN,rightAlpha);
+            UnloadImage(image);
+        };
+        game.dialogueTimer_=at(8); game.UpdateUiMotion(0.3F);
+        pixels(1,0.3F);
+        game.dialogueTimer_=at(7); game.UpdateUiMotion(0);
+        pixels(1,0.3F);
+        game.UpdateUiMotion(0.13F);
+        pixels(0.65F,0.65F);
+        const auto paused=game.dialogueMotion_.Sample(false);
+        game.TogglePause(); game.Update(0.5F);
+        assert(game.dialogueMotion_.Sample(false).opacity==paused.opacity);
+        assert(game.dialogueMotion_.Sample(false).focus==paused.focus);
+        game.TogglePause(); game.UpdateUiMotion(0.13F);
+        pixels(0.3F,1);
+        for(const auto& [id,original]:originals)visuals[id]=original;
+        UnloadTexture(red); UnloadTexture(green); UnloadRenderTexture(target);
+
+        // 正式差分逐帧审阅两个方向的过渡，保持其他世界状态不动；Draw 不推进动画。
+        game.dialogueTimer_=at(8); game.UpdateUiMotion(0.3F);
+        Capture(game,prefix,"dialogue-focus-left");
+        for(int direction=0;direction<2;++direction) {
+            game.dialogueTimer_=at(direction==0 ? 7 : 8);
+            for(int frame=0;frame<8;++frame) {
+                game.UpdateUiMotion(frame==0 ? 0 : 0.04F);
+                const std::string name="dialogue-turn-"+std::to_string(direction)+"-"+std::to_string(frame);
+                Capture(game,prefix,name.c_str());
+            }
+        }
+        game.BeginStageDialogue(2,true);
+        assert(game.dialogueMotion_.Sample(false).opacity==1 && game.dialogueMotion_.Sample(true).opacity==0);
+        std::cout<<"Dialogue transition opacity, pause and edge tests passed\n";
+    }
+
     /// @brief 实际加载十个差分，渲染逐句切换及菜单/符卡，验证离开关卡不释放通用立绘。
     static void TestPortraits(Game& game, const std::string& prefix) {
         game.StartPreview();
@@ -117,18 +193,55 @@ struct GameLifecycleProbe {
             assert(visual.dialogueCrop.height<1);
         }
         const int width=GetScreenWidth(),height=GetScreenHeight();
+        // 用正式 PNG（含近透明修复残留）独立绘制每个差分，防止纯色画布贴边测试漏掉内部留白。
+        for (const Vector2 size : {Vector2{1100,760},{1280,720},{390,844}}) {
+            const GameplayLayout layout(size.x,size.y);
+            const auto target=LoadRenderTexture(static_cast<int>(size.x),static_cast<int>(size.y));
+            constexpr Color background{255,0,255,255};
+            for (int index=0;index<10;++index) {
+                const bool right=index>=6;
+                const auto id=right ? game.stageContent_->BossPortraitVisual(index-6)
+                    : game.stageContent_->HeroPortraitVisual(index);
+                const auto& visual=game.assets_.GetVisual(id);
+                const auto crop=visual.dialogueCrop;
+                const Rectangle source{crop.x*visual.texture.width,crop.y*visual.texture.height,
+                    crop.width*visual.texture.width,crop.height*visual.texture.height};
+                BeginDrawing(); BeginTextureMode(target); ClearBackground(background);
+                DrawTexturePro(visual.texture,source,layout.DialoguePortrait(source.width/source.height,right),{},0,WHITE);
+                EndTextureMode(); EndDrawing();
+                Image image=LoadImageFromTexture(target.texture); ImageFlipVertical(&image);
+                int x0=image.width,x1=0,y1=0;
+                for (int y=0;y<image.height;++y) for(int x=0;x<image.width;++x) {
+                    const auto pixel=GetImageColor(image,x,y);
+                    if (std::abs(int(pixel.r)-255)+pixel.g+std::abs(int(pixel.b)-255)<=6) continue;
+                    x0=std::min(x0,x); x1=std::max(x1,x); y1=std::max(y1,y);
+                }
+                const int gap=right ? image.width-1-x1 : x0;
+                std::cout<<"Portrait edge "<<index<<" at "<<image.width<<"x"<<image.height
+                         <<": side="<<gap<<", bottom="<<image.height-1-y1<<" px\n";
+                assert(gap<=2 && image.height-1-y1<=2);
+                if (!prefix.empty()) {
+                    const auto path=prefix+"-portrait-edge-"+std::to_string(index)+"-"+std::to_string(image.width)+".png";
+                    assert(ExportImage(image,path.c_str()));
+                }
+                UnloadImage(image);
+            }
+            UnloadRenderTexture(target);
+        }
         game.BeginStageDialogue(1);
         const auto lines=game.CurrentDialogue();
         float start=0;
         for(std::size_t index=0;index<lines.size();++index) {
             game.dialogueTimer_=start+std::max(1.1F,lines[index].textDelay+lines[index].line2Delay+0.1F);
             assert(game.DialogueIndex()==static_cast<int>(index));
+            game.UpdateUiMotion(0.3F);
             const auto name="portrait-dialogue-"+std::to_string(index);
             Capture(game,prefix,name.c_str());
             start+=lines[index].duration;
         }
         // 重建计时器时应恢复双方表情，而不是只设置当前说话人的图。
         game.dialogueTimer_=31;
+        game.UpdateUiMotion(0.3F);
         for(const auto size:std::array<Vector2,2>{{{1280,720},{390,844}}}) {
             SetWindowSize(size.x,size.y);
             const auto name="portrait-dialogue-"+std::to_string(static_cast<int>(size.x));
@@ -278,6 +391,7 @@ struct GameLifecycleProbe {
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
         TestFullWindow(game,prefix);
+        TestDialogueTransitions(game,prefix);
         TestPortraits(game,prefix);
         TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
@@ -441,7 +555,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 使用隐藏窗口运行集成测试；argv[1] 可选为截图前缀，argv[2]=--viewport-only 仅复核视口。
+/// @brief 使用隐藏窗口运行集成测试；argv[1] 为可选截图前缀，argv[2] 可为 --viewport-only 或 --dialogue-only。
 /// 不初始化音频，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -460,6 +574,10 @@ int main(int argc, char** argv) {
         if(argc>=3 && std::string(argv[2])=="--viewport-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--dialogue-only") {
+            koumakyou::GameLifecycleProbe::TestUiFont(*game);
+            koumakyou::GameLifecycleProbe::TestDialogueTransitions(*game,prefix);
+            koumakyou::GameLifecycleProbe::TestPortraits(*game,prefix);
         } else {
             koumakyou::GameLifecycleProbe::Run(*game, prefix);
         }

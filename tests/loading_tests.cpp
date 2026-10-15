@@ -1,6 +1,7 @@
 // 本文件用隐藏图形窗口验证加载期间可绘制动画、关卡时钟冻结、取消与失败资源清理。
 #include "app/game.hpp"
 #include "render/ui_typography.hpp"
+#include "resources/dialogue_crop.hpp"
 
 #include <array>
 #include <chrono>
@@ -77,6 +78,18 @@ struct GameLifecycleProbe {
         const auto second = Capture(game, output.empty() ? output : output / "loading-1.png");
         Check(first != second, "Loading animation did not move");
         Finish(game);
+        // 后台解码和同步加载必须得到相同可见边界，不能仅在截图预览路径修复贴边。
+        const auto assetRoot=std::filesystem::path(GetApplicationDirectory())/"assets";
+        for (const auto& definition : game.stageContent_->Assets().visuals) {
+            if (definition.path.empty() || definition.animation.atlas!=battle::Atlas::None) continue;
+            Image image=LoadImage((assetRoot/definition.path).string().c_str());
+            const auto expected=FindDialogueContent(image,definition.dialogueCrop);
+            UnloadImage(image);
+            const auto actual=game.assets_.GetVisual(definition.id).dialogueCrop;
+            Check(std::abs(actual.x-expected.x)<0.00001F && std::abs(actual.y-expected.y)<0.00001F &&
+                  std::abs(actual.width-expected.width)<0.00001F && std::abs(actual.height-expected.height)<0.00001F,
+                  "Async portrait content bounds differ from the decoded image");
+        }
         game.Update(1.0F / 60.0F);
         Check(game.stage_.Elapsed() > 0, "Battle failed to start after loading");
 

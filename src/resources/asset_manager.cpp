@@ -170,8 +170,6 @@ AssetManager::~AssetManager() {
 void AssetManager::LoadCommon() {
     if (commonLoaded_) return;
     commonLoaded_ = true;
-    common_.referenceFrame = LoadTextureAsset(root_ / "common/reference_frame.png");
-    common_.referenceStage1 = LoadTextureAsset(root_ / "common/reference_stage1.png");
     common_.titleMoon = LoadTextureAsset(root_ / "common/title_layers/moon.png");
     common_.titleShrine = LoadTextureAsset(root_ / "common/title_layers/shrine.png");
     common_.titleReimu = LoadTextureAsset(root_ / "common/title_layers/reimu.png");
@@ -398,8 +396,6 @@ void AssetManager::UnloadCommon() {
     SwitchMusic(MusicSlot::None);
     UnloadSounds(commonSounds_);
     UnloadMusicAsset(menuMusic_);
-    UnloadTextureAsset(common_.referenceFrame);
-    UnloadTextureAsset(common_.referenceStage1);
     UnloadTextureAsset(common_.titleBackground);
     UnloadTextureAsset(common_.titleMoon);
     UnloadTextureAsset(common_.titleShrine);

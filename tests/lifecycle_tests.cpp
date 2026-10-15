@@ -21,7 +21,7 @@ struct GameLifecycleProbe {
     static void TestUiFont(const Game& game) {
         const Font font = game.assets_.Common().uiFont;
         assert(font.texture.id != GetFontDefault().texture.id);
-        for (int codepoint : std::array<int, 6>{'0', '9', 'Z', 0x4e2d, 0x300c, 0x2605})
+        for (int codepoint : std::array<int, 8>{'0', '9', 'Z', 0x4e2d, 0x300c, 0x2605, 0x5e7b, 0x5377})
             assert(font.glyphs[GetGlyphIndex(font, codepoint)].value == codepoint);
         const float zeroWidth = ui::MeasureText(font, "000000000", 38).x;
         assert(std::abs(zeroWidth - ui::MeasureText(font, "111111111", 38).x) < 0.001F);
@@ -56,6 +56,52 @@ struct GameLifecycleProbe {
             UnloadImage(image);
         }
         UnloadRenderTexture(target);
+    }
+
+    /// @brief 独立绘制世界，检查四边没有留黑，左右边缘随镜头变化，防止旧侧栏或裁切恢复。
+    static void TestFullWindow(Game& game, const std::string& prefix) {
+        game.StartPreview();
+        const int originalWidth=GetScreenWidth(), originalHeight=GetScreenHeight();
+        for(const Vector2 size : {Vector2{1100,760},{1280,720},{960,720},{1680,720},{390,844}}) {
+            SetWindowSize(static_cast<int>(size.x),static_cast<int>(size.y));
+            const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+            const auto render=[&](float yaw) {
+                game.SetPreviewView(yaw,0);
+                BeginDrawing(); BeginTextureMode(target);
+                ClearBackground(Color{255,0,255,255});
+                game.DrawWorld();
+                EndTextureMode(); EndDrawing();
+                Image image=LoadImageFromTexture(target.texture);
+                assert(IsImageValid(image));
+                ImageFlipVertical(&image);
+                return image;
+            };
+            Image first=render(0), turned=render(35);
+            assert(game.camera_.fovy==72);
+            for(const Vector2 point : {Vector2{1,1},{size.x-2,1},{1,size.y-2},{size.x-2,size.y-2}}) {
+                const Color pixel=GetImageColor(first,static_cast<int>(point.x),static_cast<int>(point.y));
+                assert(!(pixel.r==255 && pixel.g==0 && pixel.b==255));
+            }
+            for(const int x : {2,static_cast<int>(size.x)-3}) {
+                int changed=0, samples=0;
+                for(int y=2;y<static_cast<int>(size.y)-2;y+=7) {
+                    const Color a=GetImageColor(first,x,y), b=GetImageColor(turned,x,y);
+                    if(std::abs(int(a.r)-b.r)+std::abs(int(a.g)-b.g)+std::abs(int(a.b)-b.b)>6)++changed;
+                    ++samples;
+                }
+                assert(changed>samples/10);
+            }
+            UnloadImage(first); UnloadImage(turned); UnloadRenderTexture(target);
+            game.SetPreviewView(0,0);
+            const std::string name="full-window-"+std::to_string(static_cast<int>(size.x))+"x"+std::to_string(static_cast<int>(size.y));
+            Capture(game,prefix,name.c_str());
+        }
+        SetWindowSize(originalWidth,originalHeight);
+        // 实际提交全窗口世界与 HUD；只报告耗时，不用依赖机器速度的阈值卡测试。
+        for(int frame=0;frame<10;++frame) { BeginDrawing(); game.Draw(); EndDrawing(); }
+        const double start=GetTime();
+        for(int frame=0;frame<60;++frame) { BeginDrawing(); game.Draw(); EndDrawing(); }
+        std::cout<<"Full-window world and HUD: "<<(GetTime()-start)*1000/60<<" ms/frame\n";
     }
 
     /// @brief 实际加载十个差分，渲染逐句切换及菜单/符卡，验证离开关卡不释放通用立绘。
@@ -161,8 +207,8 @@ struct GameLifecycleProbe {
                 BeginDrawing(); ClearBackground(BLACK); game.Draw(); EndDrawing();
                 BeginDrawing(); ClearBackground(BLACK); game.Draw(); rlDrawRenderBatchActive();
                 Image windowImage=LoadImageFromScreen();
-                const Color sidebar=GetImageColor(windowImage,windowImage.width*9/10,windowImage.height/2);
-                assert(sidebar.r+sidebar.g+sidebar.b>0);
+                const Color edge=GetImageColor(windowImage,windowImage.width*9/10,windowImage.height/2);
+                assert(edge.r+edge.g+edge.b>0);
                 if(!prefix.empty())assert(ExportImage(windowImage,(prefix+"-window-retina.png").c_str()));
                 UnloadImage(windowImage); EndDrawing();
             }
@@ -231,6 +277,7 @@ struct GameLifecycleProbe {
 
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
+        TestFullWindow(game,prefix);
         TestPortraits(game,prefix);
         TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
@@ -394,7 +441,8 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 使用隐藏窗口运行集成测试；可选 argv[1] 是截图路径前缀，不初始化音频。
+/// @brief 使用隐藏窗口运行集成测试；argv[1] 可选为截图前缀，argv[2]=--viewport-only 仅复核视口。
+/// 不初始化音频，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
     const std::string prefix = argc >= 2 ? std::filesystem::absolute(argv[1]).string() : "";
@@ -409,7 +457,12 @@ int main(int argc, char** argv) {
     {
         auto game = std::make_unique<koumakyou::Game>();
         SetTargetFPS(0);
-        koumakyou::GameLifecycleProbe::Run(*game, prefix);
+        if(argc>=3 && std::string(argv[2])=="--viewport-only") {
+            koumakyou::GameLifecycleProbe::TestUiFont(*game);
+            koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
+        } else {
+            koumakyou::GameLifecycleProbe::Run(*game, prefix);
+        }
     }
     CloseWindow();
     std::filesystem::current_path(originalDirectory);

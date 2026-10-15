@@ -1,6 +1,6 @@
 # 一面新增素材
 
-标题与对话立绘使用内置 ImageGen 生成；游戏界面文字由程序绘制，战斗角色、弹幕、道具、击破动画及边框花纹使用本机新典的原始素材。战斗 DDS/ANM 的完整目录与接口见 [原始战斗素材接口](NATIVE_BATTLE_ASSETS.md)。
+标题与对话立绘使用内置 ImageGen 生成；游戏界面文字与悬浮卡片由程序绘制，战斗角色、弹幕、道具及击破动画使用本机新典的原始素材。战斗 DDS/ANM 的完整目录与接口见 [原始战斗素材接口](NATIVE_BATTLE_ASSETS.md)。
 
 | 文件 | 用途与生成提示 |
 |---|---|
@@ -19,7 +19,7 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 
 ## 新典界面图集
 
-`reference_frame.png` 为 CM 包的 `frame_zh-CN.dds` 格式转换，`reference_stage1.png` 为 `frame_stage1_zh-CN.dds` 格式转换。没有重采样或重新绘制；图集来源坐标按 ANM 的 sprite 定义使用，原生 3D 视口适配到其透明场地窗口。
+`reference_frame.png` 为 CM 包的 `frame_zh-CN.dds` 格式转换，`reference_stage1.png` 为 `frame_stage1_zh-CN.dds` 格式转换。没有重采样或重新绘制；两者保留作原作界面参考。全窗口战斗界面不再加载侧栏图集，改为按关卡元数据绘制悬浮题签与状态卡。
 
 ## 音效
 
@@ -51,3 +51,5 @@ python3 tools/subset_ui_font.py /path/to/NotoSerifCJKsc-SemiBold.otf src assets/
 生成器同时保存 `ui_charset.txt`；运行时按该清单加载字形，避免只加载默认拉丁字符。
 
 加载页补入的“女、祈、祷”使用 Google Fonts 提供的同源 [Noto Serif SC](https://fonts.google.com/noto/specimen/Noto+Serif+SC) 600 字重字形，按现有 1000 units/em 转入子集字体；原有 UI 字形和度量保持不变，沿用同一 SIL OFL 许可。后续使用完整 Noto Serif CJK SC 原字体运行上述生成器，也会包含这三个字。
+
+全窗口 HUD 的关卡题签另以同一官方字形来源补齐“幻、卷”；其他现有字形保持不变。重建时仍可使用上述完整原字体与生成器。

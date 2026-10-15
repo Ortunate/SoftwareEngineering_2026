@@ -49,6 +49,11 @@ struct DialogueLine {
 [[nodiscard]] std::array<int, 2> DialogueExpressionsAt(
     std::span<const DialogueLine> lines, std::size_t lineIndex);
 
+/// @brief 悬浮题签的关卡名称；字符串借用内容模块，须覆盖整个关卡展示期，不包含游玩模式。
+struct StageDisplayInfo {
+    std::string_view label, title, subtitle;
+};
+
 /// @brief 一个关卡提供自己的素材、事件、敌人、Boss 和对话内容。
 class StageContent {
 public:
@@ -90,6 +95,8 @@ public:
     [[nodiscard]] virtual VisualId SpellPortraitVisual() const { return BossPortraitVisual(); }
     /// @brief 返回关卡开始提示。
     [[nodiscard]] virtual const char* StartTitle() const = 0;
+    /// @brief 常驻题签的编号、中文名与副标题；未配置时沿用开场标题。
+    [[nodiscard]] virtual StageDisplayInfo DisplayInfo() const { return {"STAGE", StartTitle(), {}}; }
     /// @brief 返回胜利结算标题。
     [[nodiscard]] virtual const char* ClearTitle() const = 0;
     /// @brief 返回 Boss 出场提示。

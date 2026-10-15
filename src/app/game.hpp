@@ -176,13 +176,13 @@ private:
     void DrawWorld() const;
     /// @brief 绘制战场长方体边框和六个表面的网格。
     void DrawArena() const;
-    /// @brief 绘制分数、残机、Bomb 与坐标等战斗信息。
+    /// @brief 绘制两侧悬浮题签/状态卡、Boss 信息及窗口中央准星；不占用 3D 视口。
     void DrawHud() const;
     /// @brief 绘制状态消息、对话、符卡或结算画面的叠加层。
     void DrawOverlay() const;
-    /// @brief 绘制符卡开始时的立绘与名称展示。
+    /// @brief 在窗口右侧等比滑入完整符卡立绘，独立横幅显示名称。
     void DrawSpellCutIn() const;
-    /// @brief 根据对话计时器绘制台词及双方最近一次表情，按素材裁剪区域等比展示立绘。
+    /// @brief 在窗口下方绘制台词及双方最近一次表情，按素材裁剪区域等比展示两侧立绘。
     void DrawDialogue() const;
     /// @brief 绘制开始菜单。
     void DrawMainMenu() const;

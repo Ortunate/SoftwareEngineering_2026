@@ -41,6 +41,7 @@ add_library(koumakyou_engine STATIC
     src/platform/window_input.cpp
     src/render/menu_render.cpp
     src/render/game_render.cpp
+    src/render/gameplay_hud.cpp
     src/render/sprite_renderer.cpp
     src/render/animated_sprite.cpp
     src/resources/asset_manager.cpp

@@ -37,9 +37,9 @@ struct GameLifecycleProbe {
         for(const char* name:kBindingNames)if(!contains(name))return false;
         for(int key=KEY_SPACE;key<=MouseBinding(MOUSE_BUTTON_BACK);++key)
             if(IsValidBinding(key) && !contains(Game::KeyLabel(key).c_str()))return false;
-        return contains("按键设置") && contains("恢复默认键位");
+        return contains("按键设置") && contains("恢复默认键位") && contains("梦幻夜行绘卷");
     }
-    /// @brief 设置 page=0～18 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
+    /// @brief 设置 page=0～20 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
     static void Show(Game& game,int page) {
         game.dialogueActive_=false; game.spellCutInTimer_=0; game.messageTimer_=0;
         game.waitingForBinding_=false; game.optionsPage_=Game::OptionsPage::General;
@@ -71,6 +71,14 @@ struct GameLifecycleProbe {
             case 18:
                 game.state_=RunState::Playing;
                 game.SetMessage("FULL POWER MODE / STAGE 1 / SPELL CARD BONUS 999999999 / SHOT TEST / SETTINGS",3); break;
+            case 19: case 20:
+                game.state_=RunState::Playing;
+                game.score_=9223372036854775807LL; game.bestScore_=2000000000;
+                game.graze_=game.pointItems_=999999;
+                game.challengeMode_=page==20; game.missCount_=999999;
+                game.player_.ConfigureRun(5,3,game.challengeMode_,ShotType::Needle);
+                game.player_.AdjustPower(Player::kMaxPower);
+                break;
         }
         game.UpdateUiMotion(0.5F);
     }
@@ -148,8 +156,9 @@ void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, boo
 
 /// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的弹窗与暂停按钮。
 void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots) {
-    constexpr std::array<const char*,19> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
-        "spell-practice","music","score","credit","playing","dialogue","spell-cutin","pause","won","gameover","message"};
+    constexpr std::array<const char*,21> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
+        "spell-practice","music","score","credit","playing","dialogue","spell-cutin","pause","won","gameover","message",
+        "hud-max-values","hud-challenge"};
     for(const Vector2 size : {Vector2{320,240},{390,844},{900,900},{1600,400},{1280,720}}) {
         SetWindowSize(size.x,size.y); Event(7,0,0); Frame(game);
         game.StartPreview();

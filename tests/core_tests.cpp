@@ -48,8 +48,26 @@ void TestResponsiveLayouts() {
         for(int index=0;index<3;++index)fits(page.Track(index));
         const koumakyou::menu::OverlayLayout overlay(size.x,size.y);
         fits(overlay.PausePanel());
-        for(int index=0;index<4;++index)fits(overlay.PauseRow(index));
-        fits(koumakyou::GameplayLayout(size.x,size.y).Viewport());
+        for(int index=0;index<koumakyou::menu::kPauseCount;++index)fits(overlay.PauseRow(index));
+        const koumakyou::GameplayLayout gameplay(size.x,size.y);
+        const auto viewport=gameplay.Viewport();
+        assert(viewport.x==0 && viewport.y==0 && viewport.width==size.x && viewport.height==size.y);
+        fits(gameplay.StagePanel()); fits(gameplay.StatusPanel()); fits(gameplay.BossPanel());
+        fits(gameplay.DialoguePanel()); fits(gameplay.SpellBanner());
+        fits(gameplay.Feedback(false)); fits(gameplay.Feedback(true));
+        assert(!CheckCollisionRecs(gameplay.StagePanel(),gameplay.StatusPanel()));
+        assert(!CheckCollisionRecs(gameplay.BossPanel(),gameplay.StagePanel()));
+        assert(!CheckCollisionRecs(gameplay.BossPanel(),gameplay.StatusPanel()));
+        for(float aspect : {0.4F,0.7F,1.5F}) {
+            for(bool right : {false,true}) {
+                const auto portrait=gameplay.DialoguePortrait(aspect,right);
+                fits(portrait);
+                assert(std::abs(portrait.width/portrait.height-aspect)<0.001F);
+            }
+            const auto spell=gameplay.SpellPortrait(aspect);
+            fits(spell);
+            assert(std::abs(spell.width/spell.height-aspect)<0.001F);
+        }
     }
     const koumakyou::menu::Canvas minimized(0,0);
     assert(std::isfinite(minimized.scale) && minimized.scale>0);

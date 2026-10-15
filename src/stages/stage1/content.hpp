@@ -29,6 +29,9 @@ public:
     [[nodiscard]] const char* StartTitle() const override {
         return "Stage 1  Mystic Flier  Normal";
     }
+    [[nodiscard]] StageDisplayInfo DisplayInfo() const override {
+        return {"STAGE 01", "梦幻夜行绘卷", "Mystic Flier"};
+    }
     [[nodiscard]] const char* ClearTitle() const override { return "STAGE 1 CLEAR"; }
     [[nodiscard]] const char* BossStartMessage(bool final) const override {
         return final ? "Rumia  Stage 1 Boss" : "Rumia  Midboss";

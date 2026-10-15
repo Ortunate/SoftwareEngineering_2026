@@ -25,7 +25,8 @@ struct CommonAssets {
     Texture2D titleMoon{}, titleShrine{}, titleReimu{}; // 首页独立透明图层；分别持有纹理，不与关卡立绘共用句柄。
     Texture2D titleLogo{}; // 管理器独占的透明首页字标，随通用素材加载/释放；无效时绘制文字替代。
     Texture2D reimuPortrait{}; // 开局选择页的抬手全身图，独立持有并随通用素材卸载。
-    Font uiFont{}; // 全 UI 共用 SemiBold 衬线字体与等宽数字；管理器持有，缺失时借用默认字体，不能重复释放。
+    Font uiFont{}; // 菜单等界面的 SemiBold 衬线字体与等宽数字；管理器持有，缺失时借用默认字体。
+    Font hudFont{}; // 战斗浮窗的 Bold 字体；独立持有，缺失时借用 uiFont，卸载时不能重复释放。
 };
 
 /// @brief 单个关卡使用的图形素材；由 AssetManager 独占所有权。

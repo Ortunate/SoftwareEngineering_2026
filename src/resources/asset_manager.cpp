@@ -140,6 +140,22 @@ void MakeUiDigitsTabular(Font& font) {
     }
 }
 
+/// @brief 按共享 UTF-8 字符表加载 128 像素 UI 字体并设置等宽数字；失败时借用默认字体。
+/// 有效自有字体的纹理、字形与度量由调用方负责一起 UnloadFont，不能释放默认字体。
+Font LoadUiFont(const std::filesystem::path& path, const std::filesystem::path& charsetPath) {
+    if (!FileExists(path.string().c_str())) return GetFontDefault();
+    char* charset = LoadFileText(charsetPath.string().c_str());
+    if (!charset) return GetFontDefault();
+    int count = 0;
+    int* codepoints = LoadCodepoints(charset, &count);
+    Font font = LoadFontEx(path.string().c_str(), 128, codepoints, count);
+    UnloadCodepoints(codepoints);
+    UnloadFileText(charset);
+    SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
+    if (font.texture.id != GetFontDefault().texture.id) MakeUiDigitsTabular(font);
+    return font;
+}
+
 /// @brief 同一路径可以配置不同对话取景，按外观 ID 缓存可见边界；只读取调用方持有的 CPU 图片。
 std::unordered_map<VisualId, Rectangle> DialogueCrops(Image image, const std::filesystem::path& path,
                                                   const StageAssetManifest& manifest) {
@@ -203,24 +219,11 @@ void AssetManager::LoadCommon() {
         SetTextureFilter(common_.titleLogo, TEXTURE_FILTER_TRILINEAR);
     }
     common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/portraits/reimu/face00a_1.png");
-    const auto fontPath = root_ / "common/ui_font.otf";
-    common_.uiFont = GetFontDefault();
-    if (FileExists(fontPath.string().c_str())) {
-        // 字符表与素材一起提供，只生成实际需要的字形，避免整个 CJK 字库占用 GPU。
-        const auto charsetPath = root_ / "common/ui_charset.txt";
-        char* charset = LoadFileText(charsetPath.string().c_str());
-        if (charset) {
-            int count = 0;
-            int* codepoints = LoadCodepoints(charset, &count);
-            // 128 像素字形供最大 61 逻辑像素标题使用，在 2× Retina 窗口避免过度放大。
-            common_.uiFont = LoadFontEx(fontPath.string().c_str(), 128, codepoints, count);
-            UnloadCodepoints(codepoints);
-            UnloadFileText(charset);
-            SetTextureFilter(common_.uiFont.texture, TEXTURE_FILTER_BILINEAR);
-            if (common_.uiFont.texture.id != GetFontDefault().texture.id)
-                MakeUiDigitsTabular(common_.uiFont);
-        }
-    }
+    // 两种字重只生成共享字符表中的字形，独立加载以保持 Bold 的真实笔画和度量。
+    const auto charsetPath = root_ / "common/ui_charset.txt";
+    common_.uiFont = LoadUiFont(root_ / "common/ui_font.otf", charsetPath);
+    common_.hudFont = LoadUiFont(root_ / "common/ui_font_bold.otf", charsetPath);
+    if (common_.hudFont.texture.id == GetFontDefault().texture.id) common_.hudFont = common_.uiFont;
 
     const std::filesystem::path skyboxPath = root_ / "common/crimson_mist_skybox.png";
     Image skyboxImage = LoadImage(skyboxPath.string().c_str());
@@ -428,6 +431,9 @@ void AssetManager::UnloadCommon() {
     UnloadTextureAsset(common_.titleReimu);
     UnloadTextureAsset(common_.titleLogo);
     UnloadTextureAsset(common_.reimuPortrait);
+    if (common_.hudFont.texture.id != 0 && common_.hudFont.texture.id != common_.uiFont.texture.id &&
+        common_.hudFont.texture.id != GetFontDefault().texture.id)
+        UnloadFont(common_.hudFont);
     if (common_.uiFont.texture.id != 0 &&
         common_.uiFont.texture.id != GetFontDefault().texture.id)
         UnloadFont(common_.uiFont);

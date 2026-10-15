@@ -51,7 +51,7 @@ std::string Stock(int count) {
 void Game::DrawHud() const {
     const GameplayLayout l(GetScreenWidth(), GetScreenHeight());
     const float s = l.scale;
-    const Font font = assets_.Common().uiFont;
+    const Font font = assets_.Common().hudFont;
     // 演出时保留关键状态但降低强调，立绘/台词使用独立图层，不被侧栏文字争抢视觉焦点。
     const float emphasis = dialogueActive_ || spellCutInTimer_ > 0 ? 0.38F : 1.0F;
     const Rectangle stage = l.StagePanel(), status = l.StatusPanel();
@@ -59,12 +59,12 @@ void Game::DrawHud() const {
     if (stageContent_) {
         const auto info = stageContent_->DisplayInfo();
         const float x = stage.x + 16 * s, w = stage.width - 32 * s;
-        Label(font, info.label, {x, stage.y + 12 * s}, 13 * s, w, kGold, emphasis);
-        Label(font, info.title, {x, stage.y + 34 * s}, 24 * s, w, kInk, emphasis);
-        Label(font, info.subtitle, {x, stage.y + 66 * s}, 13 * s, w, kMuted, emphasis);
+        Label(font, info.label, {x, stage.y + 12 * s}, 16 * s, w, kGold, emphasis);
+        Label(font, info.title, {x, stage.y + 38 * s}, 28 * s, w, kInk, emphasis);
+        Label(font, info.subtitle, {x, stage.y + 78 * s}, 16 * s, w, kMuted, emphasis);
         const char* mode = spellPractice_ ? "NORMAL / 符卡练习" : practiceMode_ ? "NORMAL / 关卡练习"
             : challengeMode_ ? "NORMAL / 挑战模式" : "NORMAL";
-        Label(font, mode, {x, stage.y + (l.compact ? 92 : 109) * s}, 13 * s, w,
+        Label(font, mode, {x, stage.y + (l.compact ? 110 : 124) * s}, 16 * s, w,
                kRose, emphasis);
     }
 
@@ -74,53 +74,54 @@ void Game::DrawHud() const {
     const float contentWidth = right - left;
     const auto row = [&](const char* name, std::string_view value, float y,
                          float valueSize, Color valueColor = kInk) {
-        Label(font, name, {left, status.y + y * s}, (l.compact ? 14 : 16) * s,
-               65 * s, kMuted, emphasis);
+        // 四字标签与九位分数分列，避免字号放大后又因旧列宽被自动缩回。
+        Label(font, name, {left, status.y + y * s}, (l.compact ? 17 : 19) * s,
+               78 * s, kMuted, emphasis);
         Label(font, value, {right, status.y + (y - 1) * s}, valueSize * s,
-               contentWidth - 66 * s, valueColor, emphasis, true);
+               contentWidth - 84 * s, valueColor, emphasis, true);
     };
     if (!l.compact)
-        Label(font, "状态", {left, status.y + 13 * s}, 13 * s, contentWidth, kGold, emphasis);
-    row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 42, l.compact ? 18 : 23);
-    row("最高得分", TextFormat("%09d", bestScore_), l.compact ? 37 : 77, l.compact ? 12 : 15);
+        Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
+    row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
+    row("最高得分", TextFormat("%09d", bestScore_), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
-        DrawLineEx({left, status.y + 102 * s}, {right, status.y + 102 * s}, s,
+        DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,
                     ui::WithOpacity(Color{210, 173, 116, 65}, emphasis));
     row(challengeMode_ ? "MISS" : "Player",
         challengeMode_ ? std::to_string(missCount_) : Stock(player_.RemainingLives()),
-        l.compact ? 59 : 116, l.compact ? 15 : 20, kRose);
-    row("Bomb", Stock(player_.Bombs()), l.compact ? 81 : 148, l.compact ? 15 : 20, kGreen);
+        l.compact ? 70 : 132, l.compact ? 19 : 24, kRose);
+    row("Bomb", Stock(player_.Bombs()), l.compact ? 96 : 170, l.compact ? 19 : 24, kGreen);
     row("Power", player_.Power() == Player::kMaxPower ? "MAX" : TextFormat("%d / 128", player_.Power()),
-        l.compact ? 103 : 180, l.compact ? 13 : 16, kRose);
-    const Rectangle power{left, status.y + (l.compact ? 123 : 205) * s, contentWidth, 4 * s};
+        l.compact ? 122 : 208, l.compact ? 17 : 20, kRose);
+    const Rectangle power{left, status.y + (l.compact ? 145 : 236) * s, contentWidth, 4 * s};
     DrawRectangleRec(power, ui::WithOpacity(Color{65, 41, 56, 230}, emphasis));
     DrawRectangleRec({power.x, power.y, power.width * player_.Power() / Player::kMaxPower, power.height},
                       ui::WithOpacity(kRose, emphasis));
     if (l.compact) {
-        Label(font, TextFormat("Graze %d", graze_), {left, status.y + 135 * s}, 13 * s,
+        Label(font, TextFormat("Graze %d", graze_), {left, status.y + 159 * s}, 16 * s,
                contentWidth * 0.52F, kGreen, emphasis);
-        Label(font, TextFormat("点数 %d", pointItems_), {right, status.y + 135 * s}, 13 * s,
+        Label(font, TextFormat("点数 %d", pointItems_), {right, status.y + 159 * s}, 16 * s,
                contentWidth * 0.46F, kInk, emphasis, true);
     } else {
-        row("Graze", TextFormat("%d", graze_), 226, 16, kGreen);
-        row("点数", TextFormat("%d", pointItems_), 251, 16);
+        row("Graze", TextFormat("%d", graze_), 254, 20, kGreen);
+        row("点数", TextFormat("%d", pointItems_), 284, 20);
     }
 
     if (boss_ && boss_->active && !dialogueActive_) {
         const Rectangle panel = l.BossPanel();
         Panel(panel, s);
         const float x = panel.x + 14 * s, y = panel.y + 9 * s;
-        const float timerWidth = 45 * s;
+        const float timerWidth = 52 * s;
         const char* phase = TextFormat("Enemy %d", !boss_->IsMidboss() && boss_->phase <= 2 ? 1 : 0);
-        Label(font, phase, {x, y}, 12 * s, 76 * s, kGold);
+        Label(font, phase, {x, y}, 15 * s, 94 * s, kGold);
         if (boss_->SpellName()) {
-            Label(font, boss_->SpellName(), {x + 84 * s, y}, (l.compact ? 13 : 16) * s,
-                   panel.width - (28 + 84) * s - timerWidth, kInk);
+            Label(font, boss_->SpellName(), {x + 104 * s, y}, (l.compact ? 16 : 19) * s,
+                   panel.width - (28 + 104) * s - timerWidth, kInk);
         }
         if (boss_->TimeLimit() > 0) {
             const int seconds = std::max(0, static_cast<int>(std::ceil(boss_->TimeLimit() - boss_->phaseTimer)));
             Label(font, TextFormat("%02d", seconds), {panel.x + panel.width - 14 * s, y - 2 * s},
-                   23 * s, timerWidth, seconds <= 10 ? kRose : kInk, 1, true);
+                   27 * s, timerWidth, seconds <= 10 ? kRose : kInk, 1, true);
         }
         const float ratio = boss_->maxHealth > 0 ? std::clamp(boss_->health / boss_->maxHealth, 0.0F, 1.0F) : 0;
         const Rectangle bar{x, panel.y + panel.height - 17 * s, panel.width - 28 * s, 5 * s};
@@ -145,7 +146,7 @@ void Game::DrawHud() const {
         DrawLine(x, y - 14 * aimScale, x, y - 9 * aimScale, color);
         DrawLine(x, y + 9 * aimScale, x, y + 14 * aimScale, color);
     }
-    const float fpsY = l.compact && l.height < 420 * s && boss_ && boss_->active
+    const float fpsY = l.compact && l.height < 540 * s && boss_ && boss_->active
         ? status.y + status.height + 8 * s : l.height - l.margin - 14 * s;
     Label(font, TextFormat("%d fps", GetFPS()), {l.width - l.margin, fpsY},
            12 * s, 85 * s, kMuted, emphasis, true);
@@ -188,22 +189,22 @@ void Game::DrawDialogue() const {
         if (line.showBoss) portrait(boss, true);
         portrait(hero, false);
     }
-    const Font font = assets_.Common().uiFont;
+    const Font font = assets_.Common().hudFont;
     const Rectangle panel = l.DialoguePanel();
     if (elapsed >= line.textDelay) {
         Panel(panel, l.scale);
         const float x = panel.x + 22 * l.scale, w = panel.width - 44 * l.scale;
-        Label(font, line.speaker, {x, panel.y + 12 * l.scale}, 17 * l.scale, w, kGold);
+        Label(font, line.speaker, {x, panel.y + 12 * l.scale}, 20 * l.scale, w, kGold);
         // 每句的两个原文行共享字号，长句按可用宽度收敛，不能静默裁掉末尾或改变等待时序。
-        const float size = std::min(ui::FittedSize(font, line.text, 22 * l.scale, w),
-                                    ui::FittedSize(font, line.secondLine, 22 * l.scale, w));
-        Label(font, line.text, {x, panel.y + 43 * l.scale}, size, w, kInk);
+        const float size = std::min(ui::FittedSize(font, line.text, 26 * l.scale, w),
+                                    ui::FittedSize(font, line.secondLine, 26 * l.scale, w));
+        Label(font, line.text, {x, panel.y + 48 * l.scale}, size, w, kInk);
         if (elapsed >= line.textDelay + line.line2Delay)
-            Label(font, line.secondLine, {x, panel.y + 77 * l.scale}, size, w, kInk);
+            Label(font, line.secondLine, {x, panel.y + 89 * l.scale}, size, w, kInk);
     }
     if (line.introduce) {
         const float w = std::min(l.width * 0.42F, 250 * l.scale);
-        float y = panel.y - 106 * l.scale;
+        float y = panel.y - 120 * l.scale;
         // 竖屏角色靠近底角后，名牌需放在头部上方；跟随同一强调采样移动，不能盖住淡出的脸。
         if (l.width < l.height) {
             const auto& visual = assets_.GetVisual(boss);
@@ -212,20 +213,20 @@ void Game::DrawDialogue() const {
                 const float aspect = visual.texture.width * visual.dialogueCrop.width / sourceHeight;
                 if (aspect > 0) {
                     const auto rect = l.DialoguePortrait(aspect, true, dialogueMotion_.Sample(true).focus);
-                    y = std::min(y, rect.y - 100 * l.scale);
+                    y = std::min(y, rect.y - 112 * l.scale);
                 }
             }
         }
-        const Rectangle nameplate{l.width - l.margin - w, std::max(l.margin, y), w, 88 * l.scale};
+        const Rectangle nameplate{l.width - l.margin - w, std::max(l.margin, y), w, 100 * l.scale};
         Panel(nameplate, l.scale);
         const float x = nameplate.x + 14 * l.scale, textWidth = w - 28 * l.scale;
-        Label(font, "宵暗的妖怪", {x, nameplate.y + 12 * l.scale}, 16 * l.scale, textWidth, kMuted);
-        Label(font, "露米娅", {x, nameplate.y + 39 * l.scale}, 28 * l.scale, textWidth, kInk);
+        Label(font, "宵暗的妖怪", {x, nameplate.y + 12 * l.scale}, 19 * l.scale, textWidth, kMuted);
+        Label(font, "露米娅", {x, nameplate.y + 46 * l.scale}, 32 * l.scale, textWidth, kInk);
     }
     if (dialogueAfterBattle_) {
         const char* bonus = TextFormat("BONUS %lld", stageBonus_);
-        const float size = ui::FittedSize(font, bonus, 21 * l.scale, l.width - 2 * l.margin);
-        ui::DrawCentered(font, bonus, l.width / 2, panel.y - 31 * l.scale, size, kGold);
+        const float size = ui::FittedSize(font, bonus, 25 * l.scale, l.width - 2 * l.margin);
+        ui::DrawCentered(font, bonus, l.width / 2, panel.y - 37 * l.scale, size, kGold);
     }
 }
 
@@ -246,9 +247,9 @@ void Game::DrawSpellCutIn() const {
     }
     const Rectangle banner = l.SpellBanner();
     Panel(banner, l.scale, opacity);
-    const float size = ui::FittedSize(assets_.Common().uiFont, boss_->SpellName(), 25 * l.scale,
+    const float size = ui::FittedSize(assets_.Common().hudFont, boss_->SpellName(), 29 * l.scale,
                                      banner.width - 32 * l.scale);
-    ui::DrawCentered(assets_.Common().uiFont, boss_->SpellName(), banner.x + banner.width / 2,
+    ui::DrawCentered(assets_.Common().hudFont, boss_->SpellName(), banner.x + banner.width / 2,
                      banner.y + (banner.height - size) / 2, size, Fade(kInk, opacity));
 }
 } // namespace koumakyou

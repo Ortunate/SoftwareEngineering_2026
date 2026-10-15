@@ -40,12 +40,13 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 
 `ui_font.otf` 是 [Noto Serif CJK SC](https://github.com/notofonts/noto-cjk/tree/main/Serif) SemiBold（字重 600）的子集，依据 SIL Open Font License 使用，许可全文见同目录 `FONT_LICENSE.txt`。子集字体改名为 KoumakyouUISerif。中文采用宋体笔画，英文保留衬线，适度加粗以接近新典菜单与对话的风格。
 
-标题、选项、开局选择、HUD、对话、暂停、结算、提示消息和按键设置均使用这一字体，通过 `render/ui_typography.hpp` 共用字号 1.5% 的字距，并以相同度量处理居中与右对齐。运行时以 128 像素加载字形，改善 2× Retina 显示；ASCII 数字调整为等宽前进量并居中，避免分数更新时宽度跳动。此调整不修改 OTF 字形。
+标题、选项、开局选择、暂停、结算和按键设置使用 SemiBold。游戏内 HUD、对话、角色名牌、符卡横幅和提示消息使用同一官方来源的 Bold（字重 700）子集 `ui_font_bold.otf`，改名为 KoumakyouUIBoldSerif，沿用同一 SIL OFL 许可。两种字重通过 `render/ui_typography.hpp` 共用字号 1.5% 的字距，按各自真实字形度量居中与右对齐。运行时以 128 像素加载字形，改善 2× Retina 显示；ASCII 数字调整为等宽前进量并居中，避免分数更新时宽度跳动。此调整不修改 OTF 字形。两种字重由通用资源独立持有，Bold 缺失时借用 SemiBold，退出时避免重复释放。
 
 新增中文界面文字后，需以原字体和 fonttools 重建：
 
 ```bash
 python3 tools/subset_ui_font.py /path/to/NotoSerifCJKsc-SemiBold.otf src assets/runtime/common
+python3 tools/subset_ui_font.py /path/to/NotoSerifCJKsc-Bold.otf src assets/runtime/common --filename ui_font_bold.otf --family KoumakyouUIBoldSerif --charset assets/runtime/common/ui_charset.txt
 ```
 
 生成器同时保存 `ui_charset.txt`；运行时按该清单加载字形，避免只加载默认拉丁字符。

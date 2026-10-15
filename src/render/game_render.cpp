@@ -194,10 +194,11 @@ void Game::DrawOverlay() const {
         const Rectangle feedback = gameplay.Feedback(boss_ && boss_->active);
         const char* message = messageTimer_ > 0 ? message_.c_str()
             : TextFormat("Spell Card Bonus  %lld", spellBonus_);
-        const float size = ui::FittedSize(font, message, 19 * gameplay.scale,
+        const Font hudFont = assets_.Common().hudFont;
+        const float size = ui::FittedSize(hudFont, message, 23 * gameplay.scale,
                                           feedback.width - 28 * gameplay.scale);
         DrawRectangleRounded(feedback, 0.15F, 8, Color{12, 7, 20, 185});
-        ui::DrawCentered(font, message, feedback.x + feedback.width / 2,
+        ui::DrawCentered(hudFont, message, feedback.x + feedback.width / 2,
                          feedback.y + (feedback.height - size) / 2, size,
                          messageTimer_ > 0 ? RAYWHITE : GOLD);
     }

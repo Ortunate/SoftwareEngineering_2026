@@ -1,4 +1,4 @@
-// 本文件负责三维世界、主菜单、HUD、对话和符卡界面的绘制。
+// 本文件负责三维世界、加载页、主菜单、HUD、对话和符卡界面的绘制。
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
@@ -25,7 +25,9 @@ using namespace game_math;
 void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
-    if (state_ == RunState::MainMenu) {
+    if (state_ == RunState::Loading) {
+        DrawLoading();
+    } else if (state_ == RunState::MainMenu) {
         DrawMainMenu();
     } else if (state_ == RunState::Options) {
         DrawOptions();
@@ -37,6 +39,47 @@ void Game::Draw() const {
         DrawHud();
         DrawOverlay();
     }
+}
+
+void Game::DrawLoading() const {
+    const float width = static_cast<float>(GetScreenWidth());
+    const float height = static_cast<float>(GetScreenHeight());
+    // 以短边限制字号和图案，锚定实际右下角；超宽和竖屏均保持等比与边距。
+    const float scale = std::min(width / 600.0F, height / 760.0F);
+    const float right = width - 48 * scale;
+    const float baseline = height - 58 * scale;
+    const Font font = assets_.Common().uiFont;
+    const Color background{9, 7, 12, 255};
+    const Color vermilion{191, 57, 69, 255};
+    const Color ivory{240, 224, 210, 255};
+    const float pulse = 0.72F + 0.18F * std::sin(loadingSeconds_ * 2.4F);
+    ClearBackground(background);
+
+    const char* title = loadingFailed_ ? "加载失败" : "少女祈祷中";
+    const float titleSize = 34 * scale;
+    const float titleWidth = ui::MeasureText(font, title, titleSize).x;
+    const float left = right - titleWidth - 38 * scale;
+    const Vector2 seal{left - 57 * scale, baseline - 2 * scale};
+    ui::YinYang(seal, 23 * scale, vermilion, ivory, loadingSeconds_ * 2);
+    ui::GlowText(font, title, {left, baseline - 30 * scale}, titleSize,
+                 ui::WithOpacity(ivory, pulse + 0.1F), vermilion, pulse);
+    ui::DrawText(font, loadingFailed_ ? "按确认键返回主菜单" : "Now Loading...",
+                 {left + 2 * scale, baseline + 14 * scale}, 13 * scale,
+                 ui::WithOpacity(ivory, 0.45F));
+    if (loadingFailed_) return;
+
+    for (int index = 0; index < 3; ++index) {
+        const float opacity = 0.25F + 0.75F * std::pow(
+            0.5F + 0.5F * std::sin(loadingSeconds_ * 4 - index * 0.9F), 2.0F);
+        ui::Spark({right - (25 - index * 10) * scale, baseline - 9 * scale},
+                  2.4F * scale, ui::WithOpacity(vermilion, opacity));
+    }
+    const float lineY = baseline + 38 * scale;
+    DrawLineEx({left, lineY}, {right, lineY}, scale, ui::WithOpacity(ivory, 0.12F));
+    const float progress = assets_.StageLoadProgress();
+    if (progress > 0)
+        DrawLineEx({left, lineY}, {left + (right - left) * progress, lineY},
+                   scale, ui::WithOpacity(vermilion, 0.8F));
 }
 
 void Game::DrawWorld() const {

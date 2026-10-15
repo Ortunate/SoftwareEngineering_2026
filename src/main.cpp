@@ -110,6 +110,14 @@ int main(int argc, char** argv) {
             game.SetPreviewView(captureYaw, capturePitch);
         } else if (captureGameplay) {
             game.Start(false);
+            // 截图仍执行实际异步入口；加载帧不计入后面的六秒战斗预演。
+            while (game.IsLoading() && !game.HasLoadingFailed() && !WindowShouldClose()) {
+                game.Update(1.0F / 60.0F);
+                BeginDrawing();
+                ClearBackground(BLACK);
+                game.Draw();
+                EndDrawing();
+            }
             for (int frame = 0; frame < 360; ++frame) {
                 game.Update(1.0F / 60.0F);
             }
@@ -117,7 +125,8 @@ int main(int argc, char** argv) {
             game.OpenOptions();
         }
         int renderedFrames = 0;
-        while (!WindowShouldClose() && !game.ShouldQuit()) {
+        while (!WindowShouldClose() && !game.ShouldQuit() &&
+               !(captureFrame && game.HasLoadingFailed())) {
             // 主循环每帧先更新状态，再绘制；截图模式改画到离屏纹理。
             const float deltaTime = std::min(GetFrameTime(), 1.0F / 20.0F);
             game.Update(deltaTime);

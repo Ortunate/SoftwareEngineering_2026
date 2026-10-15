@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -34,7 +35,7 @@ struct StageAssets {
     SpriteShaders shaders{};
 };
 
-/// @brief 按通用/关卡生命周期统一持有图片、着色器、BGM 和音效。
+/// @brief 按通用/关卡生命周期统一持有图片、着色器、BGM 和音效；所有接口由图形主线程调用。
 class AssetManager {
 public:
     /// @brief 指定可执行文件旁的素材根目录。
@@ -50,6 +51,14 @@ public:
     /// @brief 关卡开始时加载其专属素材；已有的关卡资源会先释放。
     /// @param manifest 由 Stage 内容模块提供的资源清单，仅在调用期间借用。
     void LoadStage(const StageAssetManifest& manifest);
+    /// @brief 开始后台读取与解码；GPU/音频操作仍由主线程的 AdvanceStageLoad 完成。
+    /// 清单及其字符串须保持有效，直到加载完成或 UnloadStage；不能与 LoadStage 交错调用。
+    void BeginStageLoad(const StageAssetManifest& manifest);
+    /// @brief 主线程每帧调用一次，最多上传一张纹理；完成后返回 true，读取/上传失败抛异常。
+    /// 首次调用启动后台任务，调用方应先显示加载页；未开始任务时调用属于逻辑错误。
+    [[nodiscard]] bool AdvanceStageLoad();
+    /// @brief 已上传资源占比（0～1），仅用于界面反馈；后台解码期间保持当前实际进度。
+    [[nodiscard]] float StageLoadProgress() const;
     /// @brief 关卡结束或离开时停止其音乐并释放专属素材。
     void UnloadStage();
 
@@ -88,6 +97,9 @@ public:
     void PlaySoundEffect(std::string_view name) const;
 
 private:
+    struct StageLoad; // 独占后台任务与 CPU 图片；取消/析构时等待当前解码完成，再释放结果。
+    /// @brief 在纹理缓存已备好后绑定外观、着色器与音频；只允许在主线程调用。
+    void FinishStageLoad(const StageAssetManifest& manifest);
     enum class MusicSlot : std::uint8_t { None, Menu, Stage, Boss };
 
     /// @brief 切换 BGM，并在播放新曲之前停止旧曲。
@@ -100,6 +112,7 @@ private:
     std::filesystem::path root_;
     CommonAssets common_{};
     StageAssets stage_{};
+    std::unique_ptr<StageLoad> stageLoad_;
     Music menuMusic_{};
     Music stageMusic_{};
     Music bossMusic_{};

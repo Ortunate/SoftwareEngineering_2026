@@ -38,11 +38,15 @@ public:
 
     /// @brief 重置游戏并返回主菜单。
     void Reset();
-    /// @brief 从第一面开头开始一局战斗。
+    /// @brief 从第一面开头开始一局战斗，先进入可持续更新的加载页。
     /// @param captureCursor 是否为交互游玩捕获鼠标；截图时传 false。
     void Start(bool captureCursor = true);
-    /// @brief 选择并启动已注册的关卡；重试沿用该关卡。
+    /// @brief 选择关卡并进入加载页；重试沿用该关卡。
     void StartStage(StageId id, bool captureCursor = true);
+    /// @brief 是否处于加载页（含失败提示）；截图方须等待完成，并检查 HasLoadingFailed。
+    [[nodiscard]] bool IsLoading() const { return state_ == RunState::Loading; }
+    /// @brief 加载失败时返回 true；交互用户可返回首页，截图调用方应结束并报告失败。
+    [[nodiscard]] bool HasLoadingFailed() const { return IsLoading() && loadingFailed_; }
     /// @brief 进入不捕获鼠标、长时间无敌的关卡预览模式。
     void StartPreview();
     /// @brief 设置关卡预览的相机观察角度。
@@ -76,9 +80,13 @@ private:
         KeyBindings,
     };
 
-    /// @brief 重置玩家、敌人、弹幕、Boss 与关卡时钟。
+    /// @brief 进入关卡加载页；素材完成后重置战斗。同步入口只供预览和测试使用。
     /// @param captureCursor 是否捕获鼠标用于交互游玩。
-    void StartRun(bool captureCursor = true);
+    void StartRun(bool captureCursor = true, bool synchronous = false);
+    /// @brief 非阻塞推进加载；失败后留在加载页，按确认或取消返回首页。
+    void UpdateLoading(float deltaTime);
+    /// @brief 素材就绪后初始化本局状态，避免加载耗时进入战斗计时或提前捕获鼠标。
+    void CompleteStartRun();
     /// @brief 切换主菜单并清除战斗中的临时状态。
     void EnterMainMenu();
     /// @brief 停止战斗并播放剩余退场效果；池空后才结算、卸载专属素材。
@@ -178,6 +186,8 @@ private:
     void DrawDialogue() const;
     /// @brief 绘制开始菜单。
     void DrawMainMenu() const;
+    /// @brief 只使用通用资源绘制“少女祈祷中”；加载中的关卡纹理不可访问。
+    void DrawLoading() const;
     /// @brief 绘制启动选择、音乐、成绩或制作信息页，保持通用素材生命周期。
     void DrawMenuPage() const;
     /// @brief 绘制 FPS、音量、灵敏度、开局资源和按键设置入口。
@@ -191,6 +201,12 @@ private:
 
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
+    float loadingSeconds_ = 0; // 秒；独立 UI 时钟，不能参与关卡/弹幕/符卡计时。
+    bool loadingStarted_ = false;
+    bool loadingFailed_ = false;
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+    bool loadingShotTest_ = false; // 射击测试需在异步素材完成后再创建固定靶。
+#endif
     // 暂停要记住战斗或收尾，不能一律恢复 Playing；finishResult_ 仅在收尾结束时应用。
     RunState pausedState_ = RunState::Playing;
     RunState finishResult_ = RunState::Won;

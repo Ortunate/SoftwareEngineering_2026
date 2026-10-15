@@ -15,6 +15,7 @@ enum class RunState : std::uint8_t {
     MusicRoom,
     Score,
     Credit,
+    Loading, // 加载页只推进界面；素材全部就绪后才重置并启动战斗时钟。
     Playing,
     // 战斗已结束，仅播放退场；关卡资源须保留到效果池清空。
     Finishing,

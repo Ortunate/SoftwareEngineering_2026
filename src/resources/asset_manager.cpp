@@ -7,6 +7,10 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <future>
+#include <stdexcept>
+#include <unordered_set>
 #include <span>
 #include <utility>
 
@@ -137,6 +141,25 @@ void MakeUiDigitsTabular(Font& font) {
 
 }  // namespace
 
+// 每次仅解码一张图片，限制高清图集的 CPU 峰值内存；future 不捕获 AssetManager。
+// 线程只读文件并分配 CPU 像素，不接触 OpenGL、音频或运行中的资源缓存。
+struct AssetManager::StageLoad {
+    struct Item {
+        std::filesystem::path path;
+        battle::Atlas atlas = battle::Atlas::None;
+    };
+    struct Decoded {
+        Image image{};
+        std::shared_ptr<const anm::Archive> archive;
+        ~Decoded() { if (image.data) UnloadImage(image); }
+    };
+    StageAssetManifest manifest;
+    std::vector<Item> items;
+    std::size_t uploaded = 0;
+    // 必须先析构：future 等待后台完成，结果的析构器随后释放尚未上传的 CPU 图片。
+    std::future<std::unique_ptr<Decoded>> pending;
+};
+
 AssetManager::AssetManager(std::filesystem::path root) : root_(std::move(root)) {}
 
 AssetManager::~AssetManager() {
@@ -226,6 +249,75 @@ void AssetManager::LoadCommon() {
 
 void AssetManager::LoadStage(const StageAssetManifest& manifest) {
     UnloadStage();
+    FinishStageLoad(manifest);
+}
+
+void AssetManager::BeginStageLoad(const StageAssetManifest& manifest) {
+    UnloadStage();
+    stageLoad_ = std::make_unique<StageLoad>();
+    stageLoad_->manifest = manifest;
+    std::unordered_set<std::string> paths;
+    std::unordered_set<battle::Atlas> atlases;
+    for (const auto& definition : manifest.visuals) {
+        if (definition.id == kInvalidVisualId) continue;
+        if (definition.animation.atlas != battle::Atlas::None) {
+            if (atlases.insert(definition.animation.atlas).second)
+                stageLoad_->items.push_back({{}, definition.animation.atlas});
+        } else if (!definition.path.empty() && paths.emplace(definition.path).second) {
+            stageLoad_->items.push_back({std::string(definition.path), battle::Atlas::None});
+        }
+    }
+}
+
+bool AssetManager::AdvanceStageLoad() {
+    if (!stageLoad_) throw std::logic_error("Stage load has not started");
+    auto& load = *stageLoad_;
+    if (load.pending.valid()) {
+        if (load.pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+            return false;
+        auto decoded = load.pending.get(); // 仅在 ready 后取值，异常交给调用方展示失败页。
+        const Texture2D texture = LoadTextureFromImage(decoded->image);
+        if (!IsTextureValid(texture)) throw std::runtime_error("Cannot upload stage texture");
+        const auto& item = load.items[load.uploaded];
+        if (item.atlas == battle::Atlas::None) {
+            stageTextures_.emplace(item.path.string(), texture);
+        } else {
+            SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+            SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
+            battleAtlases_.emplace(item.atlas, BattleAtlasResource{texture, std::move(decoded->archive)});
+        }
+        ++load.uploaded;
+        // 包括最后一张纹理在内，上传后先返还一帧；音频/着色器绑定留到下一帧。
+        return false;
+    }
+    if (load.uploaded == load.items.size()) {
+        FinishStageLoad(load.manifest);
+        stageLoad_.reset();
+        return true;
+    }
+    const auto item = load.items[load.uploaded];
+    const auto root = root_;
+    load.pending = std::async(std::launch::async, [root, item] {
+        auto decoded = std::make_unique<StageLoad::Decoded>();
+        if (item.atlas == battle::Atlas::None) {
+            decoded->image = LoadImage((root / item.path).string().c_str());
+        } else {
+            const auto& entry = battle::Describe(item.atlas);
+            decoded->archive = std::make_shared<anm::Archive>(anm::LoadArchive(root / entry.anm));
+            decoded->image = LoadOriginalDds(root / entry.dds);
+        }
+        if (!IsImageValid(decoded->image)) throw std::runtime_error("Cannot decode stage texture");
+        return decoded;
+    });
+    return false;
+}
+
+float AssetManager::StageLoadProgress() const {
+    if (!stageLoad_) return stageLoaded_ ? 1.0F : 0.0F;
+    return static_cast<float>(stageLoad_->uploaded) / (stageLoad_->items.size() + 1);
+}
+
+void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
     for (const VisualDefinition& definition : manifest.visuals) {
         if (definition.id == kInvalidVisualId) continue;
         if (stage_.visuals.size() <= definition.id)
@@ -280,6 +372,8 @@ const BattleAtlasResource& AssetManager::LoadBattleAtlas(battle::Atlas id) {
 }
 
 void AssetManager::UnloadStage() {
+    // 等待唯一的在途 CPU 解码；随后才能释放清单字符串或销毁图形上下文。
+    stageLoad_.reset();
     if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss) {
         SwitchMusic(MusicSlot::None);
     }

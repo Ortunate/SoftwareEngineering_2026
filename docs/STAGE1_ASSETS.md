@@ -49,3 +49,5 @@ python3 tools/subset_ui_font.py /path/to/NotoSerifCJKsc-SemiBold.otf src assets/
 ```
 
 生成器同时保存 `ui_charset.txt`；运行时按该清单加载字形，避免只加载默认拉丁字符。
+
+加载页补入的“女、祈、祷”使用 Google Fonts 提供的同源 [Noto Serif SC](https://fonts.google.com/noto/specimen/Noto+Serif+SC) 600 字重字形，按现有 1000 units/em 转入子集字体；原有 UI 字形和度量保持不变，沿用同一 SIL OFL 许可。后续使用完整 Noto Serif CJK SC 原字体运行上述生成器，也会包含这三个字。

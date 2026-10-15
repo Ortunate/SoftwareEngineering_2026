@@ -68,7 +68,7 @@ void Game::StartStage(StageId id, bool captureCursor) {
 
 void Game::StartPreview() {
     practiceMode_ = spellPractice_ = challengeMode_ = false;
-    StartRun(false);
+    StartRun(false, true);
     previewMode_ = true;
     player_.SetInvulnerability(1000.0F);
 }
@@ -120,15 +120,54 @@ void Game::SaveSettings() const {
     }
 }
 
-void Game::StartRun(bool captureCursor) {
+void Game::StartRun(bool captureCursor, bool synchronous) {
     previewMode_ = false;
-    // VisualId 属于本关卡；先丢弃旧快照，再加载可能使用相同编号的新纹理。
+    // 先移除所有借用旧关卡资源的对象，再取消旧任务并释放纹理及清单。
     actorEffects_.Clear();
+    bullets_.Reset();
+    enemies_.Clear();
+    drops_.Clear();
+    boss_.reset();
+    assets_.UnloadStage();
     captureCursor_ = captureCursor;
     stage_ = StageDirector{};
     stageContent_ = CreateStageContent(stageId_);
     stage_ = StageDirector(stageContent_->Events());
-    assets_.LoadStage(stageContent_->Assets());
+    loadingSeconds_ = 0;
+    loadingStarted_ = loadingFailed_ = false;
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+    loadingShotTest_ = false;
+#endif
+    if (IsCursorHidden()) ShowCursor();
+    if (synchronous) {
+        assets_.LoadStage(stageContent_->Assets());
+        CompleteStartRun();
+    } else {
+        state_ = RunState::Loading;
+    }
+}
+
+void Game::UpdateLoading(float deltaTime) {
+    loadingSeconds_ += std::max(0.0F, deltaTime);
+    if (loadingFailed_) {
+        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE))
+            EnterMainMenu();
+        return;
+    }
+    try {
+        if (!loadingStarted_) {
+            assets_.BeginStageLoad(stageContent_->Assets());
+            loadingStarted_ = true;
+        }
+        if (assets_.AdvanceStageLoad()) CompleteStartRun();
+    } catch (const std::exception& error) {
+        TraceLog(LOG_WARNING, "STAGE: %s", error.what());
+        assets_.UnloadStage();
+        loadingFailed_ = true;
+    }
+}
+
+void Game::CompleteStartRun() {
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
     player_.Reset();
@@ -158,7 +197,7 @@ void Game::StartRun(bool captureCursor) {
     shotTestActive_ = false;
 #endif
     player_.SyncCamera(camera_);
-    if (captureCursor) DisableCursor();
+    if (captureCursor_) DisableCursor();
     messageTimer_=0;
     if (spellPractice_) {
         stage_ = StageDirector{};
@@ -167,6 +206,16 @@ void Game::StartRun(bool captureCursor) {
         player_.AdjustPower(Player::kMaxPower);
         spellCutInTimer_ = kSpellCutInDuration;
     }
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+    if (loadingShotTest_) {
+        // 调试场景也等待同一加载流程完成，避免将固定靶清除或触发普通关卡事件。
+        stage_ = StageDirector{};
+        enemies_.Add(std::make_unique<ShotTestEnemy>());
+        shotTestActive_ = true;
+        loadingShotTest_ = false;
+        SetMessage("SHOT TEST  F5: POWER -8  F6: POWER +8", 3.0F);
+    }
+#endif
 }
 
 void Game::EnterMainMenu() {
@@ -308,6 +357,10 @@ void Game::UpdateUiMotion(float deltaTime) {
 }
 
 void Game::UpdateState(float deltaTime) {
+    if (state_ == RunState::Loading) {
+        UpdateLoading(deltaTime);
+        return; // 完成加载的这一帧也不更新战斗，下一帧从关卡时间零开始。
+    }
     if (state_ == RunState::MainMenu) {
         UpdateMainMenu();
         return;
@@ -445,12 +498,7 @@ void Game::UpdateState(float deltaTime) {
 void Game::StartShotTest() {
     stageId_ = StageId::Stage1;
     StartRun();
-    // 保留 Stage 1 素材和战场，清空调度器以确保不会触发出怪或对话。
-    stage_ = StageDirector{};
-    enemies_.Clear();
-    enemies_.Add(std::make_unique<ShotTestEnemy>());
-    shotTestActive_ = true;
-    SetMessage("SHOT TEST  F5: POWER -8  F6: POWER +8", 3.0F);
+    loadingShotTest_ = true;
 }
 #endif
 

@@ -105,6 +105,15 @@ void Frame(koumakyou::Game& game) {
     game.Draw();
     EndDrawing();
 }
+/// @brief 设置/暂停测试先等待异步加载结束，避免把加载页上的按键误当成战斗输入。
+void WaitForStage(koumakyou::Game& game) {
+    const double deadline = GetTime() + 60;
+    while (game.IsLoading()) {
+        Check(GetTime() < deadline && !game.HasLoadingFailed(), "stage loading failed or timed out");
+        Frame(game);
+    }
+    Check(koumakyou::GameLifecycleProbe::Playing(game), "stage did not enter Playing");
+}
 /// @brief 模拟一次完整键盘按下和松开。
 void Key(koumakyou::Game& game, int key) {
     Event(2, key); Frame(game);
@@ -352,7 +361,7 @@ int main(int argc, char** argv) {
                   reset.bomb == KEY_F && reset.pause == KEY_P, "default binding reset failed");
             Capture(game,(screenshots / "bindings-defaults.png").string().c_str());
             AllPageSizes(game,screenshots);
-            game.Start(false); Frame(game);
+            game.Start(false); WaitForStage(game); Frame(game);
             // 统一编码必须正确分发到鼠标查询；按住/首次按下分别用于移动和 Bomb。
             Event(6, MOUSE_BUTTON_EXTRA);
             Check(koumakyou::BindingDown(settings.bindings.fire), "mouse held dispatch failed");
@@ -362,7 +371,7 @@ int main(int argc, char** argv) {
             Event(5, MOUSE_BUTTON_EXTRA); Frame(game);
             Check(!koumakyou::BindingDown(settings.bindings.fire), "mouse release failed");
             // 从捕获鼠标的战斗返回仍须释放光标；取消居中不能变成无法点击首页。
-            game.Start(true);
+            game.Start(true); WaitForStage(game);
             Check(IsCursorHidden(),"gameplay did not capture cursor");
             game.Reset();
             Check(!IsCursorHidden(),"returning to title left cursor captured");
@@ -372,7 +381,7 @@ int main(int argc, char** argv) {
             koumakyou::Game restarted;
             const auto loaded = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
             Check(loaded.musicVolume == 100 && loaded.mouseSensitivity == 100, "restart persistence failed");
-            restarted.Start(false); Frame(restarted);
+            restarted.Start(false); WaitForStage(restarted); Frame(restarted);
         }
         std::puts("Settings UI integration passed.");
     } catch (const std::exception& error) {

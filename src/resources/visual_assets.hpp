@@ -46,7 +46,7 @@ struct SoundDefinition {
     std::string_view path;
 };
 
-/// @brief 一个 Stage 的图片、音乐与音效清单；所有 span 与字符串在 LoadStage 调用期间须有效。
+/// @brief 一个 Stage 的图片、音乐与音效清单；所有 span 与字符串须覆盖同步调用或整个异步加载期。
 struct StageAssetManifest {
     std::span<const VisualDefinition> visuals;
     std::string_view stageBgm;

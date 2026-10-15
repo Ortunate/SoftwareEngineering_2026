@@ -196,7 +196,7 @@ struct GameLifecycleProbe {
             game.practiceMode_ = game.spellPractice_ = true;
             game.practicePhase_ = phase;
             const int bestScore = game.bestScore_;
-            game.StartRun(false);
+            game.StartRun(false, true);
             game.player_.SetInvulnerability(1000);
             assert(game.boss_->phase == phase && game.player_.Power() == Player::kMaxPower);
             for (int step = 0; step < 30 * 60 && game.state_ != RunState::Won; ++step)
@@ -204,7 +204,7 @@ struct GameLifecycleProbe {
             assert(game.state_ == RunState::Won && game.bestScore_ == bestScore);
             // 超时练习只保留实际擦弹分数，不能获得旧版固定 25000 分捕获奖励。
             assert(game.score_ == game.graze_*100 && EnemyCount(game) == 0);
-            game.StartRun(false); game.player_.SetInvulnerability(1000);
+            game.StartRun(false, true); game.player_.SetInvulnerability(1000);
             for(int step=0;step<130;++step)game.Update(1.0F/60);
             assert(game.boss_->CanTakeDamage());
             game.boss_->health=0; game.ResolveCollisions();

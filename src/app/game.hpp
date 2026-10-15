@@ -256,7 +256,7 @@ private:
     int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
     bool spellPractice_ = false;
     int selectedTrack_ = 0;
-    int selectedPauseItem_ = 0; // 暂停项：继续、开局选择、主菜单、重开。
+    int selectedPauseItem_ = 0; // 暂停项：继续、主菜单、重开。
     int missCount_ = 0;
     int bombCount_ = 0;
     // 每张符卡开始时保存计数；发生 Miss、Bomb 或超时则不能获得捕获奖励。

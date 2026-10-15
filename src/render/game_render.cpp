@@ -222,8 +222,8 @@ void Game::DrawOverlay() const {
         const auto center=canvas.Point(380,310);
         DrawRectangleRounded(layout.PausePanel(),0.1F,12,Color{38,12,25,225});
         ui::DrawCentered(font,"暂停",center.x,canvas.Point(0,200).y,43*canvas.scale,RAYWHITE);
-        constexpr std::array<const char*,4> labels{"解除暂停","返回开局选择","返回主菜单","从头再来"};
-        for(int index=0;index<4;++index) {
+        const auto& labels=menu::kPauseLabels;
+        for(int index=0;index<menu::kPauseCount;++index) {
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
             const float size=25*canvas.scale,width=ui::MeasureText(font,labels[index],size).x;
             const auto row=layout.PauseRow(index);

@@ -338,12 +338,12 @@ void Game::UpdateState(float deltaTime) {
         if (IsKeyPressed(KEY_ESCAPE) || BindingPressed(bindings_.pause)) { TogglePause(); return; }
         if (IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
         const int previous = selectedPauseItem_;
-        if (IsKeyPressed(KEY_UP)) selectedPauseItem_ = (selectedPauseItem_ + 3) % 4;
-        if (IsKeyPressed(KEY_DOWN)) selectedPauseItem_ = (selectedPauseItem_ + 1) % 4;
+        if (IsKeyPressed(KEY_UP)) selectedPauseItem_ = (selectedPauseItem_ + menu::kPauseCount - 1) % menu::kPauseCount;
+        if (IsKeyPressed(KEY_DOWN)) selectedPauseItem_ = (selectedPauseItem_ + 1) % menu::kPauseCount;
         if (selectedPauseItem_ != previous) assets_.PlaySoundEffect("menu_move");
         bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
-        for (int index = 0; index < 4; ++index) {
+        for (int index = 0; index < menu::kPauseCount; ++index) {
             const auto row=layout.PauseRow(index);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), row)) {
                 selectedPauseItem_ = index;
@@ -354,9 +354,8 @@ void Game::UpdateState(float deltaTime) {
             assets_.PlaySoundEffect("menu_confirm");
             switch (selectedPauseItem_) {
                 case 0: TogglePause(); break;
-                case 1: EnterMainMenu(); setupStep_ = spellPractice_ ? 3 : 0; state_ = RunState::StartSetup; break;
-                case 2: EnterMainMenu(); break;
-                case 3: StartRun(); break;
+                case 1: EnterMainMenu(); break;
+                case 2: StartRun(); break;
             }
         }
         return;

@@ -49,6 +49,10 @@ inline constexpr int kNumericOptions = 6;
 inline constexpr int kBindingsIndex = 6;
 inline constexpr int kResetIndex = 7;
 inline constexpr int kBackIndex = 8;
+/// @brief 暂停菜单的局部顺序；输入导航、鼠标命中与绘制必须使用相同项数。
+inline constexpr int kPauseCount = 3;
+inline constexpr std::array<const char*,kPauseCount> kPauseLabels{
+    "解除暂停","返回主菜单","从头再来"};
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
     "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
@@ -97,8 +101,8 @@ struct BindingsLayout {
 struct OverlayLayout {
     Canvas canvas;
     OverlayLayout(int width,int height):canvas(width,height,760,620) {}
-    [[nodiscard]] Rectangle PausePanel() const { return canvas.Rect(135,180,490,310); }
-    /// @brief 暂停操作行，index 为 0～3，绘制与点击共用。
+    [[nodiscard]] Rectangle PausePanel() const { return canvas.Rect(135,180,490,118+kPauseCount*48); }
+    /// @brief 暂停操作行，index 为 0～kPauseCount-1，绘制与点击共用。
     [[nodiscard]] Rectangle PauseRow(int index) const { return canvas.Rect(170,270+index*48,420,42); }
 };
 /// @brief 标题页的响应式布局；使用完整窗口，方形/竖屏将标题放到菜单上方。

@@ -43,9 +43,9 @@ void Quad(Texture2D texture,const anm::Archive& archive,const anm::Frame& frame,
     rlEnd();rlSetTexture(0);EndBlendMode();
 }
 }
-void DrawAnimatedBillboard(const Camera3D& camera,Texture2D texture,const anm::Archive& archive,
-                          const anm::Frame& frame,Vector3 position,float height,Vector2 pivot,Color tint,Vector3 motion) {
-    if(frame.source.height<=0)return;
+std::array<Vector3,4> AnimatedBillboardVertices(const Camera3D& camera,const anm::Frame& frame,
+                          Vector3 position,float height,Vector2 pivot,Vector3 motion) {
+    if(frame.source.height<=0)return {position,position,position,position};
     const Vector3 forward=Vector3Normalize(Vector3Subtract(camera.target,camera.position));
     const Vector3 right=Vector3Normalize(Vector3CrossProduct(forward,camera.up));
     const Vector3 up=Vector3Normalize(Vector3CrossProduct(right,forward));
@@ -65,6 +65,12 @@ void DrawAnimatedBillboard(const Camera3D& camera,Texture2D texture,const anm::A
         p=Vector3Add(p,{offset.x*unit,-offset.y*unit,offset.z*unit});
         points[i]=Vector3Add(position,Vector3Add(Vector3Scale(right,p.x),Vector3Add(Vector3Scale(up,p.y),Vector3Scale(forward,p.z))));
     }
+    return points;
+}
+void DrawAnimatedBillboard(const Camera3D& camera,Texture2D texture,const anm::Archive& archive,
+                          const anm::Frame& frame,Vector3 position,float height,Vector2 pivot,Color tint,Vector3 motion) {
+    if(frame.source.height<=0)return;
+    const auto points=AnimatedBillboardVertices(camera,frame,position,height,pivot,motion);
     // 镜像后的顶点绕序可能反转；公告板两面均可见，调用方统一恢复剔除状态。
     rlDisableBackfaceCulling();Quad(texture,archive,frame,points,tint);
 }

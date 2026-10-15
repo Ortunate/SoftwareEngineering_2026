@@ -114,6 +114,9 @@ void Game::DrawWorld() const {
 }
 
 void Game::DrawArena() const {
+    // 辅助网格是半透明线，不能用深度写入切掉后续角色/掉落物的像素。
+    rlDrawRenderBatchActive();
+    rlDisableDepthMask();
     constexpr Vector3 h = kArenaHalfExtents;
     const Color border{170, 105, 150, 190};
     const Color grid{100, 65, 115, 24};
@@ -141,6 +144,8 @@ void Game::DrawArena() const {
         DrawLine3D({-h.x, -h.y, z}, {-h.x, h.y, z}, grid);
         DrawLine3D({h.x, -h.y, z}, {h.x, h.y, z}, grid);
     }
+    rlDrawRenderBatchActive();
+    rlEnableDepthMask();
 }
 
 void Game::DrawHud() const {

@@ -198,7 +198,7 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 
 每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂和对话。第一面的实现集中在 `src/stages/stage1/`；通用 `Enemy` 负责出生后的年龄、边界检查和调用子类，各具体敌人类持有自己的运动状态，有攻击能力的敌人自行管理技能计时器。同一类固定一种外观，普通妖精与光球的轨迹由 `FairyParams`、`OrbParams` 显式指定，`DarkFairyParams` 只提供出生位置与发弹后等待时间。`EnemySpec` 使用 `std::variant` 保存对应类型的参数，不再通过原型编号、编队或槽位选择敌人行为。新增关卡时在 `src/stage/catalog.cpp` 注册内容，并在 `src/stage/enemy_spec.hpp` 登记其参数类型、扩展配置校验；`Game`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。公共事件由 `StageContent::HandleEvent` 统一执行。
 
-弹幕、敌人与 Boss 记录 `VisualId`。关卡清单将该 ID 映射到图片路径、绘制方式、世界尺寸、锚点及光晕参数。`AssetManager` 在关卡开始时按清单加载，在结束时卸载；相同路径的 PNG 共享纹理；原始 DDS/ANM 通过图集缓存共享，战斗角色与立绘独立绑定。`SpriteRenderer` 按外观 ID 分组弹幕，每帧遍历弹池一次，避免随外观种类增加而重复扫描。
+弹幕、敌人与 Boss 记录 `VisualId`。关卡清单将该 ID 映射到图片路径、绘制方式、世界尺寸、锚点及光晕参数。`AssetManager` 在关卡开始时按清单加载，在结束时卸载；相同路径的 PNG 共享纹理；原始 DDS/ANM 通过图集缓存共享，战斗角色与立绘独立绑定。`SpriteRenderer` 每帧遍历弹池一次，将掉落物、角色、弹幕、激光和特效按相机前向深度统一排序；透明贴图不写深度，避免透明外框遮住后方物体。
 
 ## 弹幕与关卡结构
 

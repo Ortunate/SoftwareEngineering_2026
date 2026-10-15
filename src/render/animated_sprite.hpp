@@ -2,6 +2,10 @@
 #pragma once
 #include "resources/animation.hpp"
 namespace koumakyou {
+/// @brief 返回公告板四角的世界坐标，顺序为左上、右上、右下、左下；不访问 GPU。
+/// 参数单位与 DrawAnimatedBillboard 相同，供透明排序复用实际变换；无精灵高度时返回四个 position。
+[[nodiscard]] std::array<Vector3,4> AnimatedBillboardVertices(const Camera3D& camera,const anm::Frame& frame,
+                          Vector3 position,float height,Vector2 pivot={0.5F,0.5F},Vector3 motion={});
 /// @brief 在 BeginMode3D 内绘制当前帧；height 为未缩放世界高度，pivot 为判定点的归一化位置。
 /// 三维接口会关闭背面剔除；调用方在整个批次绘制完毕后 flush 并恢复剔除状态。
 /// motion 用于 autoRotate，原像素位移按 height/source.height 换算；支持 XYZ 旋转、镜像、UV 与混合。

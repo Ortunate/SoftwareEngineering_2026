@@ -111,6 +111,64 @@ struct GameLifecycleProbe {
         std::cout<<"Full-window world and HUD: "<<(GetTime()-start)*1000/60<<" ms/frame\n";
     }
 
+    /// @brief 按正式更新顺序以玩家弹击破或等超时，验证 30～240 FPS 各脚本帧间隙均能保留第二组非符。
+    static void TestBossTransitions(Game& game, const std::string& prefix) {
+        game.StartPreview();
+        game.stage_=StageDirector{};
+        game.player_.SetInvulnerability(1000);
+        for(int fps : {30,60,120,240}) for(bool timeout : {false,true}) {
+            // 击破可能发生在一个 60 Hz 脚本帧中的任意渲染帧；只测整 1/60 秒会漏掉准备期空隙。
+            for(int alignment=0;alignment<std::max(1,fps/60);++alignment) {
+                const float dt=1.0F/fps;
+                game.bullets_.Reset(); game.drops_.Clear();
+                game.BeginStageBoss(true,1);
+                const auto ready=[&](int phase) {
+                    int frames=0;
+                    while(!game.boss_->CanTakeDamage() && frames++<5*fps) {
+                        game.Update(dt);
+                        assert(game.boss_->phase==phase);
+                    }
+                    assert(game.boss_->phase==phase && game.boss_->CanTakeDamage());
+                };
+                const auto hit=[&] {
+                    auto* shot=game.bullets_.Spawn(BulletOwner::Player,game.boss_->position,{},0.1F,WHITE,kInvalidVisualId);
+                    assert(shot); shot->damage=100000;
+                    game.Update(dt); // 包含 UpdateBoss、弹幕移动及 ResolveCollisions，不能直接调用 AdvancePhase 代替。
+                };
+                ready(1); hit();
+                assert(game.boss_->phase==2);
+                ready(2);
+                for(int frame=0;frame<alignment;++frame)game.Update(dt);
+                if(timeout) {
+                    int frames=0;
+                    while(game.boss_->phase==2 && frames++<30*fps)game.Update(dt);
+                } else hit();
+                assert(game.boss_->phase==3 && game.boss_->SpellName()==nullptr);
+                assert(game.boss_->health==7500/stage1::kReferenceHealthUnit);
+                assert(game.boss_->maxHealth==7500/stage1::kReferenceHealthUnit);
+                const auto bar=game.boss_->HealthBar();
+                assert(bar.remainingBars==0 && std::abs(bar.segments[1].remaining-6700.0F/7500)<0.00001F);
+                for(int frame=0;frame<std::max(1,fps/60);++frame) {
+                    game.Update(dt);
+                    assert(game.boss_->phase==3 && game.boss_->SpellName()==nullptr);
+                }
+                ready(3);
+                for(int frame=0;frame<static_cast<int>(1.1F*fps);++frame) {
+                    game.Update(dt);
+                    assert(game.boss_->phase==3);
+                }
+                int beams=0;
+                game.bullets_.Pool().ForEachActive([&](const Bullet& bullet) { if(bullet.beamLength>0)++beams; });
+                assert(beams==6 && game.boss_->TimeLimit()==30);
+                if(!timeout && fps==240 && alignment==3)Capture(game,prefix,"second-nonspell-restored");
+                hit();
+                assert(game.boss_->phase==4 && game.boss_->SpellName()!=nullptr);
+                assert(std::abs(game.boss_->HealthBar().segments[0].remaining-800.0F/7500)<0.00001F);
+            }
+        }
+        std::cout<<"Boss damage/timeout transitions and second nonspell beams passed at 30/60/120/240 FPS\n";
+    }
+
     /// @brief 通过正式 HUD 读取分段颜色与空白像素，覆盖四个攻击阶段、道中及多种窗口比例。
     static void TestBossHud(Game& game, const std::string& prefix) {
         game.StartPreview();
@@ -451,6 +509,7 @@ struct GameLifecycleProbe {
 
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
+        TestBossTransitions(game,prefix);
         TestBossHud(game,prefix);
         TestFullWindow(game,prefix);
         TestDialogueTransitions(game,prefix);
@@ -638,6 +697,7 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--boss-hud-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
+            koumakyou::GameLifecycleProbe::TestBossTransitions(*game,prefix);
             koumakyou::GameLifecycleProbe::TestBossHud(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--dialogue-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);

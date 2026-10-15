@@ -21,6 +21,7 @@ public:
     [[nodiscard]] bool IsMidboss() const override { return encounter_==Encounter::Midboss; }
     [[nodiscard]] const char* DisplayName() const override { return "Rumia"; }
     [[nodiscard]] bool CanTakeDamage() const override { return !retiring_ && script_.damageable; }
+    /// @brief 只在可受击期检查伤害阈值；阶段交接及脚本准备期不能因碰撞重复推进。
     [[nodiscard]] bool ShouldAdvanceFromDamage() const override;
     [[nodiscard]] float TimeLimit() const override { return script_.timeoutFrames/60.0F; }
     /// @brief 道中为单段；关底将非符和后续符卡按原作 HP 分组，符卡始终保留左端小段，不铺满血条。

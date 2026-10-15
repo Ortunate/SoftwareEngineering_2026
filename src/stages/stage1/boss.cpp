@@ -35,7 +35,8 @@ bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     return script_.pendingCallback>=0 || script_.finished;
 }
 bool RumiaBoss::ShouldAdvanceFromDamage() const {
-    return !retiring_ && (health<=0 || (!IsMidboss() && (phase==1 || phase==3) &&
+    // Game 每个渲染帧都检查碰撞，但脚本只在 60 Hz 执行；准备期不能用上次攻击的残余生命再次推进。
+    return CanTakeDamage() && (health<=0 || (!IsMidboss() && (phase==1 || phase==3) &&
         health<kHealthGroups[phase==1 ? 0 : 1].spell/kReferenceHealthUnit));
 }
 bool RumiaBoss::AdvancePhase() {
@@ -54,6 +55,9 @@ bool RumiaBoss::AdvancePhase() {
     }
     if(IsMidboss() || phase==4) { defeated_=health<=0; retiring_=true; }
     else ++phase;
+    // Sub19 的 ins_111 要等下一次 60 Hz Tick 才执行。先原子交接下一组生命，避免击破后的 1 HP
+    // 占位在高帧率下跳过非符，也让同一帧的 HUD 立即显示第二组完整白段与粉段。
+    if(!retiring_ && phase==3)script_.health=script_.maxHealth=kHealthGroups[1].total;
     script_.SetDeathCallback(IsMidboss() ? 7 : phase<=2 ? 19 : 20);
     // 小于 1/60 秒的帧可能还未执行回调首条 ins_105；准备期保护必须在交接时立即生效。
     script_.damageable=false;

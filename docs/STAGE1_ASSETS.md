@@ -19,7 +19,7 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 
 ## 新典界面图集
 
-`reference_frame.png` 为 CM 包的 `frame_zh-CN.dds` 格式转换，`reference_stage1.png` 为 `frame_stage1_zh-CN.dds` 格式转换。没有重采样或重新绘制；两者保留作原作界面参考。全窗口战斗界面不再加载侧栏图集，改为按关卡元数据绘制悬浮题签与状态卡。
+`reference_frame.png` 为 CM 包的 `frame_zh-CN.dds` 格式转换，`reference_stage1.png` 为 `frame_stage1_zh-CN.dds` 格式转换。没有重采样或重新绘制；两者保留作原作界面参考。全窗口战斗界面不再加载侧栏图集，改为按关卡元数据绘制悬浮题签与状态卡。左上题签沿用新典一面的暖金文字、酒红斜带和带 `~` 的英文副标题；为适配紧凑浮窗，将斜排倾角收敛到 14°，完整保留关卡名称及下方独立的游玩模式。
 
 ## 音效
 

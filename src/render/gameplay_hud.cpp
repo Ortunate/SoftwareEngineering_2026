@@ -38,6 +38,37 @@ void Label(Font font, std::string_view value, Vector2 position, float size, floa
     ui::DrawText(font, text.c_str(), position, size, ui::WithOpacity(color, opacity));
 }
 
+/// @brief 按新典题签的暖金斜排与酒红斜带绘制关卡名称；坐标为窗口逻辑像素，字体和名称仅借用。
+/// 原图文字与竖长侧栏合在一起；在紧凑浮窗中以较小倾角重排，保留完整标题及副标题，不压缩 3D 视口。
+void StageTitle(Font font, const StageDisplayInfo& info, Rectangle panel, float scale, float opacity) {
+    const float left = panel.x + 2 * scale, right = panel.x + panel.width - 2 * scale;
+    const Vector2 a{left, panel.y + 55 * scale}, b{left, panel.y + 124 * scale};
+    const Vector2 c{right, panel.y + 72 * scale}, d{right, panel.y + 3 * scale};
+    const Color band = ui::WithOpacity(Color{90, 22, 39, 170}, opacity);
+    DrawTriangle(a, b, c, band);
+    DrawTriangle(a, c, d, band);
+    DrawLineEx(a, d, scale, ui::WithOpacity(Color{230, 196, 141, 75}, opacity));
+    DrawLineEx(b, c, scale, ui::WithOpacity(Color{230, 196, 141, 45}, opacity));
+
+    constexpr float angle = -14.0F;
+    const float radians = angle * DEG2RAD;
+    const Vector2 origin{panel.x + 16 * scale, panel.y + 41 * scale};
+    const auto text = [&](std::string_view value, float y, float size, Color color) {
+        const std::string content(value);
+        size = ui::FittedSize(font, content.c_str(), size * scale, panel.width - 38 * scale);
+        const Vector2 position{origin.x - y * scale * std::sin(radians),
+                               origin.y + y * scale * std::cos(radians)};
+        // 阴影随文字旋转但保持屏幕方向的小偏移，保证明亮背景上金色笔画仍清晰。
+        DrawTextPro(font, content.c_str(), {position.x + scale, position.y + scale}, {}, angle,
+                    size, size * ui::kTrackingRatio, ui::WithOpacity(Color{43, 11, 19, 245}, opacity));
+        DrawTextPro(font, content.c_str(), position, {}, angle, size, size * ui::kTrackingRatio,
+                    ui::WithOpacity(color, opacity));
+    };
+    text(info.label, 0, 16, Color{255, 231, 166, 255});
+    text(info.title, 27, 30, Color{255, 238, 175, 255});
+    text("~ " + std::string(info.subtitle), 58, 17, Color{251, 222, 157, 255});
+}
+
 /// @brief 少量资源逐颗显示星标，超过五颗改用准确数量，防止额外残机奖励挤出状态卡。
 std::string Stock(int count) {
     if (count <= 0) return "0";
@@ -59,12 +90,10 @@ void Game::DrawHud() const {
     if (stageContent_) {
         const auto info = stageContent_->DisplayInfo();
         const float x = stage.x + 16 * s, w = stage.width - 32 * s;
-        Label(font, info.label, {x, stage.y + 12 * s}, 16 * s, w, kGold, emphasis);
-        Label(font, info.title, {x, stage.y + 38 * s}, 28 * s, w, kInk, emphasis);
-        Label(font, info.subtitle, {x, stage.y + 78 * s}, 16 * s, w, kMuted, emphasis);
+        StageTitle(font, info, stage, s, emphasis);
         const char* mode = spellPractice_ ? "NORMAL / 符卡练习" : practiceMode_ ? "NORMAL / 关卡练习"
             : challengeMode_ ? "NORMAL / 挑战模式" : "NORMAL";
-        Label(font, mode, {x, stage.y + (l.compact ? 110 : 124) * s}, 16 * s, w,
+        Label(font, mode, {x, stage.y + (l.compact ? 118 : 124) * s}, 16 * s, w,
                kRose, emphasis);
     }
 

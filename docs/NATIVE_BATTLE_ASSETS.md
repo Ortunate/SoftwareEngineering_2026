@@ -4,7 +4,11 @@
 
 ## 文件与来源
 
-`assets/runtime/battle/native/` 保存从本机 `th06CM.dat` / `th06ST.dat` 提取的 25 张标准 DDS 和对应的 25 份 ANM，共 160.87 MiB。文件逐字节复制，没有裁图、缩放、重绘或转成 PNG；`checksums.sha256` 保存全部 50 个原件的 SHA-256。标准分辨率是原包已有版本；未重复收录同图的 `_4k` 版本。构建将整个目录复制到可执行文件旁的 `assets/battle/native/`，运行时不依赖本机游戏安装目录、解包工具或 Python。
+`assets/runtime/battle/native/` 保存从本机 `th06CM.dat` / `th06ST.dat` 提取的 25 张高分辨率 DDS 和对应的 25 份 ANM，共 643.29 MiB。全部贴图已替换为原包 `_4k.dds` 原件，宽、高均为先前标准版的两倍，像素数四倍；沿用原运行时文件名，不保留标准版运行时副本。没有 AI 重绘或重新插值。ANM 文件保持逐字节不变。
+
+`resolution_manifest.json` 记录每张纹理的标准/高清尺寸、原 `_4k` 文件名及两版 SHA-256；`checksums.sha256` 校验当前全部 50 个 DDS/ANM。构建将整个目录复制到可执行文件旁的 `assets/battle/native/`，运行时不依赖本机游戏安装目录、解包工具或 Python。
+
+升级仅增加纹理采样分辨率。ANM 的图集逻辑尺寸、精灵矩形、动画时序和关卡的 `worldHeight`、`pivot`、`bulletDiameterScale` 均保持不变，原 UV 比例自动落到高清图集；世界高度、弹幕直径、道具大小和激光宽度不随纹理尺寸放大。
 
 | 图集文件名（省略扩展名） | 目录编号 / 内容 |
 |---|---|
@@ -28,7 +32,7 @@
 ## 接口分层
 
 - `resources/battle_catalog.*`：稳定 `Atlas` 编号、原始路径，以及弹幕、显现、自机与道具的原编号映射。`Catalog()` 返回全部素材，登记不占 GPU 内存。
-- `resources/dds_image.*`：直接解码 BGRA32、RGBA32、BC1/2/3/7 为保留 Alpha 的 RGBA8 图像。`eff01…eff07` 是 DX10 BC7；非四倍数边长的边块也可读取，例如 eff04 的 413×407。
+- `resources/dds_image.*`：直接解码 BGRA32、RGBA32、BC1/2/3/7 为保留 Alpha 的 RGBA8 图像。`eff01…eff07` 是 DX10 BC7；非四倍数边长的边块也可读取，例如高清 eff04 的 826×814（ANM 逻辑尺寸仍为 576×576）。
 - `resources/animation.*`：读取版本 0、外置 DDS 的 ANM，执行精灵切换、循环、随机精灵、镜像、XYZ 旋转、缩放、Alpha/位移插值、普通/加色混合、UV 滚动、停止和标签中断。`Player` 不持有纹理。
 - `AssetManager::LoadBattleAtlas()`：按需读取并缓存一套 DDS/ANM，多种颜色和多个实例复用同一张纹理；在有效图形上下文中调用。CPU 档案共享只读，GPU 句柄仅由管理器释放。
 - `render/animated_sprite.*`：当前帧的 2D 绘制、相机朝向的 3D 公告板以及激光带。绘制不推进动画；运动方向由调用方提供给 autoRotate。
@@ -69,9 +73,11 @@ DrawAnimatedSprite2D(atlas.texture, *atlas.archive, animation.Sample(), {320, 24
 ```bash
 cmake --build --preset macos-debug --target koumakyou koumakyou_tests native_asset_preview koumakyou_lifecycle_tests
 ctest --preset macos-debug
-./build/macos-debug/native_asset_preview output/stage1-review/native-battle-gallery
+./build/macos-debug/native_asset_preview output/stage1-review/native-battle-hires
+# 可选：使用提取的标准版目录，逐图集验证高清替换前后的世界绘制边界
+./build/macos-debug/native_asset_preview output/stage1-review/native-battle-hires /path/to/standard-dds
 ./build/macos-debug/koumakyou_lifecycle_tests output/stage1-review/native-battle-integrated/game
 (cd assets/runtime/battle/native && shasum -a 256 -c checksums.sha256)
 ```
 
-后两个可执行文件需要桌面图形会话。预览工具调用正式加载/播放/绘制接口，将所有脚本按第 0、12、32 帧导出，背景脚本的绝对位置居中以便审阅，并检查露米娅身体区域确实有渲染像素。核心测试读取全部 25 套素材、运行所有有效脚本并触发中断，核对真实角色帧序、颜色映射和显现时序。图形生命周期测试覆盖整关、两张符卡练习、暂停、清场及资源释放。审阅截图位于忽略目录，不入库。
+后两个可执行文件需要桌面图形会话。预览工具调用正式加载/播放/绘制接口，将所有脚本按第 0、12、32 帧导出，背景脚本的绝对位置居中以便审阅，并检查露米娅身体区域确实有渲染像素。提供标准版目录时，还会用固定相机、3.2 世界单位高度分别绘制两个分辨率的同一逻辑帧，另用白色片元校验正式绘制器生成的几何覆盖，要求全部 25 个图集的屏幕边界完全相同，避免把更清晰的 Alpha 边缘误判为尺寸变化；实际贴图仍正常导出为 `*-size-before/after.png`。核心测试读取全部 25 套素材、运行所有有效脚本并触发中断，核对真实角色帧序、颜色映射和显现时序。图形生命周期测试覆盖整关、两张符卡练习、暂停、清场及资源释放。审阅截图位于忽略目录，不入库。

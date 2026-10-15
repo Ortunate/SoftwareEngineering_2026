@@ -38,12 +38,20 @@ void TestRealTiming() {
 /// @brief 读取所有未来关卡、自机和特效；每个真实脚本运行 120 帧，执行停止标签或中断后再推进。
 void TestAllNativeAssets() {
     std::size_t sprites=0,scripts=0;
+    // 原包 _4k 图集宽高为标准版两倍；少数 ANM 逻辑尺寸与标准 DDS 本就不同，不能直接乘逻辑尺寸。
+    constexpr std::array<Vector2,25> expectedTextureSizes{{
+        {2048,2048},{256,256},{1024,1024},{2048,2048},{2048,2048},{1024,1024},
+        {2048,2048},{4096,4096},{2048,2048},{2048,2048},{4096,4096},{4096,4096},
+        {2048,2048},{4096,4096},{4096,4096},{4096,4096},{4096,4096},{4096,4096},
+        {1152,1152},{1152,1152},{1152,1152},{826,814},{1152,1152},{1152,1152},{2048,2048}
+    }};
     for(const auto& definition:battle::Catalog()) {
         auto archive=anm::LoadArchive(kAssets/definition.anm);
         sprites+=archive.sprites.size();scripts+=archive.scripts.size();
         Image image=LoadOriginalDds(kAssets/definition.dds);
         assert(image.data && image.width>0 && image.height>0 && image.format==PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-        if(definition.id==battle::Atlas::Stage4Effects)assert(image.width==413 && image.height==407);
+        const auto size=expectedTextureSizes.at(static_cast<std::size_t>(definition.id));
+        assert(image.width==size.x && image.height==size.y);
         UnloadImage(image);
         for(const auto& script:archive.scripts) {
             anm::Player player;player.Start(archive,script.id,0,archive.sprites.front().id,7);

@@ -6,7 +6,7 @@
 
 namespace koumakyou::battle {
 namespace {
-// 标准 DDS 原样保存；逻辑坐标由 ANM 指定，解码不改变素材文件。
+// DDS 使用原包的双倍分辨率 _4k 原件，沿用运行时文件名；ANM 逻辑坐标与世界尺寸保持不变。
 #define ENTRY(id,name,stage) Definition{Atlas::id,name,"battle/native/" name ".dds","battle/native/" name ".anm",stage}
 constexpr std::array<Definition,25> kCatalog{{
     ENTRY(Bullets,"etama3",0),ENTRY(BeamBullets,"etama3_2",0),ENTRY(BulletEffects,"etama4",0),

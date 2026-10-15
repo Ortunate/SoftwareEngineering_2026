@@ -4,6 +4,7 @@
 #include "render/title_entrance.hpp"
 #include "render/menu_layout.hpp"
 #include "render/gameplay_layout.hpp"
+#include "render/boss_hud.hpp"
 #include "render/dialogue_motion.hpp"
 #include "resources/dialogue_crop.hpp"
 #include <cassert>
@@ -74,6 +75,14 @@ void TestResponsiveLayouts() {
         assert(viewport.x==0 && viewport.y==0 && viewport.width==size.x && viewport.height==size.y);
         fits(gameplay.StagePanel()); fits(gameplay.StatusPanel()); fits(gameplay.BossPanel());
         fits(gameplay.DialoguePanel()); fits(gameplay.SpellBanner());
+        const koumakyou::ui::BossHudLayout bossRow(gameplay.BossPanel(),gameplay.scale);
+        fits(bossRow.enemy); fits(bossRow.bar); fits(bossRow.timer); fits(bossRow.spell);
+        assert(bossRow.enemy.x+bossRow.enemy.width<bossRow.bar.x);
+        assert(bossRow.bar.x+bossRow.bar.width<bossRow.timer.x);
+        const float center=bossRow.bar.y+bossRow.bar.height/2;
+        assert(std::abs(bossRow.enemy.y+bossRow.enemy.height/2-center)<0.001F);
+        assert(std::abs(bossRow.timer.y+bossRow.timer.height/2-center)<0.001F);
+        assert(bossRow.spell.y>bossRow.enemy.y+bossRow.enemy.height);
         fits(gameplay.Feedback(false)); fits(gameplay.Feedback(true));
         assert(!CheckCollisionRecs(gameplay.StagePanel(),gameplay.StatusPanel()));
         assert(!CheckCollisionRecs(gameplay.BossPanel(),gameplay.StagePanel()));
@@ -196,6 +205,11 @@ void RunActorEffectTests();
 void RunAnimationTests();
 
 int main() {
+    assert(koumakyou::ui::BossSeconds(35,0)==35 && koumakyou::ui::BossSeconds(35,0.01F)==34);
+    assert(koumakyou::ui::BossSeconds(25,5)==20 && koumakyou::ui::BossSeconds(25,25)==0);
+    assert(koumakyou::ui::BossSeconds(25,26)==0 && koumakyou::ui::BossSeconds(-1,0)==-1);
+    assert(koumakyou::ui::BossSeconds(150,0)==99);
+    assert(koumakyou::ui::BossSeconds(0,0)==0);
     TestDialogueContent();
     TestResponsiveLayouts();
     TestMenuMotion();

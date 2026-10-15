@@ -5,6 +5,7 @@
 #include "stages/stage1/enemies.hpp"
 #include "render/ui_typography.hpp"
 #include "render/gameplay_layout.hpp"
+#include "render/boss_hud.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -108,6 +109,63 @@ struct GameLifecycleProbe {
         const double start=GetTime();
         for(int frame=0;frame<60;++frame) { BeginDrawing(); game.Draw(); EndDrawing(); }
         std::cout<<"Full-window world and HUD: "<<(GetTime()-start)*1000/60<<" ms/frame\n";
+    }
+
+    /// @brief 通过正式 HUD 读取分段颜色与空白像素，覆盖四个攻击阶段、道中及多种窗口比例。
+    static void TestBossHud(Game& game, const std::string& prefix) {
+        game.StartPreview();
+        const int width=GetScreenWidth(),height=GetScreenHeight();
+        struct Scene { int phase; float sourceHealth; const char* name; };
+        const std::array<Scene,10> scenes{{
+            {1,7000,"first-full"},{1,3950,"first-normal-half"},{1,900,"first-boundary"},
+            {2,900,"first-spell-full"},{2,450,"first-spell-half"},{2,0,"first-spell-empty"},
+            {3,7500,"second-full"},{3,4150,"second-normal-half"},
+            {4,400,"second-spell-half"},{0,6000,"midboss-full"}}};
+        for(const Vector2 size : {Vector2{1280,720},{900,900},{390,844},{1600,400},{320,240}}) {
+            SetWindowSize(static_cast<int>(size.x),static_cast<int>(size.y));
+            const GameplayLayout layout(GetScreenWidth(),GetScreenHeight());
+            const ui::BossHudLayout row(layout.BossPanel(),layout.scale);
+            const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+            for(const auto& scene : scenes) {
+                game.BeginStageBoss(scene.phase!=0,1);
+                while(game.boss_->phase<scene.phase)assert(game.boss_->AdvancePhase());
+                game.UpdateBoss(1.0F/60);
+                game.bullets_.Reset(); game.drops_.Clear(); // 隔离 Sub19 的散落，截图不能累积上一个展示场景的对象。
+                game.boss_->phaseTimer=5;
+                game.boss_->health=scene.sourceHealth/stage1::kReferenceHealthUnit;
+                const auto health=game.boss_->HealthBar();
+                BeginDrawing(); BeginTextureMode(target); ClearBackground(Color{17,31,47,255});
+                game.DrawHud();
+                EndTextureMode(); EndDrawing();
+                Image pixels=LoadImageFromTexture(target.texture); ImageFlipVertical(&pixels);
+                const auto near=[](Color a,Color b) {
+                    return std::abs(int(a.r)-b.r)<=2 && std::abs(int(a.g)-b.g)<=2 && std::abs(int(a.b)-b.b)<=2;
+                };
+                float offset=0;
+                for(std::size_t index=0;index<health.count;++index) {
+                    const auto segment=health.segments[index];
+                    for(float fraction : {0.25F,0.75F}) {
+                        const float sample=segment.capacity*fraction;
+                        const int x=static_cast<int>(row.bar.x+(offset+sample)*row.bar.width);
+                        const int y=static_cast<int>(row.bar.y+row.bar.height/2);
+                        const auto color=GetImageColor(pixels,x,y);
+                        if(sample<segment.remaining) {
+                            const Color expected=segment.kind==BossHealthKind::Spell ? Color{239,138,152,255} : WHITE;
+                            assert(near(color,expected));
+                        } else {
+                            assert(!near(color,WHITE) && !near(color,Color{239,138,152,255}));
+                        }
+                    }
+                    offset+=segment.capacity;
+                }
+                UnloadImage(pixels);
+                const auto name="boss-hud-"+std::to_string(GetScreenWidth())+"-"+scene.name;
+                Capture(game,prefix,name.c_str());
+            }
+            UnloadRenderTexture(target);
+        }
+        SetWindowSize(width,height);
+        std::cout<<"Boss HUD segmented colors and same-row layout passed at five window sizes\n";
     }
 
     /// @brief 用纯色纹理读取边缘像素验证透明混合、暂停冻结，并用正式立绘导出切换过渡。
@@ -393,6 +451,7 @@ struct GameLifecycleProbe {
 
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
+        TestBossHud(game,prefix);
         TestFullWindow(game,prefix);
         TestDialogueTransitions(game,prefix);
         TestPortraits(game,prefix);
@@ -558,7 +617,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 使用隐藏窗口运行集成测试；argv[1] 为可选截图前缀，argv[2] 可为 --viewport-only 或 --dialogue-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only。
 /// 不初始化音频，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -577,6 +636,9 @@ int main(int argc, char** argv) {
         if(argc>=3 && std::string(argv[2])=="--viewport-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--boss-hud-only") {
+            koumakyou::GameLifecycleProbe::TestUiFont(*game);
+            koumakyou::GameLifecycleProbe::TestBossHud(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--dialogue-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestDialogueTransitions(*game,prefix);

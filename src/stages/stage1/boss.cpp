@@ -3,6 +3,12 @@
 #include "stages/stage1/ids.hpp"
 #include <algorithm>
 namespace koumakyou::stage1 {
+namespace {
+// 与 Normal Sub14/Sub19 的 ins_111、ins_113 保持一致，单位是原作 HP。
+// total 包含后续符卡；spell 是非符结束后保留的血量，同时供伤害阈值与 HUD 使用，不能按伤害倍率加权。
+struct HealthGroup { float total, spell; int remainingBars; };
+constexpr std::array<HealthGroup, 2> kHealthGroups{{{7000, 900, 1}, {7500, 800, 0}}};
+}
 void RumiaBoss::StartMidboss() {
     encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
@@ -13,9 +19,9 @@ void RumiaBoss::StartMidboss() {
 void RumiaBoss::StartFinalBoss() {
     encounter_=Encounter::Final; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
-    script_.Reset(14,{192,96,0},7000,5093);
+    script_.Reset(14,{192,96,0},kHealthGroups[0].total,5093);
     script_.damageable=false;
-    position=script_.Position(); health=maxHealth=7000/kReferenceHealthUnit;
+    position=script_.Position(); health=maxHealth=kHealthGroups[0].total/kReferenceHealthUnit;
 }
 bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     if(!active) return false;
@@ -29,8 +35,8 @@ bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     return script_.pendingCallback>=0 || script_.finished;
 }
 bool RumiaBoss::ShouldAdvanceFromDamage() const {
-    return !retiring_ && (health<=0 || (!IsMidboss() && (phase==1 ? health<900/kReferenceHealthUnit :
-                                     phase==3 ? health<800/kReferenceHealthUnit : false)));
+    return !retiring_ && (health<=0 || (!IsMidboss() && (phase==1 || phase==3) &&
+        health<kHealthGroups[phase==1 ? 0 : 1].spell/kReferenceHealthUnit));
 }
 bool RumiaBoss::AdvancePhase() {
     if(!active) return false;
@@ -41,9 +47,9 @@ bool RumiaBoss::AdvancePhase() {
     }
     if(script_.pendingCallback<0) {
         if(IsMidboss())script_.pendingCallback=7;
-        else if(phase==1) { script_.pendingCallback=26; script_.health=900; }
+        else if(phase==1) { script_.pendingCallback=26; script_.health=kHealthGroups[0].spell; }
         else if(phase==2)script_.pendingCallback=19;
-        else if(phase==3) { script_.pendingCallback=29; script_.health=800; }
+        else if(phase==3) { script_.pendingCallback=29; script_.health=kHealthGroups[1].spell; }
         else script_.pendingCallback=20;
     }
     if(IsMidboss() || phase==4) { defeated_=health<=0; retiring_=true; }
@@ -52,7 +58,7 @@ bool RumiaBoss::AdvancePhase() {
     // 小于 1/60 秒的帧可能还未执行回调首条 ins_105；准备期保护必须在交接时立即生效。
     script_.damageable=false;
     script_.Transition(); health=script_.health/kReferenceHealthUnit;
-    // 每张符卡继承前一非符的剩余 HP；HUD 在回调处重新以该阶段生命上限绘制。
+    // maxHealth 保留当前攻击的战斗上限；HUD 使用独立的整组快照，不能在符卡回调处将预留段铺满。
     if(phase==2 || phase==4)script_.maxHealth=script_.health;
     maxHealth=script_.maxHealth/kReferenceHealthUnit; phaseTimer=0;
     return true;
@@ -60,5 +66,22 @@ bool RumiaBoss::AdvancePhase() {
 const char* RumiaBoss::SpellName() const {
     if(!active || IsMidboss() || retiring_) return nullptr;
     return phase==2 ? "夜符「Night Bird」" : phase==4 ? "暗符「Demarcation」" : nullptr;
+}
+
+BossHealthBar RumiaBoss::HealthBar() const {
+    if (!active || retiring_ || phase < 1 || phase > 4) return {};
+    if (IsMidboss()) return Boss::HealthBar();
+    const auto group = kHealthGroups[phase <= 2 ? 0 : 1];
+    const bool spell = phase == 2 || phase == 4;
+    const float remaining = std::clamp(health * kReferenceHealthUnit, 0.0F,
+                                       spell ? group.spell : group.total);
+    BossHealthBar bar;
+    bar.count = 2;
+    bar.remainingBars = group.remainingBars;
+    bar.segments[0] = {group.spell / group.total, std::min(remaining, group.spell) / group.total,
+                       BossHealthKind::Spell};
+    bar.segments[1] = {(group.total - group.spell) / group.total,
+                       std::max(0.0F, remaining - group.spell) / group.total, BossHealthKind::NonSpell};
+    return bar;
 }
 } // namespace koumakyou::stage1

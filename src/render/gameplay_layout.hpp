@@ -35,7 +35,7 @@ struct GameplayLayout {
         const float left = StagePanel().x + StagePanel().width + 20 * scale;
         const float right = StatusPanel().x - 20 * scale;
         const float w = std::min(540 * scale, right - left);
-        return {left + (right - left - w) / 2, margin, w, 76 * scale};
+        return {left + (right - left - w) / 2, margin, w, 64 * scale};
     }
     /// @brief 台词框居中贴近底部，两行正文与说话人使用独立区域。
     [[nodiscard]] Rectangle DialoguePanel() const {

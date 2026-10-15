@@ -2,6 +2,7 @@
 #include "app/game.hpp"
 #include "app/constants.hpp"
 #include "render/gameplay_layout.hpp"
+#include "render/boss_hud.hpp"
 #include "render/ui_effects.hpp"
 #include "render/ui_typography.hpp"
 
@@ -136,26 +137,30 @@ void Game::DrawHud() const {
         row("点数", TextFormat("%d", pointItems_), 284, 20);
     }
 
-    if (boss_ && boss_->active && !dialogueActive_) {
+    const auto bossHealth = boss_ ? boss_->HealthBar() : BossHealthBar{};
+    if (bossHealth.count > 0 && !dialogueActive_) {
         const Rectangle panel = l.BossPanel();
+        const ui::BossHudLayout row(panel, s);
         Panel(panel, s);
-        const float x = panel.x + 14 * s, y = panel.y + 9 * s;
-        const float timerWidth = 52 * s;
-        const char* phase = TextFormat("Enemy %d", !boss_->IsMidboss() && boss_->phase <= 2 ? 1 : 0);
-        Label(font, phase, {x, y}, 15 * s, 94 * s, kGold);
-        if (boss_->SpellName()) {
-            Label(font, boss_->SpellName(), {x + 104 * s, y}, (l.compact ? 16 : 19) * s,
-                   panel.width - (28 + 104) * s - timerWidth, kInk);
+        Label(font, TextFormat("Enemy %d", bossHealth.remainingBars),
+               {row.enemy.x, row.enemy.y + (row.enemy.height - 21 * s) / 2}, 21 * s, row.enemy.width, kGold);
+        DrawRectangleRec(row.bar, Color{64, 35, 50, 160});
+        float offset = 0;
+        for (std::size_t index = 0; index < bossHealth.count; ++index) {
+            const auto segment = bossHealth.segments[index];
+            // 累加固定容量而非剩余量：后续符卡始终留在左端，非符从右侧消耗，切换时不跳成满条。
+            if (segment.remaining > 0)
+                DrawRectangleRec({row.bar.x + offset * row.bar.width, row.bar.y,
+                                  segment.remaining * row.bar.width, row.bar.height}, ui::BossHealthColor(segment.kind));
+            offset += segment.capacity;
         }
-        if (boss_->TimeLimit() > 0) {
-            const int seconds = std::max(0, static_cast<int>(std::ceil(boss_->TimeLimit() - boss_->phaseTimer)));
-            Label(font, TextFormat("%02d", seconds), {panel.x + panel.width - 14 * s, y - 2 * s},
-                   27 * s, timerWidth, seconds <= 10 ? kRose : kInk, 1, true);
-        }
-        const float ratio = boss_->maxHealth > 0 ? std::clamp(boss_->health / boss_->maxHealth, 0.0F, 1.0F) : 0;
-        const Rectangle bar{x, panel.y + panel.height - 17 * s, panel.width - 28 * s, 5 * s};
-        DrawRectangleRec(bar, Color{64, 35, 50, 230});
-        DrawRectangleRec({bar.x, bar.y, bar.width * ratio, bar.height}, kInk);
+        const int seconds = ui::BossSeconds(boss_->TimeLimit(), boss_->phaseTimer);
+        Label(font, seconds < 0 ? "--" : TextFormat("%02d", seconds),
+               {row.timer.x + row.timer.width, row.timer.y + (row.timer.height - 27 * s) / 2},
+               27 * s, row.timer.width, ui::BossTimerColor(seconds), 1, true);
+        if (boss_->SpellName())
+            Label(font, boss_->SpellName(), {row.spell.x + row.spell.width, row.spell.y}, 19 * s,
+                   row.spell.width, Color{220, 211, 255, 255}, 1, true);
     }
 
     if (!dialogueActive_ && state_ == RunState::Playing) {

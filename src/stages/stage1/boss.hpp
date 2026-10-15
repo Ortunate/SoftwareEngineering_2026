@@ -23,6 +23,8 @@ public:
     [[nodiscard]] bool CanTakeDamage() const override { return !retiring_ && script_.damageable; }
     [[nodiscard]] bool ShouldAdvanceFromDamage() const override;
     [[nodiscard]] float TimeLimit() const override { return script_.timeoutFrames/60.0F; }
+    /// @brief 道中为单段；关底将非符和后续符卡按原作 HP 分组，符卡始终保留左端小段，不铺满血条。
+    [[nodiscard]] BossHealthBar HealthBar() const override;
     [[nodiscard]] Encounter CurrentEncounter() const { return encounter_; }
 private:
     Encounter encounter_ = Encounter::Midboss;

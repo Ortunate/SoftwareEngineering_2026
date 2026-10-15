@@ -4,6 +4,7 @@
 
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/effects/actor_effects.hpp"
+#include "gameplay/actors/boss_health.hpp"
 
 namespace koumakyou {
 
@@ -37,6 +38,9 @@ public:
     [[nodiscard]] virtual bool ShouldAdvanceFromDamage() const { return health <= 0; }
     /// @brief 当前阶段原始时间上限（秒）；负值表示退场或无计时阶段。
     [[nodiscard]] virtual float TimeLimit() const { return -1; }
+    /// @brief 返回当前组的独立血条快照；默认按 health/maxHealth 显示单段，组合阶段由具体 Boss 覆盖。
+    /// 仅供展示，不能用于伤害或阶段判定；无效生命上限、未活动或退场应返回空快照。
+    [[nodiscard]] virtual BossHealthBar HealthBar() const;
     /// @brief 接收关卡自适应难度值 10…32；普通演员默认忽略，原作脚本演员用于弹速/弹数。
     virtual void SetChallengeRank(int) {}
     /// @brief 借用本帧脚本产生的音效编号；下次更新失效，普通演员返回空表。

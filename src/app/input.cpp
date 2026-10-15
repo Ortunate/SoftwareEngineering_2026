@@ -48,7 +48,7 @@ void Game::UpdateMainMenu() {
         case 3:
             practiceMode_ = selectedMenuItem_ != 0;
             spellPractice_ = selectedMenuItem_ == 3;
-            setupStep_ = spellPractice_ ? 3 : 0;
+            setupStep_ = spellPractice_ ? StartSetupStep::Spell : StartSetupStep::Difficulty;
             selectedShot_ = lastSelection_.shot;
             // 符卡练习跳过模式页，仍沿用固定练习规则；不能将它的临时模式写回上次开局记录。
             challengeMode_ = !spellPractice_ && lastSelection_.challenge;
@@ -75,8 +75,11 @@ void Game::UpdateMainMenu() {
 }
 
 void Game::UpdateMenuPage() {
+    if (state_ == RunState::StartSetup) {
+        UpdateStartSetup();
+        return;
+    }
     const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
-    const auto& canvas=layout.canvas;
     const auto clicked = [&](Rectangle bounds) {
         return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), bounds);
     };
@@ -84,8 +87,7 @@ void Game::UpdateMenuPage() {
                       clicked(layout.Back());
     if (back) {
         assets_.PlaySoundEffect("menu_cancel");
-        if (state_ == RunState::StartSetup && setupStep_ > 0 && setupStep_ < 3) --setupStep_;
-        else EnterMainMenu();
+        EnterMainMenu();
         return;
     }
     int direction = 0;
@@ -93,43 +95,7 @@ void Game::UpdateMenuPage() {
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT)) direction = 1;
     bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
                    clicked(layout.Forward());
-    if (state_ == RunState::StartSetup) {
-        if (setupStep_ > 0) {
-            const int previous = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
-                : (practicePhase_ == 2 ? 0 : 1);
-            for (int index = 0; index < 2; ++index) {
-                const auto card=layout.Choice(index);
-                const bool hover=CheckCollisionPointRec(GetMousePosition(),canvas.Rect(card.x,card.y,card.width,card.height));
-                const bool moved=GetMouseDelta().x!=0 || GetMouseDelta().y!=0;
-                if (hover && (moved || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
-                    if (setupStep_ == 1) selectedShot_ = index;
-                    else if (setupStep_ == 2) challengeMode_ = index == 1;
-                    else practicePhase_ = index == 0 ? 2 : 4;
-                }
-            }
-            if (direction != 0) {
-                if (setupStep_ == 1) selectedShot_ = 1 - selectedShot_;
-                else if (setupStep_ == 2) challengeMode_ = !challengeMode_;
-                else practicePhase_ = practicePhase_ == 2 ? 4 : 2;
-            }
-            const int current = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
-                : (practicePhase_ == 2 ? 0 : 1);
-            if (previous != current) {
-                assets_.PlaySoundEffect("menu_move");
-                // 只保存当前页的选择，避免符卡练习或运行入口的临时状态覆盖其他页的上次记录。
-                if (setupStep_ == 1) lastSelection_.shot = selectedShot_;
-                else if (setupStep_ == 2) lastSelection_.challenge = challengeMode_;
-                else lastSelection_.practicePhase = practicePhase_;
-                SaveSettings();
-            }
-        }
-        if (confirm) {
-            menuMotion_.Confirm();
-            assets_.PlaySoundEffect("menu_confirm");
-            if (setupStep_ < 2) ++setupStep_;
-            else StartRun();
-        }
-    } else if (state_ == RunState::MusicRoom) {
+    if (state_ == RunState::MusicRoom) {
         const int previous = selectedTrack_;
         if (direction != 0) {
             selectedTrack_ = (selectedTrack_ + 3 + direction) % 3;

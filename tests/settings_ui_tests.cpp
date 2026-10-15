@@ -1,8 +1,9 @@
-// 本文件以隐藏窗口回放键鼠输入，检查标题比例适配、设置界面、录入防误触及配置保存。
+// 本文件以隐藏窗口回放键鼠输入，检查标题比例适配、设置界面、录入防误触和开局选择跨重启保存。
 #include "app/game.hpp"
 #include "app/constants.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
+#include "render/start_setup_layout.hpp"
 #include "raylib.h"
 #include <chrono>
 #include <cstdio>
@@ -10,6 +11,7 @@
 #include <stdexcept>
 #include <array>
 #include <cmath>
+#include <cstring>
 
 namespace koumakyou {
 /// @brief 仅图形测试使用的友元探针；复用已加载的关卡素材创建各 UI 展示状态，不替代正式流程回归。
@@ -37,9 +39,10 @@ struct GameLifecycleProbe {
         for(const char* name:kBindingNames)if(!contains(name))return false;
         for(int key=KEY_SPACE;key<=MouseBinding(MOUSE_BUTTON_BACK);++key)
             if(IsValidBinding(key) && !contains(Game::KeyLabel(key).c_str()))return false;
-        return contains("按键设置") && contains("恢复默认键位") && contains("梦幻夜行绘卷");
+        return contains("按键设置") && contains("恢复默认键位") && contains("梦幻夜行绘卷") &&
+               contains("请选择主人公。博丽神社的巫女小姐移动速度攻击范围攻击力准备好了吗？面向大多数人的难度尚未开放");
     }
-    /// @brief 设置 page=0～20 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
+    /// @brief 设置 page=0～22 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
     static void Show(Game& game,int page) {
         game.dialogueActive_=false; game.spellCutInTimer_=0; game.messageTimer_=0;
         game.waitingForBinding_=false; game.optionsPage_=Game::OptionsPage::General;
@@ -54,7 +57,12 @@ struct GameLifecycleProbe {
                 game.state_=RunState::Options; game.optionsPage_=Game::OptionsPage::KeyBindings;
                 game.waitingForBinding_=page==4; break;
             case 5: case 6: case 7: case 8:
-                game.state_=RunState::StartSetup; game.setupStep_=page-5; break;
+                game.state_=RunState::StartSetup;
+                game.setupStep_=page==5?StartSetupStep::Difficulty:page==6?StartSetupStep::Shot:page==7?StartSetupStep::Mode:StartSetupStep::Spell; break;
+            case 21: case 22:
+                game.state_=RunState::StartSetup;
+                game.setupStep_=page==21?StartSetupStep::Character:StartSetupStep::Ready;
+                game.spellPractice_=false; break;
             case 9: game.state_=RunState::MusicRoom; break;
             case 10: game.state_=RunState::Score; break;
             case 11: game.state_=RunState::Credit; break;
@@ -80,19 +88,30 @@ struct GameLifecycleProbe {
                 game.player_.AdjustPower(Player::kMaxPower);
                 break;
         }
-        game.UpdateUiMotion(0.5F);
+        game.UpdateUiMotion(1.0F);
     }
     /// @brief 设置启动展示的可重复截图时刻；仅推进展示，不执行菜单输入或修改玩家配置。
     static void StartupAt(Game& game,float seconds) {
         game.titleEntrance_={}; game.menuMotion_={}; game.UpdateUiMotion(seconds);
     }
     static bool Setup(const Game& game) { return game.state_==RunState::StartSetup; }
+    static StartSetupStep SetupStep(const Game& game) { return game.setupStep_; }
+    /// @brief 动画测试只推进展示时钟；换页仍使用正式展示状态，不推进关卡或伪造输入队列。
+    static void Motion(Game& game,float seconds) { game.UpdateUiMotion(seconds); }
+    static void MotionStep(Game& game,StartSetupStep step,float seconds) {
+        game.setupStep_=step;game.UpdateUiMotion(seconds);
+    }
+    static float CharacterVisibility(const Game& game) { return game.startSetupMotion_.Character(); }
     static bool MainMenu(const Game& game) { return game.state_==RunState::MainMenu; }
     static bool EntranceComplete(const Game& game) { return game.titleEntrance_.Finished(); }
     static int MenuSelection(const Game& game) { return game.selectedMenuItem_; }
     static bool Waiting(const Game& game) { return game.waitingForBinding_; }
     static bool General(const Game& game) { return game.optionsPage_==Game::OptionsPage::General; }
     static bool Playing(const Game& game) { return game.state_==RunState::Playing; }
+    /// @brief 读取实际选择页使用的值，不能以配置文件存在代替界面恢复检查。
+    static StartSelection Selection(const Game& game) {
+        return {game.selectedShot_,game.challengeMode_,game.practicePhase_};
+    }
 };
 }
 
@@ -132,9 +151,8 @@ void Click(koumakyou::Game& game, int x, int y) {
     Event(7, x, y); Event(6, MOUSE_BUTTON_LEFT); Frame(game);
     Event(5, MOUSE_BUTTON_LEFT); Frame(game);
 }
-/// @brief 保存当前窗口；settleFrames 可为零，filled 检查页顶/页底渐变抵达窗口边缘，防止退回居中留边。
-void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, bool filled = false) {
-    for (int frame=0;frame<settleFrames;++frame) Frame(game);
+/// @brief 从正式绘制入口读取当前画面，不推进时钟；返回的 Image 由调用方 UnloadImage。
+Image ReadFrame(koumakyou::Game& game) {
     RenderTexture2D target = LoadRenderTexture(GetScreenWidth(), GetScreenHeight());
     BeginTextureMode(target);
     ClearBackground(BLACK);
@@ -142,6 +160,13 @@ void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, boo
     EndTextureMode();
     Image image = LoadImageFromTexture(target.texture);
     ImageFlipVertical(&image);
+    UnloadRenderTexture(target);
+    return image;
+}
+/// @brief 保存当前窗口；settleFrames 可为零，filled 检查页顶/页底渐变抵达窗口边缘，防止退回居中留边。
+void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, bool filled = false) {
+    for (int frame=0;frame<settleFrames;++frame) Frame(game);
+    Image image=ReadFrame(game);
     if(filled) {
         const Color top=GetImageColor(image,image.width/2,0),bottom=GetImageColor(image,image.width/2,image.height-1);
         Check(std::abs(top.r-18)<=2 && std::abs(top.g-16)<=2 && std::abs(top.b-19)<=2,
@@ -151,14 +176,149 @@ void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, boo
     }
     Check(ExportImage(image, path), "screenshot export failed");
     UnloadImage(image);
-    UnloadRenderTexture(target);
+}
+
+/// @brief 导出实际首页到难度及后续步骤的连续帧，验证卡片真实淡入、零时间换页无闪变和人物连续性。
+void TestStartAnimations(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;
+    const int width=GetScreenWidth(),height=GetScreenHeight();
+    SetWindowSize(1280,720);
+    Game game;
+    GameLifecycleProbe::StartupAt(game,3);
+    SetTargetFPS(0);Event(7,0,0);Frame(game);
+    Key(game,KEY_Z);
+    int number=0;
+    const auto capture=[&] {
+        const auto name=screenshots/(std::string(TextFormat("start-transition-%03d.png",number++)));
+        Capture(game,name.string().c_str(),0);
+    };
+    Color middle{};
+    const menu::StartSetupLayout layout(1280,720);
+    const auto normal=layout.Difficulty(1);
+    const int x=normal.x+normal.width*0.25F,y=normal.y+normal.height*0.82F;
+    for(int frame=0;frame<22;++frame) {
+        capture();
+        if(frame==9) { Image image=ReadFrame(game);middle=GetImageColor(image,x,y);UnloadImage(image); }
+        GameLifecycleProbe::Motion(game,1.0F/30);
+    }
+    Image before=ReadFrame(game);
+    const auto full=GetImageColor(before,x,y);
+    Check(full.r>middle.r+20 && full.g>middle.g+20 && full.b>middle.b+20,"difficulty card did not fade in");
+    GameLifecycleProbe::MotionStep(game,StartSetupStep::Character,0);
+    Image boundary=ReadFrame(game);
+    Check(before.width==boundary.width && before.height==boundary.height && before.format==boundary.format &&
+          std::memcmp(before.data,boundary.data,GetPixelDataSize(before.width,before.height,before.format))==0,
+          "zero-time page transition changed rendered pixels");
+    UnloadImage(before);UnloadImage(boundary);
+    for(int frame=0;frame<12;++frame) { capture();GameLifecycleProbe::Motion(game,1.0F/30); }
+    for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Ready}) {
+        Key(game,KEY_Z);
+        Check(GameLifecycleProbe::SetupStep(game)==step,"animation changed input sequence");
+        for(int frame=0;frame<12;++frame) {
+            Check(std::abs(GameLifecycleProbe::CharacterVisibility(game)-1)<0.00001F,"character replayed entry between setup steps");
+            capture();GameLifecycleProbe::Motion(game,1.0F/30);
+        }
+    }
+    Key(game,KEY_X);Key(game,KEY_X);GameLifecycleProbe::Motion(game,1);
+    Key(game,KEY_RIGHT); // 行强调仍在变化时确认，退出页也必须保留当前亮度。
+    before=ReadFrame(game);
+    GameLifecycleProbe::MotionStep(game,StartSetupStep::Mode,0);
+    boundary=ReadFrame(game);
+    Check(std::memcmp(before.data,boundary.data,GetPixelDataSize(before.width,before.height,before.format))==0,
+          "confirming during selection reset outgoing highlight");
+    UnloadImage(before);UnloadImage(boundary);
+    Key(game,KEY_Z);Key(game,KEY_X);GameLifecycleProbe::Motion(game,0.04F);
+    SetWindowSize(390,844);Frame(game);
+    Check(std::abs(GameLifecycleProbe::CharacterVisibility(game)-1)<0.00001F,"resizing reset shared character visibility");
+    Capture(game,(screenshots/"start-animation-resize-mid.png").string().c_str(),0);
+    Key(game,KEY_Z);Key(game,KEY_X);Key(game,KEY_Z);
+    Check(GameLifecycleProbe::SetupStep(game)==StartSetupStep::Ready,"interrupted transition lost latest input");
+    GameLifecycleProbe::Motion(game,1);
+    Capture(game,(screenshots/"start-animation-interrupted-ready.png").string().c_str(),0);
+    SetWindowSize(width,height);
+    std::puts("Start card fade, zero-time rendered continuity, shared character, resize and interrupted transitions passed.");
+}
+
+/// @brief 按真实键鼠流程检查五步开局、确认防穿透、逐级返回、选择保存、预览隔离及重启恢复。
+void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;
+    const auto expect=[](const Game& game,StartSetupStep step) {
+        Check(GameLifecycleProbe::Setup(game) && GameLifecycleProbe::SetupStep(game)==step,"wrong Start setup step");
+    };
+    const auto next=[&](Game& game,StartSetupStep step) { Key(game,KEY_Z); expect(game,step); };
+    const auto back=[&](Game& game,StartSetupStep step) { Key(game,KEY_X); expect(game,step); };
+    auto settings=LoadOrCreateSettings(kSettingsFilename);
+    settings.lastSelection={};
+    Check(SaveSettingsFile(kSettingsFilename,settings),"selection test setup failed");
+    {
+        Game game;
+        GameLifecycleProbe::StartupAt(game,3);
+        SetTargetFPS(0); Event(7,0,0); Frame(game);
+        next(game,StartSetupStep::Difficulty);
+        next(game,StartSetupStep::Character);
+        next(game,StartSetupStep::Shot);
+        Key(game,KEY_RIGHT); next(game,StartSetupStep::Mode); Key(game,KEY_DOWN);
+        auto selected=GameLifecycleProbe::Selection(game);
+        Check(selected.shot==1 && selected.challenge,"keyboard selection failed");
+        // 按住模式页的确认键不能穿过最终确认页；确认前不能开始异步加载。
+        Event(2,KEY_Z); Frame(game);
+        for(int frame=0;frame<5;++frame)Frame(game);
+        expect(game,StartSetupStep::Ready);
+        Check(!game.IsLoading(),"mode confirmation started loading before Ready confirmation");
+        Event(1,KEY_Z); Frame(game);
+        Capture(game,(screenshots/"start-ready-challenge.png").string().c_str());
+        back(game,StartSetupStep::Mode); back(game,StartSetupStep::Shot);
+        back(game,StartSetupStep::Character); back(game,StartSetupStep::Difficulty);
+        Key(game,KEY_X); Check(GameLifecycleProbe::MainMenu(game),"difficulty cancel did not return to title");
+        next(game,StartSetupStep::Difficulty); next(game,StartSetupStep::Character); next(game,StartSetupStep::Shot);
+        next(game,StartSetupStep::Mode); next(game,StartSetupStep::Ready);
+        selected=GameLifecycleProbe::Selection(game);
+        Check(selected.shot==1 && selected.challenge,"returning to setup forgot selections");
+        Key(game,KEY_Z); WaitForStage(game);
+        Check(GameLifecycleProbe::Selection(game).challenge,"starting run reset challenge");
+        game.Reset(); game.StartPreview(); game.OpenOptions();
+        Key(game,KEY_RIGHT); SetTargetFPS(0);
+        const auto saved=LoadOrCreateSettings(kSettingsFilename).lastSelection;
+        Check(saved.shot==1 && saved.challenge,"preview or options save overwrote selection memory");
+        game.Reset();
+        Key(game,KEY_DOWN); Key(game,KEY_DOWN); next(game,StartSetupStep::Spell);
+        Check(!GameLifecycleProbe::Selection(game).challenge,"spell practice inherited hidden challenge mode");
+        Key(game,KEY_X); next(game,StartSetupStep::Difficulty); next(game,StartSetupStep::Character);
+        next(game,StartSetupStep::Shot); next(game,StartSetupStep::Mode);
+        Check(GameLifecycleProbe::Selection(game).challenge,"spell practice reset saved challenge selection");
+    }
+    {
+        Game restarted;
+        GameLifecycleProbe::StartupAt(restarted,3);
+        SetTargetFPS(0); Event(7,0,0); Frame(restarted);
+        next(restarted,StartSetupStep::Difficulty); next(restarted,StartSetupStep::Character); next(restarted,StartSetupStep::Shot);
+        auto selected=GameLifecycleProbe::Selection(restarted);
+        Check(selected.shot==1 && selected.challenge,"restart did not restore visible selections");
+        const menu::StartSetupLayout layout(GetScreenWidth(),GetScreenHeight());
+        const auto click=[&](Rectangle row) { Click(restarted,row.x+row.width/2,row.y+row.height/2); };
+        click(layout.Choice(0)); click(layout.Forward()); expect(restarted,StartSetupStep::Mode);
+        click(layout.Choice(0));
+        const auto saved=LoadOrCreateSettings(kSettingsFilename).lastSelection;
+        Check(saved.shot==0 && !saved.challenge,"mouse selections were not saved");
+        click(layout.Forward()); expect(restarted,StartSetupStep::Ready);
+        click(layout.Back()); expect(restarted,StartSetupStep::Mode);
+        click(layout.Forward()); click(layout.ReadyButton()); WaitForStage(restarted);
+        restarted.Reset(); Event(7,0,0); Frame(restarted);
+        Key(restarted,KEY_DOWN); Key(restarted,KEY_DOWN); next(restarted,StartSetupStep::Spell);
+        Key(restarted,KEY_RIGHT); next(restarted,StartSetupStep::Ready); back(restarted,StartSetupStep::Spell);
+        Key(restarted,KEY_X); Check(GameLifecycleProbe::MainMenu(restarted),"spell cancel did not return to title");
+        Key(restarted,KEY_DOWN); Key(restarted,KEY_DOWN); next(restarted,StartSetupStep::Spell);
+        Check(GameLifecycleProbe::Selection(restarted).practicePhase==4,"spell practice selection was not restored");
+        Check(LoadOrCreateSettings(kSettingsFilename).lastSelection.practicePhase==4,"spell practice selection was not saved");
+    }
+    std::puts("Five-step Start flow, confirmation, backtracking, input and persisted selections passed.");
 }
 
 /// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的弹窗与暂停按钮。
 void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots) {
-    constexpr std::array<const char*,21> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
+    constexpr std::array<const char*,23> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
         "spell-practice","music","score","credit","playing","dialogue","spell-cutin","pause","won","gameover","message",
-        "hud-max-values","hud-challenge"};
+        "hud-max-values","hud-challenge","character","ready"};
     for(const Vector2 size : {Vector2{320,240},{390,844},{900,900},{1600,400},{1280,720}}) {
         SetWindowSize(size.x,size.y); Event(7,0,0); Frame(game);
         game.StartPreview();
@@ -277,6 +437,8 @@ int main(int argc, char** argv) {
             Click(game, static_cast<int>(start.x + start.width / 2), static_cast<int>(start.y + start.height / 2));
             Capture(game, (screenshots / "normal.png").string().c_str());
             Key(game, KEY_Z);
+            Capture(game, (screenshots / "character.png").string().c_str());
+            Key(game, KEY_Z);
             Capture(game, (screenshots / "shot.png").string().c_str());
             Key(game, KEY_Z);
             Capture(game, (screenshots / "mode.png").string().c_str());
@@ -392,6 +554,8 @@ int main(int argc, char** argv) {
             Check(loaded.musicVolume == 100 && loaded.mouseSensitivity == 100, "restart persistence failed");
             restarted.Start(false); WaitForStage(restarted); Frame(restarted);
         }
+        TestStartSelectionMemory(screenshots);
+        TestStartAnimations(screenshots);
         std::puts("Settings UI integration passed.");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "Settings UI integration failed: %s\n", error.what());

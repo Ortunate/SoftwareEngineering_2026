@@ -7,6 +7,7 @@
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/actors/enemy.hpp"
 #include "app/run_state.hpp"
+#include "app/start_setup.hpp"
 #include "config/settings.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/items/drop_system.hpp"
@@ -16,11 +17,13 @@
 #include "stage/catalog.hpp"
 #include "render/sprite_renderer.hpp"
 #include "render/ui_motion.hpp"
+#include "render/start_setup_motion.hpp"
 #include "render/dialogue_motion.hpp"
 #include "render/title_entrance.hpp"
 
 #include "raylib.h"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <memory>
@@ -111,6 +114,8 @@ private:
     void UpdateBattleAnimations();
     /// @brief 处理一面 Normal 的灵梦机体/标准或挑战模式选择，以及成绩、音乐和制作信息页。
     void UpdateMenuPage();
+    /// @brief 处理新典顺序的开局页；确认层单独消费一次按键，只有最终确认才启动加载。
+    void UpdateStartSetup();
     /// @brief 处理 FPS、音量、灵敏度、开局资源与设置菜单页面的输入。
     void UpdateOptions();
     /// @brief 处理按键绑定列表与新按键录入。
@@ -185,12 +190,14 @@ private:
     void DrawSpellCutIn() const;
     /// @brief 根据对话计时器绘制台词及最近表情，以预先采样的透明度和强调程度绘制贴边立绘。
     void DrawDialogue() const;
-    /// @brief 绘制开始菜单。
-    void DrawMainMenu() const;
+    /// @brief 绘制开始菜单；motion 可借用离开首页前的展示快照，供 Start 跨页混合使用，空指针读取当前展示。
+    void DrawMainMenu(const ui::MenuMotion* motion = nullptr) const;
     /// @brief 只使用通用资源绘制“少女祈祷中”；加载中的关卡纹理不可访问。
     void DrawLoading() const;
     /// @brief 绘制启动选择、音乐、成绩或制作信息页，保持通用素材生命周期。
     void DrawMenuPage() const;
+    /// @brief 绘制开局的难度、人物、选择及确认层；只借用通用纹理，不提前加载关卡资源。
+    void DrawStartSetup() const;
     /// @brief 绘制 FPS、音量、灵敏度、开局资源和按键设置入口。
     void DrawOptions() const;
     /// @brief 绘制可重新绑定的战斗按键列表。
@@ -255,6 +262,9 @@ private:
     std::string message_;
     int selectedMenuItem_ = 0;
     ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。
+    ui::MenuMotion titleMenuMotion_{}; // 首页离开前的选择与展开状态，供 Start 过渡期间继续绘制首页。
+    ui::StartSetupMotion startSetupMotion_{}; // 首页及 Start 页面连续混合；只推进展示，不阻塞选择输入。
+    std::array<ui::MenuMotion,6> setupChoiceMotion_{}; // 各步骤独立保留行强调，快速确认/返回不把正在变化的亮度重置。
     ui::TitleEntrance titleEntrance_{}; // 首次首页的五段顺序展示，完成前屏蔽首页输入。
     OptionsPage optionsPage_ = OptionsPage::General;
     int selectedOption_ = 0;
@@ -267,7 +277,7 @@ private:
     int initialBombs_ = 3;
     int bestScore_ = 0;
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
-    int setupStep_ = 0; // 0: 难度确认，1: 灵梦机体，2: 模式，3: 符卡练习；仅提供一面 Normal。
+    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前仅开放 Normal、灵梦与第一面，未开放选项不启动游戏。
     int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
     bool challengeMode_ = false;
     bool practiceMode_ = false;

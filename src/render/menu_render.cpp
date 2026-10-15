@@ -50,16 +50,10 @@ void ChoiceText(const menu::Canvas& canvas, Font font, const char* text, float x
                  Fade(selected,reveal),weight*pulse);
 }
 
-/// @brief 将借用的立绘等比放入屏幕矩形，布局铺满时仍保持人物原始比例。
-void Portrait(Texture2D texture,Rectangle slot,Color color) {
-    const float scale=std::min(slot.width/texture.width,slot.height/texture.height);
-    const float width=texture.width*scale,height=texture.height*scale;
-    DrawTexturePro(texture,{0,0,static_cast<float>(texture.width),static_cast<float>(texture.height)},
-                   {slot.x+(slot.width-width)/2,slot.y+(slot.height-height)/2,width,height},{},0,color);
-}
 }  // namespace
 
-void Game::DrawMainMenu() const {
+void Game::DrawMainMenu(const ui::MenuMotion* motion) const {
+    const auto& animation=motion?*motion:menuMotion_;
     const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), menu::kTitleRowCount);
     const auto& canvas = layout.canvas;
     const auto& common = assets_.Common();
@@ -123,20 +117,20 @@ void Game::DrawMainMenu() const {
     constexpr int count = menu::kTitleRowCount;
     for (int index = 0; index < count; ++index) {
         const float rowY = layout.menuTop + index * 45;
-        const float weight = menuMotion_.Weight(index);
-        const float reveal = menuMotion_.Reveal(index*0.012F) * titleEntrance_.MenuProgress(index);
+        const float weight = animation.Weight(index);
+        const float reveal = animation.Reveal(index*0.012F) * titleEntrance_.MenuProgress(index);
         if (reveal <= 0) continue;
         const bool locked = index == 1 || index == 4;
         if (weight > 0.01F) {
             const auto center = canvas.Point(layout.menuLeft + 15 + 16*(1-reveal), rowY + 20);
             ui::YinYang(center,9.0F*canvas.scale,Fade(kScarlet,weight*reveal),
-                       Fade(kIvory,weight*reveal),menuMotion_.Phase());
+                       Fade(kIvory,weight*reveal),animation.Phase());
         }
         ChoiceText(canvas,common.uiFont,labels[index],layout.menuLeft+45,rowY+2,locked?23:28,
-            locked?Color{155,116,117,80}:Color{160,87,94,160},kScarlet,weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash());
+            locked?Color{155,116,117,80}:Color{160,87,94,160},kScarlet,weight,reveal,animation.Pulse()+animation.Flash());
         const auto left = canvas.Point(layout.menuLeft + 30, rowY + 41);
         const auto right = canvas.Point(layout.menuLeft + layout.menuWidth - 13, rowY + 41);
-        ui::FocusLine(left,right,canvas.scale,Fade(kScarlet,reveal),weight,menuMotion_.Phase());
+        ui::FocusLine(left,right,canvas.scale,Fade(kScarlet,reveal),weight,animation.Phase());
     }
 }
 
@@ -176,6 +170,7 @@ void Game::DrawOptions() const {
 }
 
 void Game::DrawMenuPage() const {
+    if (state_ == RunState::StartSetup) { DrawStartSetup(); return; }
     const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto& canvas=layout.canvas;
     const bool compact=layout.compact;
@@ -183,50 +178,7 @@ void Game::DrawMenuPage() const {
     const Font font = common.uiFont;
     menu::DrawPageSurface(canvas,menuMotion_);
     menu::DrawPageButton(canvas,font,layout.Back(),"返回 / Esc",menuMotion_);
-    if (state_ == RunState::StartSetup) {
-        if (common.reimuPortrait.id != 0) {
-            const auto texture = common.reimuPortrait;
-            Portrait(texture,canvas.Rect((compact?244:130)-35*(1-menuMotion_.Reveal()),compact?142:82,
-                     compact?272:357,compact?434:500),Fade(WHITE,menuMotion_.Reveal()));
-        }
-        // 全身图的鞋子必须停在名字之上；名字与人物展示槽共用水平中心。
-        Text(canvas, font, "博丽 灵梦", compact?380:308.5F, compact?584:598, 37, kIvory, true);
-        Text(canvas, font, "Stage 1 · Mystic Flier", compact?380:790, compact?86:100, 25, kGold, true);
-        constexpr std::array<const char*, 4> titles{"请选择难度", "请选择使用的御札", "要以哪一种模式开始游戏？", "符卡练习"};
-        Text(canvas, font, titles[setupStep_], compact?380:825, compact?630:178, 28, kIvory, true);
-        if (setupStep_ == 0) {
-            const auto design=layout.Choice(0);
-            const auto card=canvas.Rect(design.x+30*(1-menuMotion_.Reveal()),design.y,design.width,220);
-            DrawRectangleRec(card, kIvory);
-            ChoiceText(canvas,font,"NORMAL",design.x+design.width/2,design.y+38,45,Color{40,69,91,255},kScarlet,
-                       1,menuMotion_.Reveal(),menuMotion_.Pulse(),true);
-            ui::FocusLine(canvas.Point(design.x+22,design.y+98),canvas.Point(design.x+design.width-22,design.y+98),canvas.scale,kScarlet,1,menuMotion_.Phase());
-            Text(canvas, font, "第一面 · 红雾异变的开端", design.x+design.width/2, design.y+114, 22, kScarlet, true);
-            Text(canvas, font, "三维自由移动与球形判定", design.x+design.width/2, design.y+155, 18, kScarlet, true);
-        } else {
-            const std::array<const char*, 2> names = setupStep_ == 1
-                ? std::array<const char*, 2>{"灵之御札 · Homing Amulet", "梦之御札 · Persuasion Needle"}
-                : setupStep_ == 2 ? std::array<const char*, 2>{"标准模式", "挑战模式"}
-                : std::array<const char*, 2>{"夜符 · Night Bird", "暗符 · Demarcation"};
-            const std::array<const char*, 2> hints = setupStep_ == 1
-                ? std::array<const char*, 2>{"广域追踪 · 梦想封印", "集中直射 · 封魔阵"}
-                : setupStep_ == 2 ? std::array<const char*, 2>{"有限残机 · 挑战一面最高分", "无限残机 · 挑战最少 Miss"}
-                : std::array<const char*, 2>{"旋转交错的三维双层弹幕", "多层边界环与交替开口"};
-            for (int index = 0; index < 2; ++index) {
-                const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.04F);
-                const auto design=layout.Choice(index);
-                const auto card=canvas.Rect(design.x+16*(1-reveal)-8*weight,design.y,design.width,design.height);
-                DrawRectangleRec(card,Fade(ui::Blend(Color{77,38,36,160},Color{248,236,214,255},weight),reveal));
-                DrawRectangleLinesEx(card,canvas.scale,Fade(kGold,0.3F+weight*0.7F));
-                ChoiceText(canvas,font,names[index],design.x+20,design.y+18,23,kGold,kScarlet,weight,reveal,menuMotion_.Pulse());
-                ChoiceText(canvas,font,hints[index],design.x+20,design.y+64,18,Color{193,162,150,255},kScarlet,weight,reveal,menuMotion_.Pulse());
-                ui::FocusLine({card.x+20*canvas.scale,card.y+card.height-8*canvas.scale},
-                    {card.x+card.width-20*canvas.scale,card.y+card.height-8*canvas.scale},canvas.scale,
-                    ui::Blend(kGold,kScarlet,weight),weight*reveal,menuMotion_.Phase());
-            }
-        }
-        menu::DrawPageButton(canvas,font,layout.Forward(),setupStep_>=2?"开始游戏 / Z":"下一步 / Z",menuMotion_);
-    } else if (state_ == RunState::MusicRoom) {
+    if (state_ == RunState::MusicRoom) {
         Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);
         constexpr std::array<const char*, 3> names{"比赤色更鲜红的梦", "宛如鬼灯的鲜红之魂", "妖魔夜行"};
         constexpr std::array<const char*, 3> roles{"Title", "Stage 1", "Rumia"};

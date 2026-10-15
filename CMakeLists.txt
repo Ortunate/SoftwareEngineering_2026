@@ -30,6 +30,7 @@ FetchContent_MakeAvailable(raylib)
 add_library(koumakyou_engine STATIC
     src/app/game.cpp
     src/app/input.cpp
+    src/app/start_setup.cpp
     src/config/settings.cpp
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
@@ -40,6 +41,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/items/drop_system.cpp
     src/platform/window_input.cpp
     src/render/menu_render.cpp
+    src/render/start_setup_render.cpp
     src/render/game_render.cpp
     src/render/gameplay_hud.cpp
     src/render/sprite_renderer.cpp

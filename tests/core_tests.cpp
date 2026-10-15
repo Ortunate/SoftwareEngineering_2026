@@ -3,6 +3,8 @@
 #include "render/ui_motion.hpp"
 #include "render/title_entrance.hpp"
 #include "render/menu_layout.hpp"
+#include "render/start_setup_layout.hpp"
+#include "render/start_setup_motion.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/boss_hud.hpp"
 #include "render/dialogue_motion.hpp"
@@ -63,6 +65,15 @@ void TestResponsiveLayouts() {
         fits(bindings.Button(0)); fits(bindings.Button(1)); fits(bindings.Modal());
         const koumakyou::menu::PageLayout page(size.x,size.y);
         fits(page.Back()); fits(page.Forward());
+        const koumakyou::menu::StartSetupLayout setup(size.x,size.y);
+        fits(setup.Back()); fits(setup.Forward()); fits(setup.Portrait()); fits(setup.CharacterInfo());
+        fits(setup.Badge()); fits(setup.Heading()); fits(setup.ShotSummary()); fits(setup.ModeSummary());
+        fits(setup.ReadyBand()); fits(setup.ReadyButton());
+        for(int index=0;index<4;++index)fits(setup.Difficulty(index));
+        for(int index=0;index<2;++index)fits(setup.Choice(index));
+        assert(!CheckCollisionRecs(setup.Portrait(),setup.CharacterInfo()));
+        assert(!CheckCollisionRecs(setup.Badge(),setup.ShotSummary()));
+        assert(!CheckCollisionRecs(setup.Choice(0),setup.Choice(1)));
         for(int index=0;index<2;++index) {
             const auto r=page.Choice(index);fits(page.canvas.Rect(r.x,r.y,r.width,r.height));
         }
@@ -159,6 +170,43 @@ void TestMenuMotion() {
     slow.Confirm(); slow.Advance(1,1,0.2F);
     assert(slow.Flash()==0);
 }
+/// @brief 验证错峰、人物连续性及快速反向切换的画面连续；相同真实时长在 30/240 FPS 下保持一致。
+void TestStartSetupMotion() {
+    using koumakyou::StartSetupStep;
+    using koumakyou::ui::StartSetupMotion;
+    const int difficulty=static_cast<int>(StartSetupStep::Difficulty),character=static_cast<int>(StartSetupStep::Character);
+    StartSetupMotion slow,fast;
+    assert(slow.Title()==1 && slow.Setup()==0);
+    slow.Advance(difficulty,0.14F);
+    assert(slow.Title()>0 && slow.Title()<1);
+    assert(slow.CardEntry(0)>slow.CardEntry(1) && slow.CardEntry(2)==0 && slow.CardEntry(3)==0);
+    const float previous=slow.Layer(StartSetupStep::Difficulty),title=slow.Title();
+    slow.Advance(character,0);
+    assert(slow.Layer(StartSetupStep::Difficulty)==previous && slow.Title()==title && slow.Character()==0);
+    slow.Advance(character,0.12F);
+    const float figure=slow.Character();
+    slow.Advance(difficulty,0);
+    assert(slow.Character()==figure); // 中途返回不能将已经显现的人物归零。
+    slow.Advance(difficulty,1);
+    assert(slow.Layer(StartSetupStep::Difficulty)==1);
+    for(int index=0;index<4;++index)assert(slow.CardEntry(index)==1);
+    slow=StartSetupMotion{};
+    for(int frame=0;frame<6;++frame)slow.Advance(character,1.0F/30);
+    for(int frame=0;frame<48;++frame)fast.Advance(character,1.0F/240);
+    assert(std::abs(slow.Character()-fast.Character())<0.00001F);
+    slow.Advance(character,1);
+    slow.Advance(static_cast<int>(StartSetupStep::Shot),0.15F);
+    assert(slow.Character()==1); // 相邻人物页的权重和恒定，不能重复播放人物入场。
+    slow.Advance(static_cast<int>(StartSetupStep::Ready),0.08F);
+    float sum=slow.Title();
+    for(int step=0;step<6;++step)sum+=slow.Layer(static_cast<StartSetupStep>(step));
+    assert(std::abs(sum-1)<0.00001F);
+    slow.Advance(-1,1);
+    assert(slow.Title()==1 && slow.Setup()==0);
+    slow.Advance(character,0.1F);slow.Advance(-2,0);
+    assert(slow.Title()==1 && slow.Setup()==0);
+}
+
 /// @brief 验证四层及菜单严格顺序、时间推进与帧率无关，菜单完成后才解锁。
 void TestTitleEntrance() {
     using koumakyou::ui::TitleElement;
@@ -213,6 +261,7 @@ int main() {
     TestDialogueContent();
     TestResponsiveLayouts();
     TestMenuMotion();
+    TestStartSetupMotion();
     TestTitleEntrance();
     TestDialogueMotion();
     RunSettingsTests();

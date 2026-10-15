@@ -1,0 +1,198 @@
+// 本文件参照新典绘制完整 Start 流程：难度札、人物双层立绘、御札/模式、能力评级与最终确认横幅。
+#include "app/game.hpp"
+#include "render/start_setup_layout.hpp"
+#include "render/menu_page.hpp"
+#include "render/ui_typography.hpp"
+#include "render/ui_effects.hpp"
+#include <array>
+#include <cmath>
+
+namespace koumakyou {
+namespace {
+constexpr Color kIvory{252,246,236,255},kGold{233,204,139,255},kBlue{162,194,247,255},kRose{207,119,132,255};
+constexpr std::array<const char*,2> kShots{"灵之御札「Homing Amulet」","梦之御札「Persuasion Needle」"};
+constexpr std::array<const char*,2> kBombs{"「梦想封印」","「封魔阵」"};
+
+/// @brief 在屏幕矩形中按宽度缩小文字；size 为屏幕像素，top 为矩形内相对高度，center 控制对齐。
+void Label(Font font,const char* text,Rectangle bounds,float size,Color color,float top=0,bool center=true,float glow=0) {
+    size=ui::FittedSize(font,text,size,bounds.width);
+    Vector2 point{bounds.x,bounds.y+top*bounds.height};
+    if(center)point.x+=(bounds.width-ui::MeasureText(font,text,size).x)/2;
+    ui::GlowText(font,text,point,size,color,color,glow);
+}
+
+/// @brief 花饰细线采用屏幕坐标；不变更命中矩形，缩放只影响线宽与花瓣尺寸。
+void Ornament(Rectangle bounds,float scale,Color color) {
+    const float y=bounds.y+bounds.height,r=3*scale;
+    DrawLineEx({bounds.x+10*scale,y},{bounds.x+bounds.width-10*scale,y},scale,color);
+    for(float x:{bounds.x+5*scale,bounds.x+bounds.width-5*scale})
+        for(int petal=0;petal<5;++petal) {
+            const float angle=petal*2*PI/5;
+            DrawCircleV({x+std::cos(angle)*r,y+std::sin(angle)*r},r*0.6F,color);
+        }
+}
+
+/// @brief 借用人物纹理；前景等比完整展示，背景裁取上身后等比覆盖，不拉伸人物。
+void Portrait(Texture2D texture,Rectangle slot,bool backdrop,float reveal) {
+    if(!IsTextureValid(texture))return;
+    Rectangle source{0,0,float(texture.width),float(texture.height)*(backdrop?0.7F:1)};
+    const float scale=backdrop?std::max(slot.width/source.width,slot.height/source.height):std::min(slot.width/source.width,slot.height/source.height);
+    if(backdrop) {
+        const float width=slot.width/scale,height=slot.height/scale;
+        source.x=(source.width-width)/2;source.width=width;source.height=height;
+    } else {
+        const float width=source.width*scale,height=source.height*scale;
+        slot={slot.x+(slot.width-width)/2,slot.y+slot.height-height,width,height};
+    }
+    slot.x+=(backdrop?-18:18)*(1-reveal);
+    DrawTexturePro(texture,source,slot,{},0,Fade(backdrop?Color{173,130,135,255}:WHITE,(backdrop?0.27F:1)*reveal));
+}
+
+/// @brief 难度札 index 为 Easy/Normal/Hard/Lunatic 的 0～3；未开放条目仅展示，不能暗示已可游玩。
+void DifficultyCard(Font font,Rectangle card,float scale,int index,bool selected,float opacity=1) {
+    constexpr std::array<const char*,4> names{"EASY","NORMAL","HARD","LUNATIC"};
+    constexpr std::array<Color,4> colors{{{81,131,96,255},{66,101,145,255},{141,71,117,255},{150,56,64,255}}};
+    DrawRectangleRec(card,ui::WithOpacity(selected?kIvory:Color{101,85,83,155},opacity));
+    DrawRectangleLinesEx(card,2*scale,ui::WithOpacity(selected?kGold:Color{127,98,84,180},opacity));
+    const Color ink=ui::WithOpacity(selected?colors[index]:Color{169,151,144,255},opacity);
+    Label(font,names[index],card,42*scale,ink,0.08F);
+    Rectangle rule{card.x+card.width*0.12F,card.y+card.height*0.48F,card.width*0.76F,0};
+    Ornament(rule,scale,ink);
+    Label(font,selected?"面向大多数人的难度":"尚未开放",card,22*scale,selected?ui::WithOpacity(Color{63,43,43,255},opacity):ink,0.60F);
+    if(selected)Label(font,"第一面",card,18*scale,ui::WithOpacity(Color{90,65,63,255},opacity),0.81F);
+}
+
+/// @brief 两行御札摘要与选择项共用样式；weight/reveal 为 0～1，只改变绘制，不改变输入区域。
+void Shot(Font font,Rectangle row,float scale,int shot,float weight,float reveal,float opacity=1) {
+    const Color color=ui::WithOpacity(ui::Blend(Color{156,127,121,255},shot==0?kBlue:kRose,weight),reveal*opacity);
+    Label(font,kShots[shot],row,29*scale,color,0.05F,false,weight*0.65F);
+    Ornament({row.x,row.y+row.height*0.48F,row.width,0},scale,color);
+    Label(font,kBombs[shot],row,27*scale,color,0.55F);
+}
+/// @brief 同一层的文字、细线和底色共用透明度，保留颜色原有的 Alpha；不持有字体资源。
+struct Painter {
+    Font font;
+    float scale,opacity;
+    void Text(const char* text,Rectangle bounds,float size,Color color,float top=0,bool center=true,float glow=0) const {
+        Label(font,text,bounds,size,ui::WithOpacity(color,opacity),top,center,glow);
+    }
+    void Rule(Rectangle bounds,Color color) const { Ornament(bounds,scale,ui::WithOpacity(color,opacity)); }
+    void Card(Rectangle bounds,int index,bool selected) const { DifficultyCard(font,bounds,scale,index,selected,opacity); }
+};
+
+/// @brief 两个屏幕矩形连续插值；t 为 0～1，窗口缩放时由当前布局重算，不能缓存旧窗口像素。
+Rectangle Mix(Rectangle a,Rectangle b,float t) {
+    return {a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.width+(b.width-a.width)*t,a.height+(b.height-a.height)*t};
+}
+} // namespace
+
+void Game::DrawStartSetup() const {
+    const menu::StartSetupLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto& canvas=layout.canvas;
+    const auto& common=assets_.Common();
+    const Font font=common.uiFont;
+    const auto& motion=startSetupMotion_;
+    const float s=canvas.scale,setup=motion.Setup(),character=motion.Character();
+    // 首页仍在下层绘制，背景色和装饰随选择页整体淡入；无需截图纹理，原生窗口和离屏截图行为相同。
+    if(motion.Title()>0)DrawMainMenu(state_==RunState::MainMenu?nullptr:&titleMenuMotion_);
+    if(setup<=0)return;
+    menu::DrawPageSurface(canvas,menuMotion_,setup);
+    const Painter page{font,s,setup};
+    page.Text(practiceMode_?(spellPractice_?"SPELL PRACTICE":"PRACTICE START"):"START",
+              canvas.Rect(42,canvas.height-108,layout.compact?290:400,70),52*s,Color{122,48,51,150},0,false);
+    const float difficulty=motion.Layer(StartSetupStep::Difficulty);
+    if(difficulty>0) {
+        const Painter p{font,s,difficulty};
+        auto title=canvas.Rect(layout.compact?80:360,45,layout.compact?600:560,58);
+        title.y-=12*s*(1-difficulty);
+        p.Text("请选择难度。",title,46*s,kIvory,0,true,0.5F);p.Rule(title,kRose);
+        for(int index:{0,2,3}) {
+            const float entry=motion.CardEntry(index);
+            auto card=layout.Difficulty(index);
+            card.x+=48*s*(1-entry)-18*s*(1-difficulty);
+            Painter{font,s,difficulty*entry}.Card(card,index,false);
+        }
+    }
+    if(character>0) {
+        BeginScissorMode(22*s,22*s,GetScreenWidth()-44*s,GetScreenHeight()-44*s);
+        Portrait(common.reimuPortrait,layout.PortraitBackdrop(),true,character);
+        Portrait(common.reimuPortrait,layout.Portrait(),false,character);
+        EndScissorMode();
+        const Painter p{font,s,character};
+        const auto info=layout.CharacterInfo();
+        p.Text("博丽神社的巫女小姐",info,26*s,kIvory,0,true,0.2F);
+        p.Text("博丽 灵梦",info,54*s,kIvory,0.17F,true,0.3F);
+        p.Rule({info.x,info.y+info.height*0.46F,info.width,0},kRose);
+        constexpr std::array<const char*,3> stats{"移动速度","攻击范围","攻击力"};
+        for(int index=0;index<3;++index) {
+            const Rectangle row{info.x,info.y+info.height*(0.51F+index*0.16F),info.width,info.height*0.16F};
+            p.Text(stats[index],{row.x,row.y,row.width*0.48F,row.height},25*s,kGold,0,false);
+            p.Text(index==1?"★★★★":"★★★",{row.x+row.width*0.5F,row.y,row.width*0.5F,row.height},27*s,kGold,0,false);
+        }
+    }
+    // Normal 札沿连续路径移到人物页左下，放在人物之上保持移动途中可读，后续步骤不重复淡入。
+    const float entry=motion.CardEntry(1),normal=character+difficulty*entry;
+    if(normal>0) {
+        auto card=layout.Difficulty(1);card.x+=48*s*(1-entry)-18*s*(1-difficulty);
+        const float progress=character/std::max(0.00001F,character+difficulty);
+        Painter{font,s,normal}.Card(Mix(card,layout.Badge(),progress),1,true);
+    }
+    // 可见页面各自保留当前权重；快速确认或返回只改变目标，旧标题与选项从当前画面继续退场。
+    for(const auto step:{StartSetupStep::Character,StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Spell}) {
+        const float alpha=motion.Layer(step);
+        if(alpha<=0)continue;
+        const Painter p{font,s,alpha};
+        if(step==StartSetupStep::Character) {
+            auto title=canvas.Rect(55,layout.compact?38:70,layout.compact?650:400,65);
+            title.x+=18*s*(1-alpha);
+            p.Text("请选择主人公。",title,42*s,kGold,0,false,0.4F);p.Rule(title,kGold);
+            continue;
+        }
+        auto heading=layout.Heading();heading.x+=18*s*(1-alpha);
+        const bool mode=step==StartSetupStep::Mode;
+        const Color accent=mode?kRose:kBlue;
+        p.Text(mode?"要以哪一种模式":step==StartSetupStep::Spell?"请选择练习的符卡。":"请选择使用的御札。",
+               heading,(layout.compact?38:44)*s,accent,0,true,0.5F);
+        if(mode)p.Text("开始游戏？",heading,40*s,accent,layout.compact?0.48F:0.45F,true,0.5F);
+        p.Rule(heading,accent);
+        for(int index=0;index<2;++index) {
+            const float weight=setupChoiceMotion_[static_cast<int>(step)].Weight(index);
+            auto row=layout.Choice(index);row.x+=18*s*(1-alpha)-4*s*weight;
+            if(step==StartSetupStep::Shot)Shot(font,row,s,index,weight,1,alpha);
+            else {
+                const Color color=ui::Blend(Color{161,138,132,255},mode?kIvory:kBlue,weight);
+                p.Text(mode?(index==0?"标准模式":"挑战模式"):(index==0?"夜符「Night Bird」":"暗符「Demarcation」"),
+                       row,34*s,color,0,false,weight*0.5F);
+                p.Rule({row.x,row.y+row.height*0.42F,row.width,0},color);
+                p.Text(mode?(index==0?"残机数量有限的基本模式":"无限残机，挑战最少 MISS"):(index==0?"露米娅 · 第一张符卡":"露米娅 · 第二张符卡"),
+                       row,23*s,color,0.53F,false);
+            }
+        }
+    }
+    const float ready=motion.Layer(StartSetupStep::Ready),shot=motion.Layer(StartSetupStep::Mode)+ready;
+    if(shot>0) {
+        auto row=layout.ShotSummary();row.y+=10*s*(1-shot);
+        Shot(font,row,s,selectedShot_,1,1,shot);
+    }
+    if(ready>0) {
+        const Painter p{font,s,ready};
+        auto summary=layout.ModeSummary();summary.y+=10*s*(1-ready);
+        p.Text(spellPractice_?"符卡练习":challengeMode_?"挑战模式":"标准模式",summary,30*s,kIvory,0,false);
+        p.Rule({summary.x,summary.y+summary.height*0.40F,summary.width,0},kGold);
+        p.Text(spellPractice_?(practicePhase_==2?"夜符「Night Bird」":"暗符「Demarcation」"):
+               challengeMode_?"无限残机，挑战最少 MISS":"残机数量有限的基本模式",summary,22*s,kIvory,0.52F,false);
+        auto band=layout.ReadyBand();band.y+=18*s*(1-ready);
+        DrawRectangleRec(band,ui::WithOpacity(Color{15,2,8,205},ready));
+        DrawRectangleGradientV(band.x,band.y,band.width,band.height,
+                              ui::WithOpacity(Color{71,10,19,60},ready),ui::WithOpacity(Color{135,16,32,180},ready));
+        p.Text("准备好了吗？",{band.x+band.width*0.15F,band.y+28*s,band.width*0.7F,58*s},56*s,kIvory,0,true,0.6F);
+        auto button=layout.ReadyButton();button.y+=18*s*(1-ready);
+        const float hover=CheckCollisionPointRec(GetMousePosition(),layout.ReadyButton())?1:0.55F;
+        p.Text("START GAME",button,46*s,kIvory,0.12F,true,hover*menuMotion_.Pulse());
+        p.Rule(button,ui::WithOpacity(kGold,0.65F));
+    }
+    // 按钮在最终命中区域绘制，进入动画只驱动视觉；按键和点击始终即时生效，不缓存确认。
+    menu::DrawPageButton(canvas,font,layout.Back(),"返回 / Esc",menuMotion_,0,setup);
+    if(setup-ready>0)menu::DrawPageButton(canvas,font,layout.Forward(),"下一步 / Z",menuMotion_,0,setup-ready);
+}
+} // namespace koumakyou

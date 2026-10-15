@@ -25,6 +25,10 @@ using namespace game_math;
 void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
+    if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
+        DrawStartSetup();
+        return;
+    }
     if (state_ == RunState::Loading) {
         DrawLoading();
     } else if (state_ == RunState::MainMenu) {

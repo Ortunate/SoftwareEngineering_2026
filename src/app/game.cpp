@@ -362,13 +362,21 @@ void Game::UpdateUiMotion(float deltaTime) {
         detail = optionsPage_ == OptionsPage::KeyBindings ? 1 : 0;
         selection = detail ? selectedBinding_ : selectedOption_;
     } else if (state_ == RunState::StartSetup) {
-        detail = setupStep_;
-        selection = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
-            : setupStep_ == 3 ? (practicePhase_ == 2 ? 0 : 1) : 0;
+        detail = static_cast<int>(setupStep_);
+        selection = setupStep_ == StartSetupStep::Shot ? selectedShot_ : setupStep_ == StartSetupStep::Mode ? static_cast<int>(challengeMode_)
+            : setupStep_ == StartSetupStep::Spell ? (practicePhase_ == 2 ? 0 : 1)
+            : setupStep_ == StartSetupStep::Difficulty ? 1 : 0;
     } else if (state_ == RunState::MusicRoom) selection = selectedTrack_;
     else if (state_ == RunState::Paused) selection = selectedPauseItem_;
     // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
     menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
+    startSetupMotion_.Advance(state_==RunState::MainMenu?-1:state_==RunState::StartSetup?static_cast<int>(setupStep_):-2,deltaTime);
+    for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Spell}) {
+        if(startSetupMotion_.Layer(step)<=0 && !(state_==RunState::StartSetup && setupStep_==step))continue;
+        const int selected=step==StartSetupStep::Shot?selectedShot_:step==StartSetupStep::Mode?int(challengeMode_):int(practicePhase_==4);
+        setupChoiceMotion_[static_cast<int>(step)].Advance(static_cast<int>(step),selected,deltaTime);
+    }
+    if(state_==RunState::MainMenu)titleMenuMotion_=menuMotion_;
 }
 
 void Game::UpdateState(float deltaTime) {

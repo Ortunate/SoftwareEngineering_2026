@@ -23,10 +23,11 @@ inline void DrawPageFrame(const Canvas& canvas,Color color,float width,float hei
         }
 }
 
-/// @brief 绘制覆盖整个窗口的二级页背景；canvas 为 PageCanvas，motion 仅借用，不留进场遮罩或黑边。
-inline void DrawPageSurface(const Canvas& canvas,const ui::MenuMotion& motion) {
-    ClearBackground(Color{18,16,19,255});
-    DrawRectangleGradientV(0,0,GetScreenWidth(),GetScreenHeight(),Color{18,16,19,255},Color{62,17,25,255});
+/// @brief 绘制覆盖整个窗口的二级页背景；opacity 为 0～1，半透明时叠在首页上，不清除下层画面。
+/// canvas 为 PageCanvas，motion 只借用；所有花纹和边框沿用原透明度，随整层一起混合。
+inline void DrawPageSurface(const Canvas& canvas,const ui::MenuMotion& motion,float opacity=1) {
+    if(opacity>=1)ClearBackground(Color{18,16,19,255});
+    DrawRectangleGradientV(0,0,GetScreenWidth(),GetScreenHeight(),ui::WithOpacity(Color{18,16,19,255},opacity),ui::WithOpacity(Color{62,17,25,255},opacity));
     for(int index=0;index<18;++index) {
         const float x=index%2==0 ? 80+(index%4)*38.0F : canvas.width-140+(index%3)*32.0F;
         const float y=65+index*(canvas.height-100)/18;
@@ -35,12 +36,12 @@ inline void DrawPageSurface(const Canvas& canvas,const ui::MenuMotion& motion) {
             // 中心跟随布局，花瓣半径和偏移保持等比，竖屏不会变成椭圆。
             const auto center=canvas.Point(x,y);
             DrawCircleV({center.x+std::cos(angle)*13*canvas.scale,center.y+std::sin(angle)*13*canvas.scale},
-                        10*canvas.scale,Color{208,158,126,15});
+                        10*canvas.scale,ui::WithOpacity(Color{208,158,126,15},opacity));
         }
     }
     for(Vector2 center : {canvas.Point(-110,130),canvas.Point(canvas.width+110,canvas.height-110)})
-        DrawRing(center,220*canvas.scale,221*canvas.scale,motion.Phase()*3,motion.Phase()*3+300,80,Color{208,158,126,18});
-    DrawPageFrame(canvas,Color{149,113,84,180},canvas.width,canvas.height);
+        DrawRing(center,220*canvas.scale,221*canvas.scale,motion.Phase()*3,motion.Phase()*3+300,80,ui::WithOpacity(Color{208,158,126,18},opacity));
+    DrawPageFrame(canvas,ui::WithOpacity(Color{149,113,84,180},opacity),canvas.width,canvas.height);
 }
 
 /// @brief 页面统一页眉及左下角题签；font 借用，title/subtitle/watermark 为 UTF-8 文本，字号等比。
@@ -75,13 +76,14 @@ inline void DrawPageRowRule(const Canvas& canvas,Rectangle bounds,const ui::Menu
 }
 
 /// @brief 统一操作按钮；bounds 为屏幕矩形，weight 为键盘强调（0～1），鼠标悬停共用同一外观。
+/// opacity 为 0～1 的整层透明度，保留底色与字形原有 Alpha；仅用于展示，不改变命中范围。
 inline void DrawPageButton(const Canvas& canvas,Font font,Rectangle bounds,const char* label,
-                           const ui::MenuMotion& motion,float weight=0) {
+                           const ui::MenuMotion& motion,float weight=0,float opacity=1) {
     weight=std::max(weight,CheckCollisionPointRec(GetMousePosition(),bounds)?1.0F:0.0F);
-    DrawRectangleRec(bounds,Color{69,32,32,170});
-    ui::FocusLine({bounds.x,bounds.y+bounds.height},{bounds.x+bounds.width,bounds.y+bounds.height},canvas.scale,kPageGold,weight,motion.Phase());
+    DrawRectangleRec(bounds,ui::WithOpacity(Color{69,32,32,170},opacity));
+    ui::FocusLine({bounds.x,bounds.y+bounds.height},{bounds.x+bounds.width,bounds.y+bounds.height},canvas.scale,ui::WithOpacity(kPageGold,opacity),weight,motion.Phase());
     const float size=ui::FittedSize(font,label,22*canvas.scale,bounds.width-24*canvas.scale);
     ui::GlowText(font,label,{bounds.x+12*canvas.scale,bounds.y+(bounds.height-size)/2},size,
-                 ui::Blend(kPageIvory,kPageGold,weight),kPageGold,weight*motion.Pulse());
+                 ui::WithOpacity(ui::Blend(kPageIvory,kPageGold,weight),opacity),ui::WithOpacity(kPageGold,opacity),weight*motion.Pulse());
 }
 } // namespace koumakyou::menu

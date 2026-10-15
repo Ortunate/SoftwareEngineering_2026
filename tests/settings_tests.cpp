@@ -17,6 +17,7 @@ void RunSettingsTests() {
     assert(defaults.fpsLimit == 60 && defaults.musicVolume == 50);
     assert(defaults.mouseSensitivity == 100);
     assert(defaults.soundVolume == 60 && defaults.initialLives == 2 && defaults.initialBombs == 3);
+    assert(defaults.lastSelection.shot == 0 && !defaults.lastSelection.challenge && defaults.lastSelection.practicePhase == 2);
     assert(defaults.bindings.focus == MouseBinding(MOUSE_BUTTON_RIGHT));
     assert(defaults.bindings.descend == KEY_LEFT_SHIFT);
     assert(defaults.bindings.fire == MouseBinding(MOUSE_BUTTON_LEFT));
@@ -88,7 +89,7 @@ void RunSettingsTests() {
     assert(migrated.bindings.fire == MouseBinding(MOUSE_BUTTON_LEFT));
     assert(migrated.bindings.bomb == KEY_F && migrated.bindings.pause == KEY_P);
     { std::ifstream in(path); const std::string content((std::istreambuf_iterator<char>(in)), {});
-      assert(content.find("version=4") != std::string::npos);
+      assert(content.find("version=5") != std::string::npos);
       assert(content.find("fire_alt") == std::string::npos && content.find("bomb_alt") == std::string::npos); }
     { std::ofstream out(path); out << "version=3\nfocus=86\nfire=81\nbomb=69\npause=79\n"; }
     const auto custom = LoadOrCreateSettings(path);
@@ -103,5 +104,25 @@ void RunSettingsTests() {
     const auto current = LoadOrCreateSettings(path);
     assert(current.bindings.focus == MouseBinding(MOUSE_BUTTON_SIDE));
     assert(current.bindings.fire == KEY_Z && current.bindings.bomb == KEY_X);
+    // 全部开局选项组合均需跨文件往返；更新配置不能再次迁移 version=4 的自定义键位。
+    for (int shot : {0,1}) for (bool challenge : {false,true}) for (int phase : {2,4}) {
+        auto settings = current;
+        settings.lastSelection = {shot,challenge,phase};
+        assert(SaveSettingsFile(path,settings));
+        const auto loaded = LoadOrCreateSettings(path);
+        assert(loaded.lastSelection.shot == shot && loaded.lastSelection.challenge == challenge);
+        assert(loaded.lastSelection.practicePhase == phase && loaded.bindings.fire == KEY_Z);
+    }
+    for (const char* fields : {"last_shot=-1\nlast_challenge=2\nlast_practice_phase=3\n",
+                              "last_shot=2\nlast_challenge=-1\nlast_practice_phase=0\n",
+                              "last_shot=nan\nlast_challenge=true\nlast_practice_phase=4junk\n"}) {
+        { std::ofstream out(path); out << "version=5\n" << fields; }
+        const auto loaded = LoadOrCreateSettings(path);
+        assert(loaded.lastSelection.shot == 0 && !loaded.lastSelection.challenge && loaded.lastSelection.practicePhase == 2);
+    }
+    { std::ofstream out(path); out << "version=4\nfocus=1003\nfire=90\nbomb=88\nbest_score=1234\n"; }
+    const auto upgraded = LoadOrCreateSettings(path);
+    assert(upgraded.lastSelection.shot == 0 && !upgraded.lastSelection.challenge && upgraded.lastSelection.practicePhase == 2);
+    assert(upgraded.bestScore == 1234 && upgraded.bindings.fire == KEY_Z && upgraded.bindings.bomb == KEY_X);
     std::filesystem::remove(path);
 }

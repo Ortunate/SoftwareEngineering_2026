@@ -7,7 +7,7 @@
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/actors/enemy.hpp"
 #include "app/run_state.hpp"
-#include "config/key_bindings.hpp"
+#include "config/settings.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/items/drop_system.hpp"
 #include "gameplay/arena.hpp"
@@ -99,7 +99,7 @@ private:
     void ClearEnemiesWithEffects();
     /// @brief 从本地文件读取全部设置并应用音量、灵敏度。
     void LoadSettings();
-    /// @brief 将当前 FPS、音量、灵敏度和绑定写入本地文件。
+    /// @brief 将当前设置、成绩及独立的开局选择记录写入本地文件。
     void SaveSettings() const;
     /// @brief 处理主菜单的移动、点击与确认输入。
     void UpdateMainMenu();
@@ -266,6 +266,7 @@ private:
     int initialLives_ = 2;
     int initialBombs_ = 3;
     int bestScore_ = 0;
+    StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
     int setupStep_ = 0; // 0: 难度确认，1: 灵梦机体，2: 模式，3: 符卡练习；仅提供一面 Normal。
     int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
     bool challengeMode_ = false;

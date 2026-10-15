@@ -99,6 +99,10 @@ void Game::LoadSettings() {
     initialLives_ = settings.initialLives;
     initialBombs_ = settings.initialBombs;
     bestScore_ = settings.bestScore;
+    lastSelection_ = settings.lastSelection;
+    selectedShot_ = lastSelection_.shot;
+    challengeMode_ = lastSelection_.challenge;
+    practicePhase_ = lastSelection_.practicePhase;
     assets_.SetMusicVolumePercent(musicVolume_);
     assets_.SetSoundVolumePercent(soundVolume_);
 
@@ -114,7 +118,7 @@ void Game::LoadSettings() {
 
 void Game::SaveSettings() const {
     const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_],
-        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_};
+        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_};
     if (!SaveSettingsFile(kSettingsFilename, settings)) {
         TraceLog(LOG_WARNING, "SETTINGS: Failed to save %s", kSettingsFilename);
     }

@@ -49,7 +49,10 @@ void Game::UpdateMainMenu() {
             practiceMode_ = selectedMenuItem_ != 0;
             spellPractice_ = selectedMenuItem_ == 3;
             setupStep_ = spellPractice_ ? 3 : 0;
-            challengeMode_ = false;
+            selectedShot_ = lastSelection_.shot;
+            // 符卡练习跳过模式页，仍沿用固定练习规则；不能将它的临时模式写回上次开局记录。
+            challengeMode_ = !spellPractice_ && lastSelection_.challenge;
+            practicePhase_ = lastSelection_.practicePhase;
             state_ = RunState::StartSetup;
             break;
         case 5: state_ = RunState::Score; break;
@@ -111,7 +114,14 @@ void Game::UpdateMenuPage() {
             }
             const int current = setupStep_ == 1 ? selectedShot_ : setupStep_ == 2 ? static_cast<int>(challengeMode_)
                 : (practicePhase_ == 2 ? 0 : 1);
-            if (previous != current) assets_.PlaySoundEffect("menu_move");
+            if (previous != current) {
+                assets_.PlaySoundEffect("menu_move");
+                // 只保存当前页的选择，避免符卡练习或运行入口的临时状态覆盖其他页的上次记录。
+                if (setupStep_ == 1) lastSelection_.shot = selectedShot_;
+                else if (setupStep_ == 2) lastSelection_.challenge = challengeMode_;
+                else lastSelection_.practicePhase = practicePhase_;
+                SaveSettings();
+            }
         }
         if (confirm) {
             menuMotion_.Confirm();

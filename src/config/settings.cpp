@@ -1,4 +1,4 @@
-// 本文件负责显示、音量、开局资源、成绩与统一绑定设置的读取、校验和保存。
+// 本文件负责显示、音量、开局资源、成绩、开局选择与统一绑定设置的读取、校验和保存。
 
 #include "config/settings.hpp"
 
@@ -113,7 +113,7 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
 
         if (name == "version") {
             version = *value;
-            shouldRewrite = shouldRewrite || version != 4;
+            shouldRewrite = shouldRewrite || version != 5;
         } else if (name == "music_volume") {
             if (*value >= 0 && *value <= 100) settings.musicVolume = *value;
             else shouldRewrite = true;
@@ -132,6 +132,15 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
             else shouldRewrite = true;
         } else if (name == "best_score") {
             if (*value >= 0 && *value <= 2000000000) settings.bestScore = *value;
+            else shouldRewrite = true;
+        } else if (name == "last_shot") {
+            if (*value == 0 || *value == 1) settings.lastSelection.shot = *value;
+            else shouldRewrite = true;
+        } else if (name == "last_challenge") {
+            if (*value == 0 || *value == 1) settings.lastSelection.challenge = *value == 1;
+            else shouldRewrite = true;
+        } else if (name == "last_practice_phase") {
+            if (*value == 2 || *value == 4) settings.lastSelection.practicePhase = *value;
             else shouldRewrite = true;
         } else if (name == "fps_limit") {
             if (IsSupportedFpsLimit(*value)) {
@@ -184,7 +193,7 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     if (!output) return false;
 
     output << "# koumakyou local settings\n";
-    output << "version=4\n";
+    output << "version=5\n";
     output << "fps_limit=" << settings.fpsLimit << '\n';
     output << "music_volume=" << settings.musicVolume << '\n';
     output << "mouse_sensitivity=" << settings.mouseSensitivity << '\n';
@@ -192,6 +201,9 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     output << "initial_lives=" << settings.initialLives << '\n';
     output << "initial_bombs=" << settings.initialBombs << '\n';
     output << "best_score=" << settings.bestScore << '\n';
+    output << "last_shot=" << settings.lastSelection.shot << '\n';
+    output << "last_challenge=" << settings.lastSelection.challenge << '\n';
+    output << "last_practice_phase=" << settings.lastSelection.practicePhase << '\n';
     for (const BindingField& field : kBindingFields) {
         output << field.name << '=' << settings.bindings.*(field.member) << '\n';
     }

@@ -21,7 +21,15 @@ inline constexpr int kDefaultMusicVolume = 50;
 inline constexpr int kMinMouseSensitivity = 10;
 inline constexpr int kMaxMouseSensitivity = 300;
 inline constexpr float kBaseMouseSensitivity = 0.0024F;
-/// @brief 需要持久化的战斗键位、显示、音量、鼠标和开局资源设置。
+/// @brief 上次开局页的选择；shot=0 为灵之御札、1 为梦之御札，practicePhase 仅允许 2 或 4。
+/// 与本局运行状态独立，预览、重开和练习初始化不能覆盖此记录；目前难度仅开放 Normal。
+struct StartSelection {
+    int shot = 0;
+    bool challenge = false;
+    int practicePhase = 2;
+};
+
+/// @brief 需要持久化的战斗键位、显示、音量、鼠标、开局资源和选择记录。
 struct GameSettings {
     KeyBindings bindings{};
     int fpsLimit = 60;
@@ -31,6 +39,7 @@ struct GameSettings {
     int initialLives = 2; // 额外残机 1～5，不含当前正在使用的一条命。
     int initialBombs = 3; // 开局 Bomb 0～3；复活补给保持玩家规则。
     int bestScore = 0; // 本机一面最高分，0～20 亿；练习和挑战不写入。
+    StartSelection lastSelection{};
 };
 
 /// @brief 读取本地配置；缺失或无效的配置会使用默认值。
@@ -38,7 +47,7 @@ struct GameSettings {
 /// @return 可用于本局游戏的设置。
 [[nodiscard]] GameSettings LoadOrCreateSettings(
     const std::filesystem::path& path);
-/// @brief 将全部设置保存为 version=3 文本配置；旧版本缺失字段使用默认值。
+/// @brief 将全部设置保存为 version=5 文本配置；旧版本缺失字段使用默认值。
 /// @param path 配置文件路径。
 /// @param settings 待保存的设置。
 /// @return 成功写入返回 true，否则返回 false。

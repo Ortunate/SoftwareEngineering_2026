@@ -75,11 +75,10 @@ inline void DrawPageRowRule(const Canvas& canvas,Rectangle bounds,const ui::Menu
                   Fade(kPageGold,reveal),weight,motion.Phase());
 }
 
-/// @brief 统一操作按钮；bounds 为屏幕矩形，weight 为键盘强调（0～1），鼠标悬停共用同一外观。
+/// @brief 统一操作按钮；bounds 为屏幕矩形，weight 为统一选择强调（0～1），键鼠选择都由输入层驱动。
 /// opacity 为 0～1 的整层透明度，保留底色与字形原有 Alpha；仅用于展示，不改变命中范围。
 inline void DrawPageButton(const Canvas& canvas,Font font,Rectangle bounds,const char* label,
                            const ui::MenuMotion& motion,float weight=0,float opacity=1) {
-    weight=std::max(weight,CheckCollisionPointRec(GetMousePosition(),bounds)?1.0F:0.0F);
     DrawRectangleRec(bounds,ui::WithOpacity(Color{69,32,32,170},opacity));
     ui::FocusLine({bounds.x,bounds.y+bounds.height},{bounds.x+bounds.width,bounds.y+bounds.height},canvas.scale,ui::WithOpacity(kPageGold,opacity),weight,motion.Phase());
     const float size=ui::FittedSize(font,label,22*canvas.scale,bounds.width-24*canvas.scale);

@@ -2,6 +2,7 @@
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
+#include "app/ui_input.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
 #include "stages/stage1/content.hpp"
@@ -15,31 +16,27 @@ namespace koumakyou {
 void Game::UpdateMainMenu() {
     // 键盘与鼠标使用同一门禁；不缓存动画期间的确认，避免最后一帧突然跳入开局页。
     if (!titleEntrance_.Finished()) return;
-    const bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
+    const auto input = ui::MenuInput::Read();
+    const bool confirm = input.confirm;
     constexpr int itemCount = menu::kTitleRowCount;
     const int previous = selectedMenuItem_;
     const auto available = [](int index) { return index != 1 && index != 4; };
-    int offset = 0;
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) offset = -1;
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) offset = 1;
+    const int offset = input.Direction();
     if (offset != 0) {
         do { selectedMenuItem_ = (selectedMenuItem_ + itemCount + offset) % itemCount; }
         while (!available(selectedMenuItem_));
     }
-    if (IsKeyPressed(KEY_ESCAPE)) selectedMenuItem_ = 9;
-    const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), itemCount);
-    const Vector2 mouse = GetMousePosition();
-    const Vector2 movement = GetMouseDelta();
-    bool hovered = false;
-    for (int index = 0; index < itemCount; ++index) {
-        if (available(index) && CheckCollisionPointRec(mouse, layout.Row(index))) {
-            hovered = true;
-            if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                selectedMenuItem_ = index;
-        }
+    if (input.back) {
+        selectedMenuItem_ = 9;
+        assets_.PlaySoundEffect("menu_cancel");
+        return; // 首页没有上级页面；返回只选中 Quit，仍须单独确认才退出。
     }
+    const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), itemCount);
+    bool mouseConfirmed = false;
+    for (int index = 0; index < itemCount; ++index)
+        if (available(index)) mouseConfirmed = input.Select(layout.Row(index),index,selectedMenuItem_) || mouseConfirmed;
     if (selectedMenuItem_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!confirm && !(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) return;
+    if (!confirm && !mouseConfirmed) return;
     menuMotion_.Confirm();
     assets_.PlaySoundEffect("menu_confirm");
     switch (selectedMenuItem_) {
@@ -80,43 +77,35 @@ void Game::UpdateMenuPage() {
         return;
     }
     const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
-    const auto clicked = [&](Rectangle bounds) {
-        return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), bounds);
-    };
-    const bool back = IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X) ||
-                      clicked(layout.Back());
+    const auto input = ui::MenuInput::Read();
+    const bool back = input.back || input.Clicked(layout.Back());
     if (back) {
         assets_.PlaySoundEffect("menu_cancel");
         EnterMainMenu();
         return;
     }
-    int direction = 0;
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_LEFT)) direction = -1;
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT)) direction = 1;
-    bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
-                   clicked(layout.Forward());
-    if (state_ == RunState::MusicRoom) {
-        const int previous = selectedTrack_;
-        if (direction != 0) {
-            selectedTrack_ = (selectedTrack_ + 3 + direction) % 3;
-        }
-        for (int index = 0; index < 3; ++index) {
-            const auto row=layout.Track(index);
-            if (CheckCollisionPointRec(GetMousePosition(),row) &&
-                (GetMouseDelta().x!=0 || GetMouseDelta().y!=0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
-                selectedTrack_ = index;
-                confirm = confirm || IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-            }
-        }
-        if (selectedTrack_ != previous) assets_.PlaySoundEffect("menu_move");
-        if (confirm) {
-            menuMotion_.Confirm();
+    if (state_ != RunState::MusicRoom) {
+        if (input.confirm) {
             assets_.PlaySoundEffect("menu_confirm");
-            if (selectedTrack_ == 0) assets_.PlayMenuMusic();
-            else if (selectedTrack_ == 1) assets_.PlayStageMusic();
-            else assets_.PlayBossMusic();
+            EnterMainMenu();
         }
+        return;
     }
+    const int previous = selectedTrack_;
+    // 音乐页的第 3 项为返回；底部按钮与曲目共用键盘选择和高亮。
+    selectedTrack_ = (selectedTrack_ + 4 + input.Direction()) % 4;
+    bool confirm = input.confirm;
+    for (int index = 0; index < 3; ++index)
+        confirm = input.Select(layout.Track(index),index,selectedTrack_) || confirm;
+    input.Select(layout.Back(),3,selectedTrack_);
+    if (selectedTrack_ != previous) assets_.PlaySoundEffect("menu_move");
+    if (!confirm) return;
+    menuMotion_.Confirm();
+    assets_.PlaySoundEffect("menu_confirm");
+    if (selectedTrack_ == 0) assets_.PlayMenuMusic();
+    else if (selectedTrack_ == 1) assets_.PlayStageMusic();
+    else if (selectedTrack_ == 2) assets_.PlayBossMusic();
+    else EnterMainMenu();
 }
 
 void Game::UpdateOptions() {
@@ -127,47 +116,28 @@ void Game::UpdateOptions() {
 
     constexpr int itemCount = menu::kOptionsCount;
     const int previous = selectedOption_;
-    if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)) {
+    const auto input = ui::MenuInput::Read();
+    if (input.back) {
         assets_.PlaySoundEffect("menu_cancel");
         state_ = RunState::MainMenu;
         selectedMenuItem_ = 8;
         return;
     }
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
-        selectedOption_ = (selectedOption_ + itemCount - 1) % itemCount;
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
-        selectedOption_ = (selectedOption_ + 1) % itemCount;
-
+    // 数值项保留 A/D、左右键调整；其余行允许两组方向导航。
+    const int direction = input.vertical != 0 ? input.vertical :
+        selectedOption_ >= menu::kNumericOptions ? input.horizontal : 0;
+    selectedOption_ = (selectedOption_ + itemCount + direction) % itemCount;
     const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
-    const Vector2 mouse = GetMousePosition();
-    const Vector2 movement = GetMouseDelta();
-    bool hoveringItem = false;
-    // 鼠标静止时不抢回键盘选择；点击仍可以直接选择当前指向的行。
-    for (int index = 0; index < itemCount; ++index) {
-        const Rectangle row = menu::OptionRow(canvas, index);
-        if (CheckCollisionPointRec(mouse, row)) {
-            hoveringItem = true;
-            if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                selectedOption_ = index;
-        }
-    }
-    if (selectedOption_ < menu::kNumericOptions) {
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) AdjustOption(-1);
-        else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) AdjustOption(1);
-    }
-    const bool mouseConfirmed = hoveringItem && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    bool mouseConfirmed = false;
+    for (int index = 0; index < itemCount; ++index)
+        mouseConfirmed = input.Select(menu::OptionRow(canvas,index),index,selectedOption_) || mouseConfirmed;
+    if (selectedOption_ < menu::kNumericOptions && input.vertical == 0 && input.horizontal != 0 && direction == 0)
+        AdjustOption(input.horizontal);
     if (selectedOption_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!IsKeyPressed(KEY_ENTER) && !IsKeyPressed(KEY_Z) && !mouseConfirmed) return;
+    if (!input.confirm && !mouseConfirmed) return;
     if (selectedOption_ < menu::kNumericOptions) {
-        // 绘制与命中测试共用按钮矩形；点击标签、数值或行内空白只选择，不调整。
-        if (mouseConfirmed) {
-            for (const int direction : {-1, 1}) {
-                if (CheckCollisionPointRec(mouse, menu::OptionArrow(canvas, selectedOption_, direction)))
-                    AdjustOption(direction);
-            }
-        } else {
-            AdjustOption(1);
-        }
+        const bool decrease = mouseConfirmed && input.Clicked(menu::OptionArrow(canvas,selectedOption_,-1));
+        AdjustOption(decrease ? -1 : 1);
     } else if (selectedOption_ == menu::kBindingsIndex) {
         menuMotion_.Confirm();
         assets_.PlaySoundEffect("menu_confirm");
@@ -201,15 +171,16 @@ void Game::UpdateKeyBindings() {
     constexpr int resetIndex = bindingCount;
     constexpr int backIndex = bindingCount + 1;
     constexpr int itemCount = bindingCount + 2;
+    const auto input = ui::MenuInput::Read();
 
     if (waitingForBinding_) {
-        if (IsKeyPressed(KEY_ESCAPE)) {
+        if (input.back) {
             assets_.PlaySoundEffect("menu_cancel"); waitingForBinding_ = false; return;
         }
         if (!bindingCaptureReady_) {
-            // 清空进入弹窗时的旧键盘队列，所有鼠标键释放后才开始收集新输入。
+            // 清空激活弹窗的旧键盘队列，确认键及所有鼠标键释放后才收集新输入；返回操作始终优先。
             while (GetKeyPressed() != KEY_NULL) {}
-            bool held = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_Z);
+            bool held = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_Z) || IsKeyDown(KEY_SPACE);
             for (int button = MOUSE_BUTTON_LEFT; button <= MOUSE_BUTTON_BACK; ++button)
                 held = held || IsMouseButtonDown(button);
             bindingCaptureReady_ = !held;
@@ -228,47 +199,21 @@ void Game::UpdateKeyBindings() {
         return;
     }
 
-    if (IsKeyPressed(KEY_ESCAPE)) {
+    if (input.back) {
         assets_.PlaySoundEffect("menu_cancel");
         optionsPage_ = OptionsPage::General;
         selectedOption_ = menu::kBindingsIndex;
         return;
     }
     const int previous = selectedBinding_;
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-        selectedBinding_ = (selectedBinding_ + itemCount - 1) % itemCount;
-    }
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-        selectedBinding_ = (selectedBinding_ + 1) % itemCount;
-    }
-
+    selectedBinding_ = (selectedBinding_ + itemCount + input.Direction()) % itemCount;
     const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
-    const Vector2 mouse = GetMousePosition();
-    bool hoveringItem = false;
-    for (int index = 0; index < bindingCount; ++index) {
-        const auto row=layout.Row(index);
-        if (CheckCollisionPointRec(mouse, row)) {
-            if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                selectedBinding_ = index;
-            hoveringItem = true;
-        }
-    }
-    const auto resetButton=layout.Button(0);
-    const auto backButton=layout.Button(1);
-    if (CheckCollisionPointRec(mouse, resetButton)) {
-        if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-            selectedBinding_ = resetIndex;
-        hoveringItem = true;
-    } else if (CheckCollisionPointRec(mouse, backButton)) {
-        if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-            selectedBinding_ = backIndex;
-        hoveringItem = true;
-    }
-
-    const bool mouseConfirmed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                                hoveringItem;
+    bool confirmed = input.confirm;
+    for (int index = 0; index < bindingCount; ++index)
+        confirmed = input.Select(layout.Row(index),index,selectedBinding_) || confirmed;
+    confirmed = input.Select(layout.Button(0),resetIndex,selectedBinding_) || confirmed;
+    confirmed = input.Select(layout.Button(1),backIndex,selectedBinding_) || confirmed;
     if (selectedBinding_ != previous) assets_.PlaySoundEffect("menu_move");
-    const bool confirmed = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_Z) || mouseConfirmed;
     if (!confirmed) return;
     menuMotion_.Confirm();
     assets_.PlaySoundEffect("menu_confirm");

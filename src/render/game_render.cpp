@@ -67,7 +67,7 @@ void Game::DrawLoading() const {
     ui::YinYang(seal, 23 * scale, vermilion, ivory, loadingSeconds_ * 2);
     ui::GlowText(font, title, {left, baseline - 30 * scale}, titleSize,
                  ui::WithOpacity(ivory, pulse + 0.1F), vermilion, pulse);
-    ui::DrawText(font, loadingFailed_ ? "按确认键返回主菜单" : "Now Loading...",
+    ui::DrawText(font, loadingFailed_ ? "确认 / 返回：主菜单" : "Now Loading...",
                  {left + 2 * scale, baseline + 14 * scale}, 13 * scale,
                  ui::WithOpacity(ivory, 0.45F));
     if (loadingFailed_) return;
@@ -239,7 +239,11 @@ void Game::DrawOverlay() const {
         centered(TextFormat("SCORE %09lld",score_),295,26,RAYWHITE);
         centered(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),337,22,RAYWHITE);
         centered(spellPractice_?"SPELL PRACTICE":practiceMode_?"STAGE PRACTICE":challengeMode_?"CHALLENGE":"NORMAL",382,18,GOLD);
-        centered("R Restart     Esc / M Main Menu",430,22,RAYWHITE);
+        for(int index=0;index<menu::kResultCount;++index) {
+            const auto row=layout.ResultRow(index);
+            const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
+            menu::DrawPageButton(canvas,font,row,menu::kResultLabels[index],menuMotion_,weight,reveal);
+        }
     }
 
     if (screenFlashTimer_ > 0.0F) {
@@ -276,9 +280,8 @@ void Game::DrawKeyBindings() const {
         const auto button=layout.Button(index);
         menu::DrawPageButton(canvas,font,button,buttons[index],menuMotion_,weight);
     }
-    if(layout.compact)
-        menu::DrawPageFooter(canvas,font,"方向键 / W / S：选择   Z / 回车：修改","Esc：返回选项");
-    else menu::DrawPageFooter(canvas,font,"方向键 / W / S：选择   Z / 回车：修改   Esc：返回选项");
+    menu::DrawPageFooter(canvas,font,"WASD / 方向键或鼠标选择 · Z / Space / 左键修改",
+                         "X / Esc / 右键返回选项");
     if(waitingForBinding_) {
         DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,185});
         const auto modal=layout.Modal();
@@ -290,7 +293,7 @@ void Game::DrawKeyBindings() const {
         };
         modalText("请按下键盘或鼠标按键",32,24,RAYWHITE);
         modalText(kBindingNames[selectedBinding_],84,20,gold);
-        modalText("Esc：取消   F3～F6：保留   请先松开，再按下新键",142,16,Color{193,162,150,255});
+        modalText("X / Esc / 右键：取消   请先松开，再按下新键",142,16,Color{193,162,150,255});
     }
 }
 

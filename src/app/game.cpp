@@ -2,6 +2,7 @@
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
+#include "app/ui_input.hpp"
 #include "render/menu_layout.hpp"
 #include "config/settings.hpp"
 #include "stages/stage1/ids.hpp"
@@ -154,8 +155,8 @@ void Game::StartRun(bool captureCursor, bool synchronous) {
 void Game::UpdateLoading(float deltaTime) {
     loadingSeconds_ += std::max(0.0F, deltaTime);
     if (loadingFailed_) {
-        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE))
-            EnterMainMenu();
+        const auto input = ui::MenuInput::Read();
+        if (input.confirm || input.click || input.back) EnterMainMenu();
         return;
     }
     try {
@@ -269,6 +270,7 @@ void Game::EndStage(RunState result) {
     boss_.reset();
     dialogueActive_ = false;
     spellCutInTimer_ = messageTimer_ = 0.0F;
+    selectedResultItem_ = 0;
     finishResult_ = result;
     state_ = RunState::Finishing;
 }
@@ -368,6 +370,8 @@ void Game::UpdateUiMotion(float deltaTime) {
             : setupStep_ == StartSetupStep::Difficulty ? 1 : 0;
     } else if (state_ == RunState::MusicRoom) selection = selectedTrack_;
     else if (state_ == RunState::Paused) selection = selectedPauseItem_;
+    else if (state_ == RunState::Won || state_ == RunState::GameOver) selection = selectedResultItem_;
+    if (state_ == RunState::Score || state_ == RunState::Credit) selection = 0;
     // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
     menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
     startSetupMotion_.Advance(state_==RunState::MainMenu?-1:state_==RunState::StartSetup?static_cast<int>(setupStep_):-2,deltaTime);
@@ -402,30 +406,38 @@ void Game::UpdateState(float deltaTime) {
 #endif
 
     if (state_ == RunState::Won || state_ == RunState::GameOver) {
-        if (IsKeyPressed(KEY_R)) {
-            StartRun();
-        } else if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_M)) {
-            EnterMainMenu();
+        const auto input = ui::MenuInput::Read();
+        if (input.back || IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
+        const int previous = selectedResultItem_;
+        selectedResultItem_ = (selectedResultItem_ + menu::kResultCount + input.Direction()) % menu::kResultCount;
+        bool confirm = input.confirm;
+        const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
+        for (int index = 0; index < menu::kResultCount; ++index)
+            confirm = input.Select(layout.ResultRow(index),index,selectedResultItem_) || confirm;
+        if (selectedResultItem_ != previous) assets_.PlaySoundEffect("menu_move");
+        if (IsKeyPressed(KEY_R)) { selectedResultItem_ = 0; confirm = true; }
+        if (confirm) {
+            assets_.PlaySoundEffect("menu_confirm");
+            if (selectedResultItem_ == 0) StartRun();
+            else EnterMainMenu();
         }
         return;
     }
 
     if (state_ == RunState::Paused) {
-        if (IsKeyPressed(KEY_ESCAPE) || BindingPressed(bindings_.pause)) { TogglePause(); return; }
+        const auto input = ui::MenuInput::Read();
+        // 自定义暂停键不能覆盖 UI 固定的导航和确认操作。
+        if (input.back || (BindingPressed(bindings_.pause) && !input.confirm && !input.click && input.Direction()==0)) {
+            TogglePause(); return;
+        }
         if (IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
         const int previous = selectedPauseItem_;
-        if (IsKeyPressed(KEY_UP)) selectedPauseItem_ = (selectedPauseItem_ + menu::kPauseCount - 1) % menu::kPauseCount;
-        if (IsKeyPressed(KEY_DOWN)) selectedPauseItem_ = (selectedPauseItem_ + 1) % menu::kPauseCount;
-        if (selectedPauseItem_ != previous) assets_.PlaySoundEffect("menu_move");
-        bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER);
+        selectedPauseItem_ = (selectedPauseItem_ + menu::kPauseCount + input.Direction()) % menu::kPauseCount;
+        bool confirm = input.confirm;
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
-        for (int index = 0; index < menu::kPauseCount; ++index) {
-            const auto row=layout.PauseRow(index);
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), row)) {
-                selectedPauseItem_ = index;
-                confirm = true;
-            }
-        }
+        for (int index = 0; index < menu::kPauseCount; ++index)
+            confirm = input.Select(layout.PauseRow(index),index,selectedPauseItem_) || confirm;
+        if (selectedPauseItem_ != previous) assets_.PlaySoundEffect("menu_move");
         if (confirm) {
             assets_.PlaySoundEffect("menu_confirm");
             switch (selectedPauseItem_) {
@@ -437,8 +449,13 @@ void Game::UpdateState(float deltaTime) {
         return;
     }
 
-    if (IsKeyPressed(KEY_ESCAPE) || BindingPressed(bindings_.pause)) {
+    // 对话的返回操作打开暂停菜单；普通战斗右键仍是可配置的低速移动。
+    const auto dialogueInput = ui::MenuInput::Read();
+    const bool pauseBinding = BindingPressed(bindings_.pause) &&
+        (!dialogueActive_ || (!dialogueInput.confirm && !dialogueInput.click));
+    if (IsKeyPressed(KEY_ESCAPE) || pauseBinding || (dialogueActive_ && dialogueInput.back)) {
         TogglePause();
+        return;
     }
     if (state_ == RunState::Finishing) {
         screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
@@ -483,7 +500,7 @@ void Game::UpdateState(float deltaTime) {
         float lineStart=0;
         const auto lines=CurrentDialogue();
         const auto& line=lines[DialogueIndex(&lineStart)];
-        if (IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER))
+        if (dialogueInput.confirm || dialogueInput.click)
             dialogueTimer_=lineStart+(line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
         if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))
             dialogueTimer_=DialogueDuration();

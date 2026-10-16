@@ -1,13 +1,13 @@
-// 本文件处理开局的键盘确认、逐级返回和鼠标选项；最终确认页支持点击开局，选择记忆独立持久化。
+// 本文件处理开局的统一键鼠确认、逐级返回和选项切换；选择记忆独立持久化。
 #include "app/game.hpp"
+#include "app/ui_input.hpp"
 #include "render/start_setup_layout.hpp"
 
 namespace koumakyou {
 void Game::UpdateStartSetup() {
     const menu::StartSetupLayout layout(GetScreenWidth(),GetScreenHeight());
-    const bool pressed=IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-    const auto clicked=[&](Rectangle bounds) { return pressed && CheckCollisionPointRec(GetMousePosition(),bounds); };
-    if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)) {
+    const auto input=ui::MenuInput::Read();
+    if (input.back) {
         assets_.PlaySoundEffect("menu_cancel");
         switch(setupStep_) {
             case StartSetupStep::Difficulty: case StartSetupStep::Spell: EnterMainMenu(); break;
@@ -18,15 +18,16 @@ void Game::UpdateStartSetup() {
         }
         return;
     }
-    const bool confirm=IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
-        (setupStep_==StartSetupStep::Ready && clicked(layout.ReadyButton()));
+    bool confirm=input.confirm;
+    if(setupStep_==StartSetupStep::Difficulty)confirm=confirm || input.Clicked(layout.Difficulty(1));
+    else if(setupStep_==StartSetupStep::Character)
+        confirm=confirm || input.Clicked(layout.Portrait()) || input.Clicked(layout.CharacterInfo());
+    else if(setupStep_==StartSetupStep::Ready)confirm=confirm || input.Clicked(layout.ReadyButton());
     if(setupStep_==StartSetupStep::Shot || setupStep_==StartSetupStep::Mode || setupStep_==StartSetupStep::Spell) {
         const int previous=setupStep_==StartSetupStep::Shot?selectedShot_:setupStep_==StartSetupStep::Mode?int(challengeMode_):int(practicePhase_==4);
-        int selected=previous;
-        const auto delta=GetMouseDelta();
+        int selected=input.Direction()!=0?1-previous:previous;
         for(int index=0;index<2;++index)
-            if(CheckCollisionPointRec(GetMousePosition(),layout.Choice(index)) && (pressed || delta.x!=0 || delta.y!=0))selected=index;
-        if(IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))selected=1-selected;
+            confirm=input.Select(layout.Choice(index),index,selected) || confirm;
         if(selected!=previous) {
             assets_.PlaySoundEffect("menu_move");
             if(setupStep_==StartSetupStep::Shot)lastSelection_.shot=selectedShot_=selected;
@@ -37,7 +38,7 @@ void Game::UpdateStartSetup() {
     }
     if(!confirm)return;
     menuMotion_.Confirm(); assets_.PlaySoundEffect("menu_confirm");
-    // 只沿显式页面推进；鼠标开局仅限最终确认页的 START GAME，按住确认不会穿过两页进入游戏。
+    // 点击先选择再推进当前页；每帧只处理一个步骤，持续按住左键或确认键不会穿过最终确认页。
     switch(setupStep_) {
         case StartSetupStep::Difficulty: setupStep_=StartSetupStep::Character; break;
         case StartSetupStep::Character: setupStep_=StartSetupStep::Shot; break;

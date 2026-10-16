@@ -81,6 +81,7 @@ void TestResponsiveLayouts() {
         const koumakyou::menu::OverlayLayout overlay(size.x,size.y);
         fits(overlay.PausePanel());
         for(int index=0;index<koumakyou::menu::kPauseCount;++index)fits(overlay.PauseRow(index));
+        for(int index=0;index<koumakyou::menu::kResultCount;++index)fits(overlay.ResultRow(index));
         const koumakyou::GameplayLayout gameplay(size.x,size.y);
         const auto viewport=gameplay.Viewport();
         assert(viewport.x==0 && viewport.y==0 && viewport.width==size.x && viewport.height==size.y);

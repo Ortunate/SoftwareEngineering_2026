@@ -166,7 +166,7 @@ void Game::DrawOptions() const {
             ui::DrawCentered(font,direction<0?"<":">",arrow.x+arrow.width/2,arrow.y+2*canvas.scale,23*canvas.scale,color);
         }
     }
-    menu::DrawPageFooter(canvas,font,"方向键选择 / 调整   Z / Enter 确认   Esc 返回","开局资源在下一局生效");
+    menu::DrawPageFooter(canvas,font,"WASD / 方向键选择或调整 · 鼠标移动选择","Z / Space / 左键确认 · X / Esc / 右键返回");
 }
 
 void Game::DrawMenuPage() const {
@@ -177,7 +177,8 @@ void Game::DrawMenuPage() const {
     const auto& common = assets_.Common();
     const Font font = common.uiFont;
     menu::DrawPageSurface(canvas,menuMotion_);
-    menu::DrawPageButton(canvas,font,layout.Back(),"返回 / Esc",menuMotion_);
+    menu::DrawPageButton(canvas,font,layout.Back(),"返回 / X / Esc",menuMotion_,
+                         menuMotion_.Weight(state_==RunState::MusicRoom?3:0));
     if (state_ == RunState::MusicRoom) {
         Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);
         constexpr std::array<const char*, 3> names{"比赤色更鲜红的梦", "宛如鬼灯的鲜红之魂", "妖魔夜行"};
@@ -192,7 +193,7 @@ void Game::DrawMenuPage() const {
             ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},canvas.scale,
                           kGold,weight*reveal,menuMotion_.Phase());
         }
-        Text(canvas, font, "方向键选择 · Z 播放", canvas.width/2, compact?900:598, 22, kGold, true);
+        Text(canvas, font, "WASD / 方向键选择 · Z / Space / 左键播放", canvas.width/2, compact?900:598, 22, kGold, true);
     } else if (state_ == RunState::Score) {
         Text(canvas, font, "SCORE", canvas.width/2, 110, 50, kGold, true);
         Text(canvas, font, "Stage 1 · Normal · 标准模式", canvas.width/2, compact?360:250, 28, kIvory, true);

@@ -246,7 +246,7 @@ private:
     long long spellBonus_ = 0, stageBonus_ = 0;
     /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
     [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
-    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，Z 仍只推进一句。
+    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，统一确认操作仍只推进一句。
     [[nodiscard]] int DialogueIndex(float* lineStart = nullptr) const;
     [[nodiscard]] float DialogueDuration() const;
     bool dialogueAfterBattle_ = false;
@@ -284,8 +284,9 @@ private:
     bool previewMode_ = false; // 静默截图不写入本机通关成绩，StartRun 会恢复普通记录规则。
     int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
     bool spellPractice_ = false;
-    int selectedTrack_ = 0;
+    int selectedTrack_ = 0; // 音乐页局部编号：0～2 为曲目，3 为返回。
     int selectedPauseItem_ = 0; // 暂停项：继续、主菜单、重开。
+    int selectedResultItem_ = 0; // 结算项：重开、主菜单；每次结算重置为重开。
     int missCount_ = 0;
     int bombCount_ = 0;
     // 每张符卡开始时保存计数；发生 Miss、Bomb 或超时则不能获得捕获奖励。

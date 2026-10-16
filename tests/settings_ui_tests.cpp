@@ -1,4 +1,4 @@
-// 本文件以隐藏窗口回放键鼠输入，检查标题比例适配、设置界面、录入防误触和开局选择跨重启保存。
+// 本文件以隐藏窗口回放键鼠输入，检查全界面统一操作、比例适配、录入防误触和开局记忆。
 #include "app/game.hpp"
 #include "app/constants.hpp"
 #include "config/settings.hpp"
@@ -49,6 +49,7 @@ struct GameLifecycleProbe {
         game.titleEntrance_.Complete();
         game.boss_.reset(); game.state_=RunState::MainMenu;
         game.selectedBinding_=6; game.selectedOption_=0; game.selectedPauseItem_=0;
+        game.selectedTrack_=0; game.selectedResultItem_=0;
         switch(page) {
             case 0: game.titleEntrance_={}; break;
             case 1: break;
@@ -108,6 +109,21 @@ struct GameLifecycleProbe {
     static bool Waiting(const Game& game) { return game.waitingForBinding_; }
     static bool General(const Game& game) { return game.optionsPage_==Game::OptionsPage::General; }
     static bool Playing(const Game& game) { return game.state_==RunState::Playing; }
+    static RunState State(const Game& game) { return game.state_; }
+    /// @brief 读取当前页的局部选项编号，供真实输入回放检查悬停与键盘切换。
+    static int UiSelection(const Game& game) {
+        if(game.state_==RunState::MainMenu)return game.selectedMenuItem_;
+        if(game.state_==RunState::Options)return General(game)?game.selectedOption_:game.selectedBinding_;
+        if(game.state_==RunState::MusicRoom)return game.selectedTrack_;
+        if(game.state_==RunState::Paused)return game.selectedPauseItem_;
+        if(game.state_==RunState::Won || game.state_==RunState::GameOver)return game.selectedResultItem_;
+        return game.setupStep_==StartSetupStep::Shot?game.selectedShot_:
+            game.setupStep_==StartSetupStep::Mode?int(game.challengeMode_):int(game.practicePhase_==4);
+    }
+    static float DialogueTime(const Game& game) { return game.dialogueTimer_; }
+    /// @brief 注入加载失败展示，单独验证退出操作，不触发真实磁盘故障。
+    static void FailLoading(Game& game) { game.state_=RunState::Loading; game.loadingFailed_=true; }
+
     /// @brief 读取实际选择页使用的值，不能以配置文件存在代替界面恢复检查。
     static StartSelection Selection(const Game& game) {
         return {game.selectedShot_,game.challengeMode_,game.practicePhase_};
@@ -147,9 +163,9 @@ void Key(koumakyou::Game& game, int key) {
     Event(1, key); Frame(game);
 }
 /// @brief 点击一个窗口坐标并释放，检验实际鼠标命中区域而非直接调用调整函数。
-void Click(koumakyou::Game& game, int x, int y) {
-    Event(7, x, y); Event(6, MOUSE_BUTTON_LEFT); Frame(game);
-    Event(5, MOUSE_BUTTON_LEFT); Frame(game);
+void Click(koumakyou::Game& game, int x, int y, int button = MOUSE_BUTTON_LEFT) {
+    Event(7, x, y); Event(6, button); Frame(game);
+    Event(5, button); Frame(game);
 }
 /// @brief 从正式绘制入口读取当前画面，不推进时钟；返回的 Image 由调用方 UnloadImage。
 Image ReadFrame(koumakyou::Game& game) {
@@ -296,11 +312,10 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
         Check(selected.shot==1 && selected.challenge,"restart did not restore visible selections");
         const menu::StartSetupLayout layout(GetScreenWidth(),GetScreenHeight());
         const auto click=[&](Rectangle row) { Click(restarted,row.x+row.width/2,row.y+row.height/2); };
-        click(layout.Choice(0)); next(restarted,StartSetupStep::Mode);
-        click(layout.Choice(0));
+        click(layout.Choice(0)); expect(restarted,StartSetupStep::Mode);
+        click(layout.Choice(0)); expect(restarted,StartSetupStep::Ready);
         const auto saved=LoadOrCreateSettings(kSettingsFilename).lastSelection;
         Check(saved.shot==0 && !saved.challenge,"mouse selections were not saved");
-        next(restarted,StartSetupStep::Ready);
         back(restarted,StartSetupStep::Mode);
         next(restarted,StartSetupStep::Ready); click(layout.ReadyButton()); WaitForStage(restarted);
         restarted.Reset(); Event(7,0,0); Frame(restarted);
@@ -345,6 +360,132 @@ void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots
     }
     SetWindowSize(900,620); Event(7,0,0); Frame(game);
 }
+
+/// @brief 通过正式更新入口逐页验证键鼠等价、返回优先级、静止指针及确认不穿透。
+void TestUnifiedUiInputs() {
+    using namespace koumakyou;
+    using Probe=GameLifecycleProbe;
+    Game game;
+    SetTargetFPS(0);
+    game.StartPreview();
+    const menu::StartSetupLayout setup(GetScreenWidth(),GetScreenHeight());
+    const menu::PageLayout page(GetScreenWidth(),GetScreenHeight());
+    const menu::OverlayLayout overlay(GetScreenWidth(),GetScreenHeight());
+    const menu::BindingsLayout bindings(GetScreenWidth(),GetScreenHeight());
+    const auto click=[&](Rectangle bounds,int button=MOUSE_BUTTON_LEFT) {
+        Click(game,bounds.x+bounds.width/2,bounds.y+bounds.height/2,button);
+    };
+    const auto move=[&](Rectangle bounds) {
+        Event(7,bounds.x+bounds.width/2,bounds.y+bounds.height/2); Frame(game);
+    };
+    const auto show=[&](int id) { Probe::Show(game,id); Event(7,0,0); Frame(game); };
+    // 每个有多项选择的页面都检查八个方向别名；设置数值页的左右键单独用于调值。
+    for(const auto spec : {std::array<int,2>{3,12},{6,2},{7,2},{8,2},{9,4},{15,3},{16,2},{17,2}}) {
+        for(const auto key : {KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT}) {
+            show(spec[0]);
+            const int before=Probe::UiSelection(game);
+            const int direction=key==KEY_W || key==KEY_UP || key==KEY_A || key==KEY_LEFT?-1:1;
+            Key(game,key);
+            Check(Probe::UiSelection(game)==(before+spec[1]+direction)%spec[1],"UI direction alias failed");
+        }
+        show(spec[0]);
+        const auto target=spec[0]==3?bindings.Row(1):spec[0]==9?page.Track(1):
+            spec[0]==15?overlay.PauseRow(1):spec[0]>=16?overlay.ResultRow(1):setup.Choice(1);
+        move(target);
+        Check(Probe::UiSelection(game)==1,"mouse movement did not select UI item");
+        Key(game,KEY_A);
+        Check(Probe::UiSelection(game)==0,"stationary mouse overrode keyboard selection");
+        Click(game,1,1);
+        Check(Probe::UiSelection(game)==0,"blank click changed UI selection");
+    }
+    for(const int key : {KEY_D,KEY_RIGHT,KEY_S,KEY_DOWN}) {
+        show(1); Key(game,KEY_X); // 首页返回只选中退出，不能直接退出游戏。
+        Check(Probe::MenuSelection(game)==9 && !game.ShouldQuit(),"title back did not select Quit safely");
+        Key(game,key);
+        Check(Probe::MenuSelection(game)==0,"title navigation alias failed");
+    }
+    for(const int key : {KEY_Z,KEY_SPACE,KEY_ENTER}) {
+        show(5); Key(game,key); Check(Probe::SetupStep(game)==StartSetupStep::Character,"difficulty confirm alias failed");
+        Key(game,key); Check(Probe::SetupStep(game)==StartSetupStep::Shot,"character confirm alias failed");
+        Key(game,key); Check(Probe::SetupStep(game)==StartSetupStep::Mode,"shot confirm alias failed");
+        Key(game,key); Check(Probe::SetupStep(game)==StartSetupStep::Ready && !game.IsLoading(),"mode confirmation skipped Ready");
+        show(15); Key(game,key); Check(Probe::Playing(game),"pause confirmation alias failed");
+        show(3); Key(game,key); Check(Probe::Waiting(game),"binding confirmation alias failed");
+        Key(game,KEY_X); Check(!Probe::Waiting(game),"binding prompt X did not cancel");
+        show(9); Key(game,key); Check(Probe::State(game)==RunState::MusicRoom,"music confirmation left page");
+        show(10); Key(game,key); Check(Probe::MainMenu(game),"score confirmation did not return");
+        show(11); Key(game,key); Check(Probe::MainMenu(game),"credit confirmation did not return");
+        // 上面返回首页会释放关卡；后续对话和结果渲染需要重新加载预览资源。
+        game.StartPreview();
+        show(13); const float before=Probe::DialogueTime(game); Key(game,key);
+        const float advance=Probe::DialogueTime(game)-before;
+        Check(advance>0.1F && advance<10,"dialogue confirmation did not advance exactly one line");
+    }
+    show(5); click(setup.Difficulty(0));
+    Check(Probe::SetupStep(game)==StartSetupStep::Difficulty,"disabled difficulty accepted click");
+    click(setup.Difficulty(1)); Check(Probe::SetupStep(game)==StartSetupStep::Character,"Normal click did not confirm");
+    click(setup.Portrait()); Check(Probe::SetupStep(game)==StartSetupStep::Shot,"character click did not confirm");
+    // 持续按住左键只能推进一次；释放并重新点击才能确认后续页面。
+    const auto choice=setup.Choice(1);
+    Event(7,choice.x+choice.width/2,choice.y+choice.height/2); Event(6,MOUSE_BUTTON_LEFT);
+    Frame(game); Frame(game); Frame(game);
+    Check(Probe::SetupStep(game)==StartSetupStep::Mode,"held click skipped setup step");
+    Event(5,MOUSE_BUTTON_LEFT); Frame(game);
+    click(setup.Choice(1)); Check(Probe::SetupStep(game)==StartSetupStep::Ready,"mode click did not confirm");
+    click(setup.ReadyButton()); WaitForStage(game);
+    for(const int id : {6,7,8}) {
+        show(id); click(setup.Choice(0));
+        Check(Probe::SetupStep(game)==(id==6?StartSetupStep::Mode:StartSetupStep::Ready),"choice click did not advance");
+    }
+    show(3); click(bindings.Row(0)); Check(Probe::Waiting(game),"binding click did not open prompt");
+    const auto saved=LoadOrCreateSettings(kSettingsFilename).bindings;
+    click(bindings.Modal(),MOUSE_BUTTON_RIGHT);
+    Check(!Probe::Waiting(game) && LoadOrCreateSettings(kSettingsFilename).bindings.forward==saved.forward,
+          "prompt right click was captured instead of cancelling");
+    show(3);
+    Event(2,KEY_SPACE); Frame(game); Frame(game);
+    Check(Probe::Waiting(game),"held Space was captured as binding");
+    Event(1,KEY_SPACE); Frame(game); Key(game,KEY_ESCAPE);
+    show(9); move(page.Back()); Check(Probe::UiSelection(game)==3,"music Back hover did not select");
+    Key(game,KEY_SPACE); Check(Probe::MainMenu(game),"music Back keyboard confirmation failed");
+    game.StartPreview();
+    show(13); const float before=Probe::DialogueTime(game); Click(game,1,1);
+    Check(Probe::DialogueTime(game)-before>0.1F,"dialogue left click did not advance");
+    for(const int button : {MOUSE_BUTTON_LEFT,MOUSE_BUTTON_RIGHT}) {
+        show(16); click(overlay.ResultRow(1),button);
+        Check(Probe::MainMenu(game),"result mouse return failed");
+        game.StartPreview();
+    }
+    for(const int id : {16,17}) {
+        show(id); click(overlay.ResultRow(0)); WaitForStage(game);
+        show(id); Key(game,KEY_SPACE); WaitForStage(game);
+    }
+    for(const int cancel : std::array<int,3>{KEY_X,KEY_ESCAPE,-1}) {
+        for(const int id : {2,3,5,6,7,8,9,10,11,13,15,16,17,21,22}) {
+            game.StartPreview(); show(id);
+            if(cancel<0)Click(game,1,1,MOUSE_BUTTON_RIGHT); else Key(game,cancel);
+            if(id==2 || id==5 || id==8 || (id>=9 && id<=11) || id==16 || id==17)
+                Check(Probe::MainMenu(game),"UI return did not reach title");
+            else if(id==3)Check(Probe::General(game),"binding return did not reach options");
+            else if(id==13)Check(Probe::State(game)==RunState::Paused,"dialogue return did not pause");
+            else if(id==15)Check(Probe::Playing(game),"pause return did not resume");
+            else Check(Probe::SetupStep(game)==(id==6?StartSetupStep::Character:id==7?StartSetupStep::Shot:
+                        id==21?StartSetupStep::Difficulty:StartSetupStep::Mode),"setup return skipped a step");
+        }
+        game.StartPreview(); show(3); Key(game,KEY_Z);
+        if(cancel<0)Click(game,1,1,MOUSE_BUTTON_RIGHT); else Key(game,cancel);
+        Check(!Probe::Waiting(game),"binding modal return failed");
+        Probe::FailLoading(game);
+        if(cancel<0)Click(game,1,1,MOUSE_BUTTON_RIGHT); else Key(game,cancel);
+        Check(Probe::MainMenu(game),"loading failure return failed");
+    }
+    game.StartPreview(); show(15);
+    Event(2,KEY_SPACE); Event(6,MOUSE_BUTTON_RIGHT); Frame(game);
+    Check(Probe::Playing(game),"return did not take priority over confirmation");
+    Event(1,KEY_SPACE); Event(5,MOUSE_BUTTON_RIGHT); Frame(game);
+    std::puts("Unified UI keyboard, hover, click, cancel and held-input regression passed.");
+}
+
 }
 
 /// @brief 运行图形/音频集成测试；参数可指定截图目录，需支持 raylib 自动化事件和 OpenGL。
@@ -444,7 +585,7 @@ int main(int argc, char** argv) {
             Capture(game, (screenshots / "mode.png").string().c_str());
             game.OpenOptions();
             Event(7, 0, 0); Frame(game);
-            // 在两种横屏宽度下，数字、文字、按钮外一像素及行空白均不能调值。
+            // 数值行点击遵守统一确认：左箭头减小，标签/数值/右箭头增大，行外空白无效。
             for (int width : {900, 1100}) {
                 SetWindowSize(width, 620); Frame(game);
                 const auto canvas=koumakyou::menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
@@ -453,20 +594,21 @@ int main(int argc, char** argv) {
                     const auto left = koumakyou::menu::OptionArrow(canvas, row, -1);
                     const auto right = koumakyou::menu::OptionArrow(canvas, row, 1);
                     const auto before = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
-                    for (float x : {bounds.x + 20, left.x - 1, left.x + left.width + 1, (left.x + right.x) / 2, right.x + right.width + 1})
-                        Click(game, static_cast<int>(x), static_cast<int>(bounds.y + bounds.height / 2));
-                    Click(game, static_cast<int>(left.x + 10), static_cast<int>(left.y - 1));
+                    Click(game,bounds.x-1,bounds.y+bounds.height/2);
+                    Click(game,bounds.x+bounds.width+1,bounds.y+bounds.height/2);
                     auto after = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
-                    Check(after.fpsLimit == before.fpsLimit && after.musicVolume == before.musicVolume &&
-                          after.mouseSensitivity == before.mouseSensitivity, "click outside arrows changed setting");
-                    Click(game, static_cast<int>(right.x + 10), static_cast<int>(right.y + 10));
-                    after = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
-                    Check(row == 0 ? after.fpsLimit == 120 : row == 1 ? after.musicVolume == 55 :
-                          after.mouseSensitivity == 110, "right arrow did not increase");
-                    Click(game, static_cast<int>(left.x + 10), static_cast<int>(left.y + 10));
-                    after = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
-                    Check(after.fpsLimit == before.fpsLimit && after.musicVolume == before.musicVolume &&
-                          after.mouseSensitivity == before.mouseSensitivity, "left arrow did not decrease");
+                    Check(after.fpsLimit==before.fpsLimit && after.musicVolume==before.musicVolume &&
+                          after.mouseSensitivity==before.mouseSensitivity,"blank click changed setting");
+                    for(float x : {bounds.x+20,(left.x+right.x)/2,right.x+10}) {
+                        Click(game,x,bounds.y+bounds.height/2);
+                        after=koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
+                        Check(row==0?after.fpsLimit==120:row==1?after.musicVolume==55:after.mouseSensitivity==110,
+                              "row confirmation did not increase setting");
+                        Click(game,left.x+10,left.y+10);
+                        after=koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename);
+                        Check(after.fpsLimit==before.fpsLimit && after.musicVolume==before.musicVolume &&
+                              after.mouseSensitivity==before.mouseSensitivity,"left arrow did not decrease setting");
+                    }
                 }
             }
             SetWindowSize(900, 620); Frame(game);
@@ -556,6 +698,7 @@ int main(int argc, char** argv) {
         }
         TestStartSelectionMemory(screenshots);
         TestStartAnimations(screenshots);
+        TestUnifiedUiInputs();
         std::puts("Settings UI integration passed.");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "Settings UI integration failed: %s\n", error.what());

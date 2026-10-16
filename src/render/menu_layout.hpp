@@ -53,6 +53,9 @@ inline constexpr int kBackIndex = 8;
 inline constexpr int kPauseCount = 3;
 inline constexpr std::array<const char*,kPauseCount> kPauseLabels{
     "解除暂停","返回主菜单","从头再来"};
+/// @brief 结算操作的局部顺序；输入与绘制共用，结算时默认选择重新开始。
+inline constexpr int kResultCount = 2;
+inline constexpr std::array<const char*,kResultCount> kResultLabels{"从头再来","返回主菜单"};
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
     "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
@@ -96,7 +99,7 @@ struct BindingsLayout {
     [[nodiscard]] Rectangle Modal() const { return canvas.Rect((canvas.width-600)/2,canvas.height/2-100,600,200); }
 };
 
-/// @brief 游戏叠加层的缩放与暂停命中区域；构造参数为窗口逻辑像素，返回矩形亦为屏幕像素。
+/// @brief 游戏叠加层的缩放与暂停、结算命中区域；构造参数为窗口逻辑像素，返回矩形亦为屏幕像素。
 /// 独立于 3D 视口，窄屏仍居中且完整显示。
 struct OverlayLayout {
     Canvas canvas;
@@ -104,6 +107,8 @@ struct OverlayLayout {
     [[nodiscard]] Rectangle PausePanel() const { return canvas.Rect(135,180,490,118+kPauseCount*48); }
     /// @brief 暂停操作行，index 为 0～kPauseCount-1，绘制与点击共用。
     [[nodiscard]] Rectangle PauseRow(int index) const { return canvas.Rect(170,270+index*48,420,42); }
+    /// @brief 结算操作行，index 为 0～kResultCount-1，绘制与点击共用。
+    [[nodiscard]] Rectangle ResultRow(int index) const { return canvas.Rect(170,430+index*48,420,42); }
 };
 /// @brief 标题页的响应式布局；使用完整窗口，方形/竖屏将标题放到菜单上方。
 /// width/height 为窗口逻辑像素，须为正数；行数包含 Debug 专用项，绘制和点击必须共用。

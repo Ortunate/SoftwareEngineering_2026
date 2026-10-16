@@ -23,8 +23,6 @@ struct StartSetupLayout {
     [[nodiscard]] Rectangle Choice(int index) const { return canvas.Rect(compact?62:835,(compact?730:210)+index*(compact?76:110),compact?636:380,compact?70:100); }
     [[nodiscard]] Rectangle ShotSummary() const { return canvas.Rect(compact?338:835,compact?936:594,compact?360:380,compact?60:66); }
     [[nodiscard]] Rectangle ModeSummary() const { return canvas.Rect(compact?338:835,compact?872:490,compact?360:380,compact?56:90); }
-    [[nodiscard]] Rectangle Back() const { return canvas.Rect(40,canvas.height-55,compact?190:170,36); }
-    [[nodiscard]] Rectangle Forward() const { return canvas.Rect(canvas.width-(compact?270:250),canvas.height-55,compact?230:210,36); }
     [[nodiscard]] Rectangle ReadyBand() const { return canvas.Rect(0,compact?345:235,canvas.width,compact?255:205); }
     [[nodiscard]] Rectangle ReadyButton() const { return canvas.Rect(compact?170:440,compact?500:357,compact?420:400,60); }
 };

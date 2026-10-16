@@ -191,8 +191,5 @@ void Game::DrawStartSetup() const {
         p.Text("START GAME",button,46*s,kIvory,0.12F,true,hover*menuMotion_.Pulse());
         p.Rule(button,ui::WithOpacity(kGold,0.65F));
     }
-    // 按钮在最终命中区域绘制，进入动画只驱动视觉；按键和点击始终即时生效，不缓存确认。
-    menu::DrawPageButton(canvas,font,layout.Back(),"返回 / Esc",menuMotion_,0,setup);
-    if(setup-ready>0)menu::DrawPageButton(canvas,font,layout.Forward(),"下一步 / Z",menuMotion_,0,setup-ready);
 }
 } // namespace koumakyou

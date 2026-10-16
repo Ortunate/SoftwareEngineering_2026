@@ -66,7 +66,7 @@ void TestResponsiveLayouts() {
         const koumakyou::menu::PageLayout page(size.x,size.y);
         fits(page.Back()); fits(page.Forward());
         const koumakyou::menu::StartSetupLayout setup(size.x,size.y);
-        fits(setup.Back()); fits(setup.Forward()); fits(setup.Portrait()); fits(setup.CharacterInfo());
+        fits(setup.Portrait()); fits(setup.CharacterInfo());
         fits(setup.Badge()); fits(setup.Heading()); fits(setup.ShotSummary()); fits(setup.ModeSummary());
         fits(setup.ReadyBand()); fits(setup.ReadyButton());
         for(int index=0;index<4;++index)fits(setup.Difficulty(index));

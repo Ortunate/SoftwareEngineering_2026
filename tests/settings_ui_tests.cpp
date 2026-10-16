@@ -296,13 +296,13 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
         Check(selected.shot==1 && selected.challenge,"restart did not restore visible selections");
         const menu::StartSetupLayout layout(GetScreenWidth(),GetScreenHeight());
         const auto click=[&](Rectangle row) { Click(restarted,row.x+row.width/2,row.y+row.height/2); };
-        click(layout.Choice(0)); click(layout.Forward()); expect(restarted,StartSetupStep::Mode);
+        click(layout.Choice(0)); next(restarted,StartSetupStep::Mode);
         click(layout.Choice(0));
         const auto saved=LoadOrCreateSettings(kSettingsFilename).lastSelection;
         Check(saved.shot==0 && !saved.challenge,"mouse selections were not saved");
-        click(layout.Forward()); expect(restarted,StartSetupStep::Ready);
-        click(layout.Back()); expect(restarted,StartSetupStep::Mode);
-        click(layout.Forward()); click(layout.ReadyButton()); WaitForStage(restarted);
+        next(restarted,StartSetupStep::Ready);
+        back(restarted,StartSetupStep::Mode);
+        next(restarted,StartSetupStep::Ready); click(layout.ReadyButton()); WaitForStage(restarted);
         restarted.Reset(); Event(7,0,0); Frame(restarted);
         Key(restarted,KEY_DOWN); Key(restarted,KEY_DOWN); next(restarted,StartSetupStep::Spell);
         Key(restarted,KEY_RIGHT); next(restarted,StartSetupStep::Ready); back(restarted,StartSetupStep::Spell);

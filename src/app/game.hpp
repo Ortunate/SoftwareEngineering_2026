@@ -91,7 +91,7 @@ private:
     void UpdateLoading(float deltaTime);
     /// @brief 素材就绪后初始化本局状态，避免加载耗时进入战斗计时或提前捕获鼠标。
     void CompleteStartRun();
-    /// @brief 切换主菜单并清除战斗中的临时状态。
+    /// @brief 切换主菜单并清除战斗临时状态，保留离开首页时的选项。
     void EnterMainMenu();
     /// @brief 停止战斗并播放剩余退场效果；池空后才结算、卸载专属素材。
     /// @param result 胜利或失败后的游戏状态。
@@ -260,7 +260,7 @@ private:
     // 绘制时复用空间；星点可超过普通道具池容量，不能沿用固定长度的道具绘制数组。
     mutable std::vector<PickupSprite> pickupSprites_;
     std::string message_;
-    int selectedMenuItem_ = 0;
+    int selectedMenuItem_ = 0; // 首页选项在本次运行中保留；首次启动默认 Start，返回首页不重置。
     ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。
     ui::MenuMotion titleMenuMotion_{}; // 首页离开前的选择与展开状态，供 Start 过渡期间继续绘制首页。
     ui::StartSetupMotion startSetupMotion_{}; // 首页及 Start 页面连续混合；只推进展示，不阻塞选择输入。

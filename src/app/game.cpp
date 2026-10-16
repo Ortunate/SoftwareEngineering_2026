@@ -239,7 +239,6 @@ void Game::EnterMainMenu() {
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     shotTestActive_ = false;
 #endif
-    selectedMenuItem_ = 0;
     messageTimer_ = 0.0F;
     dialogueActive_ = false;
     bossEventId_.reset();

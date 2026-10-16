@@ -299,7 +299,10 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
         game.Reset();
         Key(game,KEY_DOWN); Key(game,KEY_DOWN); next(game,StartSetupStep::Spell);
         Check(!GameLifecycleProbe::Selection(game).challenge,"spell practice inherited hidden challenge mode");
-        Key(game,KEY_X); next(game,StartSetupStep::Difficulty); next(game,StartSetupStep::Character);
+        Key(game,KEY_X);
+        Check(GameLifecycleProbe::MenuSelection(game)==3,"returning from spell practice lost title selection");
+        Key(game,KEY_UP); Key(game,KEY_UP);
+        next(game,StartSetupStep::Difficulty); next(game,StartSetupStep::Character);
         next(game,StartSetupStep::Shot); next(game,StartSetupStep::Mode);
         Check(GameLifecycleProbe::Selection(game).challenge,"spell practice reset saved challenge selection");
     }
@@ -322,7 +325,8 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
         Key(restarted,KEY_DOWN); Key(restarted,KEY_DOWN); next(restarted,StartSetupStep::Spell);
         Key(restarted,KEY_RIGHT); next(restarted,StartSetupStep::Ready); back(restarted,StartSetupStep::Spell);
         Key(restarted,KEY_X); Check(GameLifecycleProbe::MainMenu(restarted),"spell cancel did not return to title");
-        Key(restarted,KEY_DOWN); Key(restarted,KEY_DOWN); next(restarted,StartSetupStep::Spell);
+        Check(GameLifecycleProbe::MenuSelection(restarted)==3,"spell practice title selection was not retained");
+        next(restarted,StartSetupStep::Spell);
         Check(GameLifecycleProbe::Selection(restarted).practicePhase==4,"spell practice selection was not restored");
         Check(LoadOrCreateSettings(kSettingsFilename).lastSelection.practicePhase==4,"spell practice selection was not saved");
     }
@@ -571,6 +575,7 @@ int main(int argc, char** argv) {
                 Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).fpsLimit != fps,
                       "responsive title Options click missed");
                 Key(game, KEY_LEFT); Key(game, KEY_ESCAPE);
+                Check(koumakyou::GameLifecycleProbe::MenuSelection(game)==8,"returning from options lost title selection");
             }
             SetWindowSize(900, 620); Frame(game);
             const koumakyou::menu::TitleLayout title(GetScreenWidth(), GetScreenHeight(), koumakyou::menu::kTitleRowCount);

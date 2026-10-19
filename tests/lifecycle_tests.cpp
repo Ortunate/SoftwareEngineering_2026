@@ -1,4 +1,4 @@
-// 本文件负责在隐藏图形窗口中验证 Game 的击破、Boss 入场保留战场、清场及资源生命周期。
+// 本文件负责在隐藏图形窗口中验证自机射击可见性、Game 战斗演出、结算及资源生命周期。
 
 #include "app/game.hpp"
 #include "rlgl.h"
@@ -507,8 +507,69 @@ struct GameLifecycleProbe {
         assert(!game.spellPractice_ && !game.practiceMode_ && !game.challengeMode_);
     }
 
+    /// @brief 通过正式开局绑定检查两种御札，并渲染真实追踪弹，防止生成正常而素材/动画不可见。
+    static void TestPlayerShots(Game& game, const std::string& prefix) {
+        const int previousShot=game.selectedShot_;
+        for(int shot : {0,1})for(int power : {0,8,128}) {
+            game.selectedShot_=shot;
+            game.StartPreview();
+            game.stage_=StageDirector{};
+            game.player_.AdjustPower(power);
+            const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+            const auto render=[&] {
+                BeginDrawing(); BeginTextureMode(target); ClearBackground(BLACK);
+                game.DrawWorld(); EndTextureMode(); EndDrawing();
+                Image image=LoadImageFromTexture(target.texture); ImageFlipVertical(&image);
+                return image;
+            };
+            Image background=render();
+            game.player_.Update(0,{.fire=true},game.bullets_,game.stageContent_->PlayerBulletVisual(),
+                                game.stageContent_->PlayerHomingVisual(),true);
+            int homing=0;
+            float directionBefore=0;
+            game.bullets_.Pool().ForEachActive([&](const Bullet& bullet) {
+                if(bullet.homingTurnRate>0) { ++homing; directionBefore+=bullet.velocity.x; }
+            });
+            assert(homing==(shot==0 && power>=8 ? (power==128 ? 6 : 2) : 0));
+            // 偏右目标迫使成对弹的横向合速度改变；不能只检查 homingTurnRate 字段存在。
+            const std::array<Vector3,1> targets{{{4,0,4}}};
+            game.bullets_.Update(0.2F,targets,game.player_.Position());
+            game.UpdateBattleAnimations();
+            if(homing>0) {
+                float directionAfter=0;
+                game.bullets_.Pool().ForEachActive([&](Bullet& bullet) {
+                    if(bullet.homingTurnRate>0) {
+                        directionAfter+=bullet.velocity.x;
+                        const auto& frame=bullet.animation.player.Sample();
+                        assert(frame.visible && frame.sprite>=0 && frame.color.a>0);
+                    } else bullet.active=false; // 隔离直射弹，像素断言只能由追踪弹满足。
+                });
+                assert(directionAfter>directionBefore+1);
+                Image image=render();
+                int ink=0,peak=0;
+                for(int y=0;y<image.height;++y)for(int x=0;x<image.width;++x) {
+                    const Color a=GetImageColor(image,x,y),b=GetImageColor(background,x,y);
+                    const int difference=std::abs(int(a.r)-b.r)+std::abs(int(a.g)-b.g)+std::abs(int(a.b)-b.b);
+                    peak=std::max(peak,difference);
+                    if(difference>3)++ink;
+                }
+                assert(ink>20 && peak>6);
+                if(!prefix.empty()) {
+                    const std::string path=prefix+"-homing-power-"+std::to_string(power)+".png";
+                    assert(ExportImage(image,path.c_str()));
+                }
+                UnloadImage(image);
+                std::cout<<"Homing Power "<<power<<": "<<homing<<" bullets, "<<ink<<" visible pixels, peak "<<peak<<"\n";
+            }
+            UnloadImage(background); UnloadRenderTexture(target);
+        }
+        game.selectedShot_=previousShot;
+        game.StartPreview();
+    }
+
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
+        TestPlayerShots(game,prefix);
         TestBossTransitions(game,prefix);
         TestBossHud(game,prefix);
         TestFullWindow(game,prefix);
@@ -680,7 +741,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only。
 /// 不初始化音频，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -699,6 +760,8 @@ int main(int argc, char** argv) {
         if(argc>=3 && std::string(argv[2])=="--viewport-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--player-shots-only") {
+            koumakyou::GameLifecycleProbe::TestPlayerShots(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--boss-hud-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestBossTransitions(*game,prefix);

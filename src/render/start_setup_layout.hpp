@@ -16,10 +16,12 @@ struct StartSetupLayout {
     }
     [[nodiscard]] Rectangle Portrait() const { return canvas.Rect(compact?240:480,compact?90:40,compact?280:330,compact?390:410); }
     [[nodiscard]] Rectangle PortraitBackdrop() const { return canvas.Rect(compact?80:150,compact?60:-30,compact?480:480,compact?650:750); }
+    /// @brief 角色阶段的固定箭头命中区；direction 为 -1/1，晃动不改变命中区，点击只切换候选，不能确认到御札页。
+    [[nodiscard]] Rectangle CharacterArrow(int direction) const { return canvas.Rect(compact?(direction<0?175:541):(direction<0?425:821),compact?240:215,44,60); }
     [[nodiscard]] Rectangle CharacterInfo() const { return canvas.Rect(compact?180:500,compact?490:465,compact?400:320,compact?145:170); }
     [[nodiscard]] Rectangle Badge() const { return canvas.Rect(compact?52:65,compact?900:525,compact?260:345,compact?105:126); }
     [[nodiscard]] Rectangle Heading() const { return canvas.Rect(compact?62:835,compact?647:65,compact?636:380,compact?62:110); }
-    /// @brief 御札、模式、符卡的两行共用区域，index 仅为 0/1；动画不改变最终命中范围。
+    /// @brief 御札和模式的两行共用区域，index 仅为 0/1；动画不改变最终命中范围。
     [[nodiscard]] Rectangle Choice(int index) const { return canvas.Rect(compact?62:835,(compact?730:210)+index*(compact?76:110),compact?636:380,compact?70:100); }
     [[nodiscard]] Rectangle ShotSummary() const { return canvas.Rect(compact?338:835,compact?936:594,compact?360:380,compact?60:66); }
     [[nodiscard]] Rectangle ModeSummary() const { return canvas.Rect(compact?338:835,compact?872:490,compact?360:380,compact?56:90); }

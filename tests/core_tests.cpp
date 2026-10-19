@@ -1,6 +1,7 @@
 // 本文件负责运行按领域拆分的核心测试。
 #include "app/constants.hpp"
 #include "app/stage_clear.hpp"
+#include "render/spell_practice_layout.hpp"
 #include "config/settings.hpp"
 #include "render/ui_motion.hpp"
 #include "render/title_entrance.hpp"
@@ -32,6 +33,54 @@ void TestDialogueContent() {
     const auto empty = koumakyou::FindDialogueContent(image, {0.1F,0.2F,0.5F,0.6F});
     assert(empty.x==0.1F && empty.y==0.2F && empty.width==0.5F && empty.height==0.6F);
     UnloadImage(image);
+}
+/// @brief 校验完整新典目录的原始编号、七关总数、难度空槽及独立成绩，避免只补列表外观。
+void TestSpellPracticeCatalog() {
+    using namespace koumakyou;
+    constexpr std::array<int,7> totals{9,11,17,47,16,18,13},groups{3,3,5,16,4,6,13};
+    assert(spell::Cards().size()==131 && spell::Characters().size()==4);
+    std::array<int,7> counts{};int playable=0;
+    for(std::size_t index=0;index<spell::Cards().size();++index) {
+        const auto& card=spell::Cards()[index];assert(card.number==int(index)+1);
+        assert(card.group>=0 && card.group<groups[card.stage] && card.difficulty>=0 && card.difficulty<5 && (card.stage==6?card.difficulty==4:card.difficulty<4));
+        assert(spell::Find(card.stage,card.group,card.difficulty)==&card);++counts[card.stage];
+        playable+=spell::Playable(&card,0);
+        assert(spell::Playable(&card,0)==spell::Playable(&card,1));
+        assert(!spell::Playable(&card,2) && !spell::Playable(&card,3));
+    }
+    assert(counts==totals && playable==2);
+    assert(!spell::Find(0,0,0) && !spell::Find(0,0,1));
+    assert(spell::Find(0,1,1)->number==3 && spell::Find(0,2,1)->number==7);
+    assert(spell::Stages()[3].groups==16 && spell::Find(6,12,4)->number==131);
+    spell::Records records;
+    const auto* night=spell::Find(0,1,1);const auto* dark=spell::Find(0,2,1);
+    assert(!spell::Available(night,0,records) && !records.Seen(0,3));
+    records.Begin(0,3,true);records.Finish(0,3,true,true,1000);
+    records.Begin(0,3,true);records.Finish(0,3,true,false,500);
+    assert(!records.Seen(0,3) && !spell::Available(night,0,records));
+    records.Begin(1,7,false);records.Finish(1,7,false,true,2000);
+    assert(records.Seen(1,7) && !spell::Available(dark,0,records) && spell::Available(dark,1,records));
+    assert(!spell::Available(night,0,records) && !spell::Available(dark,2,records));
+    records.Begin(1,3,false); // 遇见即解锁，不要求取得、最高分或结束这次尝试。
+    assert(!spell::Available(night,0,records) && spell::Available(night,1,records));
+    assert(!records.Seen(1,4) && !records.Seen(1,0) && !records.Seen(1,132));
+    records.Begin(0,4,false);
+    assert(records.Seen(0,4) && !spell::Available(spell::Find(0,1,2),0,records));
+    assert(!spell::Available(nullptr,0,records) && !spell::Available(night,-1,records));
+    assert(records.Get(0,3).attempts==2 && records.Get(0,3).captured==1 && records.Get(0,3).bestScore==1000);
+    assert(records.Get(1,3).attempts==0 && records.Get(1,7).mainCaptured==1 && records.Get(1,7).bestScore==0);
+    assert(records.Get(-1,0).bestScore==0);
+    // 四种组合的遇见状态逐一检查；魔理沙即使拥有记录，也仍受战斗实现门禁限制。
+    for(int encountered=0;encountered<spell::kCharacterCount;++encountered) {
+        spell::Records isolated;
+        isolated.Begin(encountered,3,false);
+        for(int selected=0;selected<spell::kCharacterCount;++selected) {
+            assert(isolated.Seen(selected,3)==(selected==encountered));
+            assert(spell::Available(night,selected,isolated)==(selected==encountered && selected<2));
+            assert(!isolated.Seen(selected,7));
+        }
+        assert(!isolated.Seen(-1,3) && !isolated.Seen(4,3));
+    }
 }
 /// @brief 对照原图示例检查 Normal 奖励公式，并覆盖零点数与关卡系数。
 void TestStageClearSummary() {
@@ -80,6 +129,19 @@ void TestResponsiveLayouts() {
         fits(setup.Portrait()); fits(setup.CharacterInfo());
         fits(setup.Badge()); fits(setup.Heading()); fits(setup.ShotSummary()); fits(setup.ModeSummary());
         fits(setup.ReadyBand()); fits(setup.ReadyButton());
+        for(int direction:{-1,1}) {
+            fits(setup.CharacterArrow(direction));
+            assert(!CheckCollisionRecs(setup.CharacterArrow(direction),setup.Portrait()));
+            assert(!CheckCollisionRecs(setup.CharacterArrow(direction),setup.CharacterInfo()));
+        }
+        const koumakyou::menu::SpellPracticeLayout spellLayout(size.x,size.y);
+        fits(spellLayout.Title());fits(spellLayout.Heading());fits(spellLayout.Columns());fits(spellLayout.Footer());
+        fits(spellLayout.Portrait());fits(spellLayout.CharacterInfo());
+        for(int direction:{-1,1}) {fits(spellLayout.Arrow(direction));fits(spellLayout.GroupPage(direction));}
+        for(int index=0;index<7;++index)fits(spellLayout.StageRow(index));
+        for(int index=0;index<8;++index)fits(spellLayout.GroupRow(index));
+        for(int index=0;index<4;++index)fits(spellLayout.Difficulty(index));
+        fits(spellLayout.Difficulty(0,true));
         fits(setup.StageHeading()); fits(setup.StageModeSummary()); fits(setup.StageShotSummary());
         for(int index=0;index<koumakyou::kStageScoreCount;++index) {
             fits(setup.StageRow(index));
@@ -100,7 +162,13 @@ void TestResponsiveLayouts() {
         const koumakyou::menu::OverlayLayout overlay(size.x,size.y);
         fits(overlay.PausePanel()); fits(overlay.ClearPanel());
         fits(overlay.PausePanel(static_cast<int>(koumakyou::menu::PauseLabels(true).size())));
-        fits(overlay.PauseRow(3));
+        fits(overlay.PauseRow(3));fits(overlay.SpellResultPanel());
+        for(int index=0;index<3;++index) {
+            const auto row=overlay.SpellResultRow(index),panel=overlay.SpellResultPanel();
+            fits(row);
+            assert(row.x>=panel.x && row.y>=panel.y && row.x+row.width<=panel.x+panel.width &&
+                   row.y+row.height<=panel.y+panel.height);
+        }
         for(int index=0;index<koumakyou::menu::kPauseCount;++index)fits(overlay.PauseRow(index));
         for(int index=0;index<koumakyou::menu::kResultCount;++index)fits(overlay.ResultRow(index));
         const koumakyou::GameplayLayout gameplay(size.x,size.y);
@@ -288,6 +356,7 @@ int main() {
     assert(koumakyou::ui::BossSeconds(150,0)==99);
     assert(koumakyou::ui::BossSeconds(0,0)==0);
     TestDialogueContent();
+    TestSpellPracticeCatalog();
     TestStageClearSummary();
     TestResponsiveLayouts();
     TestMenuMotion();

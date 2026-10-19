@@ -1,4 +1,4 @@
-// 本文件绘制新典风格的文字光晕、太极游标、星芒与细线，坐标统一为屏幕像素。
+// 本文件绘制新典风格的文字光晕、选择箭头、太极游标、星芒与细线，坐标统一为屏幕像素。
 #pragma once
 
 #include "render/ui_typography.hpp"
@@ -16,6 +16,16 @@ inline Color Blend(Color from, Color to, float amount) {
     amount = std::clamp(amount, 0.0F, 1.0F);
     const auto channel = [amount](int a, int b) { return static_cast<unsigned char>(a + (b - a) * amount); };
     return {channel(from.r,to.r),channel(from.g,to.g),channel(from.b,to.b),channel(from.a,to.a)};
+}
+/// @brief 绘制共用三角选择箭头；bounds 为固定屏幕像素命中区，direction 为 -1/1，phase 为更新侧推进的秒数。
+/// opacity 为 0～1，hovered 由固定命中区计算；轻微水平晃动仅影响绘制，不能改变输入区域或在绘制时推进动画。
+inline void SelectionArrow(Rectangle bounds,int direction,Color color,float opacity,float phase,bool hovered) {
+    const float drift=direction*bounds.width*0.06F*std::sin(phase*3.5F);
+    const Vector2 center{bounds.x+bounds.width/2+drift,bounds.y+bounds.height/2};
+    const float dx=direction*bounds.width*0.28F,dy=bounds.height*0.26F;
+    const Vector2 tip{center.x+dx,center.y},top{center.x-dx,center.y-dy},bottom{center.x-dx,center.y+dy};
+    DrawTriangle(tip,direction<0?bottom:top,direction<0?top:bottom,
+                 WithOpacity(color,opacity*(hovered?1.0F:0.6F)));
 }
 /// @brief 绘制借用字体及暖色轮廓光；size 为屏幕像素，strength 为 0～2（确认可短暂增强），文字度量不受光晕影响。
 inline void GlowText(Font font, const char* text, Vector2 position, float size,

@@ -18,7 +18,7 @@ void RunSettingsTests() {
     assert(defaults.fpsLimit == 60 && defaults.musicVolume == 50);
     assert(defaults.mouseSensitivity == 100);
     assert(defaults.soundVolume == 60 && defaults.initialLives == 2 && defaults.initialBombs == 3);
-    assert(defaults.lastSelection.shot == 0 && !defaults.lastSelection.challenge && defaults.lastSelection.practicePhase == 2);
+    assert(defaults.lastSelection.character == 0 && defaults.lastSelection.shot == 0 && !defaults.lastSelection.challenge && defaults.lastSelection.practicePhase == 2);
     assert(defaults.bindings.focus == MouseBinding(MOUSE_BUTTON_RIGHT));
     assert(defaults.bindings.descend == KEY_LEFT_SHIFT);
     assert(defaults.bindings.fire == MouseBinding(MOUSE_BUTTON_LEFT));
@@ -90,7 +90,7 @@ void RunSettingsTests() {
     assert(migrated.bindings.fire == MouseBinding(MOUSE_BUTTON_LEFT));
     assert(migrated.bindings.bomb == KEY_F && migrated.bindings.pause == KEY_P);
     { std::ifstream in(path); const std::string content((std::istreambuf_iterator<char>(in)), {});
-      assert(content.find("version=6") != std::string::npos);
+      assert(content.find("version=8") != std::string::npos);
       assert(content.find("fire_alt") == std::string::npos && content.find("bomb_alt") == std::string::npos); }
     { std::ofstream out(path); out << "version=3\nfocus=86\nfire=81\nbomb=69\npause=79\n"; }
     const auto custom = LoadOrCreateSettings(path);
@@ -106,19 +106,21 @@ void RunSettingsTests() {
     assert(current.bindings.focus == MouseBinding(MOUSE_BUTTON_SIDE));
     assert(current.bindings.fire == KEY_Z && current.bindings.bomb == KEY_X);
     // 全部开局选项组合均需跨文件往返；更新配置不能再次迁移 version=4 的自定义键位。
-    for (int shot : {0,1}) for (bool challenge : {false,true}) for (int phase : {2,4}) {
+    for (int character : {0,1}) for (int shot : {0,1}) for (bool challenge : {false,true}) for (int phase : {2,4}) {
         auto settings = current;
-        settings.lastSelection = {shot,challenge,phase};
+        settings.lastSelection = {shot,challenge,phase,1,character};
         assert(SaveSettingsFile(path,settings));
         const auto loaded = LoadOrCreateSettings(path);
         assert(loaded.lastSelection.shot == shot && loaded.lastSelection.challenge == challenge);
+        assert(loaded.lastSelection.character==character);
         assert(loaded.lastSelection.practicePhase == phase && loaded.bindings.fire == KEY_Z);
     }
-    for (const char* fields : {"last_shot=-1\nlast_challenge=2\nlast_practice_phase=3\n",
-                              "last_shot=2\nlast_challenge=-1\nlast_practice_phase=0\n",
-                              "last_shot=nan\nlast_challenge=true\nlast_practice_phase=4junk\n"}) {
+    for (const char* fields : {"last_character=-1\nlast_shot=-1\nlast_challenge=2\nlast_practice_phase=3\n",
+                              "last_character=2\nlast_shot=2\nlast_challenge=-1\nlast_practice_phase=0\n",
+                              "last_character=nan\nlast_shot=nan\nlast_challenge=true\nlast_practice_phase=4junk\n"}) {
         { std::ofstream out(path); out << "version=5\n" << fields; }
         const auto loaded = LoadOrCreateSettings(path);
+        assert(loaded.lastSelection.character==0);
         assert(loaded.lastSelection.shot == 0 && !loaded.lastSelection.challenge && loaded.lastSelection.practicePhase == 2);
     }
     { std::ofstream out(path); out << "version=4\nfocus=1003\nfire=90\nbomb=88\nbest_score=1234\n"; }
@@ -157,5 +159,34 @@ void RunSettingsTests() {
     assert(previous.stageHighScores.Best(false,1)==5176180 && previous.stageHighScores.Best(true,1)==0);
     assert(previous.lastSelection.shot==1 && previous.lastSelection.challenge && previous.lastSelection.practiceStage==1);
     assert(LoadOrCreateSettings(path).stageHighScores.scores==previous.stageHighScores.scores);
+    // 符卡记录按原典编号和四种角色组合独立保存，旧整关记录不能被迁移为符卡取得。
+    auto spells=previous;
+    spells.spellSelection={spell::Page::Stage,3,15,3,3};
+    spells.spellRecords.Begin(0,3,true);spells.spellRecords.Finish(0,3,true,true,8765432109LL);
+    spells.spellRecords.Begin(1,7,false);spells.spellRecords.Finish(1,7,false,true,9999);
+    spells.spellRecords.Begin(2,4,false);spells.spellRecords.Begin(3,131,false);
+    assert(SaveSettingsFile(path,spells));
+    const auto restored=LoadOrCreateSettings(path);
+    assert(restored.spellSelection.stage==3 && restored.spellSelection.group==15 && restored.spellSelection.character==3);
+    assert(restored.spellRecords.Get(0,3).bestScore==8765432109LL && restored.spellRecords.Get(0,3).captured==1);
+    assert(restored.spellRecords.Get(1,7).mainCaptured==1 && restored.spellRecords.Get(1,7).bestScore==0);
+    assert(restored.spellRecords.Seen(1,7) && !restored.spellRecords.Seen(0,7) && !restored.spellRecords.Seen(0,3));
+    assert(spell::Available(spell::Find(0,2,1),1,restored.spellRecords));
+    assert(!spell::Available(spell::Find(0,2,1),0,restored.spellRecords));
+    assert(!spell::Available(spell::Find(0,1,1),0,restored.spellRecords));
+    for(int character=0;character<spell::kCharacterCount;++character) {
+        assert(restored.spellRecords.Seen(character,4)==(character==2));
+        assert(restored.spellRecords.Seen(character,131)==(character==3));
+    }
+    assert(restored.spellRecords.Get(1,3).attempts==0 && restored.stageHighScores.scores==previous.stageHighScores.scores);
+    {std::ofstream out(path);out<<"version=7\nlast_spell_stage=3\nlast_spell_group=99\nlast_spell_character=4\n"
+        <<"spell_record_0_3=0 3 -1 1 1 0 0\nspell_record_1_7=1 7 100 1 2 0 0\n"
+        <<"spell_record_wrong=0 7 100 1 1 0 0\nspell_record_3_131=3 131 9999999999 2 1 0 0\n";}
+    const auto invalidSpell=LoadOrCreateSettings(path);
+    assert(invalidSpell.spellSelection.group==1 && invalidSpell.spellSelection.character==0);
+    assert(invalidSpell.spellRecords.Get(0,3).attempts==0 && invalidSpell.spellRecords.Get(1,7).attempts==0);
+    assert(invalidSpell.spellRecords.Get(0,7).attempts==0 && invalidSpell.spellRecords.Get(3,131).bestScore==9999999999LL);
+    for(int character=0;character<spell::kCharacterCount;++character)
+        assert(!invalidSpell.spellRecords.Seen(character,3) && !invalidSpell.spellRecords.Seen(character,7) && !invalidSpell.spellRecords.Seen(character,131));
     std::filesystem::remove(path);
 }

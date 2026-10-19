@@ -155,12 +155,15 @@ void Game::HandlePlayerHit() {
 
 void Game::AdvanceBossPhase() {
     if (!boss_ || !boss_->active) return;
+    BeginSpellRecord();
+    const bool captured=boss_->SpellName() && boss_->health<=0 && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_;
     // 捕获奖励只在符卡击破时结算；退场回调仍保留 phase，必须用 SpellName 排除重复结算。
-    if(boss_->SpellName() && boss_->health<=0 && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_) {
+    if(captured) {
         const int seconds=static_cast<int>(std::max(0.0F,boss_->TimeLimit()-boss_->phaseTimer));
         spellBonus_=200000+20000*seconds; score_+=spellBonus_;
         spellBonusTimer_=280.0F/60;
     }
+    if(boss_->SpellName())FinishSpellRecord(captured);
     if (spellPractice_) {
         EndStage(RunState::Won);
         return;
@@ -184,6 +187,8 @@ void Game::AdvanceBossPhase() {
         spellStartMisses_=missCount_; spellStartBombs_=bombCount_;
         spellCutInTimer_ = boss_->SpellName() != nullptr
                                ? kSpellCutInDuration : 0.0F;
+        // 宣告符卡的本帧即记录遇见并落盘；即使紧接着暂停退出，也不能漏掉已经展示的符卡。
+        BeginSpellRecord();
         messageTimer_ = 0.0F;
         assets_.PlaySoundEffect(boss_->SpellName() ? "spell" : "enemy_down");
     } else if (!hasNextPhase && wasMidboss) {

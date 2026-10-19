@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <charconv>
 #include <fstream>
+#include <sstream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -106,6 +107,19 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         }
 
         const std::string_view name = Trim(trimmed.substr(0, separator));
+        if(name.starts_with("spell_record_")) {
+            // 稀疏行：角色、原典符卡号、最高分、练习尝试/取得、本篇尝试/取得；整行有效才接收。
+            std::istringstream row{std::string(trimmed.substr(separator+1))};
+            int character=0,number=0; spell::Record record; std::string trailing;
+            if(row>>character>>number>>record.bestScore>>record.attempts>>record.captured>>record.mainAttempts>>record.mainCaptured &&
+               !(row>>trailing) && character>=0 && character<spell::kCharacterCount && number>=1 && number<=spell::kSpellCount &&
+               name=="spell_record_"+std::to_string(character)+"_"+std::to_string(number) &&
+               record.bestScore>=0 && record.attempts>=0 && record.attempts<=2000000000 && record.captured>=0 && record.captured<=record.attempts &&
+               record.mainAttempts>=0 && record.mainAttempts<=2000000000 && record.mainCaptured>=0 && record.mainCaptured<=record.mainAttempts)
+                settings.spellRecords.values[character][number-1]=record;
+            else shouldRewrite=true;
+            continue;
+        }
         bool stageField=false;
         for(int mode=0;mode<2;++mode) for(int stage=1;stage<=kStageScoreCount;++stage) {
             const std::string key=std::string(mode?"stage_best_challenge_":"stage_best_standard_")+std::to_string(stage);
@@ -124,7 +138,7 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
 
         if (name == "version") {
             version = *value;
-            shouldRewrite = shouldRewrite || version != 6;
+            shouldRewrite = shouldRewrite || version != 8;
         } else if (name == "music_volume") {
             if (*value >= 0 && *value <= 100) settings.musicVolume = *value;
             else shouldRewrite = true;
@@ -147,6 +161,9 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         } else if (name == "last_shot") {
             if (*value == 0 || *value == 1) settings.lastSelection.shot = *value;
             else shouldRewrite = true;
+        } else if (name == "last_character") {
+            if (*value == 0 || *value == 1) settings.lastSelection.character = *value;
+            else shouldRewrite = true;
         } else if (name == "last_challenge") {
             if (*value == 0 || *value == 1) settings.lastSelection.challenge = *value == 1;
             else shouldRewrite = true;
@@ -156,6 +173,14 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         } else if (name == "last_practice_stage") {
             if (*value >= 1 && *value <= kStageScoreCount) settings.lastSelection.practiceStage = *value;
             else shouldRewrite = true;
+        } else if (name == "last_spell_character") {
+            if(*value>=0 && *value<spell::kCharacterCount)settings.spellSelection.character=*value;else shouldRewrite=true;
+        } else if (name == "last_spell_stage") {
+            if(*value>=0 && *value<spell::kStageCount)settings.spellSelection.stage=*value;else shouldRewrite=true;
+        } else if (name == "last_spell_group") {
+            if(*value>=0 && *value<16)settings.spellSelection.group=*value;else shouldRewrite=true;
+        } else if (name == "last_spell_difficulty") {
+            if(*value>=0 && *value<5)settings.spellSelection.difficulty=*value;else shouldRewrite=true;
         } else if (name == "fps_limit") {
             if (IsSupportedFpsLimit(*value)) {
                 settings.fpsLimit = *value;
@@ -198,6 +223,14 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         settings.stageHighScores.Record(false,1,settings.bestScore);
         shouldRewrite=true;
     }
+    if(settings.spellSelection.group>=spell::Stages()[settings.spellSelection.stage].groups) {
+        settings.spellSelection.group=0;shouldRewrite=true;
+    }
+    if(version<7) {
+        settings.spellSelection.character=settings.lastSelection.shot;
+        settings.spellSelection.group=settings.lastSelection.practicePhase==4?2:1;
+        shouldRewrite=true;
+    }
     if (!HasUniqueBindings(settings.bindings)) {
         settings.bindings = KeyBindings{};
         shouldRewrite = true;
@@ -212,7 +245,7 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     if (!output) return false;
 
     output << "# koumakyou local settings\n";
-    output << "version=6\n";
+    output << "version=8\n";
     output << "fps_limit=" << settings.fpsLimit << '\n';
     output << "music_volume=" << settings.musicVolume << '\n';
     output << "mouse_sensitivity=" << settings.mouseSensitivity << '\n';
@@ -221,12 +254,24 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     output << "initial_bombs=" << settings.initialBombs << '\n';
     output << "best_score=" << settings.bestScore << '\n';
     output << "last_shot=" << settings.lastSelection.shot << '\n';
+    output << "last_character=" << settings.lastSelection.character << '\n';
     output << "last_challenge=" << settings.lastSelection.challenge << '\n';
     output << "last_practice_phase=" << settings.lastSelection.practicePhase << '\n';
     output << "last_practice_stage=" << settings.lastSelection.practiceStage << '\n';
     for(int mode=0;mode<2;++mode) for(int stage=1;stage<=kStageScoreCount;++stage)
         output << (mode?"stage_best_challenge_":"stage_best_standard_") << stage << '='
                << settings.stageHighScores.scores[mode][stage-1] << '\n';
+    output << "last_spell_character=" << settings.spellSelection.character << '\n';
+    output << "last_spell_stage=" << settings.spellSelection.stage << '\n';
+    output << "last_spell_group=" << settings.spellSelection.group << '\n';
+    output << "last_spell_difficulty=" << settings.spellSelection.difficulty << '\n';
+    for(int character=0;character<spell::kCharacterCount;++character)for(int number=1;number<=spell::kSpellCount;++number) {
+        const auto& record=settings.spellRecords.Get(character,number);
+        if(record.bestScore==0 && record.attempts==0 && record.mainAttempts==0)continue;
+        output << "spell_record_" << character << '_' << number << '=' << character << ' ' << number << ' '
+               << record.bestScore << ' ' << record.attempts << ' ' << record.captured << ' '
+               << record.mainAttempts << ' ' << record.mainCaptured << '\n';
+    }
     for (const BindingField& field : kBindingFields) {
         output << field.name << '=' << settings.bindings.*(field.member) << '\n';
     }

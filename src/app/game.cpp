@@ -103,7 +103,10 @@ void Game::LoadSettings() {
     bestScore_ = settings.bestScore;
     stageHighScores_ = settings.stageHighScores;
     lastSelection_ = settings.lastSelection;
+    spellSelection_=settings.spellSelection;
+    spellRecords_=settings.spellRecords;
     selectedShot_ = lastSelection_.shot;
+    selectedCharacter_ = lastSelection_.character;
     challengeMode_ = lastSelection_.challenge;
     practicePhase_ = lastSelection_.practicePhase;
     assets_.SetMusicVolumePercent(musicVolume_);
@@ -121,13 +124,15 @@ void Game::LoadSettings() {
 
 void Game::SaveSettings() const {
     const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_],
-        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_, stageHighScores_};
+        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_, stageHighScores_, spellSelection_, spellRecords_};
     if (!SaveSettingsFile(kSettingsFilename, settings)) {
         TraceLog(LOG_WARNING, "SETTINGS: Failed to save %s", kSettingsFilename);
     }
 }
 
 void Game::StartRun(bool captureCursor, bool synchronous) {
+    FinishSpellRecord(false);
+    spellCaptured_=false;
     previewMode_ = false;
     // 先移除所有借用旧关卡资源的对象，再取消旧任务并释放纹理及清单。
     actorEffects_.Clear();
@@ -228,6 +233,7 @@ void Game::CompleteStartRun() {
 }
 
 void Game::EnterMainMenu() {
+    FinishSpellRecord(false);
     dialogueMotion_.Clear();
     actorEffects_.Clear();
     bullets_.Reset();
@@ -296,6 +302,7 @@ void Game::RecordStageScore() {
 }
 
 void Game::EndStage(RunState result) {
+    FinishSpellRecord(false);
     RecordStageScore();
     if (result == RunState::Won) {
         assets_.PlaySoundEffect("clear");
@@ -315,7 +322,7 @@ void Game::EndStage(RunState result) {
     boss_.reset();
     dialogueActive_ = false;
     spellCutInTimer_ = messageTimer_ = 0.0F;
-    selectedResultItem_ = 0;
+    selectedResultItem_ = spellPractice_?2:0;
     finishResult_ = result;
     state_ = RunState::Finishing;
 }
@@ -411,8 +418,12 @@ void Game::UpdateUiMotion(float deltaTime) {
     } else if (state_ == RunState::StartSetup) {
         detail = static_cast<int>(setupStep_);
         selection = setupStep_ == StartSetupStep::Shot ? selectedShot_ : setupStep_ == StartSetupStep::Mode ? static_cast<int>(challengeMode_)
-            : setupStep_ == StartSetupStep::Spell ? (practicePhase_ == 2 ? 0 : 1)
             : setupStep_ == StartSetupStep::Difficulty ? 1 : setupStep_ == StartSetupStep::Stage ? selectedPracticeStage_ : 0;
+        if(spellPractice_) {
+            detail=8+static_cast<int>(spellSelection_.page);
+            selection=spellSelection_.page==spell::Page::Stage?spellSelection_.stage:
+                spellSelection_.page==spell::Page::Group?spellSelection_.group:spellSelection_.difficulty;
+        }
     } else if (state_ == RunState::MusicRoom) selection = selectedTrack_;
     else if (state_ == RunState::Paused) selection = selectedPauseItem_;
     else if (state_ == RunState::Won || state_ == RunState::GameOver) selection = selectedResultItem_;
@@ -420,12 +431,14 @@ void Game::UpdateUiMotion(float deltaTime) {
     // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
     menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
     startSetupMotion_.Advance(state_==RunState::MainMenu?-1:state_==RunState::StartSetup?static_cast<int>(setupStep_):-2,deltaTime);
-    for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Spell,StartSetupStep::Stage}) {
+    for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Stage}) {
         if(startSetupMotion_.Layer(step)<=0 && !(state_==RunState::StartSetup && setupStep_==step))continue;
         const int selected=step==StartSetupStep::Shot?selectedShot_:step==StartSetupStep::Mode?int(challengeMode_):
-            step==StartSetupStep::Stage?selectedPracticeStage_:int(practicePhase_==4);
+            selectedPracticeStage_;
         setupChoiceMotion_[static_cast<int>(step)].Advance(static_cast<int>(step),selected,deltaTime);
     }
+    spellCharacterMotion_.Advance(0,spellSelection_.character,deltaTime);
+    startCharacterMotion_.Advance(0,selectedCharacter_,deltaTime);
     if(state_==RunState::MainMenu)titleMenuMotion_=menuMotion_;
 }
 
@@ -464,6 +477,25 @@ void Game::UpdateState(float deltaTime) {
 
     if (state_ == RunState::Won || state_ == RunState::GameOver) {
         const auto input = ui::MenuInput::Read();
+        if(spellPractice_) {
+            if(input.back) {ReturnToSpellPractice();return;}
+            if(IsKeyPressed(KEY_M)) {EnterMainMenu();return;}
+            if(input.Direction()!=0) {
+                do {selectedResultItem_=(selectedResultItem_+3+input.Direction())%3;}
+                while(!menu::kSpellResultAvailable[selectedResultItem_]);
+                assets_.PlaySoundEffect("menu_move");
+            }
+            bool confirm=input.confirm;
+            const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
+            for(int index=0;index<3;++index)if(menu::kSpellResultAvailable[index])
+                confirm=input.Select(layout.SpellResultRow(index),index,selectedResultItem_)||confirm;
+            if(IsKeyPressed(KEY_R)) {selectedResultItem_=2;confirm=true;}
+            if(confirm) {
+                assets_.PlaySoundEffect("menu_confirm");
+                if(selectedResultItem_==2)StartRun();else ReturnToSpellPractice();
+            }
+            return;
+        }
         if (input.back) {
             if(practiceMode_ && !spellPractice_)ReturnToPracticeStage(); else EnterMainMenu();
             return;
@@ -494,7 +526,7 @@ void Game::UpdateState(float deltaTime) {
         }
         if (IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
         const int previous = selectedPauseItem_;
-        const int count=static_cast<int>(menu::PauseLabels(practiceMode_ && !spellPractice_).size());
+        const int count=static_cast<int>(menu::PauseLabels(practiceMode_ && !spellPractice_,spellPractice_).size());
         selectedPauseItem_ = (selectedPauseItem_ + count + input.Direction()) % count;
         bool confirm = input.confirm;
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
@@ -507,7 +539,7 @@ void Game::UpdateState(float deltaTime) {
                 case 0: TogglePause(); break;
                 case 1: EnterMainMenu(); break;
                 case 2: StartRun(); break;
-                case 3: ReturnToPracticeStage(); break;
+                case 3: if(spellPractice_)ReturnToSpellPractice();else ReturnToPracticeStage(); break;
             }
         }
         return;
@@ -553,6 +585,7 @@ void Game::UpdateState(float deltaTime) {
     // 先推进旧效果，本帧产生的快照下一帧开始计时，避免大 dt 吞掉退场首帧。
     actorEffects_.Update(deltaTime);
 
+    BeginSpellRecord();
     const bool dialogueWasActive = dialogueActive_;
     stage_.Update(deltaTime,
                   [this](const StageEvent& event) {

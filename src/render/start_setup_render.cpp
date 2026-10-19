@@ -10,8 +10,6 @@
 namespace koumakyou {
 namespace {
 constexpr Color kIvory{252,246,236,255},kGold{233,204,139,255},kBlue{162,194,247,255},kRose{207,119,132,255};
-constexpr std::array<const char*,2> kShots{"灵之御札「Homing Amulet」","梦之御札「Persuasion Needle」"};
-constexpr std::array<const char*,2> kBombs{"「梦想封印」","「封魔阵」"};
 
 /// @brief 在屏幕矩形中按宽度缩小文字；size 为屏幕像素，top 为矩形内相对高度，center 控制对齐。
 void Label(Font font,const char* text,Rectangle bounds,float size,Color color,float top=0,bool center=true,float glow=0) {
@@ -32,7 +30,7 @@ void Ornament(Rectangle bounds,float scale,Color color) {
         }
 }
 
-/// @brief 借用人物纹理；前景等比完整展示，背景裁取上身后等比覆盖，不拉伸人物。
+/// @brief 借用人物纹理；前景完整等比展示，后层截取各自不同姿势的全身图上部并放大覆盖。
 void Portrait(Texture2D texture,Rectangle slot,bool backdrop,float reveal) {
     if(!IsTextureValid(texture))return;
     Rectangle source{0,0,float(texture.width),float(texture.height)*(backdrop?0.7F:1)};
@@ -45,6 +43,7 @@ void Portrait(Texture2D texture,Rectangle slot,bool backdrop,float reveal) {
         slot={slot.x+(slot.width-width)/2,slot.y+slot.height-height,width,height};
     }
     slot.x+=(backdrop?-18:18)*(1-reveal);
+    // 两位角色均使用自然原色的现代图，以同一色调和 27% 透明度融入后层；灵梦原效果不变。
     DrawTexturePro(texture,source,slot,{},0,Fade(backdrop?Color{173,130,135,255}:WHITE,(backdrop?0.27F:1)*reveal));
 }
 
@@ -62,12 +61,13 @@ void DifficultyCard(Font font,Rectangle card,float scale,int index,bool selected
     if(selected)Label(font,"第一面",card,18*scale,ui::WithOpacity(Color{90,65,63,255},opacity),0.81F);
 }
 
-/// @brief 两行御札摘要与选择项共用样式；weight/reveal 为 0～1，只改变绘制，不改变输入区域。
-void Shot(Font font,Rectangle row,float scale,int shot,float weight,float reveal,float opacity=1) {
-    const Color color=ui::WithOpacity(ui::Blend(Color{156,127,121,255},shot==0?kBlue:kRose,weight),reveal*opacity);
-    Label(font,kShots[shot],row,29*scale,color,0.05F,false,weight*0.65F);
+/// @brief 两行御札摘要与选择项共用样式；combination 为灵/梦/魔/恋的 0～3，weight/reveal 为 0～1。
+void Shot(Font font,Rectangle row,float scale,int combination,float weight,float reveal,float opacity=1) {
+    const auto& profile=spell::Characters()[combination];
+    const Color color=ui::WithOpacity(ui::Blend(Color{156,127,121,255},combination%2==0?kBlue:kRose,weight),reveal*opacity);
+    Label(font,profile.shot,row,29*scale,color,0.05F,false,weight*0.65F);
     Ornament({row.x,row.y+row.height*0.48F,row.width,0},scale,color);
-    Label(font,kBombs[shot],row,27*scale,color,0.55F);
+    Label(font,profile.bomb,row,27*scale,color,0.55F);
 }
 /// @brief 同一层的文字、细线和底色共用透明度，保留颜色原有的 Alpha；不持有字体资源。
 struct Painter {
@@ -93,10 +93,17 @@ void Game::DrawStartSetup() const {
     const Font font=common.uiFont;
     const auto& motion=startSetupMotion_;
     const float s=canvas.scale,setup=motion.Setup(),character=motion.Character();
+    const auto drawShot=[&](Rectangle row,int index,float weight,float opacity) {
+        for(int role=0;role<2;++role) {
+            const float alpha=opacity*startCharacterMotion_.Weight(role);
+            if(alpha>0.001F)Shot(font,row,s,role*2+index,weight,1,alpha);
+        }
+    };
     // 首页仍在下层绘制，背景色和装饰随选择页整体淡入；无需截图纹理，原生窗口和离屏截图行为相同。
     if(motion.Title()>0)DrawMainMenu(state_==RunState::MainMenu?nullptr:&titleMenuMotion_);
     if(setup<=0)return;
     menu::DrawPageSurface(canvas,menuMotion_,setup);
+    if(spellPractice_) {DrawSpellPractice(setup);return;}
     const Painter page{font,s,setup};
     page.Text(practiceMode_?(spellPractice_?"SPELL PRACTICE":"PRACTICE START"):"START",
               canvas.Rect(42,canvas.height-108,layout.compact?290:400,70),52*s,Color{122,48,51,150},0,false);
@@ -113,21 +120,25 @@ void Game::DrawStartSetup() const {
             Painter{font,s,difficulty*entry}.Card(card,index,false);
         }
     }
-    if(character>0) {
+    for(int role=0;role<2 && character>0;++role) {
+        const float alpha=character*startCharacterMotion_.Weight(role);
+        if(alpha<=0.001F)continue;
+        const auto& profile=spell::Characters()[role*2];
         BeginScissorMode(22*s,22*s,GetScreenWidth()-44*s,GetScreenHeight()-44*s);
-        Portrait(common.reimuPortrait,layout.PortraitBackdrop(),true,character);
-        Portrait(common.reimuPortrait,layout.Portrait(),false,character);
+        Portrait(role==0?common.reimuPortrait:common.marisaBackdrop,layout.PortraitBackdrop(),true,alpha);
+        Portrait(common.spellPortraits[role],layout.Portrait(),false,alpha);
         EndScissorMode();
-        const Painter p{font,s,character};
+        const Painter p{font,s,alpha};
         const auto info=layout.CharacterInfo();
-        p.Text("博丽神社的巫女小姐",info,26*s,kIvory,0,true,0.2F);
-        p.Text("博丽 灵梦",info,54*s,kIvory,0.17F,true,0.3F);
+        p.Text(profile.title,info,26*s,kIvory,0,true,0.2F);
+        p.Text(profile.displayName,info,54*s,kIvory,0.17F,true,0.3F);
         p.Rule({info.x,info.y+info.height*0.46F,info.width,0},kRose);
         constexpr std::array<const char*,3> stats{"移动速度","攻击范围","攻击力"};
+        constexpr std::array<const char*,5> stars{"★","★★","★★★","★★★★","★★★★★"};
         for(int index=0;index<3;++index) {
             const Rectangle row{info.x,info.y+info.height*(0.51F+index*0.16F),info.width,info.height*0.16F};
             p.Text(stats[index],{row.x,row.y,row.width*0.48F,row.height},25*s,kGold,0,false);
-            p.Text(index==1?"★★★★":"★★★",{row.x+row.width*0.5F,row.y,row.width*0.5F,row.height},27*s,kGold,0,false);
+            p.Text(stars[profile.stars[index]-1],{row.x+row.width*0.5F,row.y,row.width*0.5F,row.height},27*s,kGold,0,false);
         }
     }
     // Normal 札沿连续路径移到人物页左下，放在人物之上保持移动途中可读，后续步骤不重复淡入。
@@ -138,7 +149,7 @@ void Game::DrawStartSetup() const {
         Painter{font,s,normal}.Card(Mix(card,layout.Badge(),progress),1,true);
     }
     // 可见页面各自保留当前权重；快速确认或返回只改变目标，旧标题与选项从当前画面继续退场。
-    for(const auto step:{StartSetupStep::Character,StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Spell}) {
+    for(const auto step:{StartSetupStep::Character,StartSetupStep::Shot,StartSetupStep::Mode}) {
         const float alpha=motion.Layer(step);
         if(alpha<=0)continue;
         const Painter p{font,s,alpha};
@@ -146,25 +157,30 @@ void Game::DrawStartSetup() const {
             auto title=canvas.Rect(55,layout.compact?38:70,layout.compact?650:400,65);
             title.x+=18*s*(1-alpha);
             p.Text("请选择主人公。",title,42*s,kGold,0,false,0.4F);p.Rule(title,kGold);
+            for(int direction:{-1,1}) {
+                const auto button=layout.CharacterArrow(direction);
+                ui::SelectionArrow(button,direction,kGold,alpha,menuMotion_.Phase(),
+                                   CheckCollisionPointRec(GetMousePosition(),button));
+            }
             continue;
         }
         auto heading=layout.Heading();heading.x+=18*s*(1-alpha);
         const bool mode=step==StartSetupStep::Mode;
         const Color accent=mode?kRose:kBlue;
-        p.Text(mode?"要以哪一种模式":step==StartSetupStep::Spell?"请选择练习的符卡。":"请选择使用的御札。",
+        p.Text(mode?"要以哪一种模式":"请选择使用的御札。",
                heading,(layout.compact?38:44)*s,accent,0,true,0.5F);
         if(mode)p.Text("开始游戏？",heading,40*s,accent,layout.compact?0.48F:0.45F,true,0.5F);
         p.Rule(heading,accent);
         for(int index=0;index<2;++index) {
             const float weight=setupChoiceMotion_[static_cast<int>(step)].Weight(index);
             auto row=layout.Choice(index);row.x+=18*s*(1-alpha)-4*s*weight;
-            if(step==StartSetupStep::Shot)Shot(font,row,s,index,weight,1,alpha);
+            if(step==StartSetupStep::Shot)drawShot(row,index,weight,alpha);
             else {
                 const Color color=ui::Blend(Color{161,138,132,255},mode?kIvory:kBlue,weight);
-                p.Text(mode?(index==0?"标准模式":"挑战模式"):(index==0?"夜符「Night Bird」":"暗符「Demarcation」"),
+                p.Text(index==0?"标准模式":"挑战模式",
                        row,34*s,color,0,false,weight*0.5F);
                 p.Rule({row.x,row.y+row.height*0.42F,row.width,0},color);
-                p.Text(mode?(index==0?"残机数量有限的基本模式":"无限残机，挑战最少 MISS"):(index==0?"露米娅 · 第一张符卡":"露米娅 · 第二张符卡"),
+                p.Text(index==0?"残机数量有限的基本模式":"无限残机，挑战最少 MISS",
                        row,23*s,color,0.53F,false);
             }
         }
@@ -205,16 +221,15 @@ void Game::DrawStartSetup() const {
     const float shot=motion.Layer(StartSetupStep::Mode)+motion.Layer(StartSetupStep::Stage)+ready;
     if(shot>0) {
         auto row=Mix(layout.ShotSummary(),layout.StageShotSummary(),stages);row.y+=10*s*(1-shot);
-        Shot(font,row,s,selectedShot_,1,1,shot);
+        drawShot(row,selectedShot_,1,shot);
     }
     const float modeSummary=motion.Layer(StartSetupStep::Stage)+ready;
     if(modeSummary>0) {
         const Painter p{font,s,modeSummary};
         auto summary=Mix(layout.ModeSummary(),layout.StageModeSummary(),stages);summary.y+=10*s*(1-modeSummary);
-        p.Text(spellPractice_?"符卡练习":challengeMode_?"挑战模式":"标准模式",summary,30*s,kIvory,0,false);
+        p.Text(challengeMode_?"挑战模式":"标准模式",summary,30*s,kIvory,0,false);
         p.Rule({summary.x,summary.y+summary.height*0.40F,summary.width,0},kGold);
-        p.Text(spellPractice_?(practicePhase_==2?"夜符「Night Bird」":"暗符「Demarcation」"):
-               challengeMode_?"无限残机，挑战最少 MISS":"残机数量有限的基本模式",summary,22*s,kIvory,0.52F,false);
+        p.Text(challengeMode_?"无限残机，挑战最少 MISS":"残机数量有限的基本模式",summary,22*s,kIvory,0.52F,false);
     }
     if(ready>0) {
         const Painter p{font,s,ready};
@@ -225,7 +240,8 @@ void Game::DrawStartSetup() const {
         p.Text("准备好了吗？",{band.x+band.width*0.15F,band.y+28*s,band.width*0.7F,58*s},56*s,kIvory,0,true,0.6F);
         auto button=layout.ReadyButton();button.y+=18*s*(1-ready);
         const float hover=CheckCollisionPointRec(GetMousePosition(),layout.ReadyButton())?1:0.55F;
-        p.Text("START GAME",button,46*s,kIvory,0.12F,true,hover*menuMotion_.Pulse());
+        p.Text(selectedCharacter_==0?"START GAME":"魔理沙玩法尚未开放",button,selectedCharacter_==0?46*s:30*s,
+               selectedCharacter_==0?kIvory:Color{161,138,132,255},0.12F,true,selectedCharacter_==0?hover*menuMotion_.Pulse():0);
         p.Rule(button,ui::WithOpacity(kGold,0.65F));
     }
 }

@@ -9,6 +9,7 @@
 #include "app/run_state.hpp"
 #include "app/start_setup.hpp"
 #include "app/stage_clear.hpp"
+#include "app/spell_practice.hpp"
 #include "config/settings.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/items/drop_system.hpp"
@@ -121,9 +122,20 @@ private:
     void UpdateUiMotion(float deltaTime);
     /// @brief 从演员/弹幕的逻辑年龄同步原 ANM，冻结暂停帧，不改变战斗对象寿命。
     void UpdateBattleAnimations();
-    /// @brief 处理一面 Normal 的灵梦机体/标准或挑战模式选择，以及成绩、音乐和制作信息页。
+    /// @brief 处理 Normal 开局的角色/御札/模式选择，以及成绩、音乐和制作信息页。
     void UpdateMenuPage();
-    /// @brief 处理新典顺序的开局页；确认层单独消费一次按键，只有最终确认才启动加载。
+    /// @brief 独立处理符卡练习的三级浏览、横向角色切换与灰色启动门禁；返回优先于本帧确认。
+    void UpdateSpellPractice();
+    /// @brief 清理战场并返回符卡组选择，保留角色、关卡和难度，不重置选择页动画。
+    void ReturnToSpellPractice();
+    /// @brief 宣告已实现符卡时建立并保存本篇/练习尝试；本篇遇见记录只解锁本次角色/御札组合。
+    /// 每阶段最多打开一条记录，预览、对话与调试靶场不写入。
+    void BeginSpellRecord();
+    /// @brief 结束当前尝试并存档，重复调用无副作用；capture 须排除受击、Bomb 和超时。
+    void FinishSpellRecord(bool capture);
+    /// @brief 使用现有页面底板、字体、花饰和强调绘制独立符卡练习；opacity 为流程过渡权重。
+    void DrawSpellPractice(float opacity) const;
+    /// @brief 处理新典顺序的开局页；角色箭头只切换，只有已实现机体的最终确认才启动加载。
     void UpdateStartSetup();
     /// @brief 处理 FPS、音量、灵敏度、开局资源与设置菜单页面的输入。
     void UpdateOptions();
@@ -292,12 +304,19 @@ private:
     int bestScore_ = 0;
     StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
-    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前仅开放 Normal、灵梦与第一面，未开放选项不启动游戏。
+    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前仅 Normal、灵梦与第一面可玩；魔理沙候选可浏览，未开放机体不启动游戏。
+    int selectedCharacter_ = 0; // Start/Practice Start 的角色候选，0 灵梦/1 魔理沙；魔理沙目前仅支持选择与浏览。
+    ui::MenuMotion startCharacterMotion_{}; // 角色切换时前景、背景及人物摘要共用的渐变权重。
     int selectedPracticeStage_ = 0; // kPracticeStages 的局部索引，始终指向已注册关卡。
-    int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
+    int selectedShot_ = 0; // 普通选择页为角色内 0/1；符卡练习战斗为目录的四组合编号，目前仅 0/1 能启动。
     bool challengeMode_ = false;
     bool practiceMode_ = false;
     bool previewMode_ = false; // 静默截图不写入本机通关成绩，StartRun 会恢复普通记录规则。
+    spell::Selection spellSelection_{}; // 浏览身份与当前战斗御札独立，魔理沙不可借灵梦入口开局。
+    spell::Records spellRecords_{};
+    ui::MenuMotion spellCharacterMotion_{}; // 四组合展示权重，切换人物与文字共用，不影响鼠标命中。
+    int spellAttemptNumber_=0,spellAttemptCharacter_=0;
+    bool spellAttemptOpen_=false,spellAttemptPractice_=false,spellCaptured_=false; // 已打开记录只能结算一次；仅成功无伤无 Bomb 击破为取得。
     int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
     bool spellPractice_ = false;
     int selectedTrack_ = 0; // 音乐页局部编号：0～2 为曲目，3 为返回。

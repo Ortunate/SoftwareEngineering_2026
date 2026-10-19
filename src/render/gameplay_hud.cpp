@@ -113,7 +113,8 @@ void Game::DrawHud() const {
     if (!l.compact)
         Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
     row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
-    row("最高得分", TextFormat("%09d", bestScore_), l.compact ? 42 : 88, l.compact ? 16 : 18);
+    const long long displayedBest=spellPractice_?spellRecords_.Get(selectedShot_,practicePhase_==2?3:7).bestScore:bestScore_;
+    row("最高得分", TextFormat("%09lld", displayedBest), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
         DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,
                     ui::WithOpacity(Color{210, 173, 116, 65}, emphasis));

@@ -31,6 +31,9 @@ add_library(koumakyou_engine STATIC
     src/app/game.cpp
     src/app/input.cpp
     src/app/start_setup.cpp
+    src/app/spell_practice.cpp
+    src/app/spell_practice_menu.cpp
+    src/render/spell_practice_render.cpp
     src/config/settings.cpp
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp

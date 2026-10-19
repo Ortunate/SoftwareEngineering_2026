@@ -54,16 +54,21 @@ inline constexpr int kBackIndex = 8;
 inline constexpr int kPauseCount = 3;
 inline constexpr std::array<const char*,kPauseCount> kPauseLabels{
     "解除暂停","返回主菜单","从头再来"};
-/// @brief 整关练习增加返回关卡选择，前三项编号保持不变；符卡练习仍使用普通暂停项。
+/// @brief 整关练习增加返回关卡选择，前三项编号保持不变；符卡练习由 PauseLabels 返回对应选卡入口。
 inline constexpr std::array<const char*,4> kPracticePauseLabels{
     "解除暂停","返回主菜单","从头再来","返回关卡选择画面"};
 /// @brief 返回当前模式的暂停选项；借用静态数组，输入导航与绘制须使用同一列表。
-[[nodiscard]] inline std::span<const char* const> PauseLabels(bool stagePractice) {
+[[nodiscard]] inline std::span<const char* const> PauseLabels(bool stagePractice,bool spellPractice=false) {
+    static constexpr std::array<const char*,4> spells{"解除暂停","返回主菜单","从头再来","返回符卡选择画面"};
+    if(spellPractice)return spells;
     return stagePractice?std::span<const char* const>(kPracticePauseLabels):std::span<const char* const>(kPauseLabels);
 }
 /// @brief 结算操作的局部顺序；输入与绘制共用，结算时默认选择重新开始。
 inline constexpr int kResultCount = 2;
 inline constexpr std::array<const char*,kResultCount> kResultLabels{"从头再来","返回主菜单"};
+/// @brief 新典符卡结果菜单顺序；Replay 尚未实现，仅展示，导航和鼠标必须跳过该项，默认选择重试。
+inline constexpr std::array<const char*,3> kSpellResultLabels{"返回符卡选择画面","保存Replay","重试"};
+inline constexpr std::array<bool,3> kSpellResultAvailable{true,false,true};
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
     "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
@@ -112,13 +117,16 @@ struct BindingsLayout {
 struct OverlayLayout {
     Canvas canvas;
     OverlayLayout(int width,int height):canvas(width,height,760,620) {}
-    /// @brief 按实际项数确定底板高度；count 为普通 3 项或整关练习 4 项。
-    [[nodiscard]] Rectangle PausePanel(int count=kPauseCount) const { return canvas.Rect(135,180,490,118+count*48); }
-    /// @brief 暂停操作行，index 为当前 PauseLabels 的局部编号，绘制与点击共用。
-    [[nodiscard]] Rectangle PauseRow(int index) const { return canvas.Rect(170,270+index*48,420,42); }
+    /// @brief 共用暂停式浮窗；count 为操作项数，detailHeight 为标题下统计区占用的设计像素。
+    [[nodiscard]] Rectangle PausePanel(int count=kPauseCount,float detailHeight=0) const { return canvas.Rect(135,180,490,118+count*48+detailHeight); }
+    /// @brief 暂停式操作行；index 为菜单局部编号，detailHeight 须与底板一致，绘制与点击共用。
+    [[nodiscard]] Rectangle PauseRow(int index,float detailHeight=0) const { return canvas.Rect(170,270+index*48+detailHeight,420,42); }
+    /// @brief 符卡结果复用暂停浮窗，标题下为分数和统计保留 64 设计像素。
+    [[nodiscard]] Rectangle SpellResultPanel() const { return PausePanel(static_cast<int>(kSpellResultLabels.size()),64); }
+    [[nodiscard]] Rectangle SpellResultRow(int index) const { return PauseRow(index,64); }
     /// @brief 关卡计分明细的居中底板，横竖屏按短边等比缩放。
     [[nodiscard]] Rectangle ClearPanel() const { return canvas.Rect(80,100,600,430); }
-    /// @brief 结算操作行，index 为 0～kResultCount-1，绘制与点击共用。
+    /// @brief 普通结算操作行，index 为 0～1；符卡结果使用 SpellResultRow。
     [[nodiscard]] Rectangle ResultRow(int index) const { return canvas.Rect(170,430+index*48,420,42); }
 };
 /// @brief 标题页的响应式布局；使用完整窗口，方形/竖屏将标题放到菜单上方。

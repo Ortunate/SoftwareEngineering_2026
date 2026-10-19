@@ -3,6 +3,7 @@
 #pragma once
 
 #include "config/key_bindings.hpp"
+#include "app/spell_practice.hpp"
 
 #include <array>
 #include <filesystem>
@@ -40,7 +41,8 @@ struct StageHighScores {
         return true;
     }
 };
-/// @brief 上次开局页的选择；shot=0 为灵之御札、1 为梦之御札，practicePhase 仅允许 2 或 4。
+/// @brief 普通开局与整关练习的选择；character=0 灵梦/1 魔理沙，shot=0/1 为该角色的两种御札。
+/// practicePhase 仅允许 2/4，用于迁移旧符卡练习记录；新菜单独立保存 spellSelection。
 /// practiceStage 为 1～6 的关卡号，进入选择页时还须过滤未开放关卡；目前难度仅开放 Normal。
 /// 与本局运行状态独立，预览、重开和练习初始化不能覆盖此记录。
 struct StartSelection {
@@ -48,6 +50,7 @@ struct StartSelection {
     bool challenge = false;
     int practicePhase = 2;
     int practiceStage = 1;
+    int character = 0;
 };
 
 /// @brief 需要持久化的战斗键位、显示、音量、鼠标、开局资源和选择记录。
@@ -62,6 +65,8 @@ struct GameSettings {
     int bestScore = 0; // 本机一面最高分，0～20 亿；练习和挑战不写入。
     StartSelection lastSelection{};
     StageHighScores stageHighScores{};
+    spell::Selection spellSelection{}; // 独立保存符卡练习的角色、关卡、符卡组和难度；进入时重置为关卡页。
+    spell::Records spellRecords{};
 };
 
 /// @brief 读取本地配置；缺失或无效的配置会使用默认值。
@@ -69,7 +74,7 @@ struct GameSettings {
 /// @return 可用于本局游戏的设置。
 [[nodiscard]] GameSettings LoadOrCreateSettings(
     const std::filesystem::path& path);
-/// @brief 将全部设置保存为 version=6 文本配置；旧版本缺失字段使用默认值。
+/// @brief 将全部设置保存为 version=8 文本配置；旧版本缺失角色字段时使用灵梦。
 /// @param path 配置文件路径。
 /// @param settings 待保存的设置。
 /// @return 成功写入返回 true，否则返回 false。

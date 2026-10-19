@@ -192,8 +192,10 @@ void Game::DrawOverlay() const {
     const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto& canvas=layout.canvas;
     const GameplayLayout gameplay(GetScreenWidth(), GetScreenHeight());
-    // 通用反馈与符卡奖励共用底部区域；同一时刻优先显示通用事件，避免两块文字互相遮挡。
-    if (!dialogueActive_ && spellCutInTimer_ <= 0 &&
+    // 反馈只属于战斗与收尾；结果菜单已有完整计分，继续绘制奖励条会压住第三项“重试”。
+    const bool battleFeedback=state_==RunState::Playing || state_==RunState::Finishing ||
+        (state_==RunState::Paused && (pausedState_==RunState::Playing || pausedState_==RunState::Finishing));
+    if (battleFeedback && !dialogueActive_ && spellCutInTimer_ <= 0 &&
         (messageTimer_ > 0 || spellBonusTimer_ > 0)) {
         const Rectangle feedback = gameplay.Feedback(boss_ && boss_->active);
         const char* message = messageTimer_ > 0 ? message_.c_str()
@@ -211,22 +213,38 @@ void Game::DrawOverlay() const {
     DrawSpellCutIn();
     if(state_==RunState::StageClear || (state_==RunState::Paused && pausedState_==RunState::StageClear))DrawStageClear();
 
+    // 暂停与符卡结果共用底板和文字操作样式，禁用项只降透明度，不产生选中动效。
+    const auto drawModal=[&](Rectangle panel,const char* title,Color color) {
+        DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,155});
+        DrawRectangleRounded(panel,0.1F,12,Color{38,12,25,225});
+        ui::DrawCentered(font,title,canvas.Point(380,0).x,canvas.Point(0,200).y,43*canvas.scale,color);
+    };
+    const auto drawModalRow=[&](Rectangle row,const char* label,int index,bool available=true) {
+        const float weight=available?menuMotion_.Weight(index):0;
+        const float entrance=menuMotion_.Reveal(index*0.02F);
+        const float reveal=entrance*(available?1:0.35F);
+        const float size=25*canvas.scale,width=ui::MeasureText(font,label,size).x;
+        ui::GlowText(font,label,{canvas.Point(380,0).x-width/2+(-8*weight+16*(1-entrance))*canvas.scale,row.y+4*canvas.scale},size,
+                     Fade(ui::Blend(Color{190,153,164,255},GOLD,weight),reveal),GOLD,weight*menuMotion_.Pulse());
+        ui::FocusLine({row.x+20*canvas.scale,row.y+row.height},{row.x+row.width-20*canvas.scale,row.y+row.height},canvas.scale,
+                      GOLD,weight*reveal,menuMotion_.Phase());
+    };
     if (state_ == RunState::Paused) {
-        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                      Color{0, 0, 0, 155});
-        const auto center=canvas.Point(380,310);
-        const auto labels=menu::PauseLabels(practiceMode_ && !spellPractice_);
-        DrawRectangleRounded(layout.PausePanel(static_cast<int>(labels.size())),0.1F,12,Color{38,12,25,225});
-        ui::DrawCentered(font,"暂停",center.x,canvas.Point(0,200).y,43*canvas.scale,RAYWHITE);
-        for(int index=0;index<static_cast<int>(labels.size());++index) {
-            const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            const float size=25*canvas.scale,width=ui::MeasureText(font,labels[index],size).x;
-            const auto row=layout.PauseRow(index);
-            ui::GlowText(font,labels[index],{center.x-width/2+(-8*weight+16*(1-reveal))*canvas.scale,row.y+4*canvas.scale},size,
-                         Fade(ui::Blend(Color{190,153,164,255},GOLD,weight),reveal),GOLD,weight*menuMotion_.Pulse());
-            ui::FocusLine({row.x+20*canvas.scale,row.y+row.height},{row.x+row.width-20*canvas.scale,row.y+row.height},canvas.scale,
-                          GOLD,weight*reveal,menuMotion_.Phase());
-        }
+        const auto labels=menu::PauseLabels(practiceMode_ && !spellPractice_,spellPractice_);
+        drawModal(layout.PausePanel(static_cast<int>(labels.size())),"暂停",RAYWHITE);
+        for(int index=0;index<static_cast<int>(labels.size());++index)
+            drawModalRow(layout.PauseRow(index),labels[index],index);
+    } else if ((state_==RunState::Won || state_==RunState::GameOver) && spellPractice_) {
+        drawModal(layout.SpellResultPanel(),spellCaptured_?"Success!":"Failed...",spellCaptured_?GOLD:Color{255,90,110,255});
+        // 统计位于标题和操作之间，按底板宽度适配极限计数，避免窄窗口中文按钮与计分相互覆盖。
+        const auto detail=[&](const char* text,float y,float size) {
+            const float fitted=ui::FittedSize(font,text,size*canvas.scale,420*canvas.scale);
+            ui::DrawCentered(font,text,canvas.Point(380,0).x,canvas.Point(0,y).y,fitted,RAYWHITE);
+        };
+        detail(TextFormat("SCORE %09lld",score_),252,22);
+        detail(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),284,18);
+        for(int index=0;index<static_cast<int>(menu::kSpellResultLabels.size());++index)
+            drawModalRow(layout.SpellResultRow(index),menu::kSpellResultLabels[index],index,menu::kSpellResultAvailable[index]);
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,175});
         const float center=canvas.Point(380,0).x;
@@ -239,11 +257,11 @@ void Game::DrawOverlay() const {
         // 统计拆成两行，最大分数/擦弹数也不会挤出窄窗口或与重试提示重叠。
         centered(TextFormat("SCORE %09lld",score_),295,26,RAYWHITE);
         centered(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),337,22,RAYWHITE);
-        centered(spellPractice_?"SPELL PRACTICE":practiceMode_?"STAGE PRACTICE":challengeMode_?"CHALLENGE":"NORMAL",382,18,GOLD);
+        centered(practiceMode_?"STAGE PRACTICE":challengeMode_?"CHALLENGE":"NORMAL",382,18,GOLD);
         for(int index=0;index<menu::kResultCount;++index) {
             const auto row=layout.ResultRow(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            menu::DrawPageButton(canvas,font,row,index==1 && practiceMode_ && !spellPractice_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
+            menu::DrawPageButton(canvas,font,row,index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
         }
     }
 

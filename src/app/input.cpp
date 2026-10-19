@@ -47,6 +47,7 @@ void Game::UpdateMainMenu() {
             spellPractice_ = selectedMenuItem_ == 3;
             setupStep_ = spellPractice_ ? StartSetupStep::Spell : StartSetupStep::Difficulty;
             selectedShot_ = lastSelection_.shot;
+            selectedCharacter_ = lastSelection_.character;
             selectedPracticeStage_ = lastSelection_.practiceStage-1;
             if(!kPracticeStages[selectedPracticeStage_]) {
                 selectedPracticeStage_=0;
@@ -57,6 +58,7 @@ void Game::UpdateMainMenu() {
             // 符卡练习跳过模式页，仍沿用固定练习规则；不能将它的临时模式写回上次开局记录。
             challengeMode_ = !spellPractice_ && lastSelection_.challenge;
             practicePhase_ = lastSelection_.practicePhase;
+            if(spellPractice_)spellSelection_.page=spell::Page::Stage;
             state_ = RunState::StartSetup;
             break;
         case 5: state_ = RunState::Score; break;

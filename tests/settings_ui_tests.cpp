@@ -4,6 +4,7 @@
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
 #include "render/start_setup_layout.hpp"
+#include "render/spell_practice_layout.hpp"
 #include "raylib.h"
 #include <chrono>
 #include <cstdio>
@@ -39,7 +40,9 @@ struct GameLifecycleProbe {
         for(const char* name:kBindingNames)if(!contains(name))return false;
         for(int key=KEY_SPACE;key<=MouseBinding(MOUSE_BUTTON_BACK);++key)
             if(IsValidBinding(key) && !contains(Game::KeyLabel(key).c_str()))return false;
-        return contains("按键设置") && contains("恢复默认键位") && contains("梦幻夜行绘卷") &&
+        for(const auto& card:spell::Cards())if(!contains(card.name) || !contains(card.user))return false;
+        for(const auto& character:spell::Characters())if(!contains(character.name) || !contains(character.title))return false;
+        return contains("《》未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。") && contains("按键设置") && contains("恢复默认键位") && contains("梦幻夜行绘卷") &&
                contains("请选择主人公。博丽神社的巫女小姐移动速度攻击范围攻击力准备好了吗？面向大多数人的难度尚未开放");
     }
     /// @brief 设置 page=0～26 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
@@ -51,6 +54,7 @@ struct GameLifecycleProbe {
         game.selectedBinding_=6; game.selectedOption_=0; game.selectedPauseItem_=0;
         game.selectedTrack_=0; game.selectedResultItem_=0;
         game.practiceMode_=game.spellPractice_=false;
+        game.selectedCharacter_=0;game.startCharacterMotion_.Advance(0,0,1);
         switch(page) {
             case 0: game.titleEntrance_={}; break;
             case 1: break;
@@ -60,7 +64,8 @@ struct GameLifecycleProbe {
                 game.waitingForBinding_=page==4; break;
             case 5: case 6: case 7: case 8:
                 game.state_=RunState::StartSetup;
-                game.setupStep_=page==5?StartSetupStep::Difficulty:page==6?StartSetupStep::Shot:page==7?StartSetupStep::Mode:StartSetupStep::Spell; break;
+                game.setupStep_=page==5?StartSetupStep::Difficulty:page==6?StartSetupStep::Shot:page==7?StartSetupStep::Mode:StartSetupStep::Spell;
+                if(page==8) {game.practiceMode_=game.spellPractice_=true;game.spellSelection_={};} break;
             case 21: case 22:
                 game.state_=RunState::StartSetup;
                 game.setupStep_=page==21?StartSetupStep::Character:StartSetupStep::Ready;
@@ -129,9 +134,40 @@ struct GameLifecycleProbe {
         if(game.state_==RunState::MusicRoom)return game.selectedTrack_;
         if(game.state_==RunState::Paused)return game.selectedPauseItem_;
         if(game.state_==RunState::Won || game.state_==RunState::GameOver)return game.selectedResultItem_;
-        return game.setupStep_==StartSetupStep::Shot?game.selectedShot_:
+        return game.setupStep_==StartSetupStep::Character?game.selectedCharacter_:game.setupStep_==StartSetupStep::Shot?game.selectedShot_:
             game.setupStep_==StartSetupStep::Mode?int(game.challengeMode_):int(game.practicePhase_==4);
     }
+    static spell::Selection SpellChoice(const Game& game) {return game.spellSelection_;}
+    /// @brief 仅截图和隔离测试指定浏览页；实际流程另由键鼠驱动，不替代加载或结果回归。
+    static void SpellBrowse(Game& game,spell::Selection choice) {
+        game.practiceMode_=game.spellPractice_=true;game.challengeMode_=false;
+        game.setupStep_=StartSetupStep::Spell;game.spellSelection_=choice;game.state_=RunState::StartSetup;
+    }
+    static void SpellTitle(Game& game) {game.EnterMainMenu();game.selectedMenuItem_=3;game.titleEntrance_.Complete();}
+    static int BossPhase(const Game& game) {return game.boss_?game.boss_->phase:0;}
+    static bool SpellCaptured(const Game& game) {return game.spellCaptured_;}
+    static spell::Record SpellRecord(const Game& game,int character,int number) {return game.spellRecords_.Get(character,number);}
+    static bool SpellAvailable(const Game& game,int character,int group) {return spell::Available(spell::Find(0,group,1),character,game.spellRecords_);}
+    /// @brief 清空临时测试配置的符卡记录，以新档验证门禁，不修改生产存档或伪造解锁记录。
+    static void ClearSpellProgress(Game& game) {game.spellRecords_={};game.SaveSettings();}
+    /// @brief 隔离已经加载的实际关卡遭遇；保留 previewMode_，通过正式阶段交接记录遇见，不代写 Records。
+    static void PrepareStageEncounter(Game& game,bool stagePractice,int shot) {
+        game.stage_=StageDirector{};game.practiceMode_=stagePractice;game.spellPractice_=false;
+        game.selectedShot_=shot;game.BeginStageBoss(true,3);
+    }
+    /// @brief 以真实阶段结算入口分别触发击破与超时；不代写成绩，实际记录由 Game 保存。
+    static void FinishSpell(Game& game,bool capture) {
+        if(capture)game.boss_->health=0;else game.boss_->phaseTimer=game.boss_->TimeLimit();
+        game.AdvanceBossPhase();
+    }
+    static bool SpellPortraits(const Game& game) {const auto& p=game.assets_.Common().spellPortraits;return IsTextureValid(p[0]) && IsTextureValid(p[1]) && p[0].id!=p[1].id;}
+    /// @brief 前后层必须分别持有不同姿势的纹理，不能以同一前景图放大冒充后层。
+    static bool StartPortraitLayers(const Game& game) {
+        const auto& a=game.assets_.Common();
+        return SpellPortraits(game) && IsTextureValid(a.reimuPortrait) && IsTextureValid(a.marisaBackdrop) &&
+            a.reimuPortrait.id!=a.spellPortraits[0].id && a.marisaBackdrop.id!=a.spellPortraits[1].id;
+    }
+    static float StartCharacterWeight(const Game& game,int role) {return game.startCharacterMotion_.Weight(role);}
     static float DialogueTime(const Game& game) { return game.dialogueTimer_; }
     /// @brief 以真实结算入口检查成绩规则；仅替代漫长的整关计分过程，不绕过存档路径。
     static void FinishScoreAttempt(Game& game,long long score,bool challenge,bool spell,bool preview,RunState result) {
@@ -164,7 +200,7 @@ struct GameLifecycleProbe {
 
     /// @brief 读取实际选择页使用的值，不能以配置文件存在代替界面恢复检查。
     static StartSelection Selection(const Game& game) {
-        return {game.selectedShot_,game.challengeMode_,game.practicePhase_};
+        return {game.selectedShot_,game.challengeMode_,game.practicePhase_,game.selectedPracticeStage_+1,game.selectedCharacter_};
     }
 };
 }
@@ -361,14 +397,91 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
         next(restarted,StartSetupStep::Ready); click(layout.ReadyButton()); WaitForStage(restarted);
         restarted.Reset(); Event(7,0,0); Frame(restarted);
         Key(restarted,KEY_DOWN); Key(restarted,KEY_DOWN); next(restarted,StartSetupStep::Spell);
-        Key(restarted,KEY_RIGHT); next(restarted,StartSetupStep::Ready); back(restarted,StartSetupStep::Spell);
-        Key(restarted,KEY_X); Check(GameLifecycleProbe::MainMenu(restarted),"spell cancel did not return to title");
+        const auto spellBefore=GameLifecycleProbe::SpellChoice(restarted);
+        Key(restarted,KEY_RIGHT); next(restarted,StartSetupStep::Spell);
+        Key(restarted,KEY_DOWN); next(restarted,StartSetupStep::Spell);
+        Check(GameLifecycleProbe::SpellChoice(restarted).page==spell::Page::Difficulty,"spell flow skipped difficulty selection");
+        Key(restarted,KEY_X);Key(restarted,KEY_X);Key(restarted,KEY_X);
+        Check(GameLifecycleProbe::MainMenu(restarted),"spell cancel did not return to title");
         Check(GameLifecycleProbe::MenuSelection(restarted)==3,"spell practice title selection was not retained");
         next(restarted,StartSetupStep::Spell);
-        Check(GameLifecycleProbe::Selection(restarted).practicePhase==4,"spell practice selection was not restored");
-        Check(LoadOrCreateSettings(kSettingsFilename).lastSelection.practicePhase==4,"spell practice selection was not saved");
+        const auto restoredSpell=GameLifecycleProbe::SpellChoice(restarted);
+        Check(restoredSpell.character==(spellBefore.character+1)%4,"spell character selection was not restored");
+        Check(LoadOrCreateSettings(kSettingsFilename).spellSelection.group==restoredSpell.group,"spell group selection was not saved");
+
     }
     std::puts("Five-step Start flow, confirmation, backtracking, input and persisted selections passed.");
+}
+
+/// @brief 回放 Start/Practice Start 双角色选择，核验前后层独立、箭头不穿透、切换动画、记忆与未实现机体门禁。
+void TestStartCharacters(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;using Probe=GameLifecycleProbe;
+    const int width=GetScreenWidth(),height=GetScreenHeight();
+    for(bool practice:{false,true}) {
+        auto settings=LoadOrCreateSettings(kSettingsFilename);settings.lastSelection={};
+        Check(SaveSettingsFile(kSettingsFilename,settings),"character test settings setup failed");
+        Game game;SetTargetFPS(0);Probe::StartupAt(game,3);Event(7,0,0);Frame(game);
+        Check(Probe::StartPortraitLayers(game),"Start character foreground/background texture ownership is incorrect");
+        if(practice)Key(game,KEY_DOWN);
+        Key(game,KEY_Z);Key(game,KEY_SPACE);
+        Check(Probe::SetupStep(game)==StartSetupStep::Character,"Start did not enter character step");
+        const menu::StartSetupLayout layout(GetScreenWidth(),GetScreenHeight());
+        const auto click=[&](Rectangle row) {Click(game,row.x+row.width/2,row.y+row.height/2);};
+        for(int key:{KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT}) {
+            const int previous=Probe::Selection(game).character;Key(game,key);
+            Check(Probe::Selection(game).character==1-previous && Probe::SetupStep(game)==StartSetupStep::Character,
+                  "character navigation alias advanced instead of switching");
+        }
+        Probe::Motion(game,1);Key(game,KEY_D);
+        Check(Probe::StartCharacterWeight(game,0)>0 && Probe::StartCharacterWeight(game,1)>0,
+              "character change did not smoothly blend the two portrait layers");
+        Capture(game,(screenshots/(practice?"practice-character-transition.png":"start-character-transition.png")).string().c_str(),0);
+        click(layout.CharacterArrow(-1));
+        Check(Probe::Selection(game).character==0 && Probe::SetupStep(game)==StartSetupStep::Character,"left arrow clicked through character step");
+        click(layout.CharacterArrow(1));
+        Check(Probe::Selection(game).character==1 && Probe::SetupStep(game)==StartSetupStep::Character,"right arrow clicked through character step");
+        // 原姓名按钮区域必须彻底失去交互，不能留下不可见的选择或确认区域。
+        for(int role:{0,1}) {
+            const auto removed=layout.canvas.Rect((layout.compact?180:55)+role*(layout.compact?210:200),
+                layout.compact?660:170,layout.compact?190:185,44);
+            Event(7,removed.x+removed.width/2,removed.y+removed.height/2);Frame(game);
+            click(removed);
+            Check(Probe::Selection(game).character==1 && Probe::SetupStep(game)==StartSetupStep::Character,
+                  "removed character name button still responds");
+        }
+        const auto arrow=layout.CharacterArrow(-1);
+        Event(7,arrow.x+arrow.width/2,arrow.y+arrow.height/2);Frame(game);
+        Check(Probe::Selection(game).character==1,"arrow hover switched character before clicking");
+        click(layout.Portrait());
+        Check(Probe::Selection(game).character==1 && Probe::SetupStep(game)==StartSetupStep::Shot,"portrait click did not confirm Marisa");
+        Key(game,KEY_D);Check(Probe::Selection(game).shot==1,"Marisa shot choice failed");
+        Capture(game,(screenshots/(practice?"practice-marisa-shot.png":"start-marisa-shot.png")).string().c_str());
+        Key(game,KEY_Z);Key(game,KEY_Z);if(practice)Key(game,KEY_Z);
+        Check(Probe::SetupStep(game)==StartSetupStep::Ready,"Marisa browsing lost mode or stage step");
+        Key(game,KEY_Z);Key(game,KEY_SPACE);click(layout.ReadyButton());
+        Check(Probe::SetupStep(game)==StartSetupStep::Ready && !game.IsLoading(),"unimplemented Marisa silently launched Reimu");
+        Capture(game,(screenshots/(practice?"practice-marisa-ready.png":"start-marisa-ready.png")).string().c_str());
+        while(Probe::SetupStep(game)!=StartSetupStep::Character)Key(game,KEY_X);
+        for(Vector2 size:{Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
+            SetWindowSize(size.x,size.y);Event(7,0,0);Frame(game);
+            for(int role:{0,1}) {
+                if(Probe::Selection(game).character!=role)Key(game,KEY_RIGHT);
+                Event(7,0,0);Frame(game);
+                Capture(game,(screenshots/(std::string(practice?"practice-":"start-")+std::to_string(int(size.x))+"x"+
+                    std::to_string(int(size.y))+"-character-"+std::to_string(role)+".png")).string().c_str());
+            }
+        }
+        const auto memory=LoadOrCreateSettings(kSettingsFilename).lastSelection;
+        Check(memory.character==1 && memory.shot==1,"character/shot preferences were not saved independently");
+        game.Reset();Key(game,KEY_Z);Key(game,KEY_Z);
+        Check(Probe::Selection(game).character==1,"title reentry forgot chosen character");
+        Game restarted;Probe::StartupAt(restarted,3);Event(7,0,0);Frame(restarted);
+        if(practice)Key(restarted,KEY_DOWN);
+        Key(restarted,KEY_Z);Key(restarted,KEY_Z);
+        Check(Probe::Selection(restarted).character==1 && Probe::Selection(restarted).shot==1,"restart lost chosen character/shot");
+        SetWindowSize(width,height);
+    }
+    std::puts("Start/Practice Start two-character layers, arrows, removed name buttons, blending, persistence and unavailable gate passed.");
 }
 
 /// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的弹窗与暂停按钮。
@@ -422,7 +535,7 @@ void TestUnifiedUiInputs() {
     };
     const auto show=[&](int id) { Probe::Show(game,id); Event(7,0,0); Frame(game); };
     // 每个有多项选择的页面都检查八个方向别名；设置数值页的左右键单独用于调值。
-    for(const auto spec : {std::array<int,2>{3,12},{6,2},{7,2},{8,2},{9,4},{15,3},{16,2},{17,2}}) {
+    for(const auto spec : {std::array<int,2>{3,12},{6,2},{7,2},{9,4},{15,3},{16,2},{17,2}}) {
         for(const auto key : {KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT}) {
             show(spec[0]);
             const int before=Probe::UiSelection(game);
@@ -475,7 +588,7 @@ void TestUnifiedUiInputs() {
     Event(5,MOUSE_BUTTON_LEFT); Frame(game);
     click(setup.Choice(1)); Check(Probe::SetupStep(game)==StartSetupStep::Ready,"mode click did not confirm");
     click(setup.ReadyButton()); WaitForStage(game);
-    for(const int id : {6,7,8}) {
+    for(const int id : {6,7}) {
         show(id); click(setup.Choice(0));
         Check(Probe::SetupStep(game)==(id==6?StartSetupStep::Mode:StartSetupStep::Ready),"choice click did not advance");
     }
@@ -702,6 +815,168 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
     std::puts("Stage clear breakdown, ten-second timeout, confirmation, pause and practice return passed.");
 }
 
+/// @brief 回放新典式关卡→符卡组→难度，验证灰色门禁、四组合箭头、暂停返回、取得记录和响应式显示。
+void TestSpellPractice(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;using Probe=GameLifecycleProbe;
+    Game game;SetTargetFPS(0);
+    Check(Probe::SpellPortraits(game) && Probe::HasLocalizedGlyphs(game),"spell portraits or complete localized glyphs missing");
+    const auto normalMemory=LoadOrCreateSettings(kSettingsFilename).lastSelection;
+    const auto click=[&](Rectangle r) {Click(game,r.x+r.width/2,r.y+r.height/2);};
+    const auto move=[&](Rectangle r) {Event(7,r.x+r.width/2,r.y+r.height/2);Frame(game);};
+    const auto expect=[&](spell::Page page) {Check(Probe::Setup(game) && Probe::SpellChoice(game).page==page,"incorrect spell practice hierarchy");};
+    const auto waitForResult=[&] {for(int index=0;index<90 && Probe::State(game)==RunState::Finishing;++index)Frame(game);
+        Check(Probe::State(game)==RunState::Won,"spell did not reach its result menu");};
+    Probe::ClearSpellProgress(game);
+    const menu::SpellPracticeLayout lockedLayout(GetScreenWidth(),GetScreenHeight());
+    // 实现状态不代表已解锁；键盘和鼠标都不能从新档直接启动两张已实现的符卡。
+    for(int character:{0,1})for(int group:{1,2}) {
+        Probe::SpellBrowse(game,{spell::Page::Difficulty,0,group,1,character});
+        Key(game,KEY_Z);Key(game,KEY_SPACE);click(lockedLayout.Difficulty(1));expect(spell::Page::Difficulty);
+        Check(!game.IsLoading() && !Probe::SpellAvailable(game,character,group),"unseen implemented spell was playable");
+    }
+    Capture(game,(screenshots/"spell-locked.png").string().c_str());
+    game.StartPreview();Probe::PrepareStageEncounter(game,false,0);Probe::FinishSpell(game,true);Frame(game);
+    Check(Probe::SpellRecord(game,0,3).mainAttempts==0 && !Probe::SpellAvailable(game,0,1),"preview unlocked spell practice");
+    game.Start(false);WaitForStage(game);Probe::PrepareStageEncounter(game,false,0);
+    Check(!Probe::SpellAvailable(game,0,1),"nonspell unlocked future spell");
+    Probe::FinishSpell(game,true); // 非符交接到夜符，尚未运行下一帧或击破符卡。
+    const auto encountered=LoadOrCreateSettings(kSettingsFilename);
+    Check(encountered.spellRecords.Get(0,3).mainAttempts==1 && encountered.spellRecords.Get(0,3).mainCaptured==0,
+          "spell declaration did not persist encounter immediately");
+    Check(Probe::SpellAvailable(game,0,1) && !Probe::SpellAvailable(game,1,1) && !Probe::SpellAvailable(game,0,2),
+          "encounter unlocked another shot combination or a later spell");
+    game.Reset();
+    {
+        Game restarted;Check(Probe::SpellAvailable(restarted,0,1) && !Probe::SpellAvailable(restarted,1,1) &&
+            !Probe::SpellAvailable(restarted,0,2),"independent encounter unlock lost on restart");
+    }
+    Probe::SpellBrowse(game,{spell::Page::Difficulty,0,1,1,0});
+    Key(game,KEY_D);Check(Probe::SpellChoice(game).character==1,"shot switch failed before locked practice check");
+    Key(game,KEY_Z);Key(game,KEY_SPACE);click(lockedLayout.Difficulty(1));expect(spell::Page::Difficulty);
+    Check(!game.IsLoading(),"switching shot reused another combination's unlock");
+    Capture(game,(screenshots/"spell-other-shot-locked.png").string().c_str());
+    game.Start(false);WaitForStage(game);Probe::PrepareStageEncounter(game,true,1);
+    Probe::FinishSpell(game,true);Probe::FinishSpell(game,false);Probe::FinishSpell(game,true);
+    Check(Probe::BossPhase(game)==4 && !Probe::SpellAvailable(game,0,2) && Probe::SpellAvailable(game,1,2) &&
+          Probe::SpellRecord(game,1,7).mainCaptured==0,
+          "whole-stage encounter did not independently unlock the selected combination");
+    game.Reset();
+    Probe::SpellBrowse(game,{});Probe::SpellTitle(game);Key(game,KEY_Z);expect(spell::Page::Stage);
+    const menu::SpellPracticeLayout layout(GetScreenWidth(),GetScreenHeight());
+    for(int key:{KEY_A,KEY_LEFT,KEY_D,KEY_RIGHT}) {
+        const auto before=Probe::SpellChoice(game);
+        Key(game,key);
+        Check(Probe::SpellChoice(game).character==(before.character+(key==KEY_A || key==KEY_LEFT?3:1))%4,"character direction alias failed");
+        expect(spell::Page::Stage);
+    }
+    for(int character=0;character<4;++character) {
+        const auto previous=Probe::SpellChoice(game).character;
+        click(layout.Arrow(1));
+        Check(Probe::SpellChoice(game).character==(previous+1)%4,"portrait right arrow failed or clicked through");
+        click(layout.Arrow(-1));
+        Check(Probe::SpellChoice(game).character==previous,"portrait left arrow failed");
+        Key(game,KEY_D);
+    }
+    for(int key:{KEY_W,KEY_UP,KEY_S,KEY_DOWN}) {
+        const int previous=Probe::SpellChoice(game).stage;
+        Key(game,key);
+        Check(Probe::SpellChoice(game).stage==(previous+(key==KEY_W || key==KEY_UP?6:1))%7,"stage navigation alias failed");
+    }
+    move(layout.StageRow(1));Check(Probe::SpellChoice(game).stage==1,"disabled stage could not be browsed by hover");
+    click(layout.StageRow(1));expect(spell::Page::Group);
+    Key(game,KEY_SPACE);expect(spell::Page::Difficulty);
+    Key(game,KEY_ENTER);expect(spell::Page::Difficulty);
+    Check(!game.IsLoading(),"unimplemented spell started a replacement battle");
+    Key(game,KEY_X);expect(spell::Page::Group);Key(game,KEY_ESCAPE);expect(spell::Page::Stage);
+    click(layout.StageRow(3));expect(spell::Page::Group);
+    for(int index=0;index<9;++index)Key(game,KEY_S);
+    Check(Probe::SpellChoice(game).group==9,"16-group stage lost entries beyond first page");
+    click(layout.GroupPage(-1));Check(Probe::SpellChoice(game).group==1,"group previous page failed");
+    click(layout.GroupPage(1));Check(Probe::SpellChoice(game).group==9,"group next page failed");
+    Key(game,KEY_Z);expect(spell::Page::Difficulty);
+    click(layout.GroupPage(-1));expect(spell::Page::Group);
+    Check(Probe::SpellChoice(game).group==1,"visible group paging did not work from difficulty view");
+    click(layout.GroupPage(1));
+    Key(game,KEY_X);click(layout.StageRow(6));Key(game,KEY_Z);expect(spell::Page::Difficulty);
+    Check(Probe::SpellChoice(game).difficulty==4,"Extra exposed ordinary difficulty slots");
+    Key(game,KEY_Z);Check(!game.IsLoading(),"Extra placeholder launched an implemented spell");
+    Key(game,KEY_X);Key(game,KEY_X);expect(spell::Page::Stage);
+    click(layout.StageRow(0));expect(spell::Page::Group);
+    // 新关卡从第一组开始；第一面月符不可开局，第二组 Normal 对应实际夜符。
+    click(layout.GroupRow(1));expect(spell::Page::Difficulty);
+    click(layout.Arrow(1));expect(spell::Page::Difficulty);
+    Check(Probe::SpellChoice(game).character==1,"difficulty arrow advanced the page");
+    click(layout.Arrow(-1));
+    const auto recordBefore=Probe::SpellRecord(game,0,3);
+    for(int index=0;index<4;++index) {
+        if(Probe::SpellChoice(game).character==0)break;
+        Key(game,KEY_D);
+    }
+    click(layout.Difficulty(1));WaitForStage(game);Frame(game);
+    Check(Probe::BossPhase(game)==2 && !Probe::Selection(game).challenge,"Normal Night Bird did not start correct phase");
+    Key(game,KEY_ESCAPE);
+    Capture(game,(screenshots/"spell-pause.png").string().c_str());
+    const menu::OverlayLayout overlay(GetScreenWidth(),GetScreenHeight());
+    click(overlay.PauseRow(3));expect(spell::Page::Group);
+    Check(Probe::StageReleased(game) && !IsCursorHidden(),"spell pause return leaked resources or captured cursor");
+    Key(game,KEY_Z);Key(game,KEY_Z);WaitForStage(game);Frame(game);
+    Probe::FinishSpell(game,true);waitForResult();
+    Check(Probe::SpellCaptured(game) && Probe::UiSelection(game)==2,"captured spell result or default Retry is incorrect");
+    Capture(game,(screenshots/"spell-result.png").string().c_str());
+    const auto captured=Probe::SpellRecord(game,0,3);
+    Check(captured.attempts==recordBefore.attempts+2 && captured.captured==recordBefore.captured+1 && captured.bestScore>0,
+          "spell attempt, aborted run, capture or best score was not recorded once");
+    move(overlay.SpellResultRow(1));click(overlay.SpellResultRow(1));
+    Check(Probe::State(game)==RunState::Won && Probe::UiSelection(game)==2,"disabled Save Replay accepted interaction");
+    Key(game,KEY_S);Check(Probe::UiSelection(game)==0,"spell result keyboard navigation did not skip Replay");
+    move(overlay.SpellResultRow(2));Check(Probe::UiSelection(game)==2,"spell result hover missed pause-style row");
+    click(overlay.SpellResultRow(0));expect(spell::Page::Group);
+    Key(game,KEY_Z);Key(game,KEY_Z);WaitForStage(game);Frame(game);
+    Probe::FinishSpell(game,false);waitForResult();
+    Check(!Probe::SpellCaptured(game) && Probe::SpellRecord(game,0,3).captured==captured.captured,"timeout was counted as capture");
+    Capture(game,(screenshots/"spell-failed.png").string().c_str());
+    const int resultWidth=GetScreenWidth(),resultHeight=GetScreenHeight();
+    SetWindowSize(390,844);Event(7,0,0);Frame(game);
+    Capture(game,(screenshots/"390x844-spell-failed.png").string().c_str());
+    SetWindowSize(resultWidth,resultHeight);Event(7,0,0);Frame(game);
+    Key(game,KEY_X);expect(spell::Page::Group);
+    Key(game,KEY_X);Key(game,KEY_X);Check(Probe::MainMenu(game),"spell backtracking did not reach title");
+    const auto saved=LoadOrCreateSettings(kSettingsFilename);
+    Check(saved.lastSelection.shot==normalMemory.shot && saved.lastSelection.challenge==normalMemory.challenge,
+          "spell browsing overwrote normal Start preferences");
+    Check(saved.spellRecords.Get(0,3).captured==captured.captured,"spell statistics did not persist");
+    {
+        Game restarted;Check(Probe::SpellRecord(restarted,0,3).captured==captured.captured,"spell records lost on restart");
+    }
+    // 第二种灵梦御札必须接到暗符阶段；魔理沙只能浏览，不能暗中回退为灵梦战斗。
+    Probe::SpellBrowse(game,{spell::Page::Group,0,2,1,1});
+    Key(game,KEY_Z);Key(game,KEY_Z);WaitForStage(game);Frame(game);
+    Check(Probe::BossPhase(game)==4 && Probe::Selection(game).shot==1,"Reimu B Demarcation mapped to a different phase or shot");
+    const auto darkBefore=Probe::SpellRecord(game,1,7);
+    Probe::FinishSpell(game,true);waitForResult();Key(game,KEY_X);
+    Check(Probe::SpellRecord(game,1,7).captured==darkBefore.captured+1,"Reimu B capture was not isolated");
+    for(int character:{2,3}) {
+        Probe::SpellBrowse(game,{spell::Page::Difficulty,0,1,1,character});
+        Key(game,KEY_Z);expect(spell::Page::Difficulty);
+        Check(!game.IsLoading(),"unimplemented Marisa combination silently started Reimu");
+    }
+    const int width=GetScreenWidth(),height=GetScreenHeight();
+    for(Vector2 size:{Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
+        SetWindowSize(size.x,size.y);Event(7,0,0);Frame(game);
+        for(int character=0;character<4;++character) {
+            if(character!=0 && size.x!=1280)continue;
+            Probe::SpellBrowse(game,{spell::Page::Stage,0,1,1,character});
+            Capture(game,(screenshots/(std::to_string(int(size.x))+"x"+std::to_string(int(size.y))+"-spell-character-"+std::to_string(character)+".png")).string().c_str());
+        }
+        for(int stage:{0,3,6}) {
+            Probe::SpellBrowse(game,{spell::Page::Difficulty,stage,stage==3?15:stage==6?12:1,stage==6?4:1,0});
+            Capture(game,(screenshots/(std::to_string(int(size.x))+"x"+std::to_string(int(size.y))+"-spell-stage-"+std::to_string(stage)+".png")).string().c_str());
+        }
+    }
+    SetWindowSize(width,height);
+    std::puts("Spell Practice hierarchy, 131 variants, four combinations, arrows, unavailable guards, statistics and results passed.");
+}
+
 }
 
 /// @brief 运行图形/音频集成测试；参数可指定截图目录，需支持 raylib 自动化事件和 OpenGL。
@@ -721,6 +996,11 @@ int main(int argc, char** argv) {
     SetExitKey(KEY_NULL);
     int result = 0;
     try {
+        if(argc>2 && std::string(argv[2])=="--start-characters-only") {
+            TestStartCharacters(screenshots);
+        } else if(argc>2 && std::string(argv[2])=="--spell-only") {
+            TestSpellPractice(screenshots);
+        } else {
         {
             Event(7,83,147);
             koumakyou::Game game;
@@ -925,6 +1205,9 @@ int main(int argc, char** argv) {
         TestUnifiedUiInputs();
         TestPracticeStages(screenshots);
         TestStageSettlement(screenshots);
+        TestSpellPractice(screenshots);
+        TestStartCharacters(screenshots);
+        }
         std::puts("Settings UI integration passed.");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "Settings UI integration failed: %s\n", error.what());

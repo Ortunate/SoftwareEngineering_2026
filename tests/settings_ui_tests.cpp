@@ -781,7 +781,11 @@ int main(int argc, char** argv) {
                 const auto file = "menu-" + std::to_string(GetScreenWidth()) + "x" + std::to_string(GetScreenHeight()) + ".png";
                 Capture(game, (screenshots / file).string().c_str());
                 const auto options = layout.Row(8);
-                Click(game, static_cast<int>(options.x + options.width / 2), static_cast<int>(options.y + options.height / 2));
+                const Vector2 optionsPointer{static_cast<float>(static_cast<int>(options.x+options.width/2)),
+                                             static_cast<float>(static_cast<int>(options.y+options.height/2))};
+                Click(game, optionsPointer.x, optionsPointer.y);
+                Check(GetMousePosition().x==optionsPointer.x && GetMousePosition().y==optionsPointer.y,
+                      "entering Options moved mouse away from title selection");
                 const int fps = koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).fpsLimit;
                 Key(game, KEY_RIGHT);
                 Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).fpsLimit != fps,
@@ -800,7 +804,10 @@ int main(int argc, char** argv) {
             Capture(game, (screenshots / "shot.png").string().c_str());
             Key(game, KEY_Z);
             Capture(game, (screenshots / "mode.png").string().c_str());
+            const auto pointerBeforeOptions=GetMousePosition();
             game.OpenOptions();
+            Check(GetMousePosition().x==pointerBeforeOptions.x && GetMousePosition().y==pointerBeforeOptions.y,
+                  "opening Options from setup reset mouse position");
             Event(7, 0, 0); Frame(game);
             // 数值行点击遵守统一确认：左箭头减小，标签/数值/右箭头增大，行外空白无效。
             for (int width : {900, 1100}) {

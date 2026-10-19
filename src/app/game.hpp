@@ -63,7 +63,7 @@ public:
     /// @param enabled 为 true 时启用调试图层。
     void SetDebugDraw(bool enabled) { debugRender_ = enabled; }
 #endif
-    /// @brief 进入设置菜单并显示鼠标。
+    /// @brief 进入设置菜单并显示鼠标，保留可见指针的位置，不强制居中。
     void OpenOptions();
     /// @brief 按当前状态更新输入、关卡与战斗逻辑。
     /// @param deltaTime 本帧经过的秒数。

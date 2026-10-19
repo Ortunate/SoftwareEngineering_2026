@@ -88,7 +88,8 @@ void Game::OpenOptions() {
     selectedOption_ = 0;
     selectedBinding_ = 0;
     waitingForBinding_ = false;
-    EnableCursor();
+    // EnableCursor 会强制居中；设置页仅需显示光标，保留用户进入页面前的位置。
+    if (IsCursorHidden()) ShowCursor();
 }
 
 void Game::LoadSettings() {

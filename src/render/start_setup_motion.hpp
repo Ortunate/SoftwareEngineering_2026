@@ -6,15 +6,15 @@
 #include <cmath>
 
 namespace koumakyou::ui {
-/// @brief 页面权重在 0.30 秒内缓入缓出；首页与六个步骤的权重总和始终为 1。
+/// @brief 页面权重在 0.30 秒内缓入缓出；首页与全部步骤的权重总和始终为 1。
 /// 换页从当前混合值继续，人物和已选摘要按相关页面权重之和绘制，连续步骤不会重新显现。
 class StartSetupMotion {
 public:
-    /// @brief page=-1 表示首页，0～5 对应 StartSetupStep，-2 表示离开该流程；dt 为秒，非法值按零处理。
+    /// @brief page=-1 表示首页，0～Count-1 对应 StartSetupStep，-2 表示离开该流程；dt 为秒，非法值按零处理。
     /// 离开流程立即清空展示，不保留游戏/设置页内容；绘制或窗口缩放不能调用此函数推进时间。
     void Advance(int page,float dt) {
         dt=std::isfinite(dt)?std::max(0.0F,dt):0;
-        if(page < -1 || page > 5) { *this=StartSetupMotion{}; return; }
+        if(page < -1 || page >= static_cast<int>(StartSetupStep::Count)) { *this=StartSetupMotion{}; return; }
         const int target=page+1;
         if(target!=target_) {
             source_=weights_;
@@ -41,7 +41,7 @@ private:
     static float Ease(float t) { t=std::clamp(t,0.0F,1.0F);return t*t*(3-2*t); }
     int target_=0;
     float elapsed_=0.30F;
-    std::array<float,7> weights_{1,0,0,0,0,0,0},source_{1,0,0,0,0,0,0};
-    std::array<float,6> ages_{}; // 各步骤独立的进入秒数；尚有可见权重时返回不会把时钟清零。
+    std::array<float,1+static_cast<int>(StartSetupStep::Count)> weights_{1},source_{1};
+    std::array<float,static_cast<int>(StartSetupStep::Count)> ages_{}; // 各步骤独立的进入秒数；尚有可见权重时返回不会把时钟清零。
 };
 } // namespace koumakyou::ui

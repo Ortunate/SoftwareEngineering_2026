@@ -599,12 +599,16 @@ struct GameLifecycleProbe {
             game.boss_->health = 0.0F;
             game.AdvanceBossPhase();
         }
-        // 末符击破后保留原作死亡演出和两句战后独白；完成独白后才进入结算。
+        // 末符击破后先完成两句战后独白，再展示关卡奖励；关闭后完成剩余死亡演出与资源释放。
         for(int frame=0;frame<62;++frame)game.UpdateBoss(1.0F/60);
         assert(!game.boss_->active);
         game.BeginStageDialogue(4,true);
+        assert(game.state_==RunState::Playing && game.dialogueActive_ && game.dialogueTimer_==0);
+        assert(!game.stageClearShown_);
         game.dialogueTimer_=game.DialogueDuration();
         game.Update(0);
+        assert(game.state_==RunState::StageClear && !game.dialogueActive_);
+        game.ContinueStageClear();
         assert(game.state_ == RunState::Finishing);
         assert(!game.boss_);
         assert(!game.assets_.Stage().visuals.empty());

@@ -1,5 +1,7 @@
 // 本文件负责运行按领域拆分的核心测试。
 #include "app/constants.hpp"
+#include "app/stage_clear.hpp"
+#include "config/settings.hpp"
 #include "render/ui_motion.hpp"
 #include "render/title_entrance.hpp"
 #include "render/menu_layout.hpp"
@@ -31,8 +33,17 @@ void TestDialogueContent() {
     assert(empty.x==0.1F && empty.y==0.2F && empty.width==0.5F && empty.height==0.6F);
     UnloadImage(image);
 }
+/// @brief 对照原图示例检查 Normal 奖励公式，并覆盖零点数与关卡系数。
+void TestStageClearSummary() {
+    const koumakyou::StageClearSummary clear{1,84,75,25};
+    assert(clear.StagePoints()==1000 && clear.PowerPoints()==8400 && clear.GrazePoints()==750);
+    assert(clear.Total()==253750);
+    assert((koumakyou::StageClearSummary{6,128,1000,0}.Total()==0));
+    assert((koumakyou::StageClearSummary{6,128,1000,1}.Total()==28800));
+}
 /// @brief 检查从极小窗口到超宽/竖屏的所有交互矩形及 3D 视口都在窗口内，且不会退化为零缩放。
 void TestResponsiveLayouts() {
+    assert(koumakyou::menu::PauseLabels(false).size()==3 && koumakyou::menu::PauseLabels(true).size()==4);
     for(const Vector2 size : {Vector2{1,1},{320,180},{320,240},{390,844},{900,900},{1600,400},{180,900},{3840,2160}}) {
         const auto fits=[&](Rectangle rect) {
             assert(rect.x>=-0.001F && rect.y>=-0.001F && rect.width>0 && rect.height>0);
@@ -69,6 +80,14 @@ void TestResponsiveLayouts() {
         fits(setup.Portrait()); fits(setup.CharacterInfo());
         fits(setup.Badge()); fits(setup.Heading()); fits(setup.ShotSummary()); fits(setup.ModeSummary());
         fits(setup.ReadyBand()); fits(setup.ReadyButton());
+        fits(setup.StageHeading()); fits(setup.StageModeSummary()); fits(setup.StageShotSummary());
+        for(int index=0;index<koumakyou::kStageScoreCount;++index) {
+            fits(setup.StageRow(index));
+            assert(!CheckCollisionRecs(setup.StageRow(index),setup.CharacterInfo()));
+            assert(!CheckCollisionRecs(setup.StageRow(index),setup.Badge()));
+            assert(!CheckCollisionRecs(setup.StageRow(index),setup.StageModeSummary()));
+            assert(!CheckCollisionRecs(setup.StageRow(index),setup.ReadyBand()));
+        }
         for(int index=0;index<4;++index)fits(setup.Difficulty(index));
         for(int index=0;index<2;++index)fits(setup.Choice(index));
         assert(!CheckCollisionRecs(setup.Portrait(),setup.CharacterInfo()));
@@ -79,7 +98,9 @@ void TestResponsiveLayouts() {
         }
         for(int index=0;index<3;++index)fits(page.Track(index));
         const koumakyou::menu::OverlayLayout overlay(size.x,size.y);
-        fits(overlay.PausePanel());
+        fits(overlay.PausePanel()); fits(overlay.ClearPanel());
+        fits(overlay.PausePanel(static_cast<int>(koumakyou::menu::PauseLabels(true).size())));
+        fits(overlay.PauseRow(3));
         for(int index=0;index<koumakyou::menu::kPauseCount;++index)fits(overlay.PauseRow(index));
         for(int index=0;index<koumakyou::menu::kResultCount;++index)fits(overlay.ResultRow(index));
         const koumakyou::GameplayLayout gameplay(size.x,size.y);
@@ -200,8 +221,15 @@ void TestStartSetupMotion() {
     assert(slow.Character()==1); // 相邻人物页的权重和恒定，不能重复播放人物入场。
     slow.Advance(static_cast<int>(StartSetupStep::Ready),0.08F);
     float sum=slow.Title();
-    for(int step=0;step<6;++step)sum+=slow.Layer(static_cast<StartSetupStep>(step));
+    for(int step=0;step<static_cast<int>(StartSetupStep::Count);++step)sum+=slow.Layer(static_cast<StartSetupStep>(step));
     assert(std::abs(sum-1)<0.00001F);
+    slow.Advance(static_cast<int>(StartSetupStep::Stage),0);
+    assert(slow.Character()==1);
+    slow.Advance(static_cast<int>(StartSetupStep::Stage),0.15F);
+    assert(slow.Layer(StartSetupStep::Stage)>0 && slow.Layer(StartSetupStep::Stage)<1);
+    const float stages=slow.Layer(StartSetupStep::Stage);
+    slow.Advance(static_cast<int>(StartSetupStep::Ready),0);
+    assert(slow.Layer(StartSetupStep::Stage)==stages && slow.Character()==1);
     slow.Advance(-1,1);
     assert(slow.Title()==1 && slow.Setup()==0);
     slow.Advance(character,0.1F);slow.Advance(-2,0);
@@ -260,6 +288,7 @@ int main() {
     assert(koumakyou::ui::BossSeconds(150,0)==99);
     assert(koumakyou::ui::BossSeconds(0,0)==0);
     TestDialogueContent();
+    TestStageClearSummary();
     TestResponsiveLayouts();
     TestMenuMotion();
     TestStartSetupMotion();

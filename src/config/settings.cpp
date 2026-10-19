@@ -1,4 +1,4 @@
-// 本文件负责显示、音量、开局资源、成绩、开局选择与统一绑定设置的读取、校验和保存。
+// 本文件负责显示、音量、开局资源、分模式关卡成绩、开局选择与统一绑定设置的读取、校验和保存。
 
 #include "config/settings.hpp"
 
@@ -45,9 +45,10 @@ std::string_view Trim(std::string_view text) {
 /// @brief 严格解析十进制整数，不接受剩余非数字字符。
 /// @param text 待解析文本。
 /// @return 成功时返回整数，失败时返回空值。
-std::optional<int> ParseInteger(std::string_view text) {
+template<typename Integer=int>
+std::optional<Integer> ParseInteger(std::string_view text) {
     text = Trim(text);
-    int value = 0;
+    Integer value = 0;
     const auto [end, error] =
         std::from_chars(text.data(), text.data() + text.size(), value);
     if (error != std::errc{} || end != text.data() + text.size()) {
@@ -105,6 +106,16 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         }
 
         const std::string_view name = Trim(trimmed.substr(0, separator));
+        bool stageField=false;
+        for(int mode=0;mode<2;++mode) for(int stage=1;stage<=kStageScoreCount;++stage) {
+            const std::string key=std::string(mode?"stage_best_challenge_":"stage_best_standard_")+std::to_string(stage);
+            if(name!=key)continue;
+            const auto score=ParseInteger<long long>(trimmed.substr(separator+1));
+            if(score && *score>=0)settings.stageHighScores.scores[mode][stage-1]=*score;
+            else shouldRewrite=true;
+            stageField=true;
+        }
+        if(stageField)continue;
         const std::optional<int> value = ParseInteger(trimmed.substr(separator + 1));
         if (!value) {
             shouldRewrite = true;
@@ -113,7 +124,7 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
 
         if (name == "version") {
             version = *value;
-            shouldRewrite = shouldRewrite || version != 5;
+            shouldRewrite = shouldRewrite || version != 6;
         } else if (name == "music_volume") {
             if (*value >= 0 && *value <= 100) settings.musicVolume = *value;
             else shouldRewrite = true;
@@ -141,6 +152,9 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
             else shouldRewrite = true;
         } else if (name == "last_practice_phase") {
             if (*value == 2 || *value == 4) settings.lastSelection.practicePhase = *value;
+            else shouldRewrite = true;
+        } else if (name == "last_practice_stage") {
+            if (*value >= 1 && *value <= kStageScoreCount) settings.lastSelection.practiceStage = *value;
             else shouldRewrite = true;
         } else if (name == "fps_limit") {
             if (IsSupportedFpsLimit(*value)) {
@@ -179,6 +193,11 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
         if (settings.bindings.bomb == KEY_X) migrateDefault(&KeyBindings::bomb, KEY_F);
         shouldRewrite = true;
     }
+    if(version<6) {
+        // 旧 best_score 只记录标准模式一面通关分，可安全迁入标准关卡槽；挑战与其他面不能推断。
+        settings.stageHighScores.Record(false,1,settings.bestScore);
+        shouldRewrite=true;
+    }
     if (!HasUniqueBindings(settings.bindings)) {
         settings.bindings = KeyBindings{};
         shouldRewrite = true;
@@ -193,7 +212,7 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     if (!output) return false;
 
     output << "# koumakyou local settings\n";
-    output << "version=5\n";
+    output << "version=6\n";
     output << "fps_limit=" << settings.fpsLimit << '\n';
     output << "music_volume=" << settings.musicVolume << '\n';
     output << "mouse_sensitivity=" << settings.mouseSensitivity << '\n';
@@ -204,6 +223,10 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     output << "last_shot=" << settings.lastSelection.shot << '\n';
     output << "last_challenge=" << settings.lastSelection.challenge << '\n';
     output << "last_practice_phase=" << settings.lastSelection.practicePhase << '\n';
+    output << "last_practice_stage=" << settings.lastSelection.practiceStage << '\n';
+    for(int mode=0;mode<2;++mode) for(int stage=1;stage<=kStageScoreCount;++stage)
+        output << (mode?"stage_best_challenge_":"stage_best_standard_") << stage << '='
+               << settings.stageHighScores.scores[mode][stage-1] << '\n';
     for (const BindingField& field : kBindingFields) {
         output << field.name << '=' << settings.bindings.*(field.member) << '\n';
     }

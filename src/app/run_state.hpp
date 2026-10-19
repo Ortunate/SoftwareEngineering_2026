@@ -17,6 +17,7 @@ enum class RunState : std::uint8_t {
     Credit,
     Loading, // 加载页只推进界面；素材全部就绪后才重置并启动战斗时钟。
     Playing,
+    StageClear, // 关卡奖励明细等待确认或 10 秒，后续流程和战斗时钟暂停。
     // 战斗已结束，仅播放退场；关卡资源须保留到效果池清空。
     Finishing,
     Paused,

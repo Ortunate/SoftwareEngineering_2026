@@ -42,7 +42,7 @@ struct GameLifecycleProbe {
         return contains("按键设置") && contains("恢复默认键位") && contains("梦幻夜行绘卷") &&
                contains("请选择主人公。博丽神社的巫女小姐移动速度攻击范围攻击力准备好了吗？面向大多数人的难度尚未开放");
     }
-    /// @brief 设置 page=0～22 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
+    /// @brief 设置 page=0～26 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
     static void Show(Game& game,int page) {
         game.dialogueActive_=false; game.spellCutInTimer_=0; game.messageTimer_=0;
         game.waitingForBinding_=false; game.optionsPage_=Game::OptionsPage::General;
@@ -50,6 +50,7 @@ struct GameLifecycleProbe {
         game.boss_.reset(); game.state_=RunState::MainMenu;
         game.selectedBinding_=6; game.selectedOption_=0; game.selectedPauseItem_=0;
         game.selectedTrack_=0; game.selectedResultItem_=0;
+        game.practiceMode_=game.spellPractice_=false;
         switch(page) {
             case 0: game.titleEntrance_={}; break;
             case 1: break;
@@ -64,6 +65,17 @@ struct GameLifecycleProbe {
                 game.state_=RunState::StartSetup;
                 game.setupStep_=page==21?StartSetupStep::Character:StartSetupStep::Ready;
                 game.spellPractice_=false; break;
+            case 23: case 24:
+                game.state_=RunState::StartSetup; game.practiceMode_=true;
+                game.setupStep_=page==23?StartSetupStep::Stage:StartSetupStep::Ready;
+                game.selectedPracticeStage_=0; break;
+            case 25:
+                // 该截图不继承前一页的极限分数，避免把压力测试值与新增奖励相加造成溢出。
+                game.stageClearShown_=false; game.player_.AdjustPower(84-game.player_.Power());
+                game.score_=4965020; game.missCount_=game.bombCount_=0;
+                game.graze_=75; game.pointItems_=25; game.BeginStageClear(); break;
+            case 26:
+                game.state_=RunState::Paused; game.pausedState_=RunState::Playing; game.practiceMode_=true; break;
             case 9: game.state_=RunState::MusicRoom; break;
             case 10: game.state_=RunState::Score; break;
             case 11: game.state_=RunState::Credit; break;
@@ -121,6 +133,32 @@ struct GameLifecycleProbe {
             game.setupStep_==StartSetupStep::Mode?int(game.challengeMode_):int(game.practicePhase_==4);
     }
     static float DialogueTime(const Game& game) { return game.dialogueTimer_; }
+    /// @brief 以真实结算入口检查成绩规则；仅替代漫长的整关计分过程，不绕过存档路径。
+    static void FinishScoreAttempt(Game& game,long long score,bool challenge,bool spell,bool preview,RunState result) {
+        game.practiceMode_=true; game.spellPractice_=spell; game.previewMode_=preview;
+        game.challengeMode_=challenge; game.score_=score; game.EndStage(result);
+    }
+    static long long StageBest(const Game& game,bool challenge,int stage) { return game.stageHighScores_.Best(challenge,stage); }
+    static int SelectedStage(const Game& game) { return game.selectedPracticeStage_; }
+    /// @brief 使用截图示例计数触发正式战后入口；预览只用于预加载，按目标模式恢复真实计分资格。
+    static void BeginClear(Game& game,bool practice) {
+        game.previewMode_=false; game.practiceMode_=practice; game.spellPractice_=false;
+        game.challengeMode_=true; game.selectedShot_=1;
+        game.player_.AdjustPower(84-game.player_.Power());
+        game.graze_=75; game.pointItems_=25; game.score_=10000;
+        game.BeginStageDialogue(4,true);
+    }
+    /// @brief 按真实 Update 路径结束战后对话，不直接跳转结算状态。
+    static void FinishPostDialogue(Game& game) { game.dialogueTimer_=game.DialogueDuration(); game.Update(0); }
+    /// @brief 将战后独白定位到最后一句仍未结束的位置，供真实按键验证层间确认不穿透。
+    static void LastPostLine(Game& game) { game.dialogueTimer_=game.DialogueDuration()-1; }
+    static void ReenterClear(Game& game) { game.BeginStageClear(); }
+    static float ClearSeconds(const Game& game) { return game.stageClearSeconds_; }
+    static float StageTime(const Game& game) { return game.stage_.Elapsed(); }
+    static long long Score(const Game& game) { return game.score_; }
+    static bool StageReleased(const Game& game) { return game.assets_.Stage().visuals.empty() && game.actorEffects_.Pool().ActiveCount()==0; }
+
+
     /// @brief 注入加载失败展示，单独验证退出操作，不触发真实磁盘故障。
     static void FailLoading(Game& game) { game.state_=RunState::Loading; game.loadingFailed_=true; }
 
@@ -335,9 +373,9 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
 
 /// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的弹窗与暂停按钮。
 void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots) {
-    constexpr std::array<const char*,23> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
+    constexpr std::array<const char*,27> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
         "spell-practice","music","score","credit","playing","dialogue","spell-cutin","pause","won","gameover","message",
-        "hud-max-values","hud-challenge","character","ready"};
+        "hud-max-values","hud-challenge","character","ready","practice-stage","practice-ready","stage-clear","practice-pause"};
     for(const Vector2 size : {Vector2{320,240},{390,844},{900,900},{1600,400},{1280,720}}) {
         SetWindowSize(size.x,size.y); Event(7,0,0); Frame(game);
         game.StartPreview();
@@ -488,6 +526,180 @@ void TestUnifiedUiInputs() {
     Check(Probe::Playing(game),"return did not take priority over confirmation");
     Event(1,KEY_SPACE); Event(5,MOUSE_BUTTON_RIGHT); Frame(game);
     std::puts("Unified UI keyboard, hover, click, cancel and held-input regression passed.");
+}
+
+
+/// @brief 回放 Practice Start 的关卡确认/返回及分模式记录，导出带真实最高分的宽窄屏展示。
+void TestPracticeStages(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;
+    using Probe=GameLifecycleProbe;
+    const int width=GetScreenWidth(),height=GetScreenHeight();
+    auto settings=LoadOrCreateSettings(kSettingsFilename);
+    settings.lastSelection={0,false,2,6}; // 未开放的记忆槽必须回退到已开放的第一面。
+    settings.stageHighScores={};
+    settings.stageHighScores.Record(false,1,5176180);
+    settings.stageHighScores.Record(true,1,8754321);
+    Check(SaveSettingsFile(kSettingsFilename,settings),"practice records seed failed");
+    Game game;
+    SetTargetFPS(0); SetWindowSize(1280,720);
+    Probe::StartupAt(game,3); Event(7,0,0); Frame(game);
+    const menu::TitleLayout title(GetScreenWidth(),GetScreenHeight(),menu::kTitleRowCount);
+    const auto practice=title.Row(2);
+    Click(game,practice.x+practice.width/2,practice.y+practice.height/2);
+    const auto expect=[&](StartSetupStep step) {
+        Check(Probe::Setup(game) && Probe::SetupStep(game)==step,"wrong practice setup step");
+    };
+    expect(StartSetupStep::Difficulty);
+    Key(game,KEY_SPACE); expect(StartSetupStep::Character);
+    Key(game,KEY_Z); expect(StartSetupStep::Shot);
+    Key(game,KEY_Z); expect(StartSetupStep::Mode);
+    Event(2,KEY_SPACE); Frame(game); Frame(game); Frame(game);
+    expect(StartSetupStep::Stage);
+    Check(!game.IsLoading(),"held mode confirmation skipped stage selection");
+    Event(1,KEY_SPACE); Frame(game);
+    Check(Probe::SelectedStage(game)==0,"unavailable saved stage was selected");
+    for(const int key : {KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT}) {
+        Key(game,key); expect(StartSetupStep::Stage);
+        Check(Probe::SelectedStage(game)==0,"keyboard selected an unavailable stage");
+    }
+    for(int index=1;index<kStageScoreCount;++index) {
+        const auto row=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).StageRow(index);
+        Click(game,row.x+row.width/2,row.y+row.height/2); expect(StartSetupStep::Stage);
+        Check(Probe::SelectedStage(game)==0,"mouse selected an unavailable stage");
+    }
+    Probe::Motion(game,1);
+    Image before=ReadFrame(game);
+    Probe::MotionStep(game,StartSetupStep::Ready,0);
+    Image after=ReadFrame(game);
+    Check(before.width==after.width && before.height==after.height &&
+          std::memcmp(before.data,after.data,before.width*before.height*4)==0,"practice Ready transition changed at zero time");
+    UnloadImage(before); UnloadImage(after);
+    Probe::MotionStep(game,StartSetupStep::Stage,0);
+    for(const Vector2 size : {Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
+        SetWindowSize(size.x,size.y); Event(7,0,0); Frame(game);
+        const std::string dimensions=std::to_string(GetScreenWidth())+"x"+std::to_string(GetScreenHeight());
+        Capture(game,(screenshots/(dimensions+"-practice-stage-standard.png")).string().c_str());
+        const auto row=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).StageRow(0);
+        Click(game,row.x+row.width/2,row.y+row.height/2); expect(StartSetupStep::Ready);
+        Check(!game.IsLoading(),"stage row click skipped Ready");
+        Capture(game,(screenshots/(dimensions+"-practice-confirm.png")).string().c_str());
+        Click(game,1,1,MOUSE_BUTTON_RIGHT); expect(StartSetupStep::Stage);
+    }
+    SetWindowSize(1280,720); Event(7,0,0); Frame(game);
+    Key(game,KEY_X); expect(StartSetupStep::Mode);
+    Key(game,KEY_D); Check(Probe::Selection(game).challenge,"practice challenge selection failed");
+    Key(game,KEY_SPACE); expect(StartSetupStep::Stage);
+    Check(Probe::StageBest(game,false,1)==5176180 && Probe::StageBest(game,true,1)==8754321,"mode records were mixed");
+    Capture(game,(screenshots/"practice-stage-challenge.png").string().c_str());
+    Key(game,KEY_ENTER); expect(StartSetupStep::Ready);
+    const auto button=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).ReadyButton();
+    Click(game,button.x+button.width/2,button.y+button.height/2); WaitForStage(game);
+    Check(Probe::Selection(game).challenge,"selected practice mode was lost during loading");
+    // 每次调用真实结算并重新开局，检查低分、符卡练习和预览不能污染整关记录。
+    Probe::FinishScoreAttempt(game,9000000,true,false,false,RunState::GameOver);
+    Check(LoadOrCreateSettings(kSettingsFilename).stageHighScores.Best(true,1)==9000000,"challenge GameOver record was not saved");
+    const auto attempt=[&](long long score,bool challenge,bool spell,bool preview,RunState result) {
+        game.Start(false); WaitForStage(game);
+        Probe::FinishScoreAttempt(game,score,challenge,spell,preview,result);
+    };
+    attempt(6000000,false,false,false,RunState::Won);
+    attempt(4000000,false,false,false,RunState::GameOver);
+    attempt(99000000,false,true,false,RunState::Won);
+    attempt(99000000,true,false,true,RunState::Won);
+    auto saved=LoadOrCreateSettings(kSettingsFilename);
+    Check(saved.stageHighScores.Best(false,1)==6000000 && saved.stageHighScores.Best(true,1)==9000000,
+          "lower, spell or preview score overwrote stage records");
+    game.OpenOptions();
+    const auto reset=menu::OptionRow(menu::PageCanvas(GetScreenWidth(),GetScreenHeight()),menu::kResetIndex);
+    Click(game,reset.x+reset.width/2,reset.y+reset.height/2);
+    Check(LoadOrCreateSettings(kSettingsFilename).stageHighScores.scores==saved.stageHighScores.scores,"reset options erased stage records");
+    {
+        Game restarted;
+        Check(Probe::StageBest(restarted,false,1)==6000000 && Probe::StageBest(restarted,true,1)==9000000,
+              "stage records did not survive restart");
+    }
+    SetWindowSize(width,height);
+    std::puts("Practice stage flow, locked entries, transitions, mode records, migration and persistence passed.");
+}
+
+
+/// @brief 验证结算快照、精确超时、确认不穿透、暂停冻结与整关练习返回选关的完整生命周期。
+void TestStageSettlement(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;
+    using Probe=GameLifecycleProbe;
+    Game game;
+    SetTargetFPS(0);
+    const auto start=[&](bool practice) {
+        game.StartPreview(); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
+        Check(Probe::Playing(game) && Probe::DialogueTime(game)==0 && Probe::Score(game)==10000,
+              "clear report interrupted the start of post-battle dialogue");
+        game.Update(0.1F);
+        Check(Probe::Playing(game) && Probe::Score(game)==10000,"clear report interrupted post-battle dialogue");
+        Probe::FinishPostDialogue(game);
+        Check(Probe::State(game)==RunState::StageClear,"clear report did not open");
+        Check(Probe::Score(game)==263750,"clear formula or bonus application is incorrect");
+    };
+    const auto waitForSelection=[&] {
+        for(int frame=0;frame<90 && !Probe::Setup(game);++frame)Frame(game);
+        Check(Probe::Setup(game) && Probe::SetupStep(game)==StartSetupStep::Stage,"practice clear did not return to Stage");
+        Check(Probe::Selection(game).challenge && Probe::Selection(game).shot==1 && Probe::SelectedStage(game)==0,
+              "returning to Stage lost run selections");
+        Check(Probe::StageReleased(game) && !IsCursorHidden(),"returning to Stage retained resources or captured cursor");
+    };
+    for(const bool practice : {false,true}) {
+        game.StartPreview(); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
+        Probe::LastPostLine(game); Key(game,KEY_Z);
+        Check(Probe::State(game)==RunState::StageClear && Probe::ClearSeconds(game)<0.1F,
+              "confirming the final post-battle line also dismissed the clear report");
+    }
+    start(false);
+    const auto time=Probe::StageTime(game), dialogueEnd=Probe::DialogueTime(game);
+    game.Update(9.999F);
+    Check(Probe::State(game)==RunState::StageClear && Probe::DialogueTime(game)==dialogueEnd && Probe::StageTime(game)==time,
+          "clear report did not freeze later events for ten seconds");
+    game.Update(0.002F);
+    Check(Probe::State(game)==RunState::Finishing,"clear timeout did not continue to stage finishing");
+    Check(Probe::Score(game)==263750,"clear timeout awarded bonus twice");
+    for(const int key : {KEY_Z,KEY_SPACE,KEY_ENTER}) {
+        start(false); Key(game,key);
+        Check(Probe::State(game)==RunState::Finishing || Probe::State(game)==RunState::Won,"clear confirmation bypassed stage finishing");
+    }
+    start(false); Click(game,1,1);
+    Check(Probe::State(game)==RunState::Finishing || Probe::State(game)==RunState::Won,"left click did not close just the report");
+    start(false); game.Update(3);
+    Key(game,KEY_ESCAPE); const float frozen=Probe::ClearSeconds(game);
+    game.Update(12);
+    Check(Probe::State(game)==RunState::Paused && Probe::ClearSeconds(game)==frozen,"pause did not freeze clear timeout");
+    Key(game,KEY_X);
+    Check(Probe::State(game)==RunState::StageClear && !IsCursorHidden(),"resuming report captured cursor or lost state");
+    start(true);
+    game.Update(0.25F);
+    const int width=GetScreenWidth(),height=GetScreenHeight();
+    for(const Vector2 size : {Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
+        SetWindowSize(size.x,size.y);
+        Capture(game,(screenshots/(std::to_string(GetScreenWidth())+"x"+std::to_string(GetScreenHeight())+"-clear-breakdown.png")).string().c_str(),0);
+    }
+    SetWindowSize(width,height);
+    // 正式入口重入不能重复加奖励或重置倒计时。
+    const float elapsed=Probe::ClearSeconds(game);
+    Probe::Motion(game,0); Probe::ReenterClear(game);
+    Check(Probe::Score(game)==263750 && Probe::ClearSeconds(game)==elapsed,"clear reentry mutated the fixed reward");
+    Key(game,KEY_SPACE); waitForSelection();
+    start(true); game.Update(10); waitForSelection();
+    start(true); Click(game,1,1); waitForSelection();
+    // 结算期间的暂停返回和普通练习暂停返回都走同一资源清理入口。
+    start(true); Key(game,KEY_ESCAPE);
+    const menu::OverlayLayout overlay(GetScreenWidth(),GetScreenHeight());
+    const auto back=overlay.PauseRow(3);
+    Event(7,back.x+back.width/2,back.y+back.height/2); Frame(game);
+    Check(Probe::UiSelection(game)==3,"practice pause hover missed Stage return");
+    Click(game,back.x+back.width/2,back.y+back.height/2); waitForSelection();
+    Key(game,KEY_Z); Key(game,KEY_SPACE); WaitForStage(game);
+    Key(game,KEY_ESCAPE); Key(game,KEY_W);
+    Check(Probe::UiSelection(game)==3,"practice pause keyboard did not select Stage return");
+    Key(game,KEY_Z); waitForSelection();
+    Key(game,KEY_X); Check(Probe::SetupStep(game)==StartSetupStep::Mode,"returned Stage did not backtrack to mode");
+    std::puts("Stage clear breakdown, ten-second timeout, confirmation, pause and practice return passed.");
 }
 
 }
@@ -704,6 +916,8 @@ int main(int argc, char** argv) {
         TestStartSelectionMemory(screenshots);
         TestStartAnimations(screenshots);
         TestUnifiedUiInputs();
+        TestPracticeStages(screenshots);
+        TestStageSettlement(screenshots);
         std::puts("Settings UI integration passed.");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "Settings UI integration failed: %s\n", error.what());

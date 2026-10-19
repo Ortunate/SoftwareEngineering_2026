@@ -100,6 +100,7 @@ void Game::LoadSettings() {
     initialLives_ = settings.initialLives;
     initialBombs_ = settings.initialBombs;
     bestScore_ = settings.bestScore;
+    stageHighScores_ = settings.stageHighScores;
     lastSelection_ = settings.lastSelection;
     selectedShot_ = lastSelection_.shot;
     challengeMode_ = lastSelection_.challenge;
@@ -119,7 +120,7 @@ void Game::LoadSettings() {
 
 void Game::SaveSettings() const {
     const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_],
-        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_};
+        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_, stageHighScores_};
     if (!SaveSettingsFile(kSettingsFilename, settings)) {
         TraceLog(LOG_WARNING, "SETTINGS: Failed to save %s", kSettingsFilename);
     }
@@ -192,6 +193,7 @@ void Game::CompleteStartRun() {
     screenFlashTimer_ = 0.0F;
     spellCutInTimer_ = 0.0F;
     spellBonusTimer_=0; spellBonus_=stageBonus_=0;
+    stageClearSummary_={}; stageClearSeconds_=0; stageClearShown_=false;
     dialogueTimer_ = 0.0F;
     dialogueAfterBattle_ = dialogueBossMusic_ = false;
     dialogueActive_ = false;
@@ -250,7 +252,50 @@ void Game::EnterMainMenu() {
     if (IsCursorHidden()) ShowCursor();
 }
 
+void Game::ReturnToPracticeStage() {
+    if(!practiceMode_ || spellPractice_) { EnterMainMenu(); return; }
+    const int stage=StageNumber(stageId_)-1;
+    EnterMainMenu();
+    selectedMenuItem_=2;
+    selectedPracticeStage_=stage>=0 && stage<kStageScoreCount && kPracticeStages[stage]?stage:0;
+    setupStep_=StartSetupStep::Stage;
+    state_=RunState::StartSetup;
+    // 返回战斗入口时直接显示完整选择背景，避免先闪回一次首页再淡入人物。
+    startSetupMotion_.Advance(static_cast<int>(setupStep_),1);
+}
+
+void Game::BeginStageClear() {
+    if(stageClearShown_)return;
+    // 对话完整结束后再固定奖励；此入口可重入，但不能重复加分或重新启动倒计时。
+    stageClearSummary_={std::max(1,StageNumber(stageId_)),player_.Power(),graze_,pointItems_};
+    stageBonus_=stageClearSummary_.Total();
+    score_+=stageBonus_;
+    stageClearShown_=true;
+    RecordStageScore();
+    bullets_.Reset(); drops_.Clear();
+    spellCutInTimer_=screenFlashTimer_=0;
+    state_=RunState::StageClear;
+    stageClearSeconds_=0;
+    if(IsCursorHidden())ShowCursor();
+}
+
+void Game::ContinueStageClear() {
+    if(state_!=RunState::StageClear)return;
+    EndStage(RunState::Won);
+}
+
+void Game::RecordStageScore() {
+    // 分模式记录包含通关与失败的整关尝试；预览和符卡练习的计分口径不同，不能混入。
+    bool recordStage=!previewMode_ && !spellPractice_;
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+    recordStage=recordStage && !shotTestActive_;
+#endif
+    if(recordStage && stageHighScores_.Record(challengeMode_,StageNumber(stageId_),score_))
+        SaveSettings();
+}
+
 void Game::EndStage(RunState result) {
+    RecordStageScore();
     if (result == RunState::Won) {
         assets_.PlaySoundEffect("clear");
         if (!practiceMode_ && !challengeMode_ && !previewMode_ && score_ > bestScore_) {
@@ -284,7 +329,7 @@ void Game::ClearEnemiesWithEffects() {
 }
 
 void Game::TogglePause() {
-    if (state_ == RunState::Playing || state_ == RunState::Finishing) {
+    if (state_ == RunState::Playing || state_ == RunState::StageClear || state_ == RunState::Finishing) {
         selectedPauseItem_ = 0;
         assets_.PlaySoundEffect("menu_cancel");
         pausedState_ = state_;
@@ -294,14 +339,14 @@ void Game::TogglePause() {
     } else if (state_ == RunState::Paused) {
         state_ = pausedState_;
         assets_.ResumeMusic();
-        if (captureCursor_) DisableCursor();
+        if (captureCursor_ && state_!=RunState::StageClear) DisableCursor();
     }
 }
 
 void Game::Update(float deltaTime) {
     assets_.UpdateAudio();
     UpdateState(deltaTime);
-    if(state_==RunState::Playing || state_==RunState::Finishing)UpdateBattleAnimations();
+    if(state_==RunState::Playing || state_==RunState::StageClear || state_==RunState::Finishing)UpdateBattleAnimations();
     UpdateUiMotion(deltaTime);
 }
 
@@ -366,7 +411,7 @@ void Game::UpdateUiMotion(float deltaTime) {
         detail = static_cast<int>(setupStep_);
         selection = setupStep_ == StartSetupStep::Shot ? selectedShot_ : setupStep_ == StartSetupStep::Mode ? static_cast<int>(challengeMode_)
             : setupStep_ == StartSetupStep::Spell ? (practicePhase_ == 2 ? 0 : 1)
-            : setupStep_ == StartSetupStep::Difficulty ? 1 : 0;
+            : setupStep_ == StartSetupStep::Difficulty ? 1 : setupStep_ == StartSetupStep::Stage ? selectedPracticeStage_ : 0;
     } else if (state_ == RunState::MusicRoom) selection = selectedTrack_;
     else if (state_ == RunState::Paused) selection = selectedPauseItem_;
     else if (state_ == RunState::Won || state_ == RunState::GameOver) selection = selectedResultItem_;
@@ -374,9 +419,10 @@ void Game::UpdateUiMotion(float deltaTime) {
     // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
     menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
     startSetupMotion_.Advance(state_==RunState::MainMenu?-1:state_==RunState::StartSetup?static_cast<int>(setupStep_):-2,deltaTime);
-    for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Spell}) {
+    for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Spell,StartSetupStep::Stage}) {
         if(startSetupMotion_.Layer(step)<=0 && !(state_==RunState::StartSetup && setupStep_==step))continue;
-        const int selected=step==StartSetupStep::Shot?selectedShot_:step==StartSetupStep::Mode?int(challengeMode_):int(practicePhase_==4);
+        const int selected=step==StartSetupStep::Shot?selectedShot_:step==StartSetupStep::Mode?int(challengeMode_):
+            step==StartSetupStep::Stage?selectedPracticeStage_:int(practicePhase_==4);
         setupChoiceMotion_[static_cast<int>(step)].Advance(static_cast<int>(step),selected,deltaTime);
     }
     if(state_==RunState::MainMenu)titleMenuMotion_=menuMotion_;
@@ -404,9 +450,24 @@ void Game::UpdateState(float deltaTime) {
     if (IsKeyPressed(KEY_F3)) debugRender_ = !debugRender_;
 #endif
 
+    if(state_==RunState::StageClear) {
+        const auto input=ui::MenuInput::Read();
+        if(input.back || (BindingPressed(bindings_.pause) && !input.confirm && !input.click)) {
+            TogglePause(); return;
+        }
+        stageClearSeconds_=std::min(kStageClearSeconds,stageClearSeconds_+std::max(0.0F,deltaTime));
+        actorEffects_.Update(std::max(0.0F,deltaTime));
+        if(input.confirm || input.click || stageClearSeconds_>=kStageClearSeconds)ContinueStageClear();
+        return; // 确认只关闭本层，下一帧才推进收尾，避免操作穿透到后续菜单。
+    }
+
     if (state_ == RunState::Won || state_ == RunState::GameOver) {
         const auto input = ui::MenuInput::Read();
-        if (input.back || IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
+        if (input.back) {
+            if(practiceMode_ && !spellPractice_)ReturnToPracticeStage(); else EnterMainMenu();
+            return;
+        }
+        if(IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
         const int previous = selectedResultItem_;
         selectedResultItem_ = (selectedResultItem_ + menu::kResultCount + input.Direction()) % menu::kResultCount;
         bool confirm = input.confirm;
@@ -418,6 +479,7 @@ void Game::UpdateState(float deltaTime) {
         if (confirm) {
             assets_.PlaySoundEffect("menu_confirm");
             if (selectedResultItem_ == 0) StartRun();
+            else if(practiceMode_ && !spellPractice_)ReturnToPracticeStage();
             else EnterMainMenu();
         }
         return;
@@ -431,10 +493,11 @@ void Game::UpdateState(float deltaTime) {
         }
         if (IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
         const int previous = selectedPauseItem_;
-        selectedPauseItem_ = (selectedPauseItem_ + menu::kPauseCount + input.Direction()) % menu::kPauseCount;
+        const int count=static_cast<int>(menu::PauseLabels(practiceMode_ && !spellPractice_).size());
+        selectedPauseItem_ = (selectedPauseItem_ + count + input.Direction()) % count;
         bool confirm = input.confirm;
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
-        for (int index = 0; index < menu::kPauseCount; ++index)
+        for (int index = 0; index < count; ++index)
             confirm = input.Select(layout.PauseRow(index),index,selectedPauseItem_) || confirm;
         if (selectedPauseItem_ != previous) assets_.PlaySoundEffect("menu_move");
         if (confirm) {
@@ -443,6 +506,7 @@ void Game::UpdateState(float deltaTime) {
                 case 0: TogglePause(); break;
                 case 1: EnterMainMenu(); break;
                 case 2: StartRun(); break;
+                case 3: ReturnToPracticeStage(); break;
             }
         }
         return;
@@ -464,8 +528,8 @@ void Game::UpdateState(float deltaTime) {
         if (actorEffects_.Pool().ActiveCount() == 0) {
             actorEffects_.Clear();
             assets_.UnloadStage();
-            state_ = finishResult_;
-            EnableCursor();
+            if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
+            else { state_ = finishResult_; EnableCursor(); }
         }
         return;
     }
@@ -493,6 +557,7 @@ void Game::UpdateState(float deltaTime) {
                   [this](const StageEvent& event) {
                       return HandleStageEvent(event);
                   });
+    if(state_!=RunState::Playing)return; // 事件改变状态时不能再推进本帧战斗。
     // 本帧由时间轴刚启动的对话从下一帧计时，避免第一句少显示一个 deltaTime。
     if (dialogueWasActive && dialogueActive_) {
         dialogueTimer_ += deltaTime;
@@ -509,7 +574,7 @@ void Game::UpdateState(float deltaTime) {
         if (dialogueTimer_+0.00001F>=DialogueDuration()) {
             dialogueActive_=false;
             if (dialogueEventId_) { stage_.EndEvent(*dialogueEventId_); dialogueEventId_.reset(); }
-            if (dialogueAfterBattle_) { EndStage(RunState::Won); return; }
+            if (dialogueAfterBattle_) { BeginStageClear(); return; }
         }
     }
     if(!dialogueActive_) {
@@ -562,12 +627,8 @@ void Game::BeginStageBoss(bool final, StageEventId id) {
 }
 
 void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
+    if(afterBattle && stageClearShown_)return;
     dialogueAfterBattle_=afterBattle;
-    if(afterBattle) {
-        // 一面沿用基础 Normal 结算公式；3D 拾取/擦弹数采用当前世界的实际结果。
-        stageBonus_=(1000LL+graze_*10LL+player_.Power()*100LL)*pointItems_;
-        score_+=stageBonus_;
-    }
     dialogueBossMusic_=false;
     stage_.CancelEnemySpawns();
     ClearEnemiesWithEffects();

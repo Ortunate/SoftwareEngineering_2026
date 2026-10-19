@@ -2,7 +2,7 @@
 #pragma once
 
 namespace koumakyou {
-/// @brief 正常开局依次经过难度、主人公、御札、模式、最终确认；符卡练习从 Spell 直接进入确认。
+/// @brief 正常开局经过难度、主人公、御札、模式、最终确认；整关练习在模式后增加 Stage，符卡练习直接确认。
 /// 仅 Ready 页允许真正加载关卡，返回确认页之前的步骤必须保留已选内容。
-enum class StartSetupStep { Difficulty, Character, Shot, Mode, Ready, Spell };
+enum class StartSetupStep { Difficulty, Character, Shot, Mode, Ready, Spell, Stage, Count };
 } // namespace koumakyou

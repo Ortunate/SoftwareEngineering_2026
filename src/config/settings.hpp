@@ -21,12 +21,33 @@ inline constexpr int kDefaultMusicVolume = 50;
 inline constexpr int kMinMouseSensitivity = 10;
 inline constexpr int kMaxMouseSensitivity = 300;
 inline constexpr float kBaseMouseSensitivity = 0.0024F;
+/// @brief 原典普通关卡的记录槽数；槽号为 1～6，与 StageId 的内部枚举值无关。
+inline constexpr int kStageScoreCount = 6;
+/// @brief 按标准/挑战模式分别保存整关最高分；御札共享记录，符卡练习和预览不写入。
+/// scores 的第一维为 0（标准）/1（挑战），第二维为关卡号减一；分数为非负 64 位整数。
+struct StageHighScores {
+    std::array<std::array<long long,kStageScoreCount>,2> scores{};
+    /// @brief 读取指定模式、1～6 关的最高分；无效关卡返回 0。
+    [[nodiscard]] long long Best(bool challenge,int stageNumber) const {
+        return stageNumber>=1 && stageNumber<=kStageScoreCount ? scores[challenge][stageNumber-1] : 0;
+    }
+    /// @brief 尝试提升指定关卡的记录；非法关卡、负分及未超过旧记录时返回 false，不修改数据。
+    bool Record(bool challenge,int stageNumber,long long score) {
+        if(stageNumber<1 || stageNumber>kStageScoreCount || score<0)return false;
+        auto& best=scores[challenge][stageNumber-1];
+        if(score<=best)return false;
+        best=score;
+        return true;
+    }
+};
 /// @brief 上次开局页的选择；shot=0 为灵之御札、1 为梦之御札，practicePhase 仅允许 2 或 4。
-/// 与本局运行状态独立，预览、重开和练习初始化不能覆盖此记录；目前难度仅开放 Normal。
+/// practiceStage 为 1～6 的关卡号，进入选择页时还须过滤未开放关卡；目前难度仅开放 Normal。
+/// 与本局运行状态独立，预览、重开和练习初始化不能覆盖此记录。
 struct StartSelection {
     int shot = 0;
     bool challenge = false;
     int practicePhase = 2;
+    int practiceStage = 1;
 };
 
 /// @brief 需要持久化的战斗键位、显示、音量、鼠标、开局资源和选择记录。
@@ -40,6 +61,7 @@ struct GameSettings {
     int initialBombs = 3; // 开局 Bomb 0～3；复活补给保持玩家规则。
     int bestScore = 0; // 本机一面最高分，0～20 亿；练习和挑战不写入。
     StartSelection lastSelection{};
+    StageHighScores stageHighScores{};
 };
 
 /// @brief 读取本地配置；缺失或无效的配置会使用默认值。
@@ -47,7 +69,7 @@ struct GameSettings {
 /// @return 可用于本局游戏的设置。
 [[nodiscard]] GameSettings LoadOrCreateSettings(
     const std::filesystem::path& path);
-/// @brief 将全部设置保存为 version=5 文本配置；旧版本缺失字段使用默认值。
+/// @brief 将全部设置保存为 version=6 文本配置；旧版本缺失字段使用默认值。
 /// @param path 配置文件路径。
 /// @param settings 待保存的设置。
 /// @return 成功写入返回 true，否则返回 false。

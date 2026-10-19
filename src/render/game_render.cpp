@@ -209,15 +209,16 @@ void Game::DrawOverlay() const {
 
     DrawDialogue();
     DrawSpellCutIn();
+    if(state_==RunState::StageClear || (state_==RunState::Paused && pausedState_==RunState::StageClear))DrawStageClear();
 
     if (state_ == RunState::Paused) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{0, 0, 0, 155});
         const auto center=canvas.Point(380,310);
-        DrawRectangleRounded(layout.PausePanel(),0.1F,12,Color{38,12,25,225});
+        const auto labels=menu::PauseLabels(practiceMode_ && !spellPractice_);
+        DrawRectangleRounded(layout.PausePanel(static_cast<int>(labels.size())),0.1F,12,Color{38,12,25,225});
         ui::DrawCentered(font,"暂停",center.x,canvas.Point(0,200).y,43*canvas.scale,RAYWHITE);
-        const auto& labels=menu::kPauseLabels;
-        for(int index=0;index<menu::kPauseCount;++index) {
+        for(int index=0;index<static_cast<int>(labels.size());++index) {
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
             const float size=25*canvas.scale,width=ui::MeasureText(font,labels[index],size).x;
             const auto row=layout.PauseRow(index);
@@ -242,7 +243,7 @@ void Game::DrawOverlay() const {
         for(int index=0;index<menu::kResultCount;++index) {
             const auto row=layout.ResultRow(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            menu::DrawPageButton(canvas,font,row,menu::kResultLabels[index],menuMotion_,weight,reveal);
+            menu::DrawPageButton(canvas,font,row,index==1 && practiceMode_ && !spellPractice_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
         }
     }
 
@@ -252,6 +253,38 @@ void Game::DrawOverlay() const {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
                       Color{220, 240, 255, alpha});
     }
+}
+
+void Game::DrawStageClear() const {
+    const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto& canvas=layout.canvas;
+    const float s=canvas.scale;
+    const Font font=assets_.Common().hudFont;
+    const Color gold{233,204,139,255},ivory{252,246,236,255},rose{207,119,132,255};
+    const float reveal=std::clamp(stageClearSeconds_/0.22F,0.0F,1.0F);
+    DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,115});
+    DrawRectangleRounded(layout.ClearPanel(),0.035F,8,Fade(Color{29,10,22,240},0.7F+0.3F*reveal));
+    DrawRectangleRoundedLinesEx(layout.ClearPanel(),0.035F,8,s,Fade(gold,0.7F));
+    const float center=canvas.Point(380,0).x;
+    ui::DrawCentered(font,"Stage Clear",center,canvas.Point(0,122).y,38*s,gold);
+    ui::DrawCentered(font,TextFormat("STAGE %d · %s",stageClearSummary_.stage,challengeMode_?"挑战模式":"标准模式"),
+                     center,canvas.Point(0,171).y,18*s,rose);
+    const auto row=[&](const char* label,const char* value,float y,Color color,float size=26) {
+        ui::DrawText(font,label,canvas.Point(120,y),size*s,color);
+        const float fitted=ui::FittedSize(font,value,size*s,280*s);
+        const auto right=canvas.Point(640,y);
+        ui::DrawText(font,value,{right.x-ui::MeasureText(font,value,fitted).x,right.y},fitted,color);
+    };
+    row("Stage * 1000 =",TextFormat("%lld",stageClearSummary_.StagePoints()),214,ivory);
+    row("Power * 100 =",TextFormat("%lld",stageClearSummary_.PowerPoints()),251,ivory);
+    row("Graze * 10 =",TextFormat("%lld",stageClearSummary_.GrazePoints()),288,ivory);
+    row("* Point Item",TextFormat("%d",stageClearSummary_.pointItems),325,rose);
+    row("Normal Rank","* 1.0",380,rose,24);
+    const auto left=canvas.Point(120,416),right=canvas.Point(640,416);
+    DrawLineEx(left,right,s,Fade(gold,0.6F));
+    row("Total =",TextFormat("%lld",stageClearSummary_.Total()),431,gold,32);
+    ui::DrawCentered(font,TextFormat("Z / Space / 左键继续 · %ds",static_cast<int>(std::ceil(kStageClearSeconds-stageClearSeconds_))),
+                     center,canvas.Point(0,493).y,18*s,ivory);
 }
 
 void Game::DrawKeyBindings() const {

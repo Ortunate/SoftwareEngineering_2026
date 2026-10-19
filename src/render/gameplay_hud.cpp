@@ -257,11 +257,7 @@ void Game::DrawDialogue() const {
         Label(font, "宵暗的妖怪", {x, nameplate.y + 12 * l.scale}, 19 * l.scale, textWidth, kMuted);
         Label(font, "露米娅", {x, nameplate.y + 46 * l.scale}, 32 * l.scale, textWidth, kInk);
     }
-    if (dialogueAfterBattle_) {
-        const char* bonus = TextFormat("BONUS %lld", stageBonus_);
-        const float size = ui::FittedSize(font, bonus, 25 * l.scale, l.width - 2 * l.margin);
-        ui::DrawCentered(font, bonus, l.width / 2, panel.y - 37 * l.scale, size, kGold);
-    }
+
 }
 
 void Game::DrawSpellCutIn() const {

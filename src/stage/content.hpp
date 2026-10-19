@@ -24,7 +24,7 @@ public:
     virtual void SpawnStageEnemy(const EnemySpec& spec) = 0;
     /// @brief 请求开始道中或关底 Boss，并登记等待战斗结束的异步事件编号。
     virtual void BeginStageBoss(bool final, StageEventId id) = 0;
-    /// @brief 请求开始战前或战后对话并登记异步事件编号；afterBattle 决定所用台词及结算路径。
+    /// @brief 请求对话并登记异步事件编号；afterBattle 的全部台词结束后再展示关卡结算。
     virtual void BeginStageDialogue(StageEventId id, bool afterBattle = false) = 0;
     /// @brief 请求显示一条持续指定秒数的提示；接收方须复制需要留存的文本。
     virtual void StageMessage(std::string_view message, float duration) = 0;

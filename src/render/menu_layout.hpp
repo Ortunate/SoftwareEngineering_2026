@@ -4,6 +4,7 @@
 #include "raylib.h"
 #include <algorithm>
 #include <array>
+#include <span>
 
 namespace koumakyou::menu {
 /// @brief 设计画布的窗口映射；默认等比居中，Full 将布局双轴铺满，scale 始终用于等比的文字与图案。
@@ -53,6 +54,13 @@ inline constexpr int kBackIndex = 8;
 inline constexpr int kPauseCount = 3;
 inline constexpr std::array<const char*,kPauseCount> kPauseLabels{
     "解除暂停","返回主菜单","从头再来"};
+/// @brief 整关练习增加返回关卡选择，前三项编号保持不变；符卡练习仍使用普通暂停项。
+inline constexpr std::array<const char*,4> kPracticePauseLabels{
+    "解除暂停","返回主菜单","从头再来","返回关卡选择画面"};
+/// @brief 返回当前模式的暂停选项；借用静态数组，输入导航与绘制须使用同一列表。
+[[nodiscard]] inline std::span<const char* const> PauseLabels(bool stagePractice) {
+    return stagePractice?std::span<const char* const>(kPracticePauseLabels):std::span<const char* const>(kPauseLabels);
+}
 /// @brief 结算操作的局部顺序；输入与绘制共用，结算时默认选择重新开始。
 inline constexpr int kResultCount = 2;
 inline constexpr std::array<const char*,kResultCount> kResultLabels{"从头再来","返回主菜单"};
@@ -104,9 +112,12 @@ struct BindingsLayout {
 struct OverlayLayout {
     Canvas canvas;
     OverlayLayout(int width,int height):canvas(width,height,760,620) {}
-    [[nodiscard]] Rectangle PausePanel() const { return canvas.Rect(135,180,490,118+kPauseCount*48); }
-    /// @brief 暂停操作行，index 为 0～kPauseCount-1，绘制与点击共用。
+    /// @brief 按实际项数确定底板高度；count 为普通 3 项或整关练习 4 项。
+    [[nodiscard]] Rectangle PausePanel(int count=kPauseCount) const { return canvas.Rect(135,180,490,118+count*48); }
+    /// @brief 暂停操作行，index 为当前 PauseLabels 的局部编号，绘制与点击共用。
     [[nodiscard]] Rectangle PauseRow(int index) const { return canvas.Rect(170,270+index*48,420,42); }
+    /// @brief 关卡计分明细的居中底板，横竖屏按短边等比缩放。
+    [[nodiscard]] Rectangle ClearPanel() const { return canvas.Rect(80,100,600,430); }
     /// @brief 结算操作行，index 为 0～kResultCount-1，绘制与点击共用。
     [[nodiscard]] Rectangle ResultRow(int index) const { return canvas.Rect(170,430+index*48,420,42); }
 };

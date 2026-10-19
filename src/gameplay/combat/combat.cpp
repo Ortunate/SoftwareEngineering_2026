@@ -192,7 +192,7 @@ void Game::AdvanceBossPhase() {
     } else if (!hasNextPhase) {
         score_ += 200000;
         messageTimer_ = 0.0F;
-        // 战斗异步事件已结束，下一帧时间轴启动原作战后独白；独白完毕才结算。
+        // 战斗事件已结束，下一帧时间轴开始战后独白，独白结束才展示关卡奖励。
     }
 }
 

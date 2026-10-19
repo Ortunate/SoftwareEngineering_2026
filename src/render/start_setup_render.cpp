@@ -1,4 +1,4 @@
-// 本文件参照新典绘制完整 Start 流程：难度札、人物双层立绘、御札/模式、能力评级与最终确认横幅。
+// 本文件参照新典绘制完整 Start 流程：难度札、人物双层立绘、御札/模式、关卡记录、能力评级与最终确认横幅。
 #include "app/game.hpp"
 #include "render/start_setup_layout.hpp"
 #include "render/menu_page.hpp"
@@ -169,18 +169,55 @@ void Game::DrawStartSetup() const {
             }
         }
     }
-    const float ready=motion.Layer(StartSetupStep::Ready),shot=motion.Layer(StartSetupStep::Mode)+ready;
+    const float ready=motion.Layer(StartSetupStep::Ready);
+    const float stages=practiceMode_ && !spellPractice_ ? motion.Layer(StartSetupStep::Stage)+ready : 0;
+    if(stages>0) {
+        const Painter p{font,s,stages};
+        auto heading=layout.StageHeading();heading.x+=18*s*(1-stages);
+        const char* recordMode=challengeMode_?"挑战模式 · 最高得分":"标准模式 · 最高得分";
+        if(layout.compact) {
+            p.Text("请选择关卡。",heading,32*s,kGold,0,false,0.4F);
+            p.Text(recordMode,heading,20*s,kIvory,0.63F,false);
+        } else {
+            // 标题与模式同排，六行记录留在确认横幅上方，Ready 时仍能读到全部历史分数。
+            p.Text("请选择关卡。",{heading.x,heading.y,heading.width*0.51F,heading.height},28*s,kGold,0,false,0.4F);
+            p.Text(recordMode,{heading.x+heading.width*0.51F,heading.y,heading.width*0.49F,heading.height},18*s,kIvory,0.2F,false);
+        }
+        const auto& selection=setupChoiceMotion_[static_cast<int>(StartSetupStep::Stage)];
+        for(int index=0;index<kStageScoreCount;++index) {
+            const bool available=kPracticeStages[index].has_value();
+            const float weight=available?selection.Weight(index):0;
+            auto row=layout.StageRow(index);row.x+=18*s*(1-stages)-4*s*weight;
+            const Color color=available?ui::Blend(Color{161,138,132,255},kGold,weight):Color{127,106,106,180};
+            DrawRectangleRec(row,ui::WithOpacity(Color{46,22,29,static_cast<unsigned char>(45+70*weight)},stages));
+            const float split=row.width*0.36F;
+            p.Text(TextFormat("STAGE %d",index+1),{row.x+8*s,row.y,split-12*s,row.height},(layout.compact?25:21)*s,color,0.1F,false,weight*0.35F);
+            const char* score=TextFormat("%09lld",stageHighScores_.Best(challengeMode_,index+1));
+            const float scoreSize=ui::FittedSize(common.hudFont,score,(layout.compact?24:22)*s,row.width-split-8*s);
+            const float scoreWidth=ui::MeasureText(common.hudFont,score,scoreSize).x;
+            Label(common.hudFont,score,{row.x+row.width-8*s-scoreWidth,row.y,scoreWidth,row.height},
+                  scoreSize,ui::WithOpacity(color,stages),0.1F,false,weight*0.35F);
+            menu::DrawPageRowRule(canvas,row,selection,weight,stages);
+        }
+        const auto last=layout.StageRow(kStageScoreCount-1);
+        p.Text("未开放关卡不可选择",{last.x,last.y+last.height+4*s,last.width,20*s},16*s,Color{161,138,132,255},0,false);
+    }
+    const float shot=motion.Layer(StartSetupStep::Mode)+motion.Layer(StartSetupStep::Stage)+ready;
     if(shot>0) {
-        auto row=layout.ShotSummary();row.y+=10*s*(1-shot);
+        auto row=Mix(layout.ShotSummary(),layout.StageShotSummary(),stages);row.y+=10*s*(1-shot);
         Shot(font,row,s,selectedShot_,1,1,shot);
     }
-    if(ready>0) {
-        const Painter p{font,s,ready};
-        auto summary=layout.ModeSummary();summary.y+=10*s*(1-ready);
+    const float modeSummary=motion.Layer(StartSetupStep::Stage)+ready;
+    if(modeSummary>0) {
+        const Painter p{font,s,modeSummary};
+        auto summary=Mix(layout.ModeSummary(),layout.StageModeSummary(),stages);summary.y+=10*s*(1-modeSummary);
         p.Text(spellPractice_?"符卡练习":challengeMode_?"挑战模式":"标准模式",summary,30*s,kIvory,0,false);
         p.Rule({summary.x,summary.y+summary.height*0.40F,summary.width,0},kGold);
         p.Text(spellPractice_?(practicePhase_==2?"夜符「Night Bird」":"暗符「Demarcation」"):
                challengeMode_?"无限残机，挑战最少 MISS":"残机数量有限的基本模式",summary,22*s,kIvory,0.52F,false);
+    }
+    if(ready>0) {
+        const Painter p{font,s,ready};
         auto band=layout.ReadyBand();band.y+=18*s*(1-ready);
         DrawRectangleRec(band,ui::WithOpacity(Color{15,2,8,205},ready));
         DrawRectangleGradientV(band.x,band.y,band.width,band.height,

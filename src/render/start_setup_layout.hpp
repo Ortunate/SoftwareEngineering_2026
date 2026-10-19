@@ -23,6 +23,12 @@ struct StartSetupLayout {
     [[nodiscard]] Rectangle Choice(int index) const { return canvas.Rect(compact?62:835,(compact?730:210)+index*(compact?76:110),compact?636:380,compact?70:100); }
     [[nodiscard]] Rectangle ShotSummary() const { return canvas.Rect(compact?338:835,compact?936:594,compact?360:380,compact?60:66); }
     [[nodiscard]] Rectangle ModeSummary() const { return canvas.Rect(compact?338:835,compact?872:490,compact?360:380,compact?56:90); }
+    /// @brief 关卡页右侧标题及分模式最高分列表；index 为 0～5，未开放项也使用同一绘制区域，六行均避开最终确认横幅。
+    [[nodiscard]] Rectangle StageHeading() const { return canvas.Rect(compact?338:835,compact?647:35,compact?360:380,compact?56:32); }
+    [[nodiscard]] Rectangle StageRow(int index) const { return canvas.Rect(compact?338:835,(compact?714:77)+index*(compact?34:26),compact?360:380,compact?30:24); }
+    /// @brief 竖屏关卡列表占据原摘要位置，摘要下移至列表下方，避开左下角难度札。
+    [[nodiscard]] Rectangle StageModeSummary() const { return canvas.Rect(compact?338:835,compact?944:490,compact?360:380,compact?56:90); }
+    [[nodiscard]] Rectangle StageShotSummary() const { return canvas.Rect(compact?338:835,compact?1006:594,compact?360:380,compact?58:66); }
     [[nodiscard]] Rectangle ReadyBand() const { return canvas.Rect(0,compact?345:235,canvas.width,compact?255:205); }
     [[nodiscard]] Rectangle ReadyButton() const { return canvas.Rect(compact?170:440,compact?500:357,compact?420:400,60); }
 };

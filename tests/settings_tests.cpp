@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <limits>
 
 /// @brief 验证默认值、持久化边界、旧配置和键鼠冲突；失败时断言终止。
 void RunSettingsTests() {
@@ -89,7 +90,7 @@ void RunSettingsTests() {
     assert(migrated.bindings.fire == MouseBinding(MOUSE_BUTTON_LEFT));
     assert(migrated.bindings.bomb == KEY_F && migrated.bindings.pause == KEY_P);
     { std::ifstream in(path); const std::string content((std::istreambuf_iterator<char>(in)), {});
-      assert(content.find("version=5") != std::string::npos);
+      assert(content.find("version=6") != std::string::npos);
       assert(content.find("fire_alt") == std::string::npos && content.find("bomb_alt") == std::string::npos); }
     { std::ofstream out(path); out << "version=3\nfocus=86\nfire=81\nbomb=69\npause=79\n"; }
     const auto custom = LoadOrCreateSettings(path);
@@ -124,5 +125,37 @@ void RunSettingsTests() {
     const auto upgraded = LoadOrCreateSettings(path);
     assert(upgraded.lastSelection.shot == 0 && !upgraded.lastSelection.challenge && upgraded.lastSelection.practicePhase == 2);
     assert(upgraded.bestScore == 1234 && upgraded.bindings.fire == KEY_Z && upgraded.bindings.bomb == KEY_X);
+    assert(upgraded.stageHighScores.Best(false,1)==1234 && upgraded.stageHighScores.Best(true,1)==0);
+    // 分模式、分关卡记录必须独立往返，且不得被较低分、非法槽或新配置误迁移覆盖。
+    auto records=defaults;
+    for(int mode=0;mode<2;++mode)for(int stage=1;stage<=kStageScoreCount;++stage) {
+        const long long score=5000000000LL+mode*1000000+stage*123;
+        assert(records.stageHighScores.Record(mode!=0,stage,score));
+        assert(!records.stageHighScores.Record(mode!=0,stage,score-1));
+    }
+    assert(!records.stageHighScores.Record(false,0,999) && !records.stageHighScores.Record(true,7,999));
+    assert(!records.stageHighScores.Record(false,1,-1));
+    assert(records.stageHighScores.Best(false,0)==0 && records.stageHighScores.Best(true,7)==0);
+    records.bestScore=2000000000;
+    records.stageHighScores.scores[1][5]=std::numeric_limits<long long>::max();
+    for(int stage=1;stage<=kStageScoreCount;++stage) {
+        records.lastSelection.practiceStage=stage;
+        assert(SaveSettingsFile(path,records));
+        const auto loaded=LoadOrCreateSettings(path);
+        assert(loaded.stageHighScores.scores==records.stageHighScores.scores);
+        assert(loaded.lastSelection.practiceStage==stage);
+    }
+    for(const char* invalid : {"-1","9223372036854775808","120junk","nan"}) {
+        { std::ofstream out(path); out << "version=6\nlast_practice_stage=7\nstage_best_standard_1=" << invalid
+              << "\nstage_best_challenge_2=8765432109\nstage_best_standard_0=123\nstage_best_standard_7=456\n"; }
+        const auto loaded=LoadOrCreateSettings(path);
+        assert(loaded.stageHighScores.Best(false,1)==0 && loaded.stageHighScores.Best(true,2)==8765432109LL);
+        assert(loaded.lastSelection.practiceStage==1);
+    }
+    { std::ofstream out(path); out << "version=5\nbest_score=5176180\nlast_shot=1\nlast_challenge=1\n"; }
+    const auto previous=LoadOrCreateSettings(path);
+    assert(previous.stageHighScores.Best(false,1)==5176180 && previous.stageHighScores.Best(true,1)==0);
+    assert(previous.lastSelection.shot==1 && previous.lastSelection.challenge && previous.lastSelection.practiceStage==1);
+    assert(LoadOrCreateSettings(path).stageHighScores.scores==previous.stageHighScores.scores);
     std::filesystem::remove(path);
 }

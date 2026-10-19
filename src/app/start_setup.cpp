@@ -4,6 +4,7 @@
 #include "render/start_setup_layout.hpp"
 
 namespace koumakyou {
+static_assert(kPracticeStages.size()==kStageScoreCount);
 void Game::UpdateStartSetup() {
     const menu::StartSetupLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto input=ui::MenuInput::Read();
@@ -14,7 +15,10 @@ void Game::UpdateStartSetup() {
             case StartSetupStep::Character: setupStep_=StartSetupStep::Difficulty; break;
             case StartSetupStep::Shot: setupStep_=StartSetupStep::Character; break;
             case StartSetupStep::Mode: setupStep_=StartSetupStep::Shot; break;
-            case StartSetupStep::Ready: setupStep_=spellPractice_?StartSetupStep::Spell:StartSetupStep::Mode; break;
+            case StartSetupStep::Stage: setupStep_=StartSetupStep::Mode; break;
+            case StartSetupStep::Ready: setupStep_=spellPractice_?StartSetupStep::Spell:
+                practiceMode_?StartSetupStep::Stage:StartSetupStep::Mode; break;
+            case StartSetupStep::Count: return;
         }
         return;
     }
@@ -23,6 +27,21 @@ void Game::UpdateStartSetup() {
     else if(setupStep_==StartSetupStep::Character)
         confirm=confirm || input.Clicked(layout.Portrait()) || input.Clicked(layout.CharacterInfo());
     else if(setupStep_==StartSetupStep::Ready)confirm=confirm || input.Clicked(layout.ReadyButton());
+    if(setupStep_==StartSetupStep::Stage) {
+        const int previous=selectedPracticeStage_;
+        if(input.Direction()!=0) {
+            // 跳过未注册的关卡；目录始终包含第一面，避免导航落入不可启动的槽或无限循环。
+            do { selectedPracticeStage_=(selectedPracticeStage_+kStageScoreCount+input.Direction())%kStageScoreCount; }
+            while(!kPracticeStages[selectedPracticeStage_]);
+        }
+        for(int index=0;index<kStageScoreCount;++index)
+            if(kPracticeStages[index])confirm=input.Select(layout.StageRow(index),index,selectedPracticeStage_) || confirm;
+        if(previous!=selectedPracticeStage_) {
+            assets_.PlaySoundEffect("menu_move");
+            lastSelection_.practiceStage=selectedPracticeStage_+1;
+            SaveSettings();
+        }
+    }
     if(setupStep_==StartSetupStep::Shot || setupStep_==StartSetupStep::Mode || setupStep_==StartSetupStep::Spell) {
         const int previous=setupStep_==StartSetupStep::Shot?selectedShot_:setupStep_==StartSetupStep::Mode?int(challengeMode_):int(practicePhase_==4);
         int selected=input.Direction()!=0?1-previous:previous;
@@ -43,8 +62,15 @@ void Game::UpdateStartSetup() {
         case StartSetupStep::Difficulty: setupStep_=StartSetupStep::Character; break;
         case StartSetupStep::Character: setupStep_=StartSetupStep::Shot; break;
         case StartSetupStep::Shot: setupStep_=StartSetupStep::Mode; break;
-        case StartSetupStep::Mode: case StartSetupStep::Spell: setupStep_=StartSetupStep::Ready; break;
+        case StartSetupStep::Mode: setupStep_=practiceMode_?StartSetupStep::Stage:StartSetupStep::Ready; break;
+        case StartSetupStep::Spell: setupStep_=StartSetupStep::Ready; break;
+        case StartSetupStep::Stage:
+            if(!kPracticeStages[selectedPracticeStage_])return;
+            stageId_=*kPracticeStages[selectedPracticeStage_];
+            setupStep_=StartSetupStep::Ready;
+            break;
         case StartSetupStep::Ready: StartRun(); break;
+        case StartSetupStep::Count: return;
     }
 }
 } // namespace koumakyou

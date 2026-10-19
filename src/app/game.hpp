@@ -8,6 +8,7 @@
 #include "gameplay/actors/enemy.hpp"
 #include "app/run_state.hpp"
 #include "app/start_setup.hpp"
+#include "app/stage_clear.hpp"
 #include "config/settings.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/items/drop_system.hpp"
@@ -93,10 +94,18 @@ private:
     void CompleteStartRun();
     /// @brief 切换主菜单并清除战斗临时状态，保留离开首页时的选项。
     void EnterMainMenu();
-    /// @brief 停止战斗并播放剩余退场效果；池空后才结算、卸载专属素材。
+    /// @brief 清理本局资源并返回整关练习的 Stage 页，保留御札、模式和关卡；其他模式回首页。
+    void ReturnToPracticeStage();
+    /// @brief 战后对话结束后固定奖励快照、计分并显示明细；每局只生效一次。
+    void BeginStageClear();
+    /// @brief 关闭奖励明细并进入资源收尾；整关练习随后返回关卡选择，普通开局显示通关菜单。
+    void ContinueStageClear();
+    /// @brief 把有效整关成绩写入对应模式的历史最高分；仅在关卡通关或失败结算时调用。
+    void RecordStageScore();
+    /// @brief 保存有效整关的分模式最高分并播放退场效果；池空后才显示通关/失败菜单并卸载专属素材。
     /// @param result 胜利或失败后的游戏状态。
     void EndStage(RunState result);
-    /// @brief 在 Playing/Finishing 与 Paused 间切换，并同步音乐和鼠标状态。
+    /// @brief 在 Playing/StageClear/Finishing 与 Paused 间切换，并同步音乐和鼠标状态。
     void TogglePause();
     /// @brief 立即取消全部小怪并生成清场快照，不给予击破奖励。
     void ClearEnemiesWithEffects();
@@ -151,7 +160,7 @@ private:
     void SpawnStageEnemy(const EnemySpec& spec) override;
     /// @brief 开始 Boss 战并停止旧批次后续出怪，保留现存小怪、弹幕、道具及效果。
     void BeginStageBoss(bool final, StageEventId id) override;
-    /// @brief 开始原文对话；战后先结算当前一面的 Bonus，待独白结束再进入胜利状态。
+    /// @brief 开始原文对话；战后独白结束才固定 Bonus 并进入奖励明细，关闭后进入胜利收尾。
     void BeginStageDialogue(StageEventId id, bool afterBattle = false) override;
     void StageMessage(std::string_view message, float duration) override;
     /// @brief 玩家已消耗 Bomb 后清弹、伤害敌人并展示反馈。
@@ -186,6 +195,8 @@ private:
     void DrawHud() const;
     /// @brief 绘制状态消息、对话、符卡或结算画面的叠加层。
     void DrawOverlay() const;
+    /// @brief 在战斗/对话画面上绘制固定结算快照，不推进计时或再次加分。
+    void DrawStageClear() const;
     /// @brief 在窗口右侧等比滑入完整符卡立绘，独立横幅显示名称。
     void DrawSpellCutIn() const;
     /// @brief 根据对话计时器绘制台词及最近表情，以预先采样的透明度和强调程度绘制贴边立绘。
@@ -215,7 +226,7 @@ private:
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     bool loadingShotTest_ = false; // 射击测试需在异步素材完成后再创建固定靶。
 #endif
-    // 暂停要记住战斗或收尾，不能一律恢复 Playing；finishResult_ 仅在收尾结束时应用。
+    // 暂停记住战斗、奖励明细或收尾，不能一律恢复 Playing；finishResult_ 仅在收尾结束时应用。
     RunState pausedState_ = RunState::Playing;
     RunState finishResult_ = RunState::Won;
     // 当前一局是否捕获鼠标，预览和离屏测试在恢复暂停时仍不捕获。
@@ -244,6 +255,9 @@ private:
     float spellCutInTimer_ = 0.0F;
     float spellBonusTimer_ = 0; // 秒；暂停时冻结，捕获反馈最多显示 280 原作帧。
     long long spellBonus_ = 0, stageBonus_ = 0;
+    StageClearSummary stageClearSummary_{}; // 关卡结束时固定的 Normal 奖励明细，整个展示期间不变。
+    float stageClearSeconds_ = 0;
+    bool stageClearShown_ = false; // 每局至多计算并展示一次；重开时重置，防止事件重入重复加分。
     /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
     [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
     /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，统一确认操作仍只推进一句。
@@ -264,7 +278,7 @@ private:
     ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。
     ui::MenuMotion titleMenuMotion_{}; // 首页离开前的选择与展开状态，供 Start 过渡期间继续绘制首页。
     ui::StartSetupMotion startSetupMotion_{}; // 首页及 Start 页面连续混合；只推进展示，不阻塞选择输入。
-    std::array<ui::MenuMotion,6> setupChoiceMotion_{}; // 各步骤独立保留行强调，快速确认/返回不把正在变化的亮度重置。
+    std::array<ui::MenuMotion,static_cast<int>(StartSetupStep::Count)> setupChoiceMotion_{}; // 各步骤独立保留行强调，快速确认/返回不把正在变化的亮度重置。
     ui::TitleEntrance titleEntrance_{}; // 首次首页的五段顺序展示，完成前屏蔽首页输入。
     OptionsPage optionsPage_ = OptionsPage::General;
     int selectedOption_ = 0;
@@ -276,8 +290,10 @@ private:
     int initialLives_ = 2;
     int initialBombs_ = 3;
     int bestScore_ = 0;
+    StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
     StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前仅开放 Normal、灵梦与第一面，未开放选项不启动游戏。
+    int selectedPracticeStage_ = 0; // kPracticeStages 的局部索引，始终指向已注册关卡。
     int selectedShot_ = 0; // 0: 追踪御札，1: 直射针。
     bool challengeMode_ = false;
     bool practiceMode_ = false;

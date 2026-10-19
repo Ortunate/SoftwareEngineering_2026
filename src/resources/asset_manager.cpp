@@ -219,6 +219,18 @@ void AssetManager::LoadCommon() {
         SetTextureFilter(common_.titleLogo, TEXTURE_FILTER_TRILINEAR);
     }
     common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/portraits/reimu/face00a_1.png");
+    common_.marisaBackdrop = LoadTextureAsset(root_ / "common/portraits/marisa/face01a_1.png");
+    if(IsTextureValid(common_.marisaBackdrop)) {
+        GenTextureMipmaps(&common_.marisaBackdrop);
+        SetTextureFilter(common_.marisaBackdrop,TEXTURE_FILTER_TRILINEAR);
+    }
+    common_.spellPortraits[0]=LoadTextureAsset(root_ / "common/spell_practice/reimu_modern.png");
+    common_.spellPortraits[1]=LoadTextureAsset(root_ / "common/spell_practice/marisa_modern.png");
+    // 选人全身图在不同窗口中大幅缩小，mipmap 保留发丝、白色花边与纸垂的平滑边缘。
+    for(auto& portrait:common_.spellPortraits)if(IsTextureValid(portrait)) {
+        GenTextureMipmaps(&portrait);
+        SetTextureFilter(portrait,TEXTURE_FILTER_TRILINEAR);
+    }
     // 两种字重只生成共享字符表中的字形，独立加载以保持 Bold 的真实笔画和度量。
     const auto charsetPath = root_ / "common/ui_charset.txt";
     common_.uiFont = LoadUiFont(root_ / "common/ui_font.otf", charsetPath);
@@ -431,6 +443,8 @@ void AssetManager::UnloadCommon() {
     UnloadTextureAsset(common_.titleReimu);
     UnloadTextureAsset(common_.titleLogo);
     UnloadTextureAsset(common_.reimuPortrait);
+    UnloadTextureAsset(common_.marisaBackdrop);
+    for(auto& portrait:common_.spellPortraits)UnloadTextureAsset(portrait);
     if (common_.hudFont.texture.id != 0 && common_.hudFont.texture.id != common_.uiFont.texture.id &&
         common_.hudFont.texture.id != GetFontDefault().texture.id)
         UnloadFont(common_.hudFont);

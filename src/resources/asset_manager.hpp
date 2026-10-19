@@ -6,6 +6,7 @@
 
 #include "raylib.h"
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -24,7 +25,9 @@ struct CommonAssets {
     Texture2D titleBackground{}; // 三图层缺失时才加载的旧合成背景，由管理器独占。
     Texture2D titleMoon{}, titleShrine{}, titleReimu{}; // 首页独立透明图层；分别持有纹理，不与关卡立绘共用句柄。
     Texture2D titleLogo{}; // 管理器独占的透明首页字标，随通用素材加载/释放；无效时绘制文字替代。
-    Texture2D reimuPortrait{}; // 开局选择页的抬手全身图，独立持有并随通用素材卸载。
+    Texture2D reimuPortrait{}; // 开局选择页保留的灵梦后景图，独立持有并随通用素材卸载。
+    Texture2D marisaBackdrop{}; // 魔理沙提围裙姿势的现代重绘后景；不同于骑扫帚前景，独立持有。
+    std::array<Texture2D,2> spellPortraits{}; // 现代重绘的自机选人立绘，0 灵梦/1 魔理沙，通用资源独占并统一释放。
     Font uiFont{}; // 菜单等界面的 SemiBold 衬线字体与等宽数字；管理器持有，缺失时借用默认字体。
     Font hudFont{}; // 战斗浮窗的 Bold 字体；独立持有，缺失时借用 uiFont，卸载时不能重复释放。
 };

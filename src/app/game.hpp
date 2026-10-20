@@ -124,7 +124,7 @@ private:
     void UpdateBattleAnimations();
     /// @brief 处理 Normal 开局的角色/御札/模式选择，以及成绩、音乐和制作信息页。
     void UpdateMenuPage();
-    /// @brief 独立处理符卡练习的三级浏览、横向角色切换与灰色启动门禁；返回优先于本帧确认。
+    /// @brief 处理符卡练习关卡页及同页符卡/难度的两级焦点，鼠标可直接跨栏；返回优先于本帧确认。
     void UpdateSpellPractice();
     /// @brief 清理战场并返回符卡组选择，保留角色、关卡和难度，不重置选择页动画。
     void ReturnToSpellPractice();
@@ -315,6 +315,7 @@ private:
     spell::Selection spellSelection_{}; // 浏览身份与当前战斗御札独立，魔理沙不可借灵梦入口开局。
     spell::Records spellRecords_{};
     ui::MenuMotion spellCharacterMotion_{}; // 四组合展示权重，切换人物与文字共用，不影响鼠标命中。
+    ui::MenuMotion spellGroupMotion_{},spellDifficultyMotion_{}; // 同页两列分别保存强调，焦点递进不清空另列或重播页面动画。
     int spellAttemptNumber_=0,spellAttemptCharacter_=0;
     bool spellAttemptOpen_=false,spellAttemptPractice_=false,spellCaptured_=false; // 已打开记录只能结算一次；仅成功无伤无 Bomb 击破为取得。
     int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。

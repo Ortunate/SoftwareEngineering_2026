@@ -30,17 +30,17 @@ void Game::DrawSpellPractice(float opacity) const {
     const float portraitOpacity=opacity;
     if(state_==RunState::StartSetup)opacity*=menuMotion_.Reveal();
     Text(font,"Spell Practice",l.Title(),48*s,kGold,opacity);
-    const char* heading=choice.page==spell::Page::Stage?"关卡选择":choice.page==spell::Page::Group?"符卡选择":"难度选择";
+    const char* heading=choice.page==spell::Page::Stage?"关卡选择":"符卡选择";
     const auto headingBox=l.Heading();
     Text(font,heading,{headingBox.x,headingBox.y,headingBox.width*0.37F,headingBox.height},30*s,kIvory,opacity);
     Text(font,TextFormat("《 %s 》",spell::Characters()[choice.character].name),
          {headingBox.x+headingBox.width*0.38F,headingBox.y,headingBox.width*0.62F,headingBox.height},23*s,kRose,opacity);
-    const auto row=[&](Rectangle bounds,int index,bool available) {
-        const float weight=menuMotion_.Weight(index);
+    const auto row=[&](Rectangle bounds,int index,bool available,const ui::MenuMotion& motion,float strength=1) {
+        const float weight=motion.Weight(index)*strength;
         DrawRectangleRec(bounds,ui::WithOpacity(available?Color{58,22,35,static_cast<unsigned char>(105+65*weight)}:
             Color{32,23,32,static_cast<unsigned char>(110+35*weight)},opacity));
-        menu::DrawPageRowRule(c,bounds,menuMotion_,weight,opacity*(available?1:0.45F));
-        return available?ui::Blend(Color{180,148,145,255},kGold,weight):kGray;
+        menu::DrawPageRowRule(c,bounds,motion,weight,opacity*(available?1:0.7F));
+        return available?ui::Blend(Color{180,148,145,255},kGold,weight):ui::Blend(kGray,Color{190,174,176,255},weight);
     };
     const auto columns=l.Columns();
     if(choice.page==spell::Page::Stage) {
@@ -55,7 +55,7 @@ void Game::DrawSpellPractice(float opacity) const {
                 const auto& record=spellRecords_.Get(choice.character,card.number);
                 captured+=record.captured>0 || record.mainCaptured>0;
             }
-            const auto bounds=l.StageRow(stage);const Color color=row(bounds,stage,available>0);
+            const auto bounds=l.StageRow(stage);const Color color=row(bounds,stage,available>0,menuMotion_);
             Text(font,definition.label,{bounds.x+10*s,bounds.y,bounds.width*0.3F,bounds.height*0.52F},24*s,color,opacity);
             Text(font,definition.boss,{bounds.x+bounds.width*0.39F,bounds.y,bounds.width*0.32F,bounds.height*0.52F},21*s,color,opacity);
             Text(font,TextFormat("%d / %d / %d",captured,unlocked,definition.total),
@@ -63,15 +63,17 @@ void Game::DrawSpellPractice(float opacity) const {
             Text(font,definition.title,{bounds.x+22*s,bounds.y+bounds.height*0.52F,bounds.width-32*s,bounds.height*0.48F},17*s,color,opacity);
         }
     } else {
-        Text(font,"符卡",{columns.x,columns.y,columns.width*0.33F,columns.height},20*s,kGold,opacity);
-        Text(font,"按难度",{columns.x+columns.width*0.37F,columns.y,columns.width*0.63F,columns.height},20*s,kGold,opacity);
+        Text(font,"符卡",{columns.x,columns.y,columns.width*0.33F,columns.height},20*s,
+             choice.page==spell::Page::Group?kGold:kIvory,opacity);
+        Text(font,"按难度",{columns.x+columns.width*0.37F,columns.y,columns.width*0.63F,columns.height},20*s,
+             choice.page==spell::Page::Difficulty?kGold:kIvory,opacity);
         const int groups=spell::Stages()[choice.stage].groups;
         const int offset=choice.group/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
         for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<groups;++index) {
             const int group=offset+index;bool available=false;
             for(int difficulty=0;difficulty<5;++difficulty)available|=spell::Available(spell::Find(choice.stage,group,difficulty),choice.character,spellRecords_);
             const auto bounds=l.GroupRow(index);
-            const Color color=choice.page==spell::Page::Group?row(bounds,group,available):available?(group==choice.group?kGold:kIvory):kGray;
+            const Color color=row(bounds,group,available,spellGroupMotion_,choice.page==spell::Page::Group?1:0.65F);
             Text(font,TextFormat("Spell Card %d",group+1),{bounds.x+8*s,bounds.y,bounds.width-16*s,bounds.height*0.53F},23*s,color,opacity);
             Text(font,TextFormat("使用者 %s",spell::GroupUser(choice.stage,group)),
                  {bounds.x+12*s,bounds.y+bounds.height*0.53F,bounds.width-22*s,bounds.height*0.47F},17*s,color,opacity);
@@ -85,11 +87,7 @@ void Game::DrawSpellPractice(float opacity) const {
             const auto* card=spell::Find(choice.stage,choice.group,difficulty);
             const bool available=spell::Available(card,choice.character,spellRecords_);
             const auto bounds=l.Difficulty(index,choice.stage==6);
-            const Color color=choice.page==spell::Page::Difficulty?row(bounds,difficulty,available):available?kIvory:kGray;
-            if(choice.page!=spell::Page::Difficulty) {
-                DrawRectangleRec(bounds,ui::WithOpacity(Color{45,21,33,150},opacity));
-                DrawRectangleLinesEx(bounds,s,ui::WithOpacity(kGray,opacity*0.4F));
-            }
+            const Color color=row(bounds,difficulty,available,spellDifficultyMotion_,choice.page==spell::Page::Difficulty?1:0.35F);
             const float line= bounds.height/(choice.stage==6?5:4);
             Text(font,spell::kDifficulties[difficulty],{bounds.x+12*s,bounds.y,bounds.width*0.57F,line},24*s,color,opacity);
             if(card)Text(font,!spell::Playable(card,choice.character)?"尚未实现":available?"已解锁":"未解锁",

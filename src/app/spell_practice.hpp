@@ -28,7 +28,8 @@ struct Card { int number,stage,group,difficulty; const char* name; const char* u
 /// @brief 返回关内符卡组的使用者原文；无此组返回空串，字符串具有静态生命周期。
 [[nodiscard]] const char* GroupUser(int stage,int group);
 inline constexpr std::array<const char*,5> kDifficulties{"EASY","NORMAL","HARD","LUNATIC","EXTRA"};
-/// @brief 关卡→符卡组→难度的三级选择；横向输入独立循环四种角色，纵向输入仅改变当前列。
+/// @brief Stage 为关卡页，Group/Difficulty 为同一选卡页的两级操作焦点；切换焦点不能重新播放页面进场。
+/// 横向输入独立循环四种角色，纵向输入改变当前列；鼠标移动可直接切换列，键盘确认/返回逐级切换。
 enum class Page { Stage, Group, Difficulty };
 struct Selection { Page page=Page::Stage; int stage=0,group=1,difficulty=1,character=0; };
 /// @brief 单张符卡的本机记录；mainAttempts>0 说明已在实际关卡内遇见，不要求击破。

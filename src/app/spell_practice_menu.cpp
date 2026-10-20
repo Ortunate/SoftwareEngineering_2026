@@ -22,8 +22,29 @@ void Game::UpdateSpellPractice() {
     bool confirm=input.confirm;
     int vertical=input.vertical;
     const float wheel=GetMouseWheelMove();
-    if(wheel!=0 && CheckCollisionPointRec(input.mouse,layout.canvas.Rect(32,layout.compact?590:148,layout.compact?696:860,layout.compact?650:490)))
-        vertical=wheel>0?-1:1;
+    if(wheel!=0) {
+        if(choice.page==spell::Page::Stage) {
+            for(int index=0;index<spell::kStageCount;++index)
+                if(CheckCollisionPointRec(input.mouse,layout.StageRow(index)))vertical=wheel>0?-1:1;
+        } else {
+            for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups;++index)
+                if(CheckCollisionPointRec(input.mouse,layout.GroupRow(index))) {
+                    choice.page=spell::Page::Group;vertical=wheel>0?-1:1;
+                }
+            for(int index=0;index<(choice.stage==6?1:4);++index)
+                if(CheckCollisionPointRec(input.mouse,layout.Difficulty(index,choice.stage==6))) {
+                    choice.page=spell::Page::Difficulty;vertical=wheel>0?-1:1;
+                }
+        }
+    }
+    // Group/Difficulty 仅表示同一页的操作焦点；任何符卡变化都先校正难度，再处理右栏命中。
+    // 不能保留新符卡不存在的空难度，否则键盘确认和鼠标直接跨栏会指向不同的符卡。
+    const auto normalizeDifficulty=[&] {
+        if(spell::Find(choice.stage,choice.group,choice.difficulty))return;
+        for(int difficulty=0;difficulty<5;++difficulty)
+            if(spell::Find(choice.stage,choice.group,difficulty)) {choice.difficulty=difficulty;return;}
+    };
+    if(choice.page!=spell::Page::Stage)normalizeDifficulty();
     const int count=choice.page==spell::Page::Stage?spell::kStageCount:
         choice.page==spell::Page::Group?spell::Stages()[choice.stage].groups:choice.stage==6?1:4;
     int& selected=choice.page==spell::Page::Stage?choice.stage:choice.page==spell::Page::Group?choice.group:choice.difficulty;
@@ -40,25 +61,29 @@ void Game::UpdateSpellPractice() {
         for(int index=0;index<spell::kStageCount;++index)
             confirm=input.Select(layout.StageRow(index),index,choice.stage)||confirm;
         if(choice.stage!=before.stage) {choice.group=0;choice.difficulty=choice.stage==6?4:1;}
-    } else if(choice.page==spell::Page::Group) {
-        const int offset=choice.group/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
-        for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<count;++index)
-            confirm=input.Select(layout.GroupRow(index),offset+index,choice.group)||confirm;
     } else {
-        for(int index=0;index<count;++index) {
-            const int difficulty=choice.stage==6?4:index;
-            if(spell::Find(choice.stage,choice.group,difficulty))
-                confirm=input.Select(layout.Difficulty(index,choice.stage==6),difficulty,choice.difficulty)||confirm;
-        }
-        // 选择难度后依然能点击左列直接返回对应符卡组，无须多按一次取消。
+        const int groups=spell::Stages()[choice.stage].groups;
         const int offset=choice.group/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
-        for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<spell::Stages()[choice.stage].groups;++index)
-            if(input.Clicked(layout.GroupRow(index))) {choice.group=offset+index;choice.page=spell::Page::Group;confirm=false;}
+        // 鼠标可直接进入任一栏目；只有实际移动或点击才接管焦点，静止指针不覆盖键盘的递进/返回。
+        for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<groups;++index)
+            if(input.pointerActive && CheckCollisionPointRec(input.mouse,layout.GroupRow(index))) {
+                choice.page=spell::Page::Group;choice.group=offset+index;
+                confirm=input.click || input.confirm;
+            }
+        normalizeDifficulty();
+        for(int index=0;index<(choice.stage==6?1:4);++index) {
+            const int difficulty=choice.stage==6?4:index;
+            if(spell::Find(choice.stage,choice.group,difficulty) && input.pointerActive &&
+               CheckCollisionPointRec(input.mouse,layout.Difficulty(index,choice.stage==6))) {
+                choice.page=spell::Page::Difficulty;choice.difficulty=difficulty;
+                confirm=input.click || input.confirm;
+            }
+        }
     }
     if(choice.page!=spell::Page::Stage && spell::Stages()[choice.stage].groups>menu::SpellPracticeLayout::kVisibleGroups) {
         for(const int direction:{-1,1})if(input.Clicked(layout.GroupPage(direction))) {
             choice.group=std::clamp(choice.group+direction*menu::SpellPracticeLayout::kVisibleGroups,0,spell::Stages()[choice.stage].groups-1);
-            choice.page=spell::Page::Group;confirm=false;
+            choice.page=spell::Page::Group;normalizeDifficulty();confirm=false;
         }
     }
     if(before.stage!=choice.stage || before.group!=choice.group || before.character!=choice.character || before.difficulty!=choice.difficulty) {
@@ -69,8 +94,7 @@ void Game::UpdateSpellPractice() {
     if(choice.page==spell::Page::Stage)choice.page=spell::Page::Group;
     else if(choice.page==spell::Page::Group) {
         choice.page=spell::Page::Difficulty;
-        if(!spell::Find(choice.stage,choice.group,choice.difficulty))
-            for(int difficulty=0;difficulty<5;++difficulty)if(spell::Find(choice.stage,choice.group,difficulty)) {choice.difficulty=difficulty;break;}
+        normalizeDifficulty();
     } else {
         const auto* card=spell::Find(choice.stage,choice.group,choice.difficulty);
         if(!spell::Available(card,choice.character,spellRecords_)) {assets_.PlaySoundEffect("menu_cancel");return;}

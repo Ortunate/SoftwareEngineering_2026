@@ -138,6 +138,7 @@ struct GameLifecycleProbe {
             game.setupStep_==StartSetupStep::Mode?int(game.challengeMode_):int(game.practicePhase_==4);
     }
     static spell::Selection SpellChoice(const Game& game) {return game.spellSelection_;}
+    static float SpellPageReveal(const Game& game) {return game.menuMotion_.Reveal();}
     /// @brief 仅截图和隔离测试指定浏览页；实际流程另由键鼠驱动，不替代加载或结果回归。
     static void SpellBrowse(Game& game,spell::Selection choice) {
         game.practiceMode_=game.spellPractice_=true;game.challengeMode_=false;
@@ -815,7 +816,55 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
     std::puts("Stage clear breakdown, ten-second timeout, confirmation, pause and practice return passed.");
 }
 
-/// @brief 回放新典式关卡→符卡组→难度，验证灰色门禁、四组合箭头、暂停返回、取得记录和响应式显示。
+/// @brief 回放同页两栏的键盘递进与鼠标直接跨栏；只浏览和点击未解锁项，不伪造进度或启动战斗。
+void TestSpellColumnInputs(koumakyou::Game& game,const std::filesystem::path& screenshots) {
+    using namespace koumakyou;using Probe=GameLifecycleProbe;
+    const int width=GetScreenWidth(),height=GetScreenHeight();
+    for(Vector2 size:{Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
+        SetWindowSize(size.x,size.y);Event(7,0,0);Frame(game);
+        const menu::SpellPracticeLayout layout(GetScreenWidth(),GetScreenHeight());
+        const auto move=[&](Rectangle r) {Event(7,r.x+r.width/2,r.y+r.height/2);Frame(game);};
+        const auto click=[&](Rectangle r) {Click(game,r.x+r.width/2,r.y+r.height/2);};
+        const auto expect=[&](spell::Page focus,int group) {
+            const auto choice=Probe::SpellChoice(game);
+            Check(Probe::Setup(game) && choice.page==focus && choice.group==group,"same-page spell column focus is incorrect");
+            Check(Probe::SpellPageReveal(game)==1,"changing spell column focus replayed page entrance");
+        };
+        Probe::SpellBrowse(game,{spell::Page::Group,0,1,1,0});Probe::Motion(game,1);
+        for(int confirm:{KEY_Z,KEY_SPACE,KEY_ENTER}) {
+            Key(game,confirm);expect(spell::Page::Difficulty,1);
+            const int previous=Probe::SpellChoice(game).difficulty;
+            Key(game,KEY_S);expect(spell::Page::Difficulty,1);
+            Check(Probe::SpellChoice(game).difficulty!=previous,"difficulty navigation changed the parent instead of the child");
+            Key(game,KEY_X);expect(spell::Page::Group,1);
+            Key(game,KEY_W);expect(spell::Page::Group,0);
+            Key(game,KEY_DOWN);expect(spell::Page::Group,1);
+        }
+        move(layout.GroupRow(2));expect(spell::Page::Group,2);
+        move(layout.Difficulty(0));expect(spell::Page::Difficulty,2);
+        Check(Probe::SpellChoice(game).difficulty==0 && !game.IsLoading(),"hover did not enter child column without confirmation");
+        Capture(game,(screenshots/(std::to_string(int(size.x))+"x"+std::to_string(int(size.y))+"-spell-linked-columns.png")).string().c_str());
+        Key(game,KEY_X);expect(spell::Page::Group,2);
+        Frame(game);expect(spell::Page::Group,2);
+        Key(game,KEY_S);expect(spell::Page::Group,0);
+        Check(Probe::SpellChoice(game).difficulty==2,"parent change retained a nonexistent difficulty");
+        move(layout.Difficulty(1));click(layout.Difficulty(1));expect(spell::Page::Group,0);
+        Check(!game.IsLoading(),"empty difficulty slot accepted cross-column confirmation");
+        move(layout.GroupRow(1));expect(spell::Page::Group,1);
+        move(layout.Difficulty(1));expect(spell::Page::Difficulty,1);
+        Key(game,KEY_DOWN);expect(spell::Page::Difficulty,1);
+        Check(Probe::SpellChoice(game).difficulty==2,"stationary pointer overrode keyboard difficulty selection");
+        Key(game,KEY_ESCAPE);expect(spell::Page::Group,1);
+        click(layout.Difficulty(1));expect(spell::Page::Difficulty,1);
+        Check(!game.IsLoading(),"direct mouse confirmation bypassed unseen-spell guard");
+        move(layout.GroupRow(2));expect(spell::Page::Group,2);
+        Click(game,1,1);expect(spell::Page::Group,2);
+    }
+    SetWindowSize(width,height);Event(7,0,0);Frame(game);
+    std::puts("Spell same-page column focus, keyboard progression, direct hover/click, empty slots and five window ratios passed.");
+}
+
+/// @brief 回放关卡页与同页符卡/难度，验证灰色门禁、四组合箭头、暂停返回、取得记录和响应式显示。
 void TestSpellPractice(const std::filesystem::path& screenshots) {
     using namespace koumakyou;using Probe=GameLifecycleProbe;
     Game game;SetTargetFPS(0);
@@ -835,6 +884,7 @@ void TestSpellPractice(const std::filesystem::path& screenshots) {
         Check(!game.IsLoading() && !Probe::SpellAvailable(game,character,group),"unseen implemented spell was playable");
     }
     Capture(game,(screenshots/"spell-locked.png").string().c_str());
+    TestSpellColumnInputs(game,screenshots);
     game.StartPreview();Probe::PrepareStageEncounter(game,false,0);Probe::FinishSpell(game,true);Frame(game);
     Check(Probe::SpellRecord(game,0,3).mainAttempts==0 && !Probe::SpellAvailable(game,0,1),"preview unlocked spell practice");
     game.Start(false);WaitForStage(game);Probe::PrepareStageEncounter(game,false,0);
@@ -903,8 +953,8 @@ void TestSpellPractice(const std::filesystem::path& screenshots) {
     Key(game,KEY_X);Key(game,KEY_X);expect(spell::Page::Stage);
     click(layout.StageRow(0));expect(spell::Page::Group);
     // 新关卡从第一组开始；第一面月符不可开局，第二组 Normal 对应实际夜符。
-    click(layout.GroupRow(1));expect(spell::Page::Difficulty);
-    click(layout.Arrow(1));expect(spell::Page::Difficulty);
+    move(layout.GroupRow(1));expect(spell::Page::Group);
+    click(layout.Arrow(1));expect(spell::Page::Group);
     Check(Probe::SpellChoice(game).character==1,"difficulty arrow advanced the page");
     click(layout.Arrow(-1));
     const auto recordBefore=Probe::SpellRecord(game,0,3);
@@ -912,6 +962,7 @@ void TestSpellPractice(const std::filesystem::path& screenshots) {
         if(Probe::SpellChoice(game).character==0)break;
         Key(game,KEY_D);
     }
+    // 只悬停父项后直接点击难度启动，不能要求先点击符卡或按一次确认。
     click(layout.Difficulty(1));WaitForStage(game);Frame(game);
     Check(Probe::BossPhase(game)==2 && !Probe::Selection(game).challenge,"Normal Night Bird did not start correct phase");
     Key(game,KEY_ESCAPE);

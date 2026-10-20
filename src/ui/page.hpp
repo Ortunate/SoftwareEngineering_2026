@@ -1,12 +1,13 @@
 // 本文件提供二级菜单共用的全窗口花纹、回纹边框、页眉、页脚、选中细线和按钮，供选项/改键/开局/信息页复用。
 #pragma once
 
-#include "render/menu_layout.hpp"
-#include "render/ui_effects.hpp"
-#include "render/ui_motion.hpp"
+#include "ui/layout.hpp"
+#include "ui/components.hpp"
+#include "ui/effects.hpp"
+#include "ui/motion.hpp"
 #include <cmath>
 
-namespace koumakyou::menu {
+namespace koumakyou::ui {
 // 页面模板统一采用暗红、象牙白与金色；所有颜色均由绘制函数按动画透明度使用。
 inline constexpr Color kPageIvory{252,246,236,255},kPageGold{233,204,139,255};
 
@@ -79,10 +80,7 @@ inline void DrawPageRowRule(const Canvas& canvas,Rectangle bounds,const ui::Menu
 /// opacity 为 0～1 的整层透明度，保留底色与字形原有 Alpha；仅用于展示，不改变命中范围。
 inline void DrawPageButton(const Canvas& canvas,Font font,Rectangle bounds,const char* label,
                            const ui::MenuMotion& motion,float weight=0,float opacity=1) {
-    DrawRectangleRec(bounds,ui::WithOpacity(Color{69,32,32,170},opacity));
-    ui::FocusLine({bounds.x,bounds.y+bounds.height},{bounds.x+bounds.width,bounds.y+bounds.height},canvas.scale,ui::WithOpacity(kPageGold,opacity),weight,motion.Phase());
-    const float size=ui::FittedSize(font,label,22*canvas.scale,bounds.width-24*canvas.scale);
-    ui::GlowText(font,label,{bounds.x+12*canvas.scale,bounds.y+(bounds.height-size)/2},size,
-                 ui::WithOpacity(ui::Blend(kPageIvory,kPageGold,weight),opacity),ui::WithOpacity(kPageGold,opacity),weight*motion.Pulse());
+    const DrawContext context{font,canvas.scale,opacity,motion.Phase(),motion.Pulse()};
+    Button{bounds}.Draw(context,label,{weight,1});
 }
-} // namespace koumakyou::menu
+} // namespace koumakyou::ui

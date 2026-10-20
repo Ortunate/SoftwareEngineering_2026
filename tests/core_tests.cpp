@@ -3,7 +3,7 @@
 #include "app/stage_clear.hpp"
 #include "render/spell_practice_layout.hpp"
 #include "config/settings.hpp"
-#include "render/ui_motion.hpp"
+#include "ui/motion.hpp"
 #include "render/title_entrance.hpp"
 #include "render/menu_layout.hpp"
 #include "render/start_setup_layout.hpp"

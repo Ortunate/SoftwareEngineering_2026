@@ -26,6 +26,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
+# 通用 UI 可独立链接和测试，不依赖 Game、关卡、配置或素材管理器。
+add_library(koumakyou_ui STATIC src/ui/components.cpp)
+target_include_directories(koumakyou_ui PUBLIC src)
+target_link_libraries(koumakyou_ui PUBLIC raylib)
+
 # 游戏实现只编译一次，所有目标共用同一份实现。
 add_library(koumakyou_engine STATIC
     src/app/game.cpp
@@ -68,7 +73,7 @@ add_library(koumakyou_engine STATIC
 )
 target_include_directories(koumakyou_engine PUBLIC src)
 find_package(Threads REQUIRED)
-target_link_libraries(koumakyou_engine PUBLIC raylib Threads::Threads)
+target_link_libraries(koumakyou_engine PUBLIC koumakyou_ui raylib Threads::Threads)
 if(APPLE)
     target_sources(koumakyou_engine PRIVATE src/platform/window_input_macos.m)
     target_link_libraries(koumakyou_engine PRIVATE "-framework AppKit")
@@ -114,15 +119,26 @@ target_link_libraries(native_asset_preview PRIVATE koumakyou_engine)
 add_dependencies(native_asset_preview copy_assets)
 
 if(MSVC)
+    target_compile_options(koumakyou_ui PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(koumakyou_engine PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(koumakyou PRIVATE /W4 /permissive- /utf-8)
 else()
+    target_compile_options(koumakyou_ui PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(koumakyou_engine PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(koumakyou PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    # 模块测试仅链接 UI 与 raylib，不加载游戏、素材、音频或图形窗口。
+    add_executable(koumakyou_ui_tests tests/ui_tests.cpp)
+    target_link_libraries(koumakyou_ui_tests PRIVATE koumakyou_ui)
+    if(MSVC)
+        target_compile_options(koumakyou_ui_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_ui_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME koumakyou_ui_tests COMMAND koumakyou_ui_tests)
     add_executable(koumakyou_tests
         tests/core_tests.cpp
         tests/animation_tests.cpp

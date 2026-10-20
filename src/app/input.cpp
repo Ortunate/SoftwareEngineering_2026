@@ -2,7 +2,7 @@
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
-#include "app/ui_input.hpp"
+#include "ui/components.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
 #include "stages/stage1/content.hpp"
@@ -17,26 +17,19 @@ void Game::UpdateMainMenu() {
     // 键盘与鼠标使用同一门禁；不缓存动画期间的确认，避免最后一帧突然跳入开局页。
     if (!titleEntrance_.Finished()) return;
     const auto input = ui::MenuInput::Read();
-    const bool confirm = input.confirm;
     constexpr int itemCount = menu::kTitleRowCount;
-    const int previous = selectedMenuItem_;
     const auto available = [](int index) { return index != 1 && index != 4; };
-    const int offset = input.Direction();
-    if (offset != 0) {
-        do { selectedMenuItem_ = (selectedMenuItem_ + itemCount + offset) % itemCount; }
-        while (!available(selectedMenuItem_));
-    }
     if (input.back) {
         selectedMenuItem_ = 9;
         assets_.PlaySoundEffect("menu_cancel");
         return; // 首页没有上级页面；返回只选中 Quit，仍须单独确认才退出。
     }
     const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), itemCount);
-    bool mouseConfirmed = false;
-    for (int index = 0; index < itemCount; ++index)
-        if (available(index)) mouseConfirmed = input.Select(layout.Row(index),index,selectedMenuItem_) || mouseConfirmed;
-    if (selectedMenuItem_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!confirm && !mouseConfirmed) return;
+    std::array<ui::Item,itemCount> items{};
+    for(int index=0;index<itemCount;++index)items[index]={index,layout.Row(index),available(index)};
+    const auto selection=ui::UpdateSelection(items,input,selectedMenuItem_);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
+    if(!selection.confirmed)return;
     menuMotion_.Confirm();
     assets_.PlaySoundEffect("menu_confirm");
     switch (selectedMenuItem_) {
@@ -100,15 +93,11 @@ void Game::UpdateMenuPage() {
         }
         return;
     }
-    const int previous = selectedTrack_;
     // 音乐页的第 3 项为返回；底部按钮与曲目共用键盘选择和高亮。
-    selectedTrack_ = (selectedTrack_ + 4 + input.Direction()) % 4;
-    bool confirm = input.confirm;
-    for (int index = 0; index < 3; ++index)
-        confirm = input.Select(layout.Track(index),index,selectedTrack_) || confirm;
-    input.Select(layout.Back(),3,selectedTrack_);
-    if (selectedTrack_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!confirm) return;
+    const std::array<ui::Item,4> items{{{0,layout.Track(0)},{1,layout.Track(1)},{2,layout.Track(2)},{3,layout.Back()}}};
+    const auto selection=ui::UpdateSelection(items,input,selectedTrack_);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
+    if(!selection.confirmed)return;
     menuMotion_.Confirm();
     assets_.PlaySoundEffect("menu_confirm");
     if (selectedTrack_ == 0) assets_.PlayMenuMusic();
@@ -124,7 +113,6 @@ void Game::UpdateOptions() {
     }
 
     constexpr int itemCount = menu::kOptionsCount;
-    const int previous = selectedOption_;
     const auto input = ui::MenuInput::Read();
     if (input.back) {
         assets_.PlaySoundEffect("menu_cancel");
@@ -135,19 +123,22 @@ void Game::UpdateOptions() {
     // 数值项保留 A/D、左右键调整；其余行允许两组方向导航。
     const int direction = input.vertical != 0 ? input.vertical :
         selectedOption_ >= menu::kNumericOptions ? input.horizontal : 0;
-    selectedOption_ = (selectedOption_ + itemCount + direction) % itemCount;
     const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
-    bool mouseConfirmed = false;
-    for (int index = 0; index < itemCount; ++index)
-        mouseConfirmed = input.Select(menu::OptionRow(canvas,index),index,selectedOption_) || mouseConfirmed;
-    if (selectedOption_ < menu::kNumericOptions && input.vertical == 0 && input.horizontal != 0 && direction == 0)
-        AdjustOption(input.horizontal);
-    if (selectedOption_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!input.confirm && !mouseConfirmed) return;
+    std::array<ui::Item,itemCount> items{};
+    for(int index=0;index<itemCount;++index)items[index]={index,menu::OptionRow(canvas,index)};
+    auto navigationInput=input;navigationInput.vertical=direction;navigationInput.horizontal=0;
+    const auto selection=ui::UpdateSelection(items,navigationInput,selectedOption_,ui::Navigation::Vertical);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
     if (selectedOption_ < menu::kNumericOptions) {
-        const bool decrease = mouseConfirmed && input.Clicked(menu::OptionArrow(canvas,selectedOption_,-1));
-        AdjustOption(decrease ? -1 : 1);
-    } else if (selectedOption_ == menu::kBindingsIndex) {
+        const ui::ValueSelector selector{menu::OptionRow(canvas,selectedOption_),menu::OptionArrow(canvas,selectedOption_,-1),
+                                         menu::OptionArrow(canvas,selectedOption_,1)};
+        auto valueInput=input;if(direction!=0)valueInput.horizontal=0;
+        const int adjustment=selector.Update(valueInput,true);
+        if(adjustment!=0)AdjustOption(adjustment);
+        return;
+    }
+    if(!selection.confirmed)return;
+    if (selectedOption_ == menu::kBindingsIndex) {
         menuMotion_.Confirm();
         assets_.PlaySoundEffect("menu_confirm");
         optionsPage_ = OptionsPage::KeyBindings;
@@ -214,16 +205,15 @@ void Game::UpdateKeyBindings() {
         selectedOption_ = menu::kBindingsIndex;
         return;
     }
-    const int previous = selectedBinding_;
-    selectedBinding_ = (selectedBinding_ + itemCount + input.Direction()) % itemCount;
     const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
-    bool confirmed = input.confirm;
+    std::array<ui::Item,itemCount> items{};
     for (int index = 0; index < bindingCount; ++index)
-        confirmed = input.Select(layout.Row(index),index,selectedBinding_) || confirmed;
-    confirmed = input.Select(layout.Button(0),resetIndex,selectedBinding_) || confirmed;
-    confirmed = input.Select(layout.Button(1),backIndex,selectedBinding_) || confirmed;
-    if (selectedBinding_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!confirmed) return;
+        items[index]={index,layout.Row(index)};
+    items[resetIndex]=ui::Button{layout.Button(0)}.Definition(resetIndex);
+    items[backIndex]=ui::Button{layout.Button(1)}.Definition(backIndex);
+    const auto selection=ui::UpdateSelection(items,input,selectedBinding_);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
+    if(!selection.confirmed)return;
     menuMotion_.Confirm();
     assets_.PlaySoundEffect("menu_confirm");
 

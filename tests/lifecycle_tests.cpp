@@ -3,7 +3,7 @@
 #include "app/game.hpp"
 #include "rlgl.h"
 #include "stages/stage1/enemies.hpp"
-#include "render/ui_typography.hpp"
+#include "ui/typography.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/boss_hud.hpp"
 

@@ -1,17 +1,16 @@
 // 本文件用项目现有底板、衬线字体、行强调和过渡绘制新典式符卡练习三列目录与四组合人物摘要。
 #include "app/game.hpp"
 #include "render/spell_practice_layout.hpp"
-#include "render/menu_page.hpp"
-#include "render/ui_effects.hpp"
-#include "render/ui_typography.hpp"
+#include "ui/page.hpp"
+#include "ui/effects.hpp"
+#include "ui/typography.hpp"
 #include <cmath>
 namespace koumakyou {
 namespace {
 constexpr Color kGold{233,204,139,255},kIvory{252,246,236,255},kRose{207,119,132,255},kGray{133,117,123,255};
 /// @brief 在屏幕矩形内按宽度收缩文字；alpha 为独立图层权重，不改变鼠标命中范围。
 void Text(Font font,const char* text,Rectangle bounds,float size,Color color,float alpha=1) {
-    size=ui::FittedSize(font,text,size*1.12F,bounds.width);
-    ui::DrawText(font,text,{bounds.x,bounds.y+(bounds.height-size)/2},size,ui::WithOpacity(color,alpha));
+    ui::Label{bounds,size*1.12F}.Draw({font,1,alpha},text,color);
 }
 /// @brief 保持原人物纹理等比；裁图已去掉图集内嵌的称号文字，不能随窗口拉伸。
 void Portrait(Texture2D texture,Rectangle slot,float alpha) {
@@ -37,10 +36,7 @@ void Game::DrawSpellPractice(float opacity) const {
          {headingBox.x+headingBox.width*0.38F,headingBox.y,headingBox.width*0.62F,headingBox.height},23*s,kRose,opacity);
     const auto row=[&](Rectangle bounds,int index,bool available,const ui::MenuMotion& motion,float strength=1) {
         const float weight=motion.Weight(index)*strength;
-        DrawRectangleRec(bounds,ui::WithOpacity(available?Color{58,22,35,static_cast<unsigned char>(105+65*weight)}:
-            Color{32,23,32,static_cast<unsigned char>(110+35*weight)},opacity));
-        menu::DrawPageRowRule(c,bounds,motion,weight,opacity*(available?1:0.7F));
-        return available?ui::Blend(Color{180,148,145,255},kGold,weight):ui::Blend(kGray,Color{190,174,176,255},weight);
+        return ui::SelectableRow{bounds,index}.Draw({font,s,opacity,motion.Phase()},weight,available);
     };
     const auto columns=l.Columns();
     if(choice.page==spell::Page::Stage) {
@@ -128,8 +124,7 @@ void Game::DrawSpellPractice(float opacity) const {
     }
     for(int direction:{-1,1}) {
         const auto arrow=l.Arrow(direction);
-        ui::SelectionArrow(arrow,direction,kGold,portraitOpacity,menuMotion_.Phase(),
-                           CheckCollisionPointRec(GetMousePosition(),arrow));
+        ui::ArrowButton{arrow,direction}.Draw({font,s,portraitOpacity,menuMotion_.Phase()});
     }
     const auto footer=l.Footer();
     Text(font,"W/S 选择 · A/D 切换角色 · Z / Space / 左键确认 · X / Esc / 右键返回",

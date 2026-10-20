@@ -5,6 +5,7 @@
 #include "render/menu_layout.hpp"
 #include "render/start_setup_layout.hpp"
 #include "render/spell_practice_layout.hpp"
+#include "ui/ui.hpp"
 #include "raylib.h"
 #include <chrono>
 #include <cstdio>
@@ -816,6 +817,44 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
     std::puts("Stage clear breakdown, ten-second timeout, confirmation, pause and practice return passed.");
 }
 
+/// @brief 不创建 Game，使用默认字体验证组件公共绘制接口的透明度、可见输出与无状态副作用。
+void TestUiModuleDrawing(const std::filesystem::path& screenshots) {
+    using namespace koumakyou::ui;
+    const auto pointer=GetMousePosition();
+    MenuMotion motion;motion.Advance(0,0,1);
+    const float phase=motion.Phase(),weight=motion.Weight(0);
+    const Color background{11,22,33,255};
+    const auto target=LoadRenderTexture(320,240);
+    const auto draw=[&](float opacity) {
+        const DrawContext context{GetFontDefault(),1,opacity,motion.Phase(),motion.Pulse()};
+        Modal{{0,0,320,240},{8,8,304,224},{160,14}}.Draw(context,"UI MODULE",WHITE,20);
+        Label{{20,40,280,20},18}.Draw(context,"Reusable controls",WHITE);
+        Panel{{20,65,280,25},0.1F,1}.Draw(context);
+        Button{{20,95,135,32}}.Draw(context,"Button",{weight,1});
+        Button{{165,95,135,32},true,ButtonStyle::Text}.Draw(context,"Confirm",{weight,1});
+        const auto color=SelectableRow{{20,135,200,30},0}.Draw(context,weight);
+        Label{{25,135,190,30},16}.Draw(context,"Selectable row",color);
+        ArrowButton{{250,130,44,40},1}.Draw(context);
+        ValueSelector{{20,180,280,30},{20,180,32,30},{268,180,32,30}}.DrawArrows(context,1,0,2,{weight,1});
+    };
+    BeginTextureMode(target);ClearBackground(background);draw(0);EndTextureMode();
+    Image transparent=LoadImageFromTexture(target.texture);
+    const auto pixels=LoadImageColors(transparent);
+    for(int index=0;index<transparent.width*transparent.height;++index)
+        Check(pixels[index].r==background.r && pixels[index].g==background.g && pixels[index].b==background.b,
+              "zero-opacity component leaked fill, text or glow");
+    UnloadImageColors(pixels);UnloadImage(transparent);
+    BeginTextureMode(target);ClearBackground(background);draw(1);EndTextureMode();
+    Image visible=LoadImageFromTexture(target.texture);ImageFlipVertical(&visible);
+    Check(ExportImage(visible,(screenshots/"ui-components.png").string().c_str()),"UI component preview export failed");
+    const auto center=GetImageColor(visible,160,80);
+    Check(center.r!=background.r || center.g!=background.g || center.b!=background.b,"UI components did not render");
+    UnloadImage(visible);UnloadRenderTexture(target);
+    Check(motion.Phase()==phase && motion.Weight(0)==weight && GetMousePosition().x==pointer.x && GetMousePosition().y==pointer.y,
+          "component drawing changed motion or pointer");
+    std::puts("Independent UI component drawing, zero opacity and read-only presentation passed.");
+}
+
 /// @brief 回放同页两栏的键盘递进与鼠标直接跨栏；只浏览和点击未解锁项，不伪造进度或启动战斗。
 void TestSpellColumnInputs(koumakyou::Game& game,const std::filesystem::path& screenshots) {
     using namespace koumakyou;using Probe=GameLifecycleProbe;
@@ -1047,7 +1086,10 @@ int main(int argc, char** argv) {
     SetExitKey(KEY_NULL);
     int result = 0;
     try {
-        if(argc>2 && std::string(argv[2])=="--start-characters-only") {
+        TestUiModuleDrawing(screenshots);
+        if(argc>2 && std::string(argv[2])=="--components-only") {
+            // 组件绘制可单独回归，不初始化 Game 或加载生产素材。
+        } else if(argc>2 && std::string(argv[2])=="--start-characters-only") {
             TestStartCharacters(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--spell-only") {
             TestSpellPractice(screenshots);

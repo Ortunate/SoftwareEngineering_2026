@@ -2,7 +2,7 @@
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
-#include "app/ui_input.hpp"
+#include "ui/components.hpp"
 #include "render/menu_layout.hpp"
 #include "config/settings.hpp"
 #include "stages/stage1/ids.hpp"
@@ -484,15 +484,12 @@ void Game::UpdateState(float deltaTime) {
         if(spellPractice_) {
             if(input.back) {ReturnToSpellPractice();return;}
             if(IsKeyPressed(KEY_M)) {EnterMainMenu();return;}
-            if(input.Direction()!=0) {
-                do {selectedResultItem_=(selectedResultItem_+3+input.Direction())%3;}
-                while(!menu::kSpellResultAvailable[selectedResultItem_]);
-                assets_.PlaySoundEffect("menu_move");
-            }
-            bool confirm=input.confirm;
             const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
-            for(int index=0;index<3;++index)if(menu::kSpellResultAvailable[index])
-                confirm=input.Select(layout.SpellResultRow(index),index,selectedResultItem_)||confirm;
+            std::array<ui::Item,3> items{};
+            for(int index=0;index<3;++index)items[index]={index,layout.SpellResultRow(index),menu::kSpellResultAvailable[index]};
+            const auto selection=ui::UpdateSelection(items,input,selectedResultItem_);
+            if(selection.changed)assets_.PlaySoundEffect("menu_move");
+            bool confirm=selection.confirmed;
             if(IsKeyPressed(KEY_R)) {selectedResultItem_=2;confirm=true;}
             if(confirm) {
                 assets_.PlaySoundEffect("menu_confirm");
@@ -505,13 +502,13 @@ void Game::UpdateState(float deltaTime) {
             return;
         }
         if(IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
-        const int previous = selectedResultItem_;
-        selectedResultItem_ = (selectedResultItem_ + menu::kResultCount + input.Direction()) % menu::kResultCount;
-        bool confirm = input.confirm;
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
+        std::array<ui::Item,menu::kResultCount> items{};
         for (int index = 0; index < menu::kResultCount; ++index)
-            confirm = input.Select(layout.ResultRow(index),index,selectedResultItem_) || confirm;
-        if (selectedResultItem_ != previous) assets_.PlaySoundEffect("menu_move");
+            items[index]={index,layout.ResultRow(index)};
+        const auto selection=ui::UpdateSelection(items,input,selectedResultItem_);
+        bool confirm=selection.confirmed;
+        if(selection.changed)assets_.PlaySoundEffect("menu_move");
         if (IsKeyPressed(KEY_R)) { selectedResultItem_ = 0; confirm = true; }
         if (confirm) {
             assets_.PlaySoundEffect("menu_confirm");
@@ -529,15 +526,14 @@ void Game::UpdateState(float deltaTime) {
             TogglePause(); return;
         }
         if (IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
-        const int previous = selectedPauseItem_;
         const int count=static_cast<int>(menu::PauseLabels(practiceMode_ && !spellPractice_,spellPractice_).size());
-        selectedPauseItem_ = (selectedPauseItem_ + count + input.Direction()) % count;
-        bool confirm = input.confirm;
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
+        std::array<ui::Item,4> items{};
         for (int index = 0; index < count; ++index)
-            confirm = input.Select(layout.PauseRow(index),index,selectedPauseItem_) || confirm;
-        if (selectedPauseItem_ != previous) assets_.PlaySoundEffect("menu_move");
-        if (confirm) {
+            items[index]={index,layout.PauseRow(index)};
+        const auto selection=ui::UpdateSelection(std::span(items).first(count),input,selectedPauseItem_);
+        if(selection.changed)assets_.PlaySoundEffect("menu_move");
+        if (selection.confirmed) {
             assets_.PlaySoundEffect("menu_confirm");
             switch (selectedPauseItem_) {
                 case 0: TogglePause(); break;

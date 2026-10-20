@@ -1,6 +1,6 @@
 // 本文件处理开局的统一键鼠确认、逐级返回和选项切换；选择记忆独立持久化。
 #include "app/game.hpp"
-#include "app/ui_input.hpp"
+#include "ui/components.hpp"
 #include "render/start_setup_layout.hpp"
 
 namespace koumakyou {
@@ -29,7 +29,7 @@ void Game::UpdateStartSetup() {
         const int previous=selectedCharacter_;
         if(input.Direction()!=0)selectedCharacter_=1-selectedCharacter_;
         bool arrow=false;
-        for(int direction:{-1,1})if(input.Clicked(layout.CharacterArrow(direction))) {
+        for(int direction:{-1,1})if(ui::ArrowButton{layout.CharacterArrow(direction),direction}.Update(input).activated) {
             selectedCharacter_=1-previous;arrow=true;
         }
         if(!arrow) {
@@ -49,7 +49,7 @@ void Game::UpdateStartSetup() {
             while(!kPracticeStages[selectedPracticeStage_]);
         }
         for(int index=0;index<kStageScoreCount;++index)
-            if(kPracticeStages[index])confirm=input.Select(layout.StageRow(index),index,selectedPracticeStage_) || confirm;
+            if(kPracticeStages[index])confirm=ui::SelectableRow{layout.StageRow(index),index}.Select(input,selectedPracticeStage_) || confirm;
         if(previous!=selectedPracticeStage_) {
             assets_.PlaySoundEffect("menu_move");
             lastSelection_.practiceStage=selectedPracticeStage_+1;
@@ -60,7 +60,7 @@ void Game::UpdateStartSetup() {
         const int previous=setupStep_==StartSetupStep::Shot?selectedShot_:int(challengeMode_);
         int selected=input.Direction()!=0?1-previous:previous;
         for(int index=0;index<2;++index)
-            confirm=input.Select(layout.Choice(index),index,selected) || confirm;
+            confirm=ui::SelectableRow{layout.Choice(index),index}.Select(input,selected) || confirm;
         if(selected!=previous) {
             assets_.PlaySoundEffect("menu_move");
             if(setupStep_==StartSetupStep::Shot)lastSelection_.shot=selectedShot_=selected;

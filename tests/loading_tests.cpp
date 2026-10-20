@@ -1,6 +1,6 @@
 // 本文件用隐藏图形窗口验证加载期间可绘制动画、关卡时钟冻结、取消与失败资源清理。
 #include "app/game.hpp"
-#include "render/ui_typography.hpp"
+#include "ui/typography.hpp"
 #include "resources/dialogue_crop.hpp"
 
 #include <array>

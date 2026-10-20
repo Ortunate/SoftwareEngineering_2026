@@ -1,6 +1,6 @@
 // 本文件处理新典式符卡练习浏览、启动门禁、返回选卡与本机取得记录的生命周期。
 #include "app/game.hpp"
-#include "app/ui_input.hpp"
+#include "ui/components.hpp"
 #include "render/spell_practice_layout.hpp"
 namespace koumakyou {
 void Game::UpdateSpellPractice() {
@@ -16,8 +16,8 @@ void Game::UpdateSpellPractice() {
     const auto before=choice;
     int horizontal=input.horizontal;
     // 箭头只切换组合，绝不能将同一鼠标点击继续当作列表确认。
-    if(input.Clicked(layout.Arrow(-1)))horizontal=-1;
-    if(input.Clicked(layout.Arrow(1)))horizontal=1;
+    if(ui::ArrowButton{layout.Arrow(-1),-1}.Update(input).activated)horizontal=-1;
+    if(ui::ArrowButton{layout.Arrow(1),1}.Update(input).activated)horizontal=1;
     if(horizontal)choice.character=(choice.character+spell::kCharacterCount+horizontal)%spell::kCharacterCount;
     bool confirm=input.confirm;
     int vertical=input.vertical;
@@ -59,24 +59,27 @@ void Game::UpdateSpellPractice() {
     }
     if(choice.page==spell::Page::Stage) {
         for(int index=0;index<spell::kStageCount;++index)
-            confirm=input.Select(layout.StageRow(index),index,choice.stage)||confirm;
+            confirm=ui::SelectableRow{layout.StageRow(index),index}.Select(input,choice.stage)||confirm;
         if(choice.stage!=before.stage) {choice.group=0;choice.difficulty=choice.stage==6?4:1;}
     } else {
         const int groups=spell::Stages()[choice.stage].groups;
         const int offset=choice.group/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
         // 鼠标可直接进入任一栏目；只有实际移动或点击才接管焦点，静止指针不覆盖键盘的递进/返回。
-        for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<groups;++index)
-            if(input.pointerActive && CheckCollisionPointRec(input.mouse,layout.GroupRow(index))) {
-                choice.page=spell::Page::Group;choice.group=offset+index;
-                confirm=input.click || input.confirm;
+        for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<groups;++index) {
+            const auto interaction=ui::SelectableRow{layout.GroupRow(index),offset+index}.Update(input,choice.group);
+            if(interaction.focused) {
+                choice.page=spell::Page::Group;
+                confirm=interaction.activated || input.confirm;
             }
+        }
         normalizeDifficulty();
         for(int index=0;index<(choice.stage==6?1:4);++index) {
             const int difficulty=choice.stage==6?4:index;
-            if(spell::Find(choice.stage,choice.group,difficulty) && input.pointerActive &&
-               CheckCollisionPointRec(input.mouse,layout.Difficulty(index,choice.stage==6))) {
-                choice.page=spell::Page::Difficulty;choice.difficulty=difficulty;
-                confirm=input.click || input.confirm;
+            const auto interaction=ui::SelectableRow{layout.Difficulty(index,choice.stage==6),difficulty,
+                spell::Find(choice.stage,choice.group,difficulty)!=nullptr}.Update(input,choice.difficulty);
+            if(interaction.focused) {
+                choice.page=spell::Page::Difficulty;
+                confirm=interaction.activated || input.confirm;
             }
         }
     }

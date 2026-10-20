@@ -7,9 +7,9 @@
 #include "stages/stage1/scenery.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/menu_layout.hpp"
-#include "render/menu_page.hpp"
-#include "render/ui_typography.hpp"
-#include "render/ui_effects.hpp"
+#include "ui/page.hpp"
+#include "ui/typography.hpp"
+#include "ui/effects.hpp"
 
 #include <algorithm>
 #include <array>
@@ -214,20 +214,15 @@ void Game::DrawOverlay() const {
     if(state_==RunState::StageClear || (state_==RunState::Paused && pausedState_==RunState::StageClear))DrawStageClear();
 
     // 暂停与符卡结果共用底板和文字操作样式，禁用项只降透明度，不产生选中动效。
+    ui::DrawContext modalContext{font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()};
+    modalContext.theme.accent=GOLD;
     const auto drawModal=[&](Rectangle panel,const char* title,Color color) {
-        DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,155});
-        DrawRectangleRounded(panel,0.1F,12,Color{38,12,25,225});
-        ui::DrawCentered(font,title,canvas.Point(380,0).x,canvas.Point(0,200).y,43*canvas.scale,color);
+        ui::Modal{{0,0,float(GetScreenWidth()),float(GetScreenHeight())},panel,canvas.Point(380,200)}.Draw(modalContext,title,color);
     };
     const auto drawModalRow=[&](Rectangle row,const char* label,int index,bool available=true) {
         const float weight=available?menuMotion_.Weight(index):0;
         const float entrance=menuMotion_.Reveal(index*0.02F);
-        const float reveal=entrance*(available?1:0.35F);
-        const float size=25*canvas.scale,width=ui::MeasureText(font,label,size).x;
-        ui::GlowText(font,label,{canvas.Point(380,0).x-width/2+(-8*weight+16*(1-entrance))*canvas.scale,row.y+4*canvas.scale},size,
-                     Fade(ui::Blend(Color{190,153,164,255},GOLD,weight),reveal),GOLD,weight*menuMotion_.Pulse());
-        ui::FocusLine({row.x+20*canvas.scale,row.y+row.height},{row.x+row.width-20*canvas.scale,row.y+row.height},canvas.scale,
-                      GOLD,weight*reveal,menuMotion_.Phase());
+        ui::Button{row,available,ui::ButtonStyle::Text}.Draw(modalContext,label,{weight,entrance});
     };
     if (state_ == RunState::Paused) {
         const auto labels=menu::PauseLabels(practiceMode_ && !spellPractice_,spellPractice_);
@@ -261,7 +256,7 @@ void Game::DrawOverlay() const {
         for(int index=0;index<menu::kResultCount;++index) {
             const auto row=layout.ResultRow(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            menu::DrawPageButton(canvas,font,row,index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
+            ui::DrawPageButton(canvas,font,row,index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
         }
     }
 
@@ -310,14 +305,14 @@ void Game::DrawKeyBindings() const {
     const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto& canvas=layout.canvas;
     const float scale=canvas.scale;
-    const Color gold=menu::kPageGold;
-    menu::DrawPageSurface(canvas,menuMotion_);
-    menu::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","Key Bindings");
+    const Color gold=ui::kPageGold;
+    ui::DrawPageSurface(canvas,menuMotion_);
+    ui::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","Key Bindings");
     for(int index=0;index<static_cast<int>(kBindingNames.size());++index) {
         const auto row=layout.Row(index);
         const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.009F);
         const float size=(layout.compact?20:17)*scale,y=row.y+(layout.compact?10:6)*scale;
-        menu::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
+        ui::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
         ui::GlowText(font,kBindingNames[index],{row.x+(15-6*weight+12*(1-reveal))*scale,y},size,
                      Fade(ui::Blend(Color{193,162,150,255},gold,weight),reveal),gold,weight*menuMotion_.Pulse());
         const auto key=KeyLabel(BindingAt(index));
@@ -329,9 +324,9 @@ void Game::DrawKeyBindings() const {
     for(int index=0;index<2;++index) {
         const float weight=menuMotion_.Weight(static_cast<int>(kBindingNames.size())+index);
         const auto button=layout.Button(index);
-        menu::DrawPageButton(canvas,font,button,buttons[index],menuMotion_,weight);
+        ui::DrawPageButton(canvas,font,button,buttons[index],menuMotion_,weight);
     }
-    menu::DrawPageFooter(canvas,font,"WASD / 方向键或鼠标选择 · Z / Space / 左键修改",
+    ui::DrawPageFooter(canvas,font,"WASD / 方向键或鼠标选择 · Z / Space / 左键修改",
                          "X / Esc / 右键返回选项");
     if(waitingForBinding_) {
         DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,185});

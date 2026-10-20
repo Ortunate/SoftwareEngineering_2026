@@ -8,7 +8,7 @@ namespace koumakyou::ui {
 // 字距按实际字号缩放；标题与 HUD 共用同一比例，测量和绘制必须保持一致。
 inline constexpr float kTrackingRatio = 0.015F;
 
-/// @brief 测量 UTF-8 UI 文本的屏幕尺寸；font 借用 CommonAssets::uiFont，size 为正数屏幕像素。
+/// @brief 测量 UTF-8 UI 文本的屏幕尺寸；font 借用调用方加载的字体，size 为正数屏幕像素。
 inline Vector2 MeasureText(Font font, const char* text, float size) {
     return MeasureTextEx(font, text, size, size * kTrackingRatio);
 }

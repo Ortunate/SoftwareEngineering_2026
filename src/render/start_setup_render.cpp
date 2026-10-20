@@ -1,9 +1,9 @@
 // 本文件参照新典绘制完整 Start 流程：难度札、人物双层立绘、御札/模式、关卡记录、能力评级与最终确认横幅。
 #include "app/game.hpp"
 #include "render/start_setup_layout.hpp"
-#include "render/menu_page.hpp"
-#include "render/ui_typography.hpp"
-#include "render/ui_effects.hpp"
+#include "ui/page.hpp"
+#include "ui/typography.hpp"
+#include "ui/effects.hpp"
 #include <array>
 #include <cmath>
 
@@ -102,7 +102,7 @@ void Game::DrawStartSetup() const {
     // 首页仍在下层绘制，背景色和装饰随选择页整体淡入；无需截图纹理，原生窗口和离屏截图行为相同。
     if(motion.Title()>0)DrawMainMenu(state_==RunState::MainMenu?nullptr:&titleMenuMotion_);
     if(setup<=0)return;
-    menu::DrawPageSurface(canvas,menuMotion_,setup);
+    ui::DrawPageSurface(canvas,menuMotion_,setup);
     if(spellPractice_) {DrawSpellPractice(setup);return;}
     const Painter page{font,s,setup};
     page.Text(practiceMode_?(spellPractice_?"SPELL PRACTICE":"PRACTICE START"):"START",
@@ -159,8 +159,7 @@ void Game::DrawStartSetup() const {
             p.Text("请选择主人公。",title,42*s,kGold,0,false,0.4F);p.Rule(title,kGold);
             for(int direction:{-1,1}) {
                 const auto button=layout.CharacterArrow(direction);
-                ui::SelectionArrow(button,direction,kGold,alpha,menuMotion_.Phase(),
-                                   CheckCollisionPointRec(GetMousePosition(),button));
+                ui::ArrowButton{button,direction}.Draw({font,s,alpha,menuMotion_.Phase()});
             }
             continue;
         }
@@ -213,7 +212,7 @@ void Game::DrawStartSetup() const {
             const float scoreWidth=ui::MeasureText(common.hudFont,score,scoreSize).x;
             Label(common.hudFont,score,{row.x+row.width-8*s-scoreWidth,row.y,scoreWidth,row.height},
                   scoreSize,ui::WithOpacity(color,stages),0.1F,false,weight*0.35F);
-            menu::DrawPageRowRule(canvas,row,selection,weight,stages);
+            ui::DrawPageRowRule(canvas,row,selection,weight,stages);
         }
         const auto last=layout.StageRow(kStageScoreCount-1);
         p.Text("未开放关卡不可选择",{last.x,last.y+last.height+4*s,last.width,20*s},16*s,Color{161,138,132,255},0,false);

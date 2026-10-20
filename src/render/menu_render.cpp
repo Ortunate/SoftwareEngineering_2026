@@ -2,9 +2,9 @@
 #include "app/game.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
-#include "render/menu_page.hpp"
-#include "render/ui_typography.hpp"
-#include "render/ui_effects.hpp"
+#include "ui/page.hpp"
+#include "ui/typography.hpp"
+#include "ui/effects.hpp"
 
 #include <array>
 #include <cmath>
@@ -97,7 +97,7 @@ void Game::DrawMainMenu(const ui::MenuMotion* motion) const {
         DrawRectangleRec(canvas.Rect(layout.menuLeft - 12, layout.menuTop - 10,
             layout.menuWidth + 24, layout.rowCount * 45 + 12), Fade(Color{252,246,236,228},menuProgress));
     }
-    menu::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
+    ui::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
     if (IsTextureValid(common.titleLogo)) {
         // 字标自身带英文副标题和“异典”饰线，保留透明区域，不叠加重复的普通文字。
         DrawTexturePro(common.titleLogo,
@@ -139,8 +139,8 @@ void Game::DrawOptions() const {
     const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
     const bool compact=canvas.width<1000;
     const Font font=assets_.Common().uiFont;
-    menu::DrawPageSurface(canvas,menuMotion_);
-    menu::DrawPageHeader(canvas,font,"游戏设置","设置自动保存 · Player 为额外残机","OPTION");
+    ui::DrawPageSurface(canvas,menuMotion_);
+    ui::DrawPageHeader(canvas,font,"游戏设置","设置自动保存 · Player 为额外残机","OPTION");
     const std::array<std::string,6> values{
         kSupportedFpsLimits[fpsLimitIndex_]==0 ? "Unlimited" : std::to_string(kSupportedFpsLimits[fpsLimitIndex_]),
         std::to_string(musicVolume_)+"%",std::string(TextFormat("%.1fx",mouseSensitivity_/100.0F)),
@@ -154,19 +154,15 @@ void Game::DrawOptions() const {
         ChoiceText(canvas,font,menu::kOptionLabels[index],compact?64:322,y,compact?24:22,
                    Color{177,150,143,255},kGold,weight,reveal,menuMotion_.Pulse());
         const auto row=menu::OptionRow(canvas,index);
-        menu::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
+        ui::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
         if(index>=menu::kNumericOptions)continue;
         ChoiceText(canvas,font,values[index].c_str(),compact?552:795,y,23,kIvory,kGold,
                    weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash(),true);
-        for(int direction : {-1,1}) {
-            const auto arrow=menu::OptionArrow(canvas,index,direction);
-            const bool disabled=direction<0 ? levels[index]==minimum[index] : levels[index]==maximum[index];
-            const Color color=Fade(disabled?Color{92,71,65,255}:ui::Blend(Color{137,103,82,255},kGold,weight),reveal);
-            DrawRectangleLinesEx(arrow,canvas.scale,color);
-            ui::DrawCentered(font,direction<0?"<":">",arrow.x+arrow.width/2,arrow.y+2*canvas.scale,23*canvas.scale,color);
-        }
+        const ui::ValueSelector selector{row,menu::OptionArrow(canvas,index,-1),menu::OptionArrow(canvas,index,1)};
+        selector.DrawArrows({font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()},
+                            levels[index],minimum[index],maximum[index],{weight,reveal});
     }
-    menu::DrawPageFooter(canvas,font,"WASD / 方向键选择或调整 · 鼠标移动选择","Z / Space / 左键确认 · X / Esc / 右键返回");
+    ui::DrawPageFooter(canvas,font,"WASD / 方向键选择或调整 · 鼠标移动选择","Z / Space / 左键确认 · X / Esc / 右键返回");
 }
 
 void Game::DrawMenuPage() const {
@@ -176,8 +172,8 @@ void Game::DrawMenuPage() const {
     const bool compact=layout.compact;
     const auto& common = assets_.Common();
     const Font font = common.uiFont;
-    menu::DrawPageSurface(canvas,menuMotion_);
-    menu::DrawPageButton(canvas,font,layout.Back(),"返回 / X / Esc",menuMotion_,
+    ui::DrawPageSurface(canvas,menuMotion_);
+    ui::DrawPageButton(canvas,font,layout.Back(),"返回 / X / Esc",menuMotion_,
                          menuMotion_.Weight(state_==RunState::MusicRoom?3:0));
     if (state_ == RunState::MusicRoom) {
         Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);

@@ -34,11 +34,5 @@ struct MenuInput {
     [[nodiscard]] int Direction() const { return vertical != 0 ? vertical : horizontal; }
     /// @brief 判断本帧左键是否点击指定屏幕矩形；不把空白区域当作当前项的确认。
     [[nodiscard]] bool Clicked(Rectangle bounds) const { return click && CheckCollisionPointRec(mouse, bounds); }
-    /// @brief 指针移动或点击时选择命中项，返回是否点击该项；index 仅在当前页面内有效。
-    bool Select(Rectangle bounds, int index, int& selected) const {
-        if (!CheckCollisionPointRec(mouse, bounds)) return false;
-        if (pointerActive) selected = index;
-        return click;
-    }
 };
 } // namespace koumakyou::ui

@@ -18,7 +18,7 @@
 #include "stage/content.hpp"
 #include "stage/catalog.hpp"
 #include "render/sprite_renderer.hpp"
-#include "render/ui_motion.hpp"
+#include "ui/motion.hpp"
 #include "render/start_setup_motion.hpp"
 #include "render/dialogue_motion.hpp"
 #include "render/title_entrance.hpp"

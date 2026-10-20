@@ -3,8 +3,8 @@
 #include "app/constants.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/boss_hud.hpp"
-#include "render/ui_effects.hpp"
-#include "render/ui_typography.hpp"
+#include "ui/effects.hpp"
+#include "ui/typography.hpp"
 
 #include <algorithm>
 #include <cmath>

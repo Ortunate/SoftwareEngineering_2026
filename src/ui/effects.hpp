@@ -1,4 +1,4 @@
-// 本文件绘制新典风格的文字光晕、选择箭头、太极游标、星芒与细线，坐标统一为屏幕像素。
+// 本文件绘制新典风格的文字光晕、选择箭头、太极游标、准星、星芒与细线，坐标统一为屏幕像素。
 #pragma once
 
 #include "ui/typography.hpp"
@@ -45,6 +45,32 @@ inline void Spark(Vector2 center, float radius, Color color) {
     const Vector2 bottom{center.x,center.y+radius}, left{center.x-radius,center.y};
     DrawTriangle(top,left,bottom,color);
     DrawTriangle(top,bottom,right,color);
+}
+/// @brief 绘制回纹四角、断环与中心瞄准点；center 为准确瞄准位置，scale 为正比例，所有装饰等比缩放。
+/// accent/ink/mark 分别控制框线、中心点和四向短刻线；调用方提供危险态配色，绘制不读取输入或推进动画。
+inline void AimReticle(Vector2 center,float scale,Color accent,Color ink,Color mark) {
+    const Color shadow{24,10,19,220};
+    const auto point=[&](float x,float y) { return Vector2{center.x+x*scale,center.y+y*scale}; };
+    const auto line=[&](Vector2 from,Vector2 to,Color color) {
+        DrawLineEx(from,to,3*scale,shadow);
+        DrawLineEx(from,to,scale,color);
+    };
+    // 中央留空，只有瞄准点位于射线原点；深色衬线使浅色雾景和明亮弹幕下的轮廓也可辨认。
+    for(int quadrant=0;quadrant<4;++quadrant) {
+        const float start=quadrant*90+20,end=start+50;
+        DrawRing(center,6*scale,8.5F*scale,start,end,12,shadow);
+        DrawRing(center,6.8F*scale,7.6F*scale,start,end,12,accent);
+    }
+    for(float x : {-1.0F,1.0F})for(float y : {-1.0F,1.0F}) {
+        line(point(x*6,y*10),point(x*10,y*10),accent);
+        line(point(x*10,y*10),point(x*10,y*6),accent);
+    }
+    for(float direction : {-1.0F,1.0F}) {
+        line(point(direction*11,0),point(direction*14,0),mark);
+        line(point(0,direction*11),point(0,direction*14),mark);
+    }
+    DrawCircleV(center,2.5F*scale,shadow);
+    DrawCircleV(center,1.25F*scale,ink);
 }
 /// @brief 带流动星芒的细线；amount（0～1）控制选中强调，phase 为秒，scale 为画布缩放比例。
 inline void FocusLine(Vector2 left, Vector2 right, float scale, Color color, float amount, float phase) {

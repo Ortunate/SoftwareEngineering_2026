@@ -171,15 +171,10 @@ void Game::DrawHud() const {
             if (bullet.owner == BulletOwner::Enemy && bullet.Dangerous() &&
                 bullet.DistanceSquaredTo(position) < 1.15F * 1.15F) danger = true;
         });
-        const int x = static_cast<int>(l.width / 2), y = static_cast<int>(l.height / 2);
         const float aimScale = std::clamp(s, 0.75F, 1.5F);
-        const Color color = danger ? Color{255, 70, 90, 255} : Color{215, 240, 255, 235};
-        DrawCircleLines(x, y, 6 * aimScale, color);
-        DrawCircle(x, y, 1.5F * aimScale, color);
-        DrawLine(x - 14 * aimScale, y, x - 9 * aimScale, y, color);
-        DrawLine(x + 9 * aimScale, y, x + 14 * aimScale, y, color);
-        DrawLine(x, y - 14 * aimScale, x, y - 9 * aimScale, color);
-        DrawLine(x, y + 9 * aimScale, x, y + 14 * aimScale, color);
+        const Color warning{255,90,110,255};
+        ui::AimReticle({l.width/2,l.height/2},aimScale,danger?warning:kGold,danger?warning:kInk,
+                       danger?kInk:Color{173,61,65,255});
     }
     const float fpsY = l.compact && l.height < 540 * s && boss_ && boss_->active
         ? status.y + status.height + 8 * s : l.ContentBottom() - l.margin - 14 * s;

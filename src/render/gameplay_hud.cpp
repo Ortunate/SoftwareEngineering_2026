@@ -70,13 +70,34 @@ void StageTitle(Font font, const StageDisplayInfo& info, Rectangle panel, float 
     text("~ " + std::string(info.subtitle), 58, 17, Color{251, 222, 157, 255});
 }
 
-/// @brief 少量资源逐颗显示星标，超过五颗改用准确数量，防止额外残机奖励挤出状态卡。
+/// @brief Bomb 少量逐颗显示星标，超过五颗改用准确数量，避免挤出状态卡。
 std::string Stock(int count) {
     if (count <= 0) return "0";
     if (count > 5) return "★ x " + std::to_string(count);
     std::string value;
     for (int index = 0; index < count; ++index) value += "★ ";
     return value;
+}
+
+/// @brief 在残机值区域右对齐绘制粉色爱心；count 为剩余残机，bounds/size 使用屏幕像素，font 仅借用。
+/// 超过五颗显示单颗爱心与数量，零残机显示 0；整组等比缩小到可用宽度，opacity 沿用 HUD 演出透明度。
+void LifeStock(Font font,int count,Rectangle bounds,float size,float opacity) {
+    if(count<=0) {
+        Label(font,"0",{bounds.x+bounds.width,bounds.y},size,bounds.width,kRose,opacity,true);
+        return;
+    }
+    const int icons=count>5?1:count;
+    const std::string caption=count>5?"x "+std::to_string(count):"";
+    const float iconSize=size*0.76F,gap=size*0.24F;
+    const float captionWidth=caption.empty()?0:gap+ui::MeasureText(font,caption.c_str(),size).x;
+    const float width=icons*iconSize+(icons-1)*gap+captionWidth;
+    const float scale=std::min(1.0F,bounds.width/width);
+    const float x=bounds.x+bounds.width-width*scale;
+    for(int index=0;index<icons;++index)
+        ui::Heart({x+(index*(iconSize+gap)+iconSize/2)*scale,bounds.y+size/2},iconSize*scale,ui::WithOpacity(kRose,opacity));
+    if(!caption.empty())
+        Label(font,caption,{bounds.x+bounds.width,bounds.y+(size-size*scale)/2},size*scale,
+              bounds.width,kRose,opacity,true);
 }
 }
 
@@ -118,9 +139,11 @@ void Game::DrawHud() const {
     if (!l.compact)
         DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,
                     ui::WithOpacity(Color{210, 173, 116, 65}, emphasis));
-    row(challengeMode_ ? "MISS" : "Player",
-        challengeMode_ ? std::to_string(missCount_) : Stock(player_.RemainingLives()),
-        l.compact ? 70 : 132, l.compact ? 19 : 24, kRose);
+    const float livesY=l.compact?70:132,livesSize=(l.compact?19:24)*s;
+    row(challengeMode_ ? "MISS" : "Player",challengeMode_ ? std::to_string(missCount_) : "",
+        livesY,l.compact ? 19 : 24,kRose);
+    if(!challengeMode_)
+        LifeStock(font,player_.RemainingLives(),{left+84*s,status.y+(livesY-1)*s,contentWidth-84*s,livesSize},livesSize,emphasis);
     row("Bomb", Stock(player_.Bombs()), l.compact ? 96 : 170, l.compact ? 19 : 24, kGreen);
     row("Power", player_.Power() == Player::kMaxPower ? "MAX" : TextFormat("%d / 128", player_.Power()),
         l.compact ? 122 : 208, l.compact ? 17 : 20, kRose);

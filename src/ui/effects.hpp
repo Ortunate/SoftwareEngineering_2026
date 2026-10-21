@@ -1,4 +1,4 @@
-// 本文件绘制新典风格的文字光晕、选择箭头、太极游标、准星、星芒与细线，坐标统一为屏幕像素。
+// 本文件绘制新典风格的文字光晕、选择箭头、太极游标、准星、爱心、星芒与细线，坐标统一为屏幕像素。
 #pragma once
 
 #include "ui/typography.hpp"
@@ -45,6 +45,21 @@ inline void Spark(Vector2 center, float radius, Color color) {
     const Vector2 bottom{center.x,center.y+radius}, left{center.x-radius,center.y};
     DrawTriangle(top,left,bottom,color);
     DrawTriangle(top,bottom,right,color);
+}
+/// @brief 绘制实心爱心；center 为包围盒中心，size 为正数屏幕像素，宽高随 size 等比缩放。
+/// 使用不重叠的三角形填充连续轮廓，半透明时不会因两瓣叠画产生深色接缝，也不依赖字体字形。
+inline void Heart(Vector2 center,float size,Color color) {
+    const auto point=[&](float angle) {
+        const float sine=std::sin(angle);
+        return Vector2{center.x+size*0.5F*sine*sine*sine,
+                       center.y-size*(13*std::cos(angle)-5*std::cos(2*angle)-2*std::cos(3*angle)-std::cos(4*angle)+2.5F)/29};
+    };
+    Vector2 previous=point(0);
+    for(int index=1;index<=48;++index) {
+        const auto current=point(2*PI*index/48);
+        DrawTriangle(center,current,previous,color);
+        previous=current;
+    }
 }
 /// @brief 绘制回纹四角、断环与中心瞄准点；center 为准确瞄准位置，scale 为正比例，所有装饰等比缩放。
 /// accent/ink/mark 分别控制框线、中心点和四向短刻线；调用方提供危险态配色，绘制不读取输入或推进动画。

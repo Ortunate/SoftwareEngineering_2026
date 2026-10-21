@@ -43,7 +43,7 @@ struct GameLifecycleProbe {
             if(IsValidBinding(key) && !contains(Game::KeyLabel(key).c_str()))return false;
         for(const auto& card:spell::Cards())if(!contains(card.name) || !contains(card.user))return false;
         for(const auto& character:spell::Characters())if(!contains(character.name) || !contains(character.title))return false;
-        return contains("《》未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。") && contains("按键设置") && contains("恢复默认键位") && contains("请按下新键请先松开按键") && contains("梦幻夜行绘卷") &&
+        return contains("《》未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。") && contains("按键设置") && contains("恢复默认键位") && contains("请按下新键") && contains("梦幻夜行绘卷") &&
                contains("请选择主人公。博丽神社的巫女小姐移动速度攻击范围攻击力准备好了吗？面向大多数人的难度尚未开放");
     }
     /// @brief 设置 page=0～26 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。

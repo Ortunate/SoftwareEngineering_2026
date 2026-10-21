@@ -319,7 +319,7 @@ void Game::DrawKeyBindings() const {
                                Color{177,150,143,255},gold,weight,reveal,menuMotion_.Pulse());
         if(index==resetIndex)continue;
         const bool capturing=waitingForBinding_ && index==selectedBinding_;
-        const auto key=capturing?std::string(bindingCaptureReady_?"请按下新键":"请先松开按键"):KeyLabel(BindingAt(index));
+        const auto key=capturing?std::string("请按下新键"):KeyLabel(BindingAt(index));
         const float keySize=ui::FittedSize(font,key.c_str(),23*scale,row.width*0.42F)/scale;
         const Color grey{145,145,150,255};
         ui::DrawPageChoiceText(canvas,font,key.c_str(),layout.compact?552:795,label.y,keySize,

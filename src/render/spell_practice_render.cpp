@@ -127,9 +127,7 @@ void Game::DrawSpellPractice(float opacity) const {
         ui::ArrowButton{arrow,direction}.Draw({font,s,portraitOpacity,menuMotion_.Phase()});
     }
     const auto footer=l.Footer();
-    Text(font,"W/S 选择 · A/D 切换角色 · Z / Space / 左键确认 · X / Esc / 右键返回",
-        {footer.x,footer.y,footer.width,footer.height*0.5F},17*s,kIvory,opacity);
     Text(font,choice.character>=2?"魔理沙玩法尚未实现，当前组合仅供浏览。":"未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。",
-        {footer.x,footer.y+footer.height*0.5F,footer.width,footer.height*0.5F},16*s,kGray,opacity);
+        footer,16*s,kGray,opacity);
 }
 } // namespace koumakyou

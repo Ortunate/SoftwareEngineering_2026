@@ -182,14 +182,14 @@ void Game::DrawHud() const {
         DrawLine(x, y + 9 * aimScale, x, y + 14 * aimScale, color);
     }
     const float fpsY = l.compact && l.height < 540 * s && boss_ && boss_->active
-        ? status.y + status.height + 8 * s : l.height - l.margin - 14 * s;
+        ? status.y + status.height + 8 * s : l.ContentBottom() - l.margin - 14 * s;
     Label(font, TextFormat("%d fps", GetFPS()), {l.width - l.margin, fpsY},
            12 * s, 85 * s, kMuted, emphasis, true);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_)
         Label(font, TextFormat("XYZ %+.1f %+.1f %+.1f | %d bullets", player_.Position().x,
               player_.Position().y, player_.Position().z, static_cast<int>(bullets_.Pool().ActiveCount())),
-              {l.margin, l.height - l.margin - 14 * s}, 12 * s, l.width * 0.6F, kInk);
+              {l.margin, l.ContentBottom() - l.margin - 14 * s}, 12 * s, l.width * 0.6F, kInk);
 #endif
 }
 

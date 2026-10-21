@@ -80,21 +80,20 @@ void Game::UpdateMenuPage() {
     }
     const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto input = ui::MenuInput::Read();
-    const bool back = input.back || input.Clicked(layout.Back());
-    if (back) {
+    if (input.back) {
         assets_.PlaySoundEffect("menu_cancel");
         EnterMainMenu();
         return;
     }
     if (state_ != RunState::MusicRoom) {
-        if (input.confirm) {
+        if (state_==RunState::Credit && input.confirm) {
             assets_.PlaySoundEffect("menu_confirm");
             EnterMainMenu();
         }
         return;
     }
-    // 音乐页的第 3 项为返回；底部按钮与曲目共用键盘选择和高亮。
-    const std::array<ui::Item,4> items{{{0,layout.Track(0)},{1,layout.Track(1)},{2,layout.Track(2)},{3,layout.Back()}}};
+    // 返回不占据曲目槽位，导航只循环三首曲目。
+    const std::array<ui::Item,3> items{{{0,layout.Track(0)},{1,layout.Track(1)},{2,layout.Track(2)}}};
     const auto selection=ui::UpdateSelection(items,input,selectedTrack_);
     if(selection.changed)assets_.PlaySoundEffect("menu_move");
     if(!selection.confirmed)return;
@@ -103,7 +102,6 @@ void Game::UpdateMenuPage() {
     if (selectedTrack_ == 0) assets_.PlayMenuMusic();
     else if (selectedTrack_ == 1) assets_.PlayStageMusic();
     else if (selectedTrack_ == 2) assets_.PlayBossMusic();
-    else EnterMainMenu();
 }
 
 void Game::UpdateOptions() {
@@ -159,18 +157,13 @@ void Game::UpdateOptions() {
         assets_.SetSoundVolumePercent(soundVolume_);
         SaveSettings();
         assets_.PlaySoundEffect("menu_confirm");
-    } else {
-        assets_.PlaySoundEffect("menu_cancel");
-        state_ = RunState::MainMenu;
-        selectedMenuItem_ = 8;
     }
 }
 
 void Game::UpdateKeyBindings() {
     constexpr int bindingCount = static_cast<int>(kBindingNames.size());
     constexpr int resetIndex = bindingCount;
-    constexpr int backIndex = bindingCount + 1;
-    constexpr int itemCount = bindingCount + 2;
+    constexpr int itemCount = bindingCount + 1;
     const auto input = ui::MenuInput::Read();
 
     if (waitingForBinding_) {
@@ -178,7 +171,7 @@ void Game::UpdateKeyBindings() {
             assets_.PlaySoundEffect("menu_cancel"); waitingForBinding_ = false; return;
         }
         if (!bindingCaptureReady_) {
-            // 清空激活弹窗的旧键盘队列，确认键及所有鼠标键释放后才收集新输入；返回操作始终优先。
+            // 清空进入录入状态的旧键盘队列，确认键及所有鼠标键释放后才收集新输入；返回操作始终优先。
             while (GetKeyPressed() != KEY_NULL) {}
             bool held = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_Z) || IsKeyDown(KEY_SPACE);
             for (int button = MOUSE_BUTTON_LEFT; button <= MOUSE_BUTTON_BACK; ++button)
@@ -207,10 +200,8 @@ void Game::UpdateKeyBindings() {
     }
     const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
     std::array<ui::Item,itemCount> items{};
-    for (int index = 0; index < bindingCount; ++index)
+    for (int index = 0; index < itemCount; ++index)
         items[index]={index,layout.Row(index)};
-    items[resetIndex]=ui::Button{layout.Button(0)}.Definition(resetIndex);
-    items[backIndex]=ui::Button{layout.Button(1)}.Definition(backIndex);
     const auto selection=ui::UpdateSelection(items,input,selectedBinding_);
     if(selection.changed)assets_.PlaySoundEffect("menu_move");
     if(!selection.confirmed)return;
@@ -223,9 +214,6 @@ void Game::UpdateKeyBindings() {
     } else if (selectedBinding_ == resetIndex) {
         bindings_ = KeyBindings{};
         SaveSettings();
-    } else {
-        optionsPage_ = OptionsPage::General;
-        selectedOption_ = menu::kBindingsIndex;
     }
 }
 

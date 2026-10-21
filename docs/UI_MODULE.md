@@ -10,6 +10,7 @@
 | `input.hpp` | `MenuInput` 单帧快照，统一 WASD/方向键、Z/Space/Enter/左键、X/Esc/右键 |
 | `layout.hpp` | `Canvas` 等比或全窗口坐标映射，零窗口尺寸保护 |
 | `components.hpp/.cpp` | `Label`、`Panel`、`Button`、`SelectableRow`、`ArrowButton`、`ValueSelector`、`Modal`，以及 `UpdateSelection` 列表交互 |
+| `command_bar.hpp/.cpp` | `CommandBar` 与 `KeyHint`，全宽贴底的上下文按键提示和内容避让区域 |
 | `motion.hpp` | `MenuMotion` 选择渐变、页面进场、确认闪光和可重复动画时钟 |
 | `typography.hpp` | UTF-8 文字测量、绘制、居中与宽度适配 |
 | `effects.hpp` | 光晕、选择箭头、强调线、星芒与太极装饰 |
@@ -29,6 +30,25 @@
 - `Modal` 仅绘制遮罩、圆角底板和标题。调用方只向当前模态传入输入，并在关闭或打开新页面后结束本帧，避免操作穿透。
 
 返回优先于确认；指针只有实际移动或点击时才接管焦点，静止指针不会覆盖键盘导航。确认只响应首次按下，空白点击不确认。`Item::enabled` 控制交互，`SelectableRow::Draw` 的 `available` 只控制灰色外观：尚未实现但允许浏览的目录仍可响应悬停，实际启动限制由业务层判定。
+
+## 统一底部功能按键横条
+
+`CommandBar(width, height)` 接收实际窗口逻辑尺寸，`Draw(context, hints)` 借用最多六个 `KeyHint{keys, action, enabled}`。横条只展示，不处理点击；调用方仍使用 `MenuInput` 和页面路由处理实际功能。高度固定为一行正文加上下内边距（28 个设计像素），所有提示横向排列，窄屏也不换行，文字按各项可用宽度缩小；提示数量变化不改变占位，零透明度不残留底色和文字。
+
+```cpp
+const ui::CommandBar bar(windowWidth, windowHeight);
+const std::array<ui::KeyHint, 3> hints{{
+    {"W/S", "选择"}, {"Z / Space / 左键", "确认"}, {"X / Esc / 右键", "返回"}
+}};
+bar.Draw({font, bar.Scale()}, hints);
+const float contentHeight = ui::CommandBar::ContentHeight(windowWidth, windowHeight);
+```
+
+`Bounds()` 给出实际占位，`Cell(index, count)` 用于验证布局，`ContentHeight()` 为页面控件预留安全高度。菜单、开局、符卡练习及弹窗在该高度内排版；战斗仍绘制全窗口 3D，仅底部台词、Boss 条、提示和 FPS 避让横条。极小窗口保留至少一像素内容，最小化不绘制。
+
+游戏仅在 `Game::Draw()` 结束时绘制一次横条，覆盖首页进场、设置/改键及行内录入、普通/整关/符卡练习、音乐室、成绩、制作信息、加载及失败、战斗、对话、暂停、收尾和结算。`src/render/command_bar.cpp` 根据页面提供提示，战斗读取当前自定义绑定。旧页面功能按键说明已统一到横条，符卡的未实现说明和结算倒计时保留为正文信息。
+
+Option 的 Quit、Music Room 的返回项、Score 的返回按钮和 Key Bindings 的返回按钮均移除，且不保留导航槽或隐藏命中区；使用 X/Esc/鼠标右键返回。音乐室只循环三首曲目；改键页包含十项绑定，恢复默认作为同一样式的最后一行，绘制和鼠标命中共用列表布局。Score 的确认键不再兼任返回。横条内的“返回”文字也不作为可点击按钮。
 
 ## 最小使用方式
 
@@ -79,4 +99,4 @@ cmake --build --preset macos-release --target koumakyou_settings_ui_tests
 ./build/macos-release/koumakyou_settings_ui_tests output/stage1-review/ui-module
 ```
 
-`koumakyou_ui_tests` 只链接 `koumakyou_ui` 和 raylib，不创建窗口，也不加载游戏或素材；验证独立导航、禁用与空列表、返回优先、重叠命中、静止指针、跨栏焦点、箭头、数值选择及画布/时钟。原生窗口测试先在不创建 Game 的条件下用默认字体绘制全部基础组件，核验零透明度不会泄漏底色、文字或光晕，绘制不推进时钟也不移动指针，并输出 `ui-components.png`；可用 `--components-only` 单独执行。完整测试再通过正式页面验证模态和两栏交互、全部键鼠别名、进场动画及五种窗口比例。
+`koumakyou_ui_tests` 只链接 `koumakyou_ui` 和 raylib，不创建窗口，也不加载游戏或素材；验证横条在极小/宽/窄窗口的单行占位、横向排列与边界，以及独立导航、禁用与空列表、返回优先、重叠命中、静止指针、跨栏焦点、箭头、数值选择及画布/时钟。原生窗口测试先在不创建 Game 的条件下用默认字体绘制全部基础组件，核验零透明度不会泄漏底色、文字或光晕，绘制不推进时钟也不移动指针，并输出 `ui-components.png`；可用 `--components-only` 单独执行。完整测试再通过正式页面验证模态和两栏交互、全部键鼠别名、进场动画及五种窗口比例。

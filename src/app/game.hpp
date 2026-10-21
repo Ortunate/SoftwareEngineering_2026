@@ -217,6 +217,8 @@ private:
     void DrawMainMenu(const ui::MenuMotion* motion = nullptr) const;
     /// @brief 只使用通用资源绘制“少女祈祷中”；加载中的关卡纹理不可访问。
     void DrawLoading() const;
+    /// @brief 在最终叠加层统一展示当前页面的功能按键；战斗键位读取本机设置，横条不接收点击。
+    void DrawCommandBar() const;
     /// @brief 绘制启动选择、音乐、成绩或制作信息页，保持通用素材生命周期。
     void DrawMenuPage() const;
     /// @brief 绘制开局的难度、人物、选择及确认层；只借用通用纹理，不提前加载关卡资源。
@@ -320,7 +322,7 @@ private:
     bool spellAttemptOpen_=false,spellAttemptPractice_=false,spellCaptured_=false; // 已打开记录只能结算一次；仅成功无伤无 Bomb 击破为取得。
     int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
     bool spellPractice_ = false;
-    int selectedTrack_ = 0; // 音乐页局部编号：0～2 为曲目，3 为返回。
+    int selectedTrack_ = 0; // 音乐页局部编号为 0～2；返回使用固定返回键，不占曲目槽。
     int selectedPauseItem_ = 0; // 暂停项：继续、主菜单、重开。
     int selectedResultItem_ = 0; // 结算项：重开、主菜单；每次结算重置为重开。
     int missCount_ = 0;
@@ -329,7 +331,7 @@ private:
     int spellStartMisses_ = 0, spellStartBombs_ = 0;
     float shotSoundTimer_ = 0.0F; // 秒；射击声音最多每 0.10 秒触发一次。
     bool waitingForBinding_ = false;
-    /// @brief 激活录入后须先释放确认键/鼠标按钮，避免把打开弹窗的点击录入为绑定。
+    /// @brief 激活行内录入后须先释放确认键/鼠标按钮，避免把确认点击录入为绑定。
     bool bindingCaptureReady_ = false;
     bool shouldQuit_ = false;
 #ifdef KOUMAKYOU_DEBUG_FEATURES

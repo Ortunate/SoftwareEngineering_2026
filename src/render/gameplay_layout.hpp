@@ -1,6 +1,7 @@
 // 本文件定义全窗口战斗视口、悬浮 HUD 与演出的响应式布局；坐标均为窗口逻辑像素。
 #pragma once
 #include "raylib.h"
+#include "ui/command_bar.hpp"
 #include <algorithm>
 
 namespace koumakyou {
@@ -11,11 +12,13 @@ struct GameplayLayout {
     bool compact;
     GameplayLayout(float windowWidth, float windowHeight)
         : width(std::max(1.0F, windowWidth)), height(std::max(1.0F, windowHeight)),
-          scale(std::min({width / 500.0F, height / 300.0F,
+          scale(std::min({width / 500.0F, ui::CommandBar::ContentHeight(width,height) / 300.0F,
                           std::clamp(height / 760.0F, 0.75F, 1.6F)})),
           margin(16 * scale), compact(width < 900 * scale || height < 540) {}
 
     [[nodiscard]] Rectangle Viewport() const { return {0, 0, width, height}; }
+    /// @brief 底部浮窗和文字的安全底边；只避让按键横条，世界视口和立绘窗口边缘锚点保持原样。
+    [[nodiscard]] float ContentBottom() const { return ui::CommandBar::ContentHeight(width,height); }
     /// @brief 左上题签与右上状态卡为放大的文字预留列宽和行距，不裁掉底下的 3D 场景。
     [[nodiscard]] Rectangle StagePanel() const {
         return {margin, margin, (compact ? 208 : 232) * scale, (compact ? 138 : 158) * scale};
@@ -28,7 +31,7 @@ struct GameplayLayout {
     [[nodiscard]] Rectangle BossPanel() const {
         if (compact) {
             const float h = 64 * scale;
-            const float y = height < 540 * scale ? height - margin - h
+            const float y = height < 540 * scale ? ContentBottom() - margin - h
                 : StatusPanel().y + StatusPanel().height + 12 * scale;
             return {margin, y, width - 2 * margin, h};
         }
@@ -40,7 +43,7 @@ struct GameplayLayout {
     /// @brief 台词框居中贴近底部，两行正文与说话人使用独立区域。
     [[nodiscard]] Rectangle DialoguePanel() const {
         const float w = std::min(width - 2 * margin, 1100 * scale);
-        return {(width - w) / 2, height - margin - 140 * scale, w, 140 * scale};
+        return {(width - w) / 2, ContentBottom() - margin - 140 * scale, w, 140 * scale};
     }
     /// @brief aspect 为去除透明留白后的可见取景宽高比，须为正；focus 为 0～1 的发言强调。
     /// 发言者等比贴齐窗口左右与底边；非发言者缩至 90%，向对应底角微移，离屏部分由窗口裁切。
@@ -61,13 +64,13 @@ struct GameplayLayout {
     }
     [[nodiscard]] Rectangle SpellBanner() const {
         const float w = std::min(width - 2 * margin, 560 * scale);
-        return {width - margin - w, height * 0.72F, w, 66 * scale};
+        return {width - margin - w, std::min(height * 0.72F,ContentBottom()-margin-66*scale), w, 66 * scale};
     }
     /// @brief 临时提示位于下方中央；矮窗口的 Boss 条在底部时，提示向上避让。
     [[nodiscard]] Rectangle Feedback(bool bossVisible = false) const {
         const float w = std::min(width - 2 * margin, 620 * scale);
         const float bottom = compact && height < 540 * scale && bossVisible ? BossPanel().y - 8 * scale
-            : height - margin - 24 * scale;
+            : ContentBottom() - margin - 24 * scale;
         return {(width - w) / 2, bottom - 48 * scale, w, 48 * scale};
     }
 };

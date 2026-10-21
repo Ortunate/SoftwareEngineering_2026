@@ -43,7 +43,7 @@ struct GameLifecycleProbe {
             if(IsValidBinding(key) && !contains(Game::KeyLabel(key).c_str()))return false;
         for(const auto& card:spell::Cards())if(!contains(card.name) || !contains(card.user))return false;
         for(const auto& character:spell::Characters())if(!contains(character.name) || !contains(character.title))return false;
-        return contains("《》未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。") && contains("按键设置") && contains("恢复默认键位") && contains("梦幻夜行绘卷") &&
+        return contains("《》未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。") && contains("按键设置") && contains("恢复默认键位") && contains("请按下新键请先松开按键") && contains("梦幻夜行绘卷") &&
                contains("请选择主人公。博丽神社的巫女小姐移动速度攻击范围攻击力准备好了吗？面向大多数人的难度尚未开放");
     }
     /// @brief 设置 page=0～26 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
@@ -255,16 +255,19 @@ Image ReadFrame(koumakyou::Game& game) {
     UnloadRenderTexture(target);
     return image;
 }
-/// @brief 保存当前窗口；settleFrames 可为零，filled 检查页顶/页底渐变抵达窗口边缘，防止退回居中留边。
+/// @brief 保存当前窗口；settleFrames 可为零，filled 检查页顶背景和贴底横条，防止退回居中留边或漏画提示。
 void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, bool filled = false) {
     for (int frame=0;frame<settleFrames;++frame) Frame(game);
     Image image=ReadFrame(game);
+    const Color barBottom=GetImageColor(image,image.width/2,image.height-1);
+    Check(barBottom.r>=18 && barBottom.r<=32 && barBottom.g>=8 && barBottom.g<=22 && barBottom.b>=15 && barBottom.b<=30,
+          "page is missing the full-width bottom command bar");
     if(filled) {
         const Color top=GetImageColor(image,image.width/2,0),bottom=GetImageColor(image,image.width/2,image.height-1);
         Check(std::abs(top.r-18)<=2 && std::abs(top.g-16)<=2 && std::abs(top.b-19)<=2,
               "secondary page top has letterboxing or wrong template");
-        Check(std::abs(bottom.r-62)<=2 && std::abs(bottom.g-17)<=2 && std::abs(bottom.b-25)<=2,
-              "secondary page bottom has letterboxing or wrong template");
+        Check(std::abs(bottom.r-22)<=2 && std::abs(bottom.g-10)<=2 && std::abs(bottom.b-17)<=2,
+              "secondary page bottom command bar is missing");
     }
     Check(ExportImage(image, path), "screenshot export failed");
     UnloadImage(image);
@@ -486,7 +489,7 @@ void TestStartCharacters(const std::filesystem::path& screenshots) {
     std::puts("Start/Practice Start two-character layers, arrows, removed name buttons, blending, persistence and unavailable gate passed.");
 }
 
-/// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的弹窗与暂停按钮。
+/// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的行内改键与暂停按钮。
 void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots) {
     constexpr std::array<const char*,27> names{"startup","title","options","bindings","binding-modal","difficulty","shot","mode",
         "spell-practice","music","score","credit","playing","dialogue","spell-cutin","pause","won","gameover","message",
@@ -498,7 +501,7 @@ void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots
         for(int page=0;page<static_cast<int>(names.size());++page) {
             koumakyou::GameLifecycleProbe::Show(game,page);
             Capture(game,(screenshots/(dimensions+"-"+names[page]+".png")).string().c_str(),0,
-                    page>=2 && page<=11 && page!=4);
+                    page>=2 && page<=11);
         }
         koumakyou::GameLifecycleProbe::Show(game,3);
         const koumakyou::menu::BindingsLayout bindings(GetScreenWidth(),GetScreenHeight());
@@ -506,9 +509,8 @@ void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots
         Click(game,row.x+row.width/2,row.y+row.height/2);
         Check(koumakyou::GameLifecycleProbe::Waiting(game),"resized binding row missed");
         Key(game,KEY_ESCAPE);
-        const auto back=bindings.Button(1);
-        Click(game,back.x+back.width/2,back.y+back.height/2);
-        Check(koumakyou::GameLifecycleProbe::General(game),"resized bindings Back missed");
+        Key(game,KEY_ESCAPE);
+        Check(koumakyou::GameLifecycleProbe::General(game),"resized bindings return key missed");
         game.StartPreview(); koumakyou::GameLifecycleProbe::Show(game,15);
         const koumakyou::menu::OverlayLayout overlay(GetScreenWidth(),GetScreenHeight());
         const auto resume=overlay.PauseRow(0);
@@ -537,7 +539,7 @@ void TestUnifiedUiInputs() {
     };
     const auto show=[&](int id) { Probe::Show(game,id); Event(7,0,0); Frame(game); };
     // 每个有多项选择的页面都检查八个方向别名；设置数值页的左右键单独用于调值。
-    for(const auto spec : {std::array<int,2>{3,12},{6,2},{7,2},{9,4},{15,3},{16,2},{17,2}}) {
+    for(const auto spec : {std::array<int,2>{3,11},{6,2},{7,2},{9,3},{15,3},{16,2},{17,2}}) {
         for(const auto key : {KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT}) {
             show(spec[0]);
             const int before=Probe::UiSelection(game);
@@ -561,6 +563,22 @@ void TestUnifiedUiInputs() {
         Key(game,key);
         Check(Probe::MenuSelection(game)==0,"title navigation alias failed");
     }
+    // 删除的返回项不能保留悬停、点击或导航槽位；横条仅展示，不应把左键当成返回。
+    for(const int id:{2,3,9,10}) {
+        show(id);
+        const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
+        const auto removed=id==2?menu::OptionRow(canvas,8):id==3?
+            canvas.Rect(canvas.width<1000?390:560,canvas.height-130,canvas.width<1000?322:300,42):
+            canvas.Rect(canvas.width<1000?40:70,canvas.width<1000?1010:675,canvas.width<1000?210:170,42);
+        const auto before=Probe::State(game);click(removed);
+        Check(Probe::State(game)==before && !Probe::MainMenu(game),"removed return button retained an invisible click area");
+        const ui::CommandBar bar(GetScreenWidth(),GetScreenHeight());
+        click(bar.Bounds());
+        Check(Probe::State(game)==before,"command bar unexpectedly handled a left click");
+    }
+    show(2);Key(game,KEY_W);Check(Probe::UiSelection(game)==7,"Option retained a removed Quit item");
+    show(3);move(bindings.Row(0));Key(game,KEY_W);
+    Check(Probe::UiSelection(game)==10,"bindings retained a removed return item");
     for(const int key : {KEY_Z,KEY_SPACE,KEY_ENTER}) {
         show(5); Key(game,key); Check(Probe::SetupStep(game)==StartSetupStep::Character,"difficulty confirm alias failed");
         Key(game,key); Check(Probe::SetupStep(game)==StartSetupStep::Shot,"character confirm alias failed");
@@ -570,7 +588,7 @@ void TestUnifiedUiInputs() {
         show(3); Key(game,key); Check(Probe::Waiting(game),"binding confirmation alias failed");
         Key(game,KEY_X); Check(!Probe::Waiting(game),"binding prompt X did not cancel");
         show(9); Key(game,key); Check(Probe::State(game)==RunState::MusicRoom,"music confirmation left page");
-        show(10); Key(game,key); Check(Probe::MainMenu(game),"score confirmation did not return");
+        show(10); Key(game,key); Check(Probe::State(game)==RunState::Score,"score confirmation bypassed return key");
         show(11); Key(game,key); Check(Probe::MainMenu(game),"credit confirmation did not return");
         // 上面返回首页会释放关卡；后续对话和结果渲染需要重新加载预览资源。
         game.StartPreview();
@@ -596,15 +614,16 @@ void TestUnifiedUiInputs() {
     }
     show(3); click(bindings.Row(0)); Check(Probe::Waiting(game),"binding click did not open prompt");
     const auto saved=LoadOrCreateSettings(kSettingsFilename).bindings;
-    click(bindings.Modal(),MOUSE_BUTTON_RIGHT);
+    click(bindings.Row(0),MOUSE_BUTTON_RIGHT);
     Check(!Probe::Waiting(game) && LoadOrCreateSettings(kSettingsFilename).bindings.forward==saved.forward,
           "prompt right click was captured instead of cancelling");
     show(3);
     Event(2,KEY_SPACE); Frame(game); Frame(game);
     Check(Probe::Waiting(game),"held Space was captured as binding");
     Event(1,KEY_SPACE); Frame(game); Key(game,KEY_ESCAPE);
-    show(9); move(page.Back()); Check(Probe::UiSelection(game)==3,"music Back hover did not select");
-    Key(game,KEY_SPACE); Check(Probe::MainMenu(game),"music Back keyboard confirmation failed");
+    show(9); Key(game,KEY_W); Check(Probe::UiSelection(game)==2,"music navigation retained a removed return item");
+    Key(game,KEY_SPACE); Check(Probe::State(game)==RunState::MusicRoom,"music playback unexpectedly returned");
+    Key(game,KEY_X);Check(Probe::MainMenu(game),"music return key failed");
     game.StartPreview();
     show(13); const float before=Probe::DialogueTime(game); Click(game,1,1);
     Check(Probe::DialogueTime(game)-before>0.1F,"dialogue left click did not advance");
@@ -686,8 +705,10 @@ void TestPracticeStages(const std::filesystem::path& screenshots) {
     Image before=ReadFrame(game);
     Probe::MotionStep(game,StartSetupStep::Ready,0);
     Image after=ReadFrame(game);
+    // 横条立即反映 Ready 的可用操作；零时间连续性只约束正文，不能要求旧页面按键提示继续显示。
+    const int contentHeight=ui::CommandBar::ContentHeight(before.width,before.height);
     Check(before.width==after.width && before.height==after.height &&
-          std::memcmp(before.data,after.data,before.width*before.height*4)==0,"practice Ready transition changed at zero time");
+          std::memcmp(before.data,after.data,before.width*contentHeight*4)==0,"practice Ready content transition changed at zero time");
     UnloadImage(before); UnloadImage(after);
     Probe::MotionStep(game,StartSetupStep::Stage,0);
     for(const Vector2 size : {Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
@@ -836,6 +857,10 @@ void TestUiModuleDrawing(const std::filesystem::path& screenshots) {
         Label{{25,135,190,30},16}.Draw(context,"Selectable row",color);
         ArrowButton{{250,130,44,40},1}.Draw(context);
         ValueSelector{{20,180,280,30},{20,180,32,30},{268,180,32,30}}.DrawArrows(context,1,0,2,{weight,1});
+        const CommandBar bar(320,240);
+        auto barContext=context;barContext.scale=bar.Scale();
+        const std::array<KeyHint,3> hints{{{"W/S","Select"},{"Z","Confirm"},{"X/Esc","Back"}}};
+        bar.Draw(barContext,hints);
     };
     BeginTextureMode(target);ClearBackground(background);draw(0);EndTextureMode();
     Image transparent=LoadImageFromTexture(target.texture);
@@ -1237,13 +1262,14 @@ int main(int argc, char** argv) {
             Key(game, KEY_DOWN); Key(game, KEY_LEFT);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).initialBombs == 2, "bomb count not saved");
             Key(game, KEY_DOWN); Key(game, KEY_Z);
-            // 点击 Focus 行打开录入；持续按住的激活点击不能立即变成新绑定。
+            // 点击 Focus 行进入行内录入；持续按住的激活点击不能立即变成新绑定。
             const koumakyou::menu::BindingsLayout bindingLayout(GetScreenWidth(),GetScreenHeight());
             const auto focus=bindingLayout.Row(6);
             Event(7,focus.x+focus.width/2,focus.y+focus.height/2); Event(6,MOUSE_BUTTON_LEFT); Frame(game); Frame(game);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_RIGHT), "opening click captured");
             Capture(game, (screenshots / "binding-prompt.png").string().c_str());
             Event(5, MOUSE_BUTTON_LEFT); Frame(game);
+            Capture(game, (screenshots / "binding-ready.png").string().c_str(),0,true);
             Event(6, MOUSE_BUTTON_EXTRA); Frame(game);
             Event(5, MOUSE_BUTTON_EXTRA); Frame(game);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == koumakyou::MouseBinding(MOUSE_BUTTON_EXTRA), "mouse side binding failed");
@@ -1262,7 +1288,7 @@ int main(int argc, char** argv) {
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.focus == settings.bindings.focus, "cancel altered binding");
             Key(game, KEY_DOWN); Key(game, KEY_ENTER); Key(game, KEY_F1);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings.fire == KEY_F1, "keyboard rebind failed");
-            // 列表只有十个动作，恢复按钮必须紧随暂停；恢复后写入新的单键默认布局。
+            // 恢复默认作为十个动作后的列表末行；恢复后写入新的单键默认布局。
             for (int i=0;i<3;++i) Key(game,KEY_DOWN);
             Key(game,KEY_ENTER);
             const auto reset=koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).bindings;

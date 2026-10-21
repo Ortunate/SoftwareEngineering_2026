@@ -15,6 +15,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <string>
 #include <utility>
 
 namespace koumakyou {
@@ -27,9 +28,7 @@ void Game::Draw() const {
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
     if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
         DrawStartSetup();
-        return;
-    }
-    if (state_ == RunState::Loading) {
+    } else if (state_ == RunState::Loading) {
         DrawLoading();
     } else if (state_ == RunState::MainMenu) {
         DrawMainMenu();
@@ -43,11 +42,13 @@ void Game::Draw() const {
         DrawHud();
         DrawOverlay();
     }
+    // 唯一的全局按键提示出口；在所有页面、演出与模态上方绘制，避免遗漏或叠画多个旧页脚。
+    DrawCommandBar();
 }
 
 void Game::DrawLoading() const {
     const float width = static_cast<float>(GetScreenWidth());
-    const float height = static_cast<float>(GetScreenHeight());
+    const float height = ui::CommandBar::ContentHeight(width,GetScreenHeight());
     // 以短边限制字号和图案，锚定实际右下角；超宽和竖屏均保持等比与边距。
     const float scale = std::min(width / 600.0F, height / 760.0F);
     const float right = width - 48 * scale;
@@ -67,7 +68,7 @@ void Game::DrawLoading() const {
     ui::YinYang(seal, 23 * scale, vermilion, ivory, loadingSeconds_ * 2);
     ui::GlowText(font, title, {left, baseline - 30 * scale}, titleSize,
                  ui::WithOpacity(ivory, pulse + 0.1F), vermilion, pulse);
-    ui::DrawText(font, loadingFailed_ ? "确认 / 返回：主菜单" : "Now Loading...",
+    if(!loadingFailed_)ui::DrawText(font, "Now Loading...",
                  {left + 2 * scale, baseline + 14 * scale}, 13 * scale,
                  ui::WithOpacity(ivory, 0.45F));
     if (loadingFailed_) return;
@@ -296,7 +297,7 @@ void Game::DrawStageClear() const {
     const auto left=canvas.Point(120,416),right=canvas.Point(640,416);
     DrawLineEx(left,right,s,Fade(gold,0.6F));
     row("Total =",TextFormat("%lld",stageClearSummary_.Total()),431,gold,32);
-    ui::DrawCentered(font,TextFormat("Z / Space / 左键继续 · %ds",static_cast<int>(std::ceil(kStageClearSeconds-stageClearSeconds_))),
+    ui::DrawCentered(font,TextFormat("%ds",static_cast<int>(std::ceil(kStageClearSeconds-stageClearSeconds_))),
                      center,canvas.Point(0,493).y,18*s,ivory);
 }
 
@@ -307,39 +308,23 @@ void Game::DrawKeyBindings() const {
     const float scale=canvas.scale;
     const Color gold=ui::kPageGold;
     ui::DrawPageSurface(canvas,menuMotion_);
-    ui::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","Key Bindings");
-    for(int index=0;index<static_cast<int>(kBindingNames.size());++index) {
+    ui::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","KEYBINDINGS");
+    const int resetIndex=static_cast<int>(kBindingNames.size());
+    for(int index=0;index<=resetIndex;++index) {
         const auto row=layout.Row(index);
-        const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.009F);
-        const float size=(layout.compact?20:17)*scale,y=row.y+(layout.compact?10:6)*scale;
+        const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.012F);
+        const auto label=layout.LabelOrigin(index);
         ui::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
-        ui::GlowText(font,kBindingNames[index],{row.x+(15-6*weight+12*(1-reveal))*scale,y},size,
-                     Fade(ui::Blend(Color{193,162,150,255},gold,weight),reveal),gold,weight*menuMotion_.Pulse());
-        const auto key=KeyLabel(BindingAt(index));
-        const float keySize=ui::FittedSize(font,key.c_str(),size,row.width*0.45F);
-        ui::GlowText(font,key.c_str(),{row.x+row.width-16*scale-ui::MeasureText(font,key.c_str(),keySize).x,y},keySize,
-                     Fade(ui::Blend(Color{212,190,184,255},gold,weight),reveal),gold,weight*(menuMotion_.Pulse()+menuMotion_.Flash()));
-    }
-    constexpr std::array<const char*,2> buttons{"恢复默认键位","返回"};
-    for(int index=0;index<2;++index) {
-        const float weight=menuMotion_.Weight(static_cast<int>(kBindingNames.size())+index);
-        const auto button=layout.Button(index);
-        ui::DrawPageButton(canvas,font,button,buttons[index],menuMotion_,weight);
-    }
-    ui::DrawPageFooter(canvas,font,"WASD / 方向键或鼠标选择 · Z / Space / 左键修改",
-                         "X / Esc / 右键返回选项");
-    if(waitingForBinding_) {
-        DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,185});
-        const auto modal=layout.Modal();
-        DrawRectangleRounded(modal,0.16F,10,Color{38,12,25,250});
-        DrawRectangleRoundedLinesEx(modal,0.16F,10,2*scale,gold);
-        const auto modalText=[&](const char* text,float offset,float size,Color color) {
-            ui::DrawCentered(font,text,modal.x+modal.width/2,modal.y+offset*canvas.yScale,
-                             ui::FittedSize(font,text,size*scale,modal.width-40*scale),color);
-        };
-        modalText("请按下键盘或鼠标按键",32,24,RAYWHITE);
-        modalText(kBindingNames[selectedBinding_],84,20,gold);
-        modalText("X / Esc / 右键：取消   请先松开，再按下新键",142,16,Color{193,162,150,255});
+        ui::DrawPageChoiceText(canvas,font,index==resetIndex?"恢复默认键位":kBindingNames[index],label.x,label.y,layout.compact?24:22,
+                               Color{177,150,143,255},gold,weight,reveal,menuMotion_.Pulse());
+        if(index==resetIndex)continue;
+        const bool capturing=waitingForBinding_ && index==selectedBinding_;
+        const auto key=capturing?std::string(bindingCaptureReady_?"请按下新键":"请先松开按键"):KeyLabel(BindingAt(index));
+        const float keySize=ui::FittedSize(font,key.c_str(),23*scale,row.width*0.42F)/scale;
+        const Color grey{145,145,150,255};
+        ui::DrawPageChoiceText(canvas,font,key.c_str(),layout.compact?552:795,label.y,keySize,
+                               capturing?grey:ui::kPageIvory,capturing?grey:gold,weight,reveal,
+                               capturing?0:menuMotion_.Pulse()+menuMotion_.Flash(),true);
     }
 }
 

@@ -2,6 +2,7 @@
 #pragma once
 
 #include "ui/layout.hpp"
+#include "ui/command_bar.hpp"
 #include <algorithm>
 #include <array>
 #include <span>
@@ -13,14 +14,13 @@ using ui::Canvas;
 /// @brief 根据窗口逻辑像素宽高选择纵向/横向铺满画布，绘制与点击必须使用相同实例配置。
 inline Canvas PageCanvas(int width,int height) {
     const bool compact=std::max(1,width)<std::max(1,height)*1.15F;
-    return Canvas::Full(width,height,compact?760:1100,compact?1100:760);
+    return Canvas::Full(width,ui::CommandBar::ContentHeight(width,height),compact?760:1100,compact?1100:760);
 }
 
-inline constexpr int kOptionsCount = 9;
+inline constexpr int kOptionsCount = 8;
 inline constexpr int kNumericOptions = 6;
 inline constexpr int kBindingsIndex = 6;
 inline constexpr int kResetIndex = 7;
-inline constexpr int kBackIndex = 8;
 /// @brief 暂停菜单的局部顺序；输入导航、鼠标命中与绘制必须使用相同项数。
 inline constexpr int kPauseCount = 3;
 inline constexpr std::array<const char*,kPauseCount> kPauseLabels{
@@ -43,8 +43,8 @@ inline constexpr std::array<bool,3> kSpellResultAvailable{true,false,true};
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
     "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
-    "按键设置", "恢复默认设置", "Quit"};
-/// @brief 第 index 行的屏幕矩形；index 为 0～8，菜单的文字与命中共用此处定义。
+    "按键设置", "恢复默认设置"};
+/// @brief 第 index 行的屏幕矩形；index 为 0～7，返回只通过返回键处理，不加入选项列表。
 inline Rectangle OptionRow(const Canvas& canvas, int index) {
     return canvas.width<1000 ? canvas.Rect(48,220+index*76,664,64)
                              : canvas.Rect(310,160+index*48,625,42);
@@ -61,7 +61,6 @@ struct PageLayout {
     Canvas canvas;
     bool compact;
     PageLayout(int width,int height):canvas(PageCanvas(width,height)),compact(canvas.width<1000) {}
-    [[nodiscard]] Rectangle Back() const { return canvas.Rect(compact?40:70,compact?1010:675,compact?210:170,42); }
     [[nodiscard]] Rectangle Forward() const { return canvas.Rect(compact?380:775,compact?1010:675,compact?340:250,42); }
     /// @brief 选择卡片的设计矩形，index 为 0/1；动画和文字使用它的设计坐标，输入转换后命中。
     [[nodiscard]] Rectangle Choice(int index) const { return {compact?48.0F:640.0F,(compact?680.0F:300.0F)+index*125,compact?664.0F:385.0F,105}; }
@@ -69,25 +68,32 @@ struct PageLayout {
     [[nodiscard]] Rectangle Track(int index) const { return canvas.Rect(compact?48:280,(compact?280:260)+index*(compact?150:95),compact?664:680,compact?100:70); }
 };
 
-/// @brief 改键列表及录入弹窗共用布局；构造参数为窗口逻辑像素，所有方法返回屏幕矩形。
-/// 12 项局部编号含 10 个动作、恢复和返回，只有动作使用 Row。
+/// @brief 改键列表布局；录入提示直接替换对应行的键名，构造参数为窗口逻辑像素。
+/// 11 项局部编号含 10 个动作和列表末尾的恢复默认；返回只通过返回键处理。
 struct BindingsLayout {
     Canvas canvas;
     bool compact;
     BindingsLayout(int width,int height)
         :canvas(PageCanvas(width,height)),compact(canvas.width<1000) {}
-    /// @brief 动作行的屏幕矩形，index 为 0～9。
-    [[nodiscard]] Rectangle Row(int index) const { return canvas.Rect(compact?48:240,(compact?220:176)+index*(compact?52:31),compact?664:620,compact?48:28); }
-    /// @brief 页面底部按钮，index 为 0（恢复）或 1（返回）。
-    [[nodiscard]] Rectangle Button(int index) const { return canvas.Rect(compact?48+index*342:240+index*320,canvas.height-130,compact?322:300,42); }
-    [[nodiscard]] Rectangle Modal() const { return canvas.Rect((canvas.width-600)/2,canvas.height/2-100,600,200); }
+    /// @brief 列表行的屏幕矩形，index 为 0～10；最后一行为恢复默认键位。
+    /// 与 Option 共用首行位置和宽度；十一行采用较密行距，为左下题签保留空间。
+    [[nodiscard]] Rectangle Row(int index) const {
+        auto row=OptionRow(canvas,0);
+        row.y+=index*(compact?58:36)*canvas.yScale;
+        row.height=(compact?50:32)*canvas.yScale;
+        return row;
+    }
+    /// @brief 行内标签的设计坐标；与 Option 共用文字内边距，绘制时再应用统一选择位移。
+    [[nodiscard]] Vector2 LabelOrigin(int index) const {
+        return {compact?64.0F:322.0F,(compact?230.0F:168.0F)+index*(compact?58:36)};
+    }
 };
 
 /// @brief 游戏叠加层的缩放与暂停、结算命中区域；构造参数为窗口逻辑像素，返回矩形亦为屏幕像素。
 /// 独立于 3D 视口，窄屏仍居中且完整显示。
 struct OverlayLayout {
     Canvas canvas;
-    OverlayLayout(int width,int height):canvas(width,height,760,620) {}
+    OverlayLayout(int width,int height):canvas(width,ui::CommandBar::ContentHeight(width,height),760,620) {}
     /// @brief 共用暂停式浮窗；count 为操作项数，detailHeight 为标题下统计区占用的设计像素。
     [[nodiscard]] Rectangle PausePanel(int count=kPauseCount,float detailHeight=0) const { return canvas.Rect(135,180,490,118+count*48+detailHeight); }
     /// @brief 暂停式操作行；index 为菜单局部编号，detailHeight 须与底板一致，绘制与点击共用。

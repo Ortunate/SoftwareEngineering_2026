@@ -27,7 +27,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(raylib)
 
 # 通用 UI 可独立链接和测试，不依赖 Game、关卡、配置或素材管理器。
-add_library(koumakyou_ui STATIC src/ui/components.cpp)
+add_library(koumakyou_ui STATIC src/ui/components.cpp src/ui/command_bar.cpp)
 target_include_directories(koumakyou_ui PUBLIC src)
 target_link_libraries(koumakyou_ui PUBLIC raylib)
 
@@ -51,6 +51,7 @@ add_library(koumakyou_engine STATIC
     src/render/menu_render.cpp
     src/render/start_setup_render.cpp
     src/render/game_render.cpp
+    src/render/command_bar.cpp
     src/render/gameplay_hud.cpp
     src/render/sprite_renderer.cpp
     src/render/animated_sprite.cpp

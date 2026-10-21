@@ -70,8 +70,24 @@ void TestLayoutAndMotion() {
     motion.Advance(1,2,0);assert(motion.Phase()==phase && motion.Weight(2)==weight);
     motion.Advance(1,3,0.01F);assert(motion.Weight(2)>0 && motion.Weight(3)>0);
 }
+/// @brief 横条在极小、宽、窄窗口均保持单行，提示数量不改变高度，各项横向排列且不重叠。
+void TestCommandBar() {
+    for(Vector2 size:{Vector2{1,1},{320,180},{320,240},{390,844},{900,900},{1280,720},{1600,400},{3840,2160}}) {
+        const CommandBar bar(size.x,size.y);const auto bounds=bar.Bounds();
+        assert(bounds.x==0 && bounds.width==size.x && bounds.y>=0 && bounds.y+bounds.height==size.y);
+        assert(std::isfinite(bar.Scale()) && CommandBar::ContentHeight(size.x,size.y)>=1);
+        assert(bounds.height<=std::ceil(28*bar.Scale()));
+        for(int count=1;count<=CommandBar::kMaxHints;++count)for(int index=0;index<count;++index) {
+            const auto cell=bar.Cell(index,count);
+            assert(cell.x>=0 && cell.y>=bounds.y && cell.x+cell.width<=size.x+0.001F && cell.y+cell.height<=size.y+0.001F);
+            assert(cell.y==bar.Cell(0,count).y && cell.height==bar.Cell(0,count).height);
+            for(int other=0;other<index;++other)assert(!CheckCollisionRecs(cell,bar.Cell(other,count)));
+        }
+        assert(bar.Cell(-1,3).width==0 && bar.Cell(3,3).width==0 && bar.Cell(0,0).width==0);
+    }
+}
 }
 int main() {
-    TestSelection();TestComponents();TestLayoutAndMotion();
+    TestSelection();TestComponents();TestLayoutAndMotion();TestCommandBar();
     std::puts("Independent UI selection, components, cancellation, layout and motion passed.");
 }

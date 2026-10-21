@@ -9,7 +9,7 @@ struct StartSetupLayout {
     Canvas canvas;
     bool compact;
     StartSetupLayout(int width,int height)
-        : canvas(Canvas::Full(width,height,width<height*1.15F?760:1280,width<height*1.15F?1100:720)),
+        : canvas(Canvas::Full(width,ui::CommandBar::ContentHeight(width,height),width<height*1.15F?760:1280,width<height*1.15F?1100:720)),
           compact(canvas.width<1000) {}
     [[nodiscard]] Rectangle Difficulty(int index) const {
         return canvas.Rect(compact?130:440,(compact?200:130)+index*(compact?180:120),compact?500:400,compact?150:104);

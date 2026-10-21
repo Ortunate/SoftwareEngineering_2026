@@ -57,7 +57,7 @@ inline void DrawPageHeader(const Canvas& canvas,Font font,const char* title,cons
                  ui::FittedSize(font,watermark,52*canvas.scale,(canvas.width-120)*canvas.xScale),Color{173,61,65,255});
 }
 
-/// @brief 页面统一页脚；secondLine 可为空，位置贴近全窗口底部，不依赖列表高度。
+/// @brief 通用说明文字页脚；secondLine 可为空，不依赖列表高度；应用功能按键统一使用 CommandBar。
 inline void DrawPageFooter(const Canvas& canvas,Font font,const char* firstLine,const char* secondLine="") {
     const float center=canvas.Point(canvas.width/2,0).x;
     for(int index=0;index<2;++index) {
@@ -74,6 +74,16 @@ inline void DrawPageRowRule(const Canvas& canvas,Rectangle bounds,const ui::Menu
     ui::FocusLine({bounds.x+12*canvas.scale,bounds.y+bounds.height},
                   {bounds.x+bounds.width-12*canvas.scale,bounds.y+bounds.height},canvas.scale,
                   Fade(kPageGold,reveal),weight,motion.Phase());
+}
+
+/// @brief 页面选项文字的统一颜色、滑入与选中偏移；font 由调用方持有，x/y/size 为设计像素。
+/// weight/reveal 为 0～1；pulse 控制光晕，center 表示以 x 为水平中心，绘制位移不改变命中区域。
+inline void DrawPageChoiceText(const Canvas& canvas,Font font,const char* text,float x,float y,float size,
+                               Color normal,Color selected,float weight,float reveal,float pulse,bool center=false) {
+    auto point=canvas.Point(x+16*(1-reveal)-8*weight,y);
+    if(center)point.x-=ui::MeasureText(font,text,size*canvas.scale).x/2;
+    ui::GlowText(font,text,point,size*canvas.scale,Fade(ui::Blend(normal,selected,weight),reveal),
+                 Fade(selected,reveal),weight*pulse);
 }
 
 /// @brief 统一操作按钮；bounds 为屏幕矩形，weight 为统一选择强调（0～1），键鼠选择都由输入层驱动。

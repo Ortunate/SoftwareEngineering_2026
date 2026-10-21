@@ -111,7 +111,7 @@ void TestResponsiveLayouts() {
         assert(std::abs(moon.y + moon.height * 0.42F - (logo.y + logo.height / 2)) < 0.001F);
         const auto options=koumakyou::menu::PageCanvas(size.x,size.y);
         const auto full=options.Rect(0,0,options.width,options.height);
-        assert(full.x==0 && full.y==0 && std::abs(full.width-size.x)<0.001F && std::abs(full.height-size.y)<0.001F);
+        assert(full.x==0 && full.y==0 && std::abs(full.width-size.x)<0.001F && std::abs(full.height-koumakyou::ui::CommandBar::ContentHeight(size.x,size.y))<0.001F);
         for(int index=0;index<koumakyou::menu::kOptionsCount;++index) {
             fits(koumakyou::menu::OptionRow(options,index));
             if(index<koumakyou::menu::kNumericOptions) {
@@ -120,11 +120,10 @@ void TestResponsiveLayouts() {
         }
         const koumakyou::menu::BindingsLayout bindings(size.x,size.y);
         const auto bindingsFull=bindings.canvas.Rect(0,0,bindings.canvas.width,bindings.canvas.height);
-        assert(bindingsFull.x==0 && bindingsFull.y==0 && std::abs(bindingsFull.width-size.x)<0.001F && std::abs(bindingsFull.height-size.y)<0.001F);
-        for(int index=0;index<static_cast<int>(koumakyou::kBindingNames.size());++index)fits(bindings.Row(index));
-        fits(bindings.Button(0)); fits(bindings.Button(1)); fits(bindings.Modal());
+        assert(bindingsFull.x==0 && bindingsFull.y==0 && std::abs(bindingsFull.width-size.x)<0.001F && std::abs(bindingsFull.height-koumakyou::ui::CommandBar::ContentHeight(size.x,size.y))<0.001F);
+        for(int index=0;index<=static_cast<int>(koumakyou::kBindingNames.size());++index)fits(bindings.Row(index));
         const koumakyou::menu::PageLayout page(size.x,size.y);
-        fits(page.Back()); fits(page.Forward());
+        fits(page.Forward());
         const koumakyou::menu::StartSetupLayout setup(size.x,size.y);
         fits(setup.Portrait()); fits(setup.CharacterInfo());
         fits(setup.Badge()); fits(setup.Heading()); fits(setup.ShotSummary()); fits(setup.ModeSummary());

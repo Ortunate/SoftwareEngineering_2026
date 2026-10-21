@@ -40,15 +40,7 @@ void TitleText(const menu::Canvas& canvas, Font font, const char* text,
     ui::DrawText(font, text, position, pixels, color);
 }
 
-/// @brief 菜单选项的文字强调；weight 为选中强度，reveal 为进场进度，坐标/字号为设计像素。
-/// 动画只偏移绘制位置，命中区域始终使用 menu_layout 中的最终矩形。
-void ChoiceText(const menu::Canvas& canvas, Font font, const char* text, float x, float y, float size,
-                Color normal, Color selected, float weight, float reveal, float pulse, bool center = false) {
-    auto point = canvas.Point(x + 16 * (1 - reveal) - 8 * weight, y);
-    if (center) point.x -= ui::MeasureText(font,text,size*canvas.scale).x/2;
-    ui::GlowText(font,text,point,size*canvas.scale,Fade(ui::Blend(normal,selected,weight),reveal),
-                 Fade(selected,reveal),weight*pulse);
-}
+using ui::DrawPageChoiceText;
 
 }  // namespace
 
@@ -97,7 +89,8 @@ void Game::DrawMainMenu(const ui::MenuMotion* motion) const {
         DrawRectangleRec(canvas.Rect(layout.menuLeft - 12, layout.menuTop - 10,
             layout.menuWidth + 24, layout.rowCount * 45 + 12), Fade(Color{252,246,236,228},menuProgress));
     }
-    ui::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,layout.height);
+    ui::DrawPageFrame(canvas,Color{134,50,57,210},layout.width,
+                      ui::CommandBar::ContentHeight(GetScreenWidth(),GetScreenHeight())/canvas.yScale);
     if (IsTextureValid(common.titleLogo)) {
         // 字标自身带英文副标题和“异典”饰线，保留透明区域，不叠加重复的普通文字。
         DrawTexturePro(common.titleLogo,
@@ -126,7 +119,7 @@ void Game::DrawMainMenu(const ui::MenuMotion* motion) const {
             ui::YinYang(center,9.0F*canvas.scale,Fade(kScarlet,weight*reveal),
                        Fade(kIvory,weight*reveal),animation.Phase());
         }
-        ChoiceText(canvas,common.uiFont,labels[index],layout.menuLeft+45,rowY+2,locked?23:28,
+        DrawPageChoiceText(canvas,common.uiFont,labels[index],layout.menuLeft+45,rowY+2,locked?23:28,
             locked?Color{155,116,117,80}:Color{160,87,94,160},kScarlet,weight,reveal,animation.Pulse()+animation.Flash());
         const auto left = canvas.Point(layout.menuLeft + 30, rowY + 41);
         const auto right = canvas.Point(layout.menuLeft + layout.menuWidth - 13, rowY + 41);
@@ -151,18 +144,17 @@ void Game::DrawOptions() const {
     for(int index=0;index<menu::kOptionsCount;++index) {
         const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.012F);
         const float y=(compact?230:168)+index*(compact?76:48);
-        ChoiceText(canvas,font,menu::kOptionLabels[index],compact?64:322,y,compact?24:22,
+        DrawPageChoiceText(canvas,font,menu::kOptionLabels[index],compact?64:322,y,compact?24:22,
                    Color{177,150,143,255},kGold,weight,reveal,menuMotion_.Pulse());
         const auto row=menu::OptionRow(canvas,index);
         ui::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
         if(index>=menu::kNumericOptions)continue;
-        ChoiceText(canvas,font,values[index].c_str(),compact?552:795,y,23,kIvory,kGold,
+        DrawPageChoiceText(canvas,font,values[index].c_str(),compact?552:795,y,23,kIvory,kGold,
                    weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash(),true);
         const ui::ValueSelector selector{row,menu::OptionArrow(canvas,index,-1),menu::OptionArrow(canvas,index,1)};
         selector.DrawArrows({font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()},
                             levels[index],minimum[index],maximum[index],{weight,reveal});
     }
-    ui::DrawPageFooter(canvas,font,"WASD / 方向键选择或调整 · 鼠标移动选择","Z / Space / 左键确认 · X / Esc / 右键返回");
 }
 
 void Game::DrawMenuPage() const {
@@ -173,8 +165,6 @@ void Game::DrawMenuPage() const {
     const auto& common = assets_.Common();
     const Font font = common.uiFont;
     ui::DrawPageSurface(canvas,menuMotion_);
-    ui::DrawPageButton(canvas,font,layout.Back(),"返回 / X / Esc",menuMotion_,
-                         menuMotion_.Weight(state_==RunState::MusicRoom?3:0));
     if (state_ == RunState::MusicRoom) {
         Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);
         constexpr std::array<const char*, 3> names{"比赤色更鲜红的梦", "宛如鬼灯的鲜红之魂", "妖魔夜行"};
@@ -189,7 +179,6 @@ void Game::DrawMenuPage() const {
             ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},canvas.scale,
                           kGold,weight*reveal,menuMotion_.Phase());
         }
-        Text(canvas, font, "WASD / 方向键选择 · Z / Space / 左键播放", canvas.width/2, compact?900:598, 22, kGold, true);
     } else if (state_ == RunState::Score) {
         Text(canvas, font, "SCORE", canvas.width/2, 110, 50, kGold, true);
         Text(canvas, font, "Stage 1 · Normal · 标准模式", canvas.width/2, compact?360:250, 28, kIvory, true);

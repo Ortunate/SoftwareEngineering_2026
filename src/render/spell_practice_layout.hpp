@@ -6,7 +6,7 @@ namespace koumakyou::menu {
 struct SpellPracticeLayout {
     Canvas canvas; bool compact;
     static constexpr int kVisibleGroups=8;
-    SpellPracticeLayout(int width,int height):canvas(Canvas::Full(width,height,width<height*1.15F?760:1280,width<height*1.15F?1400:720)),compact(canvas.width<1000){}
+    SpellPracticeLayout(int width,int height):canvas(Canvas::Full(width,ui::CommandBar::ContentHeight(width,height),width<height*1.15F?760:1280,width<height*1.15F?1400:720)),compact(canvas.width<1000){}
     [[nodiscard]] Rectangle Title() const{return canvas.Rect(42,30,compact?676:830,58);}
     [[nodiscard]] Rectangle Heading() const{return canvas.Rect(42,compact?540:105,compact?676:830,42);}
     [[nodiscard]] Rectangle Columns() const{return canvas.Rect(42,compact?602:157,compact?676:830,30);}

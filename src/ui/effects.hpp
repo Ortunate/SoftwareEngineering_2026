@@ -61,6 +61,23 @@ inline void Heart(Vector2 center,float size,Color color) {
         previous=current;
     }
 }
+/// @brief 绘制实心五角星；center 为包围盒中心，size 为正数屏幕像素，与 Heart 使用相同外接尺寸。
+/// 外顶点按完整宽高归一化，避免星形几何中心偏高造成与同排资源图标的视觉错位。
+inline void FivePointStar(Vector2 center,float size,Color color) {
+    constexpr float halfWidth=0.951056516F,height=1.809016994F,offsetY=0.095491503F;
+    const Vector2 hub{center.x,center.y+size*offsetY/height};
+    const auto point=[&](int index) {
+        const float angle=-PI/2+index*PI/5,radius=index%2==0?1.0F:0.45F;
+        return Vector2{center.x+size*std::cos(angle)*radius/(2*halfWidth),
+                       center.y+size*(std::sin(angle)*radius+offsetY)/height};
+    };
+    Vector2 previous=point(9);
+    for(int index=0;index<10;++index) {
+        const auto current=point(index);
+        DrawTriangle(hub,current,previous,color);
+        previous=current;
+    }
+}
 /// @brief 绘制回纹四角、断环与中心瞄准点；center 为准确瞄准位置，scale 为正比例，所有装饰等比缩放。
 /// accent/ink/mark 分别控制框线、中心点和四向短刻线；调用方提供危险态配色，绘制不读取输入或推进动画。
 inline void AimReticle(Vector2 center,float scale,Color accent,Color ink,Color mark) {

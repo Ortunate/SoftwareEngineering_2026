@@ -3,6 +3,7 @@
 #pragma once
 
 #include "raylib.h"
+#include "resources/battle_catalog.hpp"
 
 #include <cstdint>
 #include <limits>
@@ -30,6 +31,14 @@ struct VisualDefinition {
     Vector2 pivot{0.5F, 0.5F};
     float bulletDiameterScale = 2.6F;
     bool glow = false;
+    /// @brief 对话专用的归一化裁剪矩形，限定在 [0,1]；符卡显示完整 PNG，战斗 ANM 自行选帧。
+    /// 全身差分裁到上半身，使脸部尺寸接近半身差分，底部藏在台词面板之后。
+    /// 加载器在此区域内排除透明留白，使窗口锚点对应人物的可见边界。
+    Rectangle dialogueCrop{0, 0, 1, 1};
+    /// @brief 原始战斗动画绑定；非 None 时不使用 path，纹理由图集缓存持有。
+    battle::Selection animation{};
+    /// @brief 击破时使用的独立动画外观；invalid 保留通用退场，不能用于自然离场或清场。
+    VisualId defeatVisual = kInvalidVisualId;
 };
 
 /// @brief 声音清单项，路径相对 assets 根目录；name 是播放时使用的查找键。
@@ -38,7 +47,7 @@ struct SoundDefinition {
     std::string_view path;
 };
 
-/// @brief 一个 Stage 的图片、音乐与音效清单；所有 span 与字符串在 LoadStage 调用期间须有效。
+/// @brief 一个 Stage 的图片、音乐与音效清单；所有 span 与字符串须覆盖同步调用或整个异步加载期。
 struct StageAssetManifest {
     std::span<const VisualDefinition> visuals;
     std::string_view stageBgm;

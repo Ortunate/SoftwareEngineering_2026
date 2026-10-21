@@ -45,6 +45,10 @@ public:
     std::vector<int> soundEvents;
     /// @brief 本次更新 ins_119 的散落道具数量；下一次更新清空，Game 负责按当前 Power 实际生成。
     std::vector<int> dropEvents;
+    int deathEffect = 0; // ECL 100 打包参数的低字节，0/1/2 对应小爆散/旋转爆散/大爆散。
+    int animationScript = -1; // 原 ECL 97/98 选择的主动画，编号属于当前敌人/Boss 图集。
+    double animationAge = 0; // 本次脚本启动后的秒数；ECL 子程序跳转不重置它。
+    std::uint32_t animationRevision = 0;
     [[nodiscard]] Vector3 Position() const { return ReferencePosition(sourcePosition); }
 private:
     struct Context { int sub = 0, pc = 0, frame = 0, compare = 0; std::array<float,12> variables{}; };
@@ -61,6 +65,8 @@ private:
     int lifeCallback_ = -1, deathCallback_ = -1, timerCallback_ = -1;
     std::array<float,8> effects_{};
     int rank_ = 16;
+    std::array<int,5> poses_{-1,-1,-1,-1,-1}; // 待机、左收势、右收势、左移、右移。
+    int pose_ = -1; // -1 尚未首次选择；0 静止、-2 左移、2 右移。
     std::array<float,6> rankInfluence_{-0.5F,0.5F,0,0,0,0};
     void Tick(Vector3 player, BulletSystem& bullets);
     void Execute(const reference::Instruction& instruction, Vector3 player, BulletSystem& bullets);
@@ -70,5 +76,6 @@ private:
     [[nodiscard]] float Value(float value) const;
     float& Variable(float id);
     float Random(float range);
+    void SetAnimation(int script);
 };
 } // namespace koumakyou::stage1

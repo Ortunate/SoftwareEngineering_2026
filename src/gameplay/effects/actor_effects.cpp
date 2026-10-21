@@ -52,6 +52,7 @@ ActorAppearance ActorPresentation::Sample() const {
 }
 
 ActorAppearance ActorExitEffect::Sample() const {
+    if(nativeDefeat)return {}; // 透明度和缩放完全由原 ANM 决定。
     const float t = std::clamp(age / duration, 0.0F, 1.0F);
     const float fade = 1.0F - Smooth(t);
     ActorAppearance result = initial;
@@ -72,17 +73,20 @@ ActorAppearance ActorExitEffect::Sample() const {
 
 bool ActorEffectSystem::Spawn(VisualId visual, Vector3 position, float hitRadius,
                              const ActorPresentation& presentation,
-                             ActorExitReason reason) {
+                             ActorExitReason reason,const anm::Frame* animation,VisualId defeatVisual) {
     ActorExitEffect* effect = effects_.Acquire();
     if (!effect) return false;
-    effect->visual = visual;
+    effect->nativeDefeat=reason==ActorExitReason::Defeated && defeatVisual!=kInvalidVisualId;
+    effect->visual = effect->nativeDefeat ? defeatVisual : visual;
     effect->position = position;
     effect->hitRadius = hitRadius;
     effect->kind = presentation.Kind();
     effect->reason = reason;
     effect->initial = presentation.Sample();
+    if(animation && !effect->nativeDefeat)effect->animation=*animation;
     effect->duration = reason == ActorExitReason::Defeated
         ? DefeatDuration(effect->kind) : ActorPresentation::ExitDuration(effect->kind);
+    if(effect->nativeDefeat)effect->duration=1.0F; // 无删除指令的错误绑定也必须回收；正常 ANM 结束即失活。
     return true;
 }
 

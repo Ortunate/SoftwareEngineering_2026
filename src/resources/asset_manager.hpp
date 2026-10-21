@@ -6,8 +6,10 @@
 
 #include "raylib.h"
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -20,10 +22,14 @@ struct CommonAssets {
     Model skyboxModel{};
     TextureCubemap skyboxTexture{};
     Shader skyboxShader{};
-    Texture2D titleBackground{};
-    Texture2D reimuPortrait{};
-    Texture2D referenceFrame{}, referenceStage1{}; // 管理器独占的原作侧栏图集与一面题签。
-    Font uiFont{}; // 管理器持有；缺失时借用 raylib 默认字体，不能重复释放。
+    Texture2D titleBackground{}; // 三图层缺失时才加载的旧合成背景，由管理器独占。
+    Texture2D titleMoon{}, titleShrine{}, titleReimu{}; // 首页独立透明图层；分别持有纹理，不与关卡立绘共用句柄。
+    Texture2D titleLogo{}; // 管理器独占的透明首页字标，随通用素材加载/释放；无效时绘制文字替代。
+    Texture2D reimuPortrait{}; // 开局选择页保留的灵梦后景图，独立持有并随通用素材卸载。
+    Texture2D marisaBackdrop{}; // 魔理沙提围裙姿势的现代重绘后景；不同于骑扫帚前景，独立持有。
+    std::array<Texture2D,2> spellPortraits{}; // 现代重绘的自机选人立绘，0 灵梦/1 魔理沙，通用资源独占并统一释放。
+    Font uiFont{}; // 菜单等界面的 SemiBold 衬线字体与等宽数字；管理器持有，缺失时借用默认字体。
+    Font hudFont{}; // 战斗浮窗的 Bold 字体；独立持有，缺失时借用 uiFont，卸载时不能重复释放。
 };
 
 /// @brief 单个关卡使用的图形素材；由 AssetManager 独占所有权。
@@ -32,7 +38,7 @@ struct StageAssets {
     SpriteShaders shaders{};
 };
 
-/// @brief 按通用/关卡生命周期统一持有图片、着色器、BGM 和音效。
+/// @brief 按通用/关卡生命周期统一持有图片、着色器、BGM 和音效；所有接口由图形主线程调用。
 class AssetManager {
 public:
     /// @brief 指定可执行文件旁的素材根目录。
@@ -48,6 +54,14 @@ public:
     /// @brief 关卡开始时加载其专属素材；已有的关卡资源会先释放。
     /// @param manifest 由 Stage 内容模块提供的资源清单，仅在调用期间借用。
     void LoadStage(const StageAssetManifest& manifest);
+    /// @brief 开始后台读取与解码；GPU/音频操作仍由主线程的 AdvanceStageLoad 完成。
+    /// 清单及其字符串须保持有效，直到加载完成或 UnloadStage；不能与 LoadStage 交错调用。
+    void BeginStageLoad(const StageAssetManifest& manifest);
+    /// @brief 主线程每帧调用一次，最多上传一张纹理；完成后返回 true，读取/上传失败抛异常。
+    /// 首次调用启动后台任务，调用方应先显示加载页；未开始任务时调用属于逻辑错误。
+    [[nodiscard]] bool AdvanceStageLoad();
+    /// @brief 已上传资源占比（0～1），仅用于界面反馈；后台解码期间保持当前实际进度。
+    [[nodiscard]] float StageLoadProgress() const;
     /// @brief 关卡结束或离开时停止其音乐并释放专属素材。
     void UnloadStage();
 
@@ -58,6 +72,10 @@ public:
     /// @brief 按当前关卡的外观 ID 查询；无效 ID 返回空资源，不转移纹理所有权。
     /// @return 资源引用；下次 LoadStage 或 UnloadStage 后不得继续使用有效外观引用。
     [[nodiscard]] const VisualResource& GetVisual(VisualId id) const;
+    /// @brief 按目录编号加载原始 DDS/ANM，重复调用复用纹理；需有效图形上下文。
+    /// 不依赖当前关卡，可供未来自机/关卡或素材浏览器使用；缺失/损坏资源抛异常。
+    /// 返回借用引用，随 UnloadStage 或管理器销毁失效，调用方不得释放纹理。
+    [[nodiscard]] const BattleAtlasResource& LoadBattleAtlas(battle::Atlas id);
     /// @brief 查询当前是否持有关卡专属素材。
     [[nodiscard]] bool HasStage() const { return stageLoaded_; }
 
@@ -82,6 +100,9 @@ public:
     void PlaySoundEffect(std::string_view name) const;
 
 private:
+    struct StageLoad; // 独占后台任务与 CPU 图片；取消/析构时等待当前解码完成，再释放结果。
+    /// @brief 在纹理缓存已备好后绑定外观、着色器与音频；只允许在主线程调用。
+    void FinishStageLoad(const StageAssetManifest& manifest);
     enum class MusicSlot : std::uint8_t { None, Menu, Stage, Boss };
 
     /// @brief 切换 BGM，并在播放新曲之前停止旧曲。
@@ -94,12 +115,15 @@ private:
     std::filesystem::path root_;
     CommonAssets common_{};
     StageAssets stage_{};
+    std::unique_ptr<StageLoad> stageLoad_;
     Music menuMusic_{};
     Music stageMusic_{};
     Music bossMusic_{};
     std::unordered_map<std::string, Sound> commonSounds_;
     std::unordered_map<std::string, Sound> stageSounds_;
     std::unordered_map<std::string, Texture2D> stageTextures_;
+    std::unordered_map<VisualId, Rectangle> stageDialogueCrops_; // CPU 解码时计算的可见取景，随关卡清空。
+    std::unordered_map<battle::Atlas, BattleAtlasResource> battleAtlases_; // 按需图集统一随关卡卸载，目录本身不占 GPU。
     MusicSlot activeMusic_ = MusicSlot::None;
     int musicVolumePercent_ = 50;
     int soundVolumePercent_ = 60;

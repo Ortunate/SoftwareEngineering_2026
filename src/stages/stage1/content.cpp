@@ -14,6 +14,16 @@ const StageAssetManifest& Stage1Content::Assets() const { return Stage1Manifest(
 std::span<const StageEvent> Stage1Content::Events() const { return Stage1Timeline(); }
 std::span<const DialogueLine> Stage1Content::Dialogue(bool afterBattle) const { return Stage1Dialogue(afterBattle); }
 
+VisualId Stage1Content::HeroPortraitVisual(int expression) const {
+    return expression >= 0 && expression < static_cast<int>(kReimuPortraits.size())
+        ? kReimuPortraits[expression] : kReimuPortraits.front();
+}
+
+VisualId Stage1Content::BossPortraitVisual(int expression) const {
+    return expression >= 0 && expression < static_cast<int>(kRumiaPortraits.size())
+        ? kRumiaPortraits[expression] : kRumiaPortraits.front();
+}
+
 std::unique_ptr<Enemy> Stage1Content::CreateEnemy(const EnemySpec& spec) const {
     if (!IsValidEnemySpec(spec)) return nullptr;
     return std::visit([](const auto& params) -> std::unique_ptr<Enemy> {

@@ -286,11 +286,39 @@ void TestStage1Content() {
     assert(finalBoss && finalBoss->active && !finalBoss->IsMidboss());
 
     const auto& visuals = content->Assets().visuals;
-    assert(visuals.size() == 13);
-    assert(visuals[stage1::kFairy].path == "stages/stage1/fairy_modern.png");
-    assert(visuals[stage1::kDarkFairy].path == "stages/stage1/dark_fairy_modern.png");
-    assert(visuals[stage1::kRumia].path == "stages/stage1/rumia_cutout.png");
-    assert(visuals[stage1::kGreenSphere].mode == VisualMode::Sphere);
+    assert(visuals.size() == stage1::kVisualCount);
+    assert(visuals[stage1::kFairy].animation.atlas == battle::Atlas::Stage1Enemies);
+    assert(visuals[stage1::kDarkFairy].animation.script == 3);
+    assert(visuals[stage1::kRumia].animation.atlas == battle::Atlas::Rumia);
+    assert(content->BossPortraitVisual()!=stage1::kRumia);
+    const std::array<std::string_view,6> reimuFiles{
+        "face00a_0.png", "face00a_1.png", "face00b_0.png", "face00b_1.png", "face00c_0.png", "face00c_1.png"};
+    const std::array<std::string_view,4> rumiaFiles{
+        "face03a_0.png", "face03a_1.png", "face03b_0.png", "face03b_1.png"};
+    for(int index=0;index<6;++index) {
+        const auto id=content->HeroPortraitVisual(index);
+        assert(id==stage1::kReimuPortraits[index]);
+        assert(visuals[id].id==id && visuals[id].path.ends_with(reimuFiles[index]));
+    }
+    for(int index=0;index<4;++index) {
+        const auto id=content->BossPortraitVisual(index);
+        assert(id==stage1::kRumiaPortraits[index]);
+        assert(visuals[id].id==id && visuals[id].path.ends_with(rumiaFiles[index]));
+    }
+    assert(content->HeroPortraitVisual(-1)==content->HeroPortraitVisual());
+    assert(content->HeroPortraitVisual(6)==content->HeroPortraitVisual());
+    assert(content->BossPortraitVisual(-1)==content->BossPortraitVisual());
+    assert(content->BossPortraitVisual(4)==content->BossPortraitVisual());
+    assert(content->SpellPortraitVisual()==content->BossPortraitVisual(2));
+    // 台词交替时，未发言的一方保留最近一次表情；独白和越界查询不继承上一场对话状态。
+    const auto before=content->Dialogue();
+    assert((DialogueExpressionsAt(before,5)==std::array<int,2>{3,1}));
+    assert((DialogueExpressionsAt(before,6)==std::array<int,2>{5,1}));
+    assert((DialogueExpressionsAt(before,9)==std::array<int,2>{0,3}));
+    assert((DialogueExpressionsAt(before,100)==std::array<int,2>{3,2}));
+    assert((DialogueExpressionsAt(content->Dialogue(true),0)==std::array<int,2>{0,0}));
+    assert((DialogueExpressionsAt({},0)==std::array<int,2>{0,0}));
+    assert(visuals[stage1::kGreenSphere].mode == VisualMode::Bullet);
     assert(content->PlayerBulletVisual() == stage1::kPlayerGoldCard);
     assert(content->PlayerHomingVisual() == stage1::kPlayerCyanCard);
     assert(content->PowerPickupVisual() == stage1::kPowerPoint);

@@ -7,6 +7,8 @@
 #include "stage/system.hpp"
 #include "resources/visual_assets.hpp"
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -22,7 +24,7 @@ public:
     virtual void SpawnStageEnemy(const EnemySpec& spec) = 0;
     /// @brief 请求开始道中或关底 Boss，并登记等待战斗结束的异步事件编号。
     virtual void BeginStageBoss(bool final, StageEventId id) = 0;
-    /// @brief 请求开始战前或战后对话并登记异步事件编号；afterBattle 决定所用台词及结算路径。
+    /// @brief 请求对话并登记异步事件编号；afterBattle 的全部台词结束后再展示关卡结算。
     virtual void BeginStageDialogue(StageEventId id, bool afterBattle = false) = 0;
     /// @brief 请求显示一条持续指定秒数的提示；接收方须复制需要留存的文本。
     virtual void StageMessage(std::string_view message, float duration) = 0;
@@ -38,8 +40,18 @@ struct DialogueLine {
     /// @brief Rumia 在首次搭话时才出现，战后独白不显示；introduce 显示宵暗的妖怪名牌。
     bool showBoss = true, introduce = false;
     const char* secondLine = "";
-    int expression = 0; // 新典原始表情编号；当前现代立绘沿用角色图，记录编号供表情资产扩展。
+    int expression = 0; // 当前说话人的关卡局部表情编号；另一方保留最近一句的表情。
     float textDelay = 0;
+};
+
+/// @brief 返回截至 lineIndex 的玩家/Boss 表情编号，数组下标分别为 0/1。
+/// 尚未发言的一方使用 0；空台词返回 {0,0}，越界下标按最后一句处理，不持有台词。
+[[nodiscard]] std::array<int, 2> DialogueExpressionsAt(
+    std::span<const DialogueLine> lines, std::size_t lineIndex);
+
+/// @brief 悬浮题签的关卡名称；字符串借用内容模块，须覆盖整个关卡展示期，不包含游玩模式。
+struct StageDisplayInfo {
+    std::string_view label, title, subtitle;
 };
 
 /// @brief 一个关卡提供自己的素材、事件、敌人、Boss 和对话内容。
@@ -69,16 +81,22 @@ public:
     [[nodiscard]] virtual VisualId PlayerHomingVisual() const = 0;
     /// @brief 返回 Power 道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId PowerPickupVisual() const = 0;
+    /// @brief 返回大 P 道具外观；未区分大小的关卡默认复用普通 P 图。
+    [[nodiscard]] virtual VisualId LargePowerPickupVisual() const { return PowerPickupVisual(); }
     /// @brief 返回分数道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId ScorePickupVisual() const = 0;
     /// @brief 返回清弹星点的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId StarPickupVisual() const = 0;
-    /// @brief 返回对话中玩家侧立绘的外观 ID。
-    [[nodiscard]] virtual VisualId HeroPortraitVisual() const = 0;
-    /// @brief 返回对话与符卡中 Boss 立绘的外观 ID。
-    [[nodiscard]] virtual VisualId BossPortraitVisual() const = 0;
+    /// @brief 按关卡局部表情编号返回玩家立绘；未知编号回退到默认表情 0。
+    [[nodiscard]] virtual VisualId HeroPortraitVisual(int expression = 0) const = 0;
+    /// @brief 按关卡局部表情编号返回 Boss 立绘；未知编号回退到默认表情 0。
+    [[nodiscard]] virtual VisualId BossPortraitVisual(int expression = 0) const = 0;
+    /// @brief 返回符卡演出的完整立绘；默认沿用 Boss 默认表情，关卡可独立选择差分。
+    [[nodiscard]] virtual VisualId SpellPortraitVisual() const { return BossPortraitVisual(); }
     /// @brief 返回关卡开始提示。
     [[nodiscard]] virtual const char* StartTitle() const = 0;
+    /// @brief 常驻题签的编号、中文名与副标题；未配置时沿用开场标题。
+    [[nodiscard]] virtual StageDisplayInfo DisplayInfo() const { return {"STAGE", StartTitle(), {}}; }
     /// @brief 返回胜利结算标题。
     [[nodiscard]] virtual const char* ClearTitle() const = 0;
     /// @brief 返回 Boss 出场提示。

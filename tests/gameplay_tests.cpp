@@ -25,6 +25,58 @@
 #include <vector>
 
 namespace {
+/// @brief 非符与符卡共享固定血量区间；击破、超时、下一组和退场均不能把符卡段错误铺满。
+void TestBossHealthGroups() {
+    using koumakyou::stage1::kReferenceHealthUnit;
+    using koumakyou::BossHealthKind;
+    auto bullets=std::make_unique<koumakyou::BulletSystem>();
+    koumakyou::stage1::RumiaBoss boss;
+    assert(boss.HealthBar().count==0);
+    boss.StartMidboss();
+    auto bar=boss.HealthBar();
+    assert(bar.count==1 && bar.remainingBars==0 && bar.segments[0].kind==BossHealthKind::NonSpell);
+    boss.health=boss.maxHealth/2;
+    assert(std::abs(boss.HealthBar().segments[0].remaining-0.5F)<0.00001F);
+    boss.StartFinalBoss();
+    bar=boss.HealthBar();
+    assert(bar.count==2 && bar.remainingBars==1);
+    assert(bar.segments[0].kind==BossHealthKind::Spell && bar.segments[1].kind==BossHealthKind::NonSpell);
+    assert(std::abs(bar.segments[0].capacity-900.0F/7000)<0.00001F);
+    assert(std::abs(bar.segments[1].capacity-6100.0F/7000)<0.00001F);
+    assert(bar.segments[0].remaining==bar.segments[0].capacity && bar.segments[1].remaining==bar.segments[1].capacity);
+    boss.health=(900+6100.0F/2)/kReferenceHealthUnit;
+    bar=boss.HealthBar();
+    assert(bar.segments[0].remaining==bar.segments[0].capacity);
+    assert(std::abs(bar.segments[1].remaining-3050.0F/7000)<0.00001F);
+    boss.health=900/kReferenceHealthUnit;
+    const float spellWidth=boss.HealthBar().segments[0].remaining;
+    assert(boss.AdvancePhase() && boss.phase==2);
+    bar=boss.HealthBar();
+    assert(bar.segments[0].remaining==spellWidth && bar.segments[1].remaining==0);
+    boss.health=450/kReferenceHealthUnit;
+    assert(std::abs(boss.HealthBar().segments[0].remaining-450.0F/7000)<0.00001F);
+    boss.health=0;
+    assert(boss.AdvancePhase() && boss.phase==3);
+    // 真实主循环在 UpdateBoss 后还会执行碰撞；下一 60 Hz 帧前必须已交接新生命，且准备期不能再次推进。
+    assert(boss.health==7500/kReferenceHealthUnit && boss.maxHealth==7500/kReferenceHealthUnit);
+    assert(!boss.ShouldAdvanceFromDamage());
+    boss.Update(1.0F/60,{},*bullets); // Sub19 首帧与交接时保持同一组总生命。
+    bar=boss.HealthBar();
+    assert(bar.remainingBars==0);
+    assert(std::abs(bar.segments[0].capacity-800.0F/7500)<0.00001F);
+    assert(std::abs(bar.segments[1].remaining-6700.0F/7500)<0.00001F);
+    boss.health=800/kReferenceHealthUnit;
+    assert(boss.AdvancePhase() && boss.phase==4);
+    bar=boss.HealthBar();
+    assert(std::abs(bar.segments[0].remaining-800.0F/7500)<0.00001F && bar.segments[1].remaining==0);
+    boss.health=0;
+    assert(boss.AdvancePhase() && boss.HealthBar().count==0);
+    boss.StartFinalBoss();
+    assert(boss.Update(35.1F,{},*bullets));
+    assert(boss.AdvancePhase() && boss.phase==2);
+    assert(std::abs(boss.HealthBar().segments[0].remaining-900.0F/7000)<0.00001F);
+}
+
 /// @brief 验证暗色妖精的 Z 轴往返、单次稀疏球面散射以及跨帧阶段切换。
 void TestDarkFairyBehavior() {
     using koumakyou::Bullet;
@@ -159,6 +211,7 @@ void TestBeamContacts() {
 
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
+    TestBossHealthGroups();
     TestBeamContacts();
     using koumakyou::BulletOwner;
     using koumakyou::BulletSystem;

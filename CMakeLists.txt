@@ -26,10 +26,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
+# 通用 UI 可独立链接和测试，不依赖 Game、关卡、配置或素材管理器。
+add_library(koumakyou_ui STATIC src/ui/components.cpp src/ui/command_bar.cpp)
+target_include_directories(koumakyou_ui PUBLIC src)
+target_link_libraries(koumakyou_ui PUBLIC raylib)
+
 # 游戏实现只编译一次，所有目标共用同一份实现。
 add_library(koumakyou_engine STATIC
     src/app/game.cpp
     src/app/input.cpp
+    src/app/start_setup.cpp
+    src/app/spell_practice.cpp
+    src/app/spell_practice_menu.cpp
+    src/render/spell_practice_render.cpp
     src/config/settings.cpp
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
@@ -40,9 +49,16 @@ add_library(koumakyou_engine STATIC
     src/gameplay/items/drop_system.cpp
     src/platform/window_input.cpp
     src/render/menu_render.cpp
+    src/render/start_setup_render.cpp
     src/render/game_render.cpp
+    src/render/command_bar.cpp
+    src/render/gameplay_hud.cpp
     src/render/sprite_renderer.cpp
+    src/render/animated_sprite.cpp
     src/resources/asset_manager.cpp
+    src/resources/animation.cpp
+    src/resources/battle_catalog.cpp
+    src/resources/dds_image.cpp
     src/stage/catalog.cpp
     src/stage/content.cpp
     src/stage/enemy_spec.cpp
@@ -57,7 +73,8 @@ add_library(koumakyou_engine STATIC
     src/stages/stage1/timeline.cpp
 )
 target_include_directories(koumakyou_engine PUBLIC src)
-target_link_libraries(koumakyou_engine PUBLIC raylib)
+find_package(Threads REQUIRED)
+target_link_libraries(koumakyou_engine PUBLIC koumakyou_ui raylib Threads::Threads)
 if(APPLE)
     target_sources(koumakyou_engine PRIVATE src/platform/window_input_macos.m)
     target_link_libraries(koumakyou_engine PRIVATE "-framework AppKit")
@@ -97,18 +114,35 @@ add_custom_target(copy_assets
 )
 add_dependencies(koumakyou copy_assets)
 
+# 全目录图形审阅工具按需构建，直接复用原始素材缓存与 ANM 播放/绘制接口。
+add_executable(native_asset_preview EXCLUDE_FROM_ALL tools/native_asset_preview.cpp)
+target_link_libraries(native_asset_preview PRIVATE koumakyou_engine)
+add_dependencies(native_asset_preview copy_assets)
+
 if(MSVC)
+    target_compile_options(koumakyou_ui PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(koumakyou_engine PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(koumakyou PRIVATE /W4 /permissive- /utf-8)
 else()
+    target_compile_options(koumakyou_ui PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(koumakyou_engine PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(koumakyou PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    # 模块测试仅链接 UI 与 raylib，不加载游戏、素材、音频或图形窗口。
+    add_executable(koumakyou_ui_tests tests/ui_tests.cpp)
+    target_link_libraries(koumakyou_ui_tests PRIVATE koumakyou_ui)
+    if(MSVC)
+        target_compile_options(koumakyou_ui_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_ui_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME koumakyou_ui_tests COMMAND koumakyou_ui_tests)
     add_executable(koumakyou_tests
         tests/core_tests.cpp
+        tests/animation_tests.cpp
         tests/actor_effect_tests.cpp
         tests/drop_tests.cpp
         tests/gameplay_tests.cpp
@@ -116,6 +150,7 @@ if(BUILD_TESTING)
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
     target_link_libraries(koumakyou_tests PRIVATE koumakyou_engine)
+    target_compile_definitions(koumakyou_tests PRIVATE KOUMAKYOU_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime")
     # 离屏生命周期测试仍需要图形会话，手动运行，避免普通无窗口测试依赖桌面服务。
     add_executable(koumakyou_lifecycle_tests EXCLUDE_FROM_ALL tests/lifecycle_tests.cpp)
     target_link_libraries(koumakyou_lifecycle_tests PRIVATE koumakyou_engine)
@@ -126,6 +161,25 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_lifecycle_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
     endif()
     add_dependencies(koumakyou_lifecycle_tests copy_assets)
+    # 加载测试需要图形上下文，验证实际异步任务和绘制帧，不纳入无窗口 CTest。
+    add_executable(koumakyou_loading_tests EXCLUDE_FROM_ALL tests/loading_tests.cpp)
+    target_link_libraries(koumakyou_loading_tests PRIVATE koumakyou_engine)
+    add_dependencies(koumakyou_loading_tests copy_assets)
+    if(MSVC)
+        target_sources(koumakyou_loading_tests PRIVATE src/windows_utf8.manifest)
+        target_compile_options(koumakyou_loading_tests PRIVATE /W4 /permissive- /utf-8)
+    else()
+        target_compile_options(koumakyou_loading_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    # 重叠测试用已知 Alpha 颜色读取 GPU 像素，按需运行，不依赖本机原作安装或音频。
+    add_executable(koumakyou_sprite_overlap_tests EXCLUDE_FROM_ALL tests/sprite_overlap_tests.cpp)
+    target_link_libraries(koumakyou_sprite_overlap_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_sources(koumakyou_sprite_overlap_tests PRIVATE src/windows_utf8.manifest)
+        target_compile_options(koumakyou_sprite_overlap_tests PRIVATE /W4 /permissive- /utf-8)
+    else()
+        target_compile_options(koumakyou_sprite_overlap_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
     if(MSVC)
         target_sources(koumakyou_tests PRIVATE src/windows_utf8.manifest)
     endif()

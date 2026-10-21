@@ -1,11 +1,17 @@
 // 本文件负责实现通用与关卡素材的加载、音频播放和资源卸载。
 
 #include "resources/asset_manager.hpp"
+#include "resources/dds_image.hpp"
+#include "resources/dialogue_crop.hpp"
 
 #include "rlgl.h"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <future>
+#include <stdexcept>
+#include <unordered_set>
 #include <span>
 #include <utility>
 
@@ -121,7 +127,68 @@ void UnloadMusicAsset(Music& music) {
     music = {};
 }
 
+/// @brief 将自有 UI 字体的 ASCII 数字设为等宽；居中保留原字形，分数更新时不会改变整串宽度。
+/// 只调整当前字体的运行时度量，不改 OTF，也不能传入由 raylib 借用的默认字体。
+void MakeUiDigitsTabular(Font& font) {
+    int advance = 0;
+    for (int codepoint = '0'; codepoint <= '9'; ++codepoint)
+        advance = std::max(advance, font.glyphs[GetGlyphIndex(font, codepoint)].advanceX);
+    for (int codepoint = '0'; codepoint <= '9'; ++codepoint) {
+        GlyphInfo& glyph = font.glyphs[GetGlyphIndex(font, codepoint)];
+        glyph.offsetX += (advance - glyph.advanceX) / 2;
+        glyph.advanceX = advance;
+    }
+}
+
+/// @brief 按共享 UTF-8 字符表加载 128 像素 UI 字体并设置等宽数字；失败时借用默认字体。
+/// 有效自有字体的纹理、字形与度量由调用方负责一起 UnloadFont，不能释放默认字体。
+Font LoadUiFont(const std::filesystem::path& path, const std::filesystem::path& charsetPath) {
+    if (!FileExists(path.string().c_str())) return GetFontDefault();
+    char* charset = LoadFileText(charsetPath.string().c_str());
+    if (!charset) return GetFontDefault();
+    int count = 0;
+    int* codepoints = LoadCodepoints(charset, &count);
+    Font font = LoadFontEx(path.string().c_str(), 128, codepoints, count);
+    UnloadCodepoints(codepoints);
+    UnloadFileText(charset);
+    SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
+    if (font.texture.id != GetFontDefault().texture.id) MakeUiDigitsTabular(font);
+    return font;
+}
+
+/// @brief 同一路径可以配置不同对话取景，按外观 ID 缓存可见边界；只读取调用方持有的 CPU 图片。
+std::unordered_map<VisualId, Rectangle> DialogueCrops(Image image, const std::filesystem::path& path,
+                                                  const StageAssetManifest& manifest) {
+    std::unordered_map<VisualId, Rectangle> crops;
+    for (const auto& definition : manifest.visuals) {
+        if (definition.id != kInvalidVisualId && definition.animation.atlas == battle::Atlas::None &&
+            definition.path == path.generic_string())
+            crops.emplace(definition.id, FindDialogueContent(image, definition.dialogueCrop));
+    }
+    return crops;
+}
+
 }  // namespace
+
+// 每次仅解码一张图片，限制高清图集的 CPU 峰值内存；future 不捕获 AssetManager。
+// 线程只读文件并分配 CPU 像素，不接触 OpenGL、音频或运行中的资源缓存。
+struct AssetManager::StageLoad {
+    struct Item {
+        std::filesystem::path path;
+        battle::Atlas atlas = battle::Atlas::None;
+    };
+    struct Decoded {
+        Image image{};
+        std::shared_ptr<const anm::Archive> archive;
+        std::unordered_map<VisualId, Rectangle> dialogueCrops;
+        ~Decoded() { if (image.data) UnloadImage(image); }
+    };
+    StageAssetManifest manifest;
+    std::vector<Item> items;
+    std::size_t uploaded = 0;
+    // 必须先析构：future 等待后台完成，结果的析构器随后释放尚未上传的 CPU 图片。
+    std::future<std::unique_ptr<Decoded>> pending;
+};
 
 AssetManager::AssetManager(std::filesystem::path root) : root_(std::move(root)) {}
 
@@ -133,25 +200,42 @@ AssetManager::~AssetManager() {
 void AssetManager::LoadCommon() {
     if (commonLoaded_) return;
     commonLoaded_ = true;
-    common_.referenceFrame = LoadTextureAsset(root_ / "common/reference_frame.png");
-    common_.referenceStage1 = LoadTextureAsset(root_ / "common/reference_stage1.png");
-    common_.titleBackground = LoadTextureAsset(root_ / "common/title_reimu_modern.png");
-    common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/reimu_cutout.png");
-    const auto fontPath = root_ / "common/ui_font.otf";
-    common_.uiFont = GetFontDefault();
-    if (FileExists(fontPath.string().c_str())) {
-        // 字符表与素材一起提供，只生成实际需要的字形，避免整个 CJK 字库占用 GPU。
-        const auto charsetPath = root_ / "common/ui_charset.txt";
-        char* charset = LoadFileText(charsetPath.string().c_str());
-        if (charset) {
-            int count = 0;
-            int* codepoints = LoadCodepoints(charset, &count);
-            common_.uiFont = LoadFontEx(fontPath.string().c_str(), 64, codepoints, count);
-            UnloadCodepoints(codepoints);
-            UnloadFileText(charset);
-            SetTextureFilter(common_.uiFont.texture, TEXTURE_FILTER_BILINEAR);
-        }
+    common_.titleMoon = LoadTextureAsset(root_ / "common/title_layers/moon.png");
+    common_.titleShrine = LoadTextureAsset(root_ / "common/title_layers/shrine.png");
+    common_.titleReimu = LoadTextureAsset(root_ / "common/title_layers/reimu.png");
+    for (Texture2D* layer : {&common_.titleMoon, &common_.titleShrine, &common_.titleReimu}) {
+        if (!IsTextureValid(*layer)) continue;
+        GenTextureMipmaps(layer);
+        SetTextureFilter(*layer, TEXTURE_FILTER_TRILINEAR);
     }
+    // 任一分层素材缺失时整页回退，避免出现只有人物、却没有座下石阶的残缺组合。
+    if (!IsTextureValid(common_.titleMoon) || !IsTextureValid(common_.titleShrine) ||
+        !IsTextureValid(common_.titleReimu))
+        common_.titleBackground = LoadTextureAsset(root_ / "common/title_reimu_modern.png");
+    common_.titleLogo = LoadTextureAsset(root_ / "common/title_logo_yidian.png");
+    if (IsTextureValid(common_.titleLogo)) {
+        // 高分辨率字标会随窗口缩小；mipmap 避免细笔画和装饰线在缩放时跳动、锯齿化。
+        GenTextureMipmaps(&common_.titleLogo);
+        SetTextureFilter(common_.titleLogo, TEXTURE_FILTER_TRILINEAR);
+    }
+    common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/portraits/reimu/face00a_1.png");
+    common_.marisaBackdrop = LoadTextureAsset(root_ / "common/portraits/marisa/face01a_1.png");
+    if(IsTextureValid(common_.marisaBackdrop)) {
+        GenTextureMipmaps(&common_.marisaBackdrop);
+        SetTextureFilter(common_.marisaBackdrop,TEXTURE_FILTER_TRILINEAR);
+    }
+    common_.spellPortraits[0]=LoadTextureAsset(root_ / "common/spell_practice/reimu_modern.png");
+    common_.spellPortraits[1]=LoadTextureAsset(root_ / "common/spell_practice/marisa_modern.png");
+    // 选人全身图在不同窗口中大幅缩小，mipmap 保留发丝、白色花边与纸垂的平滑边缘。
+    for(auto& portrait:common_.spellPortraits)if(IsTextureValid(portrait)) {
+        GenTextureMipmaps(&portrait);
+        SetTextureFilter(portrait,TEXTURE_FILTER_TRILINEAR);
+    }
+    // 两种字重只生成共享字符表中的字形，独立加载以保持 Bold 的真实笔画和度量。
+    const auto charsetPath = root_ / "common/ui_charset.txt";
+    common_.uiFont = LoadUiFont(root_ / "common/ui_font.otf", charsetPath);
+    common_.hudFont = LoadUiFont(root_ / "common/ui_font_bold.otf", charsetPath);
+    if (common_.hudFont.texture.id == GetFontDefault().texture.id) common_.hudFont = common_.uiFont;
 
     const std::filesystem::path skyboxPath = root_ / "common/crimson_mist_skybox.png";
     Image skyboxImage = LoadImage(skyboxPath.string().c_str());
@@ -192,21 +276,108 @@ void AssetManager::LoadCommon() {
 
 void AssetManager::LoadStage(const StageAssetManifest& manifest) {
     UnloadStage();
+    FinishStageLoad(manifest);
+}
+
+void AssetManager::BeginStageLoad(const StageAssetManifest& manifest) {
+    UnloadStage();
+    stageLoad_ = std::make_unique<StageLoad>();
+    stageLoad_->manifest = manifest;
+    std::unordered_set<std::string> paths;
+    std::unordered_set<battle::Atlas> atlases;
+    for (const auto& definition : manifest.visuals) {
+        if (definition.id == kInvalidVisualId) continue;
+        if (definition.animation.atlas != battle::Atlas::None) {
+            if (atlases.insert(definition.animation.atlas).second)
+                stageLoad_->items.push_back({{}, definition.animation.atlas});
+        } else if (!definition.path.empty() && paths.emplace(definition.path).second) {
+            stageLoad_->items.push_back({std::string(definition.path), battle::Atlas::None});
+        }
+    }
+}
+
+bool AssetManager::AdvanceStageLoad() {
+    if (!stageLoad_) throw std::logic_error("Stage load has not started");
+    auto& load = *stageLoad_;
+    if (load.pending.valid()) {
+        if (load.pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+            return false;
+        auto decoded = load.pending.get(); // 仅在 ready 后取值，异常交给调用方展示失败页。
+        const Texture2D texture = LoadTextureFromImage(decoded->image);
+        if (!IsTextureValid(texture)) throw std::runtime_error("Cannot upload stage texture");
+        const auto& item = load.items[load.uploaded];
+        if (item.atlas == battle::Atlas::None) {
+            stageTextures_.emplace(item.path.string(), texture);
+            stageDialogueCrops_.insert(decoded->dialogueCrops.begin(), decoded->dialogueCrops.end());
+        } else {
+            SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+            SetTextureWrap(texture, TEXTURE_WRAP_REPEAT);
+            battleAtlases_.emplace(item.atlas, BattleAtlasResource{texture, std::move(decoded->archive)});
+        }
+        ++load.uploaded;
+        // 包括最后一张纹理在内，上传后先返还一帧；音频/着色器绑定留到下一帧。
+        return false;
+    }
+    if (load.uploaded == load.items.size()) {
+        FinishStageLoad(load.manifest);
+        stageLoad_.reset();
+        return true;
+    }
+    const auto item = load.items[load.uploaded];
+    const auto root = root_;
+    const auto manifest = load.manifest; // 清单字符串覆盖整个异步加载期，后台不捕获管理器本身。
+    load.pending = std::async(std::launch::async, [root, item, manifest] {
+        auto decoded = std::make_unique<StageLoad::Decoded>();
+        if (item.atlas == battle::Atlas::None) {
+            decoded->image = LoadImage((root / item.path).string().c_str());
+            decoded->dialogueCrops = DialogueCrops(decoded->image, item.path, manifest);
+        } else {
+            const auto& entry = battle::Describe(item.atlas);
+            decoded->archive = std::make_shared<anm::Archive>(anm::LoadArchive(root / entry.anm));
+            decoded->image = LoadOriginalDds(root / entry.dds);
+        }
+        if (!IsImageValid(decoded->image)) throw std::runtime_error("Cannot decode stage texture");
+        return decoded;
+    });
+    return false;
+}
+
+float AssetManager::StageLoadProgress() const {
+    if (!stageLoad_) return stageLoaded_ ? 1.0F : 0.0F;
+    return static_cast<float>(stageLoad_->uploaded) / (stageLoad_->items.size() + 1);
+}
+
+void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
     for (const VisualDefinition& definition : manifest.visuals) {
         if (definition.id == kInvalidVisualId) continue;
         if (stage_.visuals.size() <= definition.id)
             stage_.visuals.resize(static_cast<std::size_t>(definition.id) + 1);
         Texture2D texture{};
-        if (!definition.path.empty()) {
+        if (definition.animation.atlas==battle::Atlas::None && !definition.path.empty()) {
             const std::string path(definition.path);
             // 多个外观可以共用一张贴图，实际所有权由路径缓存统一管理。
             auto [it, inserted] = stageTextures_.try_emplace(path);
-            if (inserted) it->second = LoadTextureAsset(root_ / path);
+            if (inserted) {
+                Image image = LoadImage((root_ / path).string().c_str());
+                it->second = LoadTextureFromImage(image);
+                const auto crops = DialogueCrops(image, path, manifest);
+                stageDialogueCrops_.insert(crops.begin(), crops.end());
+                if (image.data) UnloadImage(image);
+            }
             texture = it->second;
         }
         stage_.visuals[definition.id] = {texture, definition.mode,
             definition.worldHeight, definition.pivot,
-            definition.bulletDiameterScale, definition.glow};
+            definition.bulletDiameterScale, definition.glow, definition.dialogueCrop, {}, definition.defeatVisual, {}};
+        if (const auto crop = stageDialogueCrops_.find(definition.id); crop != stageDialogueCrops_.end())
+            stage_.visuals[definition.id].dialogueCrop = crop->second;
+        if(definition.animation.atlas!=battle::Atlas::None) {
+            const auto& atlas=LoadBattleAtlas(definition.animation.atlas);
+            auto& visual=stage_.visuals[definition.id];
+            visual.texture=atlas.texture;visual.archive=atlas.archive;visual.animation=definition.animation;
+            if(!visual.archive->FindScript(visual.animation.script))
+                throw std::runtime_error("Visual references missing native animation");
+        }
     }
     const std::filesystem::path shaders = root_ / "common/shaders";
     stage_.shaders.bulletCore = LoadShaderAsset({}, shaders / "bullet_core.fs");
@@ -226,7 +397,21 @@ const VisualResource& AssetManager::GetVisual(VisualId id) const {
     return id < stage_.visuals.size() ? stage_.visuals[id] : empty;
 }
 
+const BattleAtlasResource& AssetManager::LoadBattleAtlas(battle::Atlas id) {
+    if(const auto it=battleAtlases_.find(id);it!=battleAtlases_.end())return it->second;
+    const auto& entry=battle::Describe(id);
+    auto archive=std::make_shared<anm::Archive>(anm::LoadArchive(root_/entry.anm));
+    Image image=LoadOriginalDds(root_/entry.dds);
+    const Texture2D texture=LoadTextureFromImage(image);UnloadImage(image);
+    if(!IsTextureValid(texture))throw std::runtime_error("Cannot upload native DDS");
+    SetTextureFilter(texture,TEXTURE_FILTER_BILINEAR);
+    SetTextureWrap(texture,TEXTURE_WRAP_REPEAT); // 原 ANM 特效的 UV 滚动/越界区域使用重复采样。
+    return battleAtlases_.emplace(id,BattleAtlasResource{texture,std::move(archive)}).first->second;
+}
+
 void AssetManager::UnloadStage() {
+    // 等待唯一的在途 CPU 解码；随后才能释放清单字符串或销毁图形上下文。
+    stageLoad_.reset();
     if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss) {
         SwitchMusic(MusicSlot::None);
     }
@@ -240,6 +425,9 @@ void AssetManager::UnloadStage() {
         UnloadTextureAsset(texture);
     }
     stageTextures_.clear();
+    stageDialogueCrops_.clear();
+    for(auto& [id,atlas]:battleAtlases_) { (void)id;UnloadTextureAsset(atlas.texture); }
+    battleAtlases_.clear();
     stage_ = {};
     stageLoaded_ = false;
 }
@@ -249,10 +437,17 @@ void AssetManager::UnloadCommon() {
     SwitchMusic(MusicSlot::None);
     UnloadSounds(commonSounds_);
     UnloadMusicAsset(menuMusic_);
-    UnloadTextureAsset(common_.referenceFrame);
-    UnloadTextureAsset(common_.referenceStage1);
     UnloadTextureAsset(common_.titleBackground);
+    UnloadTextureAsset(common_.titleMoon);
+    UnloadTextureAsset(common_.titleShrine);
+    UnloadTextureAsset(common_.titleReimu);
+    UnloadTextureAsset(common_.titleLogo);
     UnloadTextureAsset(common_.reimuPortrait);
+    UnloadTextureAsset(common_.marisaBackdrop);
+    for(auto& portrait:common_.spellPortraits)UnloadTextureAsset(portrait);
+    if (common_.hudFont.texture.id != 0 && common_.hudFont.texture.id != common_.uiFont.texture.id &&
+        common_.hudFont.texture.id != GetFontDefault().texture.id)
+        UnloadFont(common_.hudFont);
     if (common_.uiFont.texture.id != 0 &&
         common_.uiFont.texture.id != GetFontDefault().texture.id)
         UnloadFont(common_.uiFont);

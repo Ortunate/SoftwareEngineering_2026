@@ -46,6 +46,11 @@ public:
     int scoreValue = 500;
     /// @brief 独立视觉状态；不决定活动标记、判定或技能时钟。
     ActorPresentation presentation;
+    battle::Cursor animation; // 借用本关卡原 ANM，暂停/同龄绘制不推进；不控制碰撞。
+    VisualId defeatVisual = kInvalidVisualId; // 可覆盖清单的击破动画，invalid 时采用清单绑定。
+    int animationScript = -1; // -1 沿用清单默认；原 ECL 可覆盖本图集脚本编号。
+    double animationAge = -1; // 原 ECL 的本次动画秒数；负值使用演员出生年龄。
+    std::uint32_t animationRevision = 0; // 同编号重新启动时也递增，不能只比较编号。
     /// @brief 返回本类敌人的两类道具联合分布；表由具体敌人静态持有。
     /// @return 仅在敌人生命周期内借用的只读表，空表表示不掉落。
     [[nodiscard]] std::span<const DropOutcome> DropDistribution() const {

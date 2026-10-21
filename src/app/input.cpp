@@ -2,6 +2,7 @@
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
+#include "ui/components.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
 #include "stages/stage1/content.hpp"
@@ -13,38 +14,23 @@
 namespace koumakyou {
 
 void Game::UpdateMainMenu() {
-    const bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
-    if (titleIntro_) {
-        if (confirm || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            titleIntro_ = false;
-            assets_.PlaySoundEffect("menu_confirm");
-        }
-        return;
-    }
+    // 键盘与鼠标使用同一门禁；不缓存动画期间的确认，避免最后一帧突然跳入开局页。
+    if (!titleEntrance_.Finished()) return;
+    const auto input = ui::MenuInput::Read();
     constexpr int itemCount = menu::kTitleRowCount;
-    const int previous = selectedMenuItem_;
     const auto available = [](int index) { return index != 1 && index != 4; };
-    int offset = 0;
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) offset = -1;
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) offset = 1;
-    if (offset != 0) {
-        do { selectedMenuItem_ = (selectedMenuItem_ + itemCount + offset) % itemCount; }
-        while (!available(selectedMenuItem_));
+    if (input.back) {
+        selectedMenuItem_ = 9;
+        assets_.PlaySoundEffect("menu_cancel");
+        return; // 首页没有上级页面；返回只选中 Quit，仍须单独确认才退出。
     }
-    if (IsKeyPressed(KEY_ESCAPE)) selectedMenuItem_ = 9;
     const menu::TitleLayout layout(GetScreenWidth(), GetScreenHeight(), itemCount);
-    const Vector2 mouse = GetMousePosition();
-    const Vector2 movement = GetMouseDelta();
-    bool hovered = false;
-    for (int index = 0; index < itemCount; ++index) {
-        if (available(index) && CheckCollisionPointRec(mouse, layout.Row(index))) {
-            hovered = true;
-            if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                selectedMenuItem_ = index;
-        }
-    }
-    if (selectedMenuItem_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!confirm && !(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) return;
+    std::array<ui::Item,itemCount> items{};
+    for(int index=0;index<itemCount;++index)items[index]={index,layout.Row(index),available(index)};
+    const auto selection=ui::UpdateSelection(items,input,selectedMenuItem_);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
+    if(!selection.confirmed)return;
+    menuMotion_.Confirm();
     assets_.PlaySoundEffect("menu_confirm");
     switch (selectedMenuItem_) {
         case 0:
@@ -52,8 +38,20 @@ void Game::UpdateMainMenu() {
         case 3:
             practiceMode_ = selectedMenuItem_ != 0;
             spellPractice_ = selectedMenuItem_ == 3;
-            setupStep_ = spellPractice_ ? 3 : 0;
-            challengeMode_ = false;
+            setupStep_ = spellPractice_ ? StartSetupStep::Spell : StartSetupStep::Difficulty;
+            selectedShot_ = lastSelection_.shot;
+            selectedCharacter_ = lastSelection_.character;
+            selectedPracticeStage_ = lastSelection_.practiceStage-1;
+            if(!kPracticeStages[selectedPracticeStage_]) {
+                selectedPracticeStage_=0;
+                lastSelection_.practiceStage=1;
+                SaveSettings();
+            }
+            stageId_ = StageId::Stage1;
+            // 符卡练习跳过模式页，仍沿用固定练习规则；不能将它的临时模式写回上次开局记录。
+            challengeMode_ = !spellPractice_ && lastSelection_.challenge;
+            practicePhase_ = lastSelection_.practicePhase;
+            if(spellPractice_)spellSelection_.page=spell::Page::Stage;
             state_ = RunState::StartSetup;
             break;
         case 5: state_ = RunState::Score; break;
@@ -76,62 +74,34 @@ void Game::UpdateMainMenu() {
 }
 
 void Game::UpdateMenuPage() {
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
-    const auto clicked = [&](Rectangle bounds) {
-        return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(GetMousePosition(), bounds);
-    };
-    const bool back = IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X) ||
-                      clicked(canvas.Rect(70, 675, 170, 42));
-    if (back) {
-        assets_.PlaySoundEffect("menu_cancel");
-        if (state_ == RunState::StartSetup && setupStep_ > 0 && setupStep_ < 3) --setupStep_;
-        else { EnterMainMenu(); titleIntro_ = false; }
+    if (state_ == RunState::StartSetup) {
+        UpdateStartSetup();
         return;
     }
-    int direction = 0;
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_LEFT)) direction = -1;
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT)) direction = 1;
-    bool confirm = IsKeyPressed(KEY_Z) || IsKeyPressed(KEY_ENTER) ||
-                   clicked(canvas.Rect(775, 675, 250, 42));
-    if (state_ == RunState::StartSetup) {
-        if (setupStep_ > 0) {
-            for (int index = 0; index < 2; ++index) {
-                if (clicked(canvas.Rect(640, 300 + index * 125, 385, 105))) {
-                    if (setupStep_ == 1) selectedShot_ = index;
-                    else if (setupStep_ == 2) challengeMode_ = index == 1;
-                    else practicePhase_ = index == 0 ? 2 : 4;
-                    assets_.PlaySoundEffect("menu_move");
-                }
-            }
-            if (direction != 0) {
-                if (setupStep_ == 1) selectedShot_ = 1 - selectedShot_;
-                else if (setupStep_ == 2) challengeMode_ = !challengeMode_;
-                else practicePhase_ = practicePhase_ == 2 ? 4 : 2;
-                assets_.PlaySoundEffect("menu_move");
-            }
-        }
-        if (confirm) {
-            assets_.PlaySoundEffect("menu_confirm");
-            if (setupStep_ < 2) ++setupStep_;
-            else StartRun();
-        }
-    } else if (state_ == RunState::MusicRoom) {
-        if (direction != 0) {
-            selectedTrack_ = (selectedTrack_ + 3 + direction) % 3;
-            assets_.PlaySoundEffect("menu_move");
-        }
-        for (int index = 0; index < 3; ++index) {
-            if (clicked(canvas.Rect(280, 260 + index * 95, 680, 70))) {
-                selectedTrack_ = index;
-                confirm = true;
-            }
-        }
-        if (confirm) {
-            if (selectedTrack_ == 0) assets_.PlayMenuMusic();
-            else if (selectedTrack_ == 1) assets_.PlayStageMusic();
-            else assets_.PlayBossMusic();
-        }
+    const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
+    const auto input = ui::MenuInput::Read();
+    if (input.back) {
+        assets_.PlaySoundEffect("menu_cancel");
+        EnterMainMenu();
+        return;
     }
+    if (state_ != RunState::MusicRoom) {
+        if (state_==RunState::Credit && input.confirm) {
+            assets_.PlaySoundEffect("menu_confirm");
+            EnterMainMenu();
+        }
+        return;
+    }
+    // 返回不占据曲目槽位，导航只循环三首曲目。
+    const std::array<ui::Item,3> items{{{0,layout.Track(0)},{1,layout.Track(1)},{2,layout.Track(2)}}};
+    const auto selection=ui::UpdateSelection(items,input,selectedTrack_);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
+    if(!selection.confirmed)return;
+    menuMotion_.Confirm();
+    assets_.PlaySoundEffect("menu_confirm");
+    if (selectedTrack_ == 0) assets_.PlayMenuMusic();
+    else if (selectedTrack_ == 1) assets_.PlayStageMusic();
+    else if (selectedTrack_ == 2) assets_.PlayBossMusic();
 }
 
 void Game::UpdateOptions() {
@@ -141,54 +111,39 @@ void Game::UpdateOptions() {
     }
 
     constexpr int itemCount = menu::kOptionsCount;
-    const int previous = selectedOption_;
-    if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_X)) {
+    const auto input = ui::MenuInput::Read();
+    if (input.back) {
         assets_.PlaySoundEffect("menu_cancel");
         state_ = RunState::MainMenu;
         selectedMenuItem_ = 8;
         return;
     }
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W))
-        selectedOption_ = (selectedOption_ + itemCount - 1) % itemCount;
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S))
-        selectedOption_ = (selectedOption_ + 1) % itemCount;
-
-    const menu::Canvas canvas(GetScreenWidth(), GetScreenHeight());
-    const Vector2 mouse = GetMousePosition();
-    const Vector2 movement = GetMouseDelta();
-    bool hoveringItem = false;
-    // 鼠标静止时不抢回键盘选择；点击仍可以直接选择当前指向的行。
-    for (int index = 0; index < itemCount; ++index) {
-        const Rectangle row = menu::OptionRow(canvas, index);
-        if (CheckCollisionPointRec(mouse, row)) {
-            hoveringItem = true;
-            if (movement.x != 0 || movement.y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                selectedOption_ = index;
-        }
-    }
+    // 数值项保留 A/D、左右键调整；其余行允许两组方向导航。
+    const int direction = input.vertical != 0 ? input.vertical :
+        selectedOption_ >= menu::kNumericOptions ? input.horizontal : 0;
+    const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
+    std::array<ui::Item,itemCount> items{};
+    for(int index=0;index<itemCount;++index)items[index]={index,menu::OptionRow(canvas,index)};
+    auto navigationInput=input;navigationInput.vertical=direction;navigationInput.horizontal=0;
+    const auto selection=ui::UpdateSelection(items,navigationInput,selectedOption_,ui::Navigation::Vertical);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
     if (selectedOption_ < menu::kNumericOptions) {
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_A)) AdjustOption(-1);
-        else if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D)) AdjustOption(1);
+        const ui::ValueSelector selector{menu::OptionRow(canvas,selectedOption_),menu::OptionArrow(canvas,selectedOption_,-1),
+                                         menu::OptionArrow(canvas,selectedOption_,1)};
+        auto valueInput=input;if(direction!=0)valueInput.horizontal=0;
+        const int adjustment=selector.Update(valueInput,true);
+        if(adjustment!=0)AdjustOption(adjustment);
+        return;
     }
-    const bool mouseConfirmed = hoveringItem && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-    if (selectedOption_ != previous) assets_.PlaySoundEffect("menu_move");
-    if (!IsKeyPressed(KEY_ENTER) && !IsKeyPressed(KEY_Z) && !mouseConfirmed) return;
-    if (selectedOption_ < menu::kNumericOptions) {
-        // 绘制与命中测试共用按钮矩形；点击标签、数值或行内空白只选择，不调整。
-        if (mouseConfirmed) {
-            for (const int direction : {-1, 1}) {
-                if (CheckCollisionPointRec(mouse, menu::OptionArrow(canvas, selectedOption_, direction)))
-                    AdjustOption(direction);
-            }
-        } else {
-            AdjustOption(1);
-        }
-    } else if (selectedOption_ == menu::kBindingsIndex) {
+    if(!selection.confirmed)return;
+    if (selectedOption_ == menu::kBindingsIndex) {
+        menuMotion_.Confirm();
         assets_.PlaySoundEffect("menu_confirm");
         optionsPage_ = OptionsPage::KeyBindings;
         selectedBinding_ = 0;
         waitingForBinding_ = false;
     } else if (selectedOption_ == menu::kResetIndex) {
+        menuMotion_.Confirm();
         const GameSettings defaults;
         bindings_ = defaults.bindings;
         fpsLimitIndex_ = 1;
@@ -202,24 +157,23 @@ void Game::UpdateOptions() {
         assets_.SetSoundVolumePercent(soundVolume_);
         SaveSettings();
         assets_.PlaySoundEffect("menu_confirm");
-    } else {
-        state_ = RunState::MainMenu;
-        selectedMenuItem_ = 8;
     }
 }
 
 void Game::UpdateKeyBindings() {
     constexpr int bindingCount = static_cast<int>(kBindingNames.size());
     constexpr int resetIndex = bindingCount;
-    constexpr int backIndex = bindingCount + 1;
-    constexpr int itemCount = bindingCount + 2;
+    constexpr int itemCount = bindingCount + 1;
+    const auto input = ui::MenuInput::Read();
 
     if (waitingForBinding_) {
-        if (IsKeyPressed(KEY_ESCAPE)) { waitingForBinding_ = false; return; }
+        if (input.back) {
+            assets_.PlaySoundEffect("menu_cancel"); waitingForBinding_ = false; return;
+        }
         if (!bindingCaptureReady_) {
-            // 清空进入弹窗时的旧键盘队列，所有鼠标键释放后才开始收集新输入。
+            // 清空进入录入状态的旧键盘队列，确认键及所有鼠标键释放后才收集新输入；返回操作始终优先。
             while (GetKeyPressed() != KEY_NULL) {}
-            bool held = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_Z);
+            bool held = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_Z) || IsKeyDown(KEY_SPACE);
             for (int button = MOUSE_BUTTON_LEFT; button <= MOUSE_BUTTON_BACK; ++button)
                 held = held || IsMouseButtonDown(button);
             bindingCaptureReady_ = !held;
@@ -231,52 +185,28 @@ void Game::UpdateKeyBindings() {
         }
         if (IsValidBinding(code)) {
             SetBinding(selectedBinding_, code);
+            menuMotion_.Confirm();
+            assets_.PlaySoundEffect("menu_confirm");
             waitingForBinding_ = false;
         }
         return;
     }
 
-    if (IsKeyPressed(KEY_ESCAPE)) {
+    if (input.back) {
+        assets_.PlaySoundEffect("menu_cancel");
         optionsPage_ = OptionsPage::General;
         selectedOption_ = menu::kBindingsIndex;
         return;
     }
-    if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) {
-        selectedBinding_ = (selectedBinding_ + itemCount - 1) % itemCount;
-    }
-    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) {
-        selectedBinding_ = (selectedBinding_ + 1) % itemCount;
-    }
-
-    const float centerX = static_cast<float>(GetScreenWidth()) * 0.5F;
-    const Vector2 mouse = GetMousePosition();
-    bool hoveringItem = false;
-    for (int index = 0; index < bindingCount; ++index) {
-        const Rectangle row{centerX - 270.0F,
-                            kBindingsTop + static_cast<float>(index) * kBindingsSpacing,
-                            540.0F, kBindingsHeight};
-        if (CheckCollisionPointRec(mouse, row)) {
-            if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                selectedBinding_ = index;
-            hoveringItem = true;
-        }
-    }
-    const Rectangle resetButton{centerX - 270.0F, 500.0F, 260.0F, 42.0F};
-    const Rectangle backButton{centerX + 10.0F, 500.0F, 260.0F, 42.0F};
-    if (CheckCollisionPointRec(mouse, resetButton)) {
-        if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-            selectedBinding_ = resetIndex;
-        hoveringItem = true;
-    } else if (CheckCollisionPointRec(mouse, backButton)) {
-        if (GetMouseDelta().x != 0 || GetMouseDelta().y != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-            selectedBinding_ = backIndex;
-        hoveringItem = true;
-    }
-
-    const bool mouseConfirmed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                                hoveringItem;
-    const bool confirmed = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_Z) || mouseConfirmed;
-    if (!confirmed) return;
+    const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
+    std::array<ui::Item,itemCount> items{};
+    for (int index = 0; index < itemCount; ++index)
+        items[index]={index,layout.Row(index)};
+    const auto selection=ui::UpdateSelection(items,input,selectedBinding_);
+    if(selection.changed)assets_.PlaySoundEffect("menu_move");
+    if(!selection.confirmed)return;
+    menuMotion_.Confirm();
+    assets_.PlaySoundEffect("menu_confirm");
 
     if (selectedBinding_ < bindingCount) {
         waitingForBinding_ = true;
@@ -284,9 +214,6 @@ void Game::UpdateKeyBindings() {
     } else if (selectedBinding_ == resetIndex) {
         bindings_ = KeyBindings{};
         SaveSettings();
-    } else {
-        optionsPage_ = OptionsPage::General;
-        selectedOption_ = menu::kBindingsIndex;
     }
 }
 
@@ -298,7 +225,8 @@ void Game::AdjustFpsLimit(int offset) {
 }
 
 void Game::AdjustOption(int offset) {
-    if (selectedOption_ == 0) { AdjustFpsLimit(offset); return; }
+    menuMotion_.Confirm();
+    if (selectedOption_ == 0) { AdjustFpsLimit(offset); assets_.PlaySoundEffect("menu_move"); return; }
     if (selectedOption_ == 1) {
         musicVolume_ = std::clamp(musicVolume_ + offset * 5, 0, 100);
         assets_.SetMusicVolumePercent(musicVolume_);
@@ -326,8 +254,8 @@ void Game::UpdatePlayer(float deltaTime) {
         .ascend = BindingDown(bindings_.ascend),
         .descend = BindingDown(bindings_.descend),
         .focus = BindingDown(bindings_.focus),
-        .fire = BindingDown(bindings_.fire) || BindingDown(bindings_.fireAlt),
-        .bomb = BindingPressed(bindings_.bomb) || BindingPressed(bindings_.bombAlt),
+        .fire = BindingDown(bindings_.fire),
+        .bomb = BindingPressed(bindings_.bomb),
     };
     shotSoundTimer_ = std::max(0.0F, shotSoundTimer_ - deltaTime);
     if (input.fire && !dialogueActive_ && shotSoundTimer_ <= 0) {
@@ -354,55 +282,65 @@ void Game::SetBinding(int index, int key) {
 std::string Game::KeyLabel(int key) {
     if (IsMouseBinding(key)) {
         constexpr std::array<const char*, 7> labels{
-            "MOUSE LEFT", "MOUSE RIGHT", "MOUSE MIDDLE", "MOUSE 4 / SIDE 1",
-            "MOUSE 5 / SIDE 2", "MOUSE 6", "MOUSE 7"};
+            "鼠标左键", "鼠标右键", "鼠标中键", "鼠标侧键 1（4）",
+            "鼠标侧键 2（5）", "鼠标按键 6", "鼠标按键 7"};
         return labels[key - kMouseBindingBase];
     }
-    if (key >= KEY_A && key <= KEY_Z) {
-        return std::string(1, static_cast<char>('A' + key - KEY_A));
-    }
-    if (key >= KEY_ZERO && key <= KEY_NINE) {
-        return std::string(1, static_cast<char>('0' + key - KEY_ZERO));
-    }
+    // 字母、数字和功能键沿用实体键帽标识；小键盘单独标注，避免与主键区数字混淆。
+    if (key >= KEY_A && key <= KEY_Z) return std::string(1,static_cast<char>('A'+key-KEY_A));
+    if (key >= KEY_ZERO && key <= KEY_NINE) return std::string(1,static_cast<char>('0'+key-KEY_ZERO));
+    if (key >= KEY_F1 && key <= KEY_F12) return TextFormat("F%d",key-KEY_F1+1);
+    if (key >= KEY_KP_0 && key <= KEY_KP_9) return TextFormat("小键盘 %d",key-KEY_KP_0);
     switch (key) {
-        case KEY_SPACE: return "SPACE";
-        case KEY_ENTER: return "ENTER";
-        case KEY_TAB: return "TAB";
-        case KEY_BACKSPACE: return "BACKSPACE";
-        case KEY_INSERT: return "INSERT";
-        case KEY_DELETE: return "DELETE";
-        case KEY_RIGHT: return "RIGHT";
-        case KEY_LEFT: return "LEFT";
-        case KEY_DOWN: return "DOWN";
-        case KEY_UP: return "UP";
-        case KEY_PAGE_UP: return "PAGE UP";
-        case KEY_PAGE_DOWN: return "PAGE DOWN";
-        case KEY_HOME: return "HOME";
-        case KEY_END: return "END";
-        case KEY_CAPS_LOCK: return "CAPS LOCK";
-        case KEY_SCROLL_LOCK: return "SCROLL LOCK";
-        case KEY_NUM_LOCK: return "NUM LOCK";
-        case KEY_PRINT_SCREEN: return "PRINT SCREEN";
-        case KEY_PAUSE: return "PAUSE";
-        case KEY_LEFT_SHIFT: return "LEFT SHIFT";
-        case KEY_LEFT_CONTROL: return "LEFT CTRL";
-        case KEY_LEFT_ALT: return "LEFT ALT";
-        case KEY_RIGHT_SHIFT: return "RIGHT SHIFT";
-        case KEY_RIGHT_CONTROL: return "RIGHT CTRL";
-        case KEY_RIGHT_ALT: return "RIGHT ALT";
-        case KEY_F1: return "F1";
-        case KEY_F2: return "F2";
-        case KEY_F3: return "F3";
-        case KEY_F4: return "F4";
-        case KEY_F5: return "F5";
-        case KEY_F6: return "F6";
-        case KEY_F7: return "F7";
-        case KEY_F8: return "F8";
-        case KEY_F9: return "F9";
-        case KEY_F10: return "F10";
-        case KEY_F11: return "F11";
-        case KEY_F12: return "F12";
-        default: return TextFormat("KEY %d", key);
+        case KEY_NULL: return "未设置";
+        case KEY_SPACE: return "空格";
+        case KEY_ESCAPE: return "Esc";
+        case KEY_ENTER: return "回车";
+        case KEY_TAB: return "Tab";
+        case KEY_BACKSPACE: return "退格";
+        case KEY_INSERT: return "插入";
+        case KEY_DELETE: return "删除";
+        case KEY_RIGHT: return "向右";
+        case KEY_LEFT: return "向左";
+        case KEY_DOWN: return "向下";
+        case KEY_UP: return "向上";
+        case KEY_PAGE_UP: return "上翻页";
+        case KEY_PAGE_DOWN: return "下翻页";
+        case KEY_HOME: return "Home（行首）";
+        case KEY_END: return "End（行尾）";
+        case KEY_CAPS_LOCK: return "大写锁定";
+        case KEY_SCROLL_LOCK: return "滚动锁定";
+        case KEY_NUM_LOCK: return "数字锁定";
+        case KEY_PRINT_SCREEN: return "截屏";
+        case KEY_PAUSE: return "暂停键";
+        case KEY_LEFT_SHIFT: return "左 Shift";
+        case KEY_LEFT_CONTROL: return "左 Ctrl";
+        case KEY_LEFT_ALT: return "左 Alt";
+        case KEY_RIGHT_SHIFT: return "右 Shift";
+        case KEY_RIGHT_CONTROL: return "右 Ctrl";
+        case KEY_RIGHT_ALT: return "右 Alt";
+        case KEY_LEFT_SUPER: return "左系统键";
+        case KEY_RIGHT_SUPER: return "右系统键";
+        case KEY_KB_MENU: return "菜单键";
+        case KEY_KP_DECIMAL: return "小键盘 .";
+        case KEY_KP_DIVIDE: return "小键盘 /";
+        case KEY_KP_MULTIPLY: return "小键盘 *";
+        case KEY_KP_SUBTRACT: return "小键盘 -";
+        case KEY_KP_ADD: return "小键盘 +";
+        case KEY_KP_ENTER: return "小键盘回车";
+        case KEY_KP_EQUAL: return "小键盘 =";
+        case KEY_APOSTROPHE: return "'";
+        case KEY_COMMA: return ",";
+        case KEY_MINUS: return "-";
+        case KEY_PERIOD: return ".";
+        case KEY_SLASH: return "/";
+        case KEY_SEMICOLON: return ";";
+        case KEY_EQUAL: return "=";
+        case KEY_LEFT_BRACKET: return "[";
+        case KEY_BACKSLASH: return "\\";
+        case KEY_RIGHT_BRACKET: return "]";
+        case KEY_GRAVE: return "`";
+        default: return TextFormat("按键 %d",key);
     }
 }
 

@@ -18,10 +18,16 @@ void Game::UpdateEnemies(float deltaTime) {
         enemy.SetChallengeRank(referenceRank_);
         enemy.Update(deltaTime, player_.Position(), bullets_);
         for(int id:enemy.SoundEvents())assets_.PlaySoundEffect("reference_"+std::to_string(id));
+        const auto& visual=assets_.GetVisual(enemy.visual);
+        if(visual.archive) {
+            auto selected=visual.animation;
+            if(enemy.animationScript>=0)selected.script=enemy.animationScript;
+            enemy.animation.Sync(*visual.archive,selected,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,enemy.animationRevision);
+        }
         // 只处理本帧仍活动到失活的跃迁，快照不延长 Enemy 的槽位寿命。
         if (!enemy.active)
             actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
-                                enemy.presentation, ActorExitReason::Retreat);
+                                enemy.presentation, ActorExitReason::Retreat, &enemy.animation.player.Sample());
     });
 }
 
@@ -82,7 +88,7 @@ void Game::ResolveCollisions() {
             enemy.active = false;
             assets_.PlaySoundEffect("enemy_down");
             actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
-                                enemy.presentation, ActorExitReason::Defeated);
+                                enemy.presentation, ActorExitReason::Defeated, &enemy.animation.player.Sample(), enemy.defeatVisual!=kInvalidVisualId ? enemy.defeatVisual : assets_.GetVisual(enemy.visual).defeatVisual);
             score_ += enemy.scoreValue;
             if(enemy.ReferenceDropKind()==-3) drops_.SpawnEnemyDrops(enemy.position,enemy.DropDistribution());
             else drops_.SpawnReferenceDrop(enemy.position,enemy.ReferenceDropKind(),player_.Power()==Player::kMaxPower);
@@ -149,12 +155,15 @@ void Game::HandlePlayerHit() {
 
 void Game::AdvanceBossPhase() {
     if (!boss_ || !boss_->active) return;
+    BeginSpellRecord();
+    const bool captured=boss_->SpellName() && boss_->health<=0 && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_;
     // 捕获奖励只在符卡击破时结算；退场回调仍保留 phase，必须用 SpellName 排除重复结算。
-    if(boss_->SpellName() && boss_->health<=0 && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_) {
+    if(captured) {
         const int seconds=static_cast<int>(std::max(0.0F,boss_->TimeLimit()-boss_->phaseTimer));
         spellBonus_=200000+20000*seconds; score_+=spellBonus_;
         spellBonusTimer_=280.0F/60;
     }
+    if(boss_->SpellName())FinishSpellRecord(captured);
     if (spellPractice_) {
         EndStage(RunState::Won);
         return;
@@ -168,7 +177,7 @@ void Game::AdvanceBossPhase() {
         ? ActorExitReason::Defeated : ActorExitReason::Retreat;
     if (!hasNextPhase)
         actorEffects_.Spawn(boss_->visual, boss_->position, boss_->hitRadius,
-                            boss_->presentation, exitReason);
+                            boss_->presentation, exitReason, &boss_->animation.player.Sample(), boss_->defeatVisual!=kInvalidVisualId ? boss_->defeatVisual : assets_.GetVisual(boss_->visual).defeatVisual);
     // 仅整场遭遇结束时通知时间轴；阶段切换仍属于同一异步事件。
     if (!hasNextPhase && bossEventId_) {
         stage_.EndEvent(*bossEventId_);
@@ -178,6 +187,8 @@ void Game::AdvanceBossPhase() {
         spellStartMisses_=missCount_; spellStartBombs_=bombCount_;
         spellCutInTimer_ = boss_->SpellName() != nullptr
                                ? kSpellCutInDuration : 0.0F;
+        // 宣告符卡的本帧即记录遇见并落盘；即使紧接着暂停退出，也不能漏掉已经展示的符卡。
+        BeginSpellRecord();
         messageTimer_ = 0.0F;
         assets_.PlaySoundEffect(boss_->SpellName() ? "spell" : "enemy_down");
     } else if (!hasNextPhase && wasMidboss) {
@@ -186,7 +197,7 @@ void Game::AdvanceBossPhase() {
     } else if (!hasNextPhase) {
         score_ += 200000;
         messageTimer_ = 0.0F;
-        // 战斗异步事件已结束，下一帧时间轴启动原作战后独白；独白完毕才结算。
+        // 战斗事件已结束，下一帧时间轴开始战后独白，独白结束才展示关卡奖励。
     }
 }
 

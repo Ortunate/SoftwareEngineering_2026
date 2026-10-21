@@ -1,0 +1,357 @@
+{
+  "texture_upgrade": "th06nc_original_4k",
+  "linear_resolution_scale": 2,
+  "animation_coordinates": "unchanged",
+  "atlases": [
+    {
+      "file": "eff00.dds",
+      "source": "eff00_4k.dds",
+      "standard_size": [
+        512,
+        512
+      ],
+      "texture_size": [
+        1024,
+        1024
+      ],
+      "standard_sha256": "22d3c92ecf7c223b559c8aaf773a92cf3cf57019f299b9fc7ef4999f98d08afc",
+      "source_sha256": "c08de3565c40f23894e2017aedb33250a9540c9380be8741aaf2c35a4e459f2d"
+    },
+    {
+      "file": "eff01.dds",
+      "source": "eff01_4k.dds",
+      "standard_size": [
+        576,
+        576
+      ],
+      "texture_size": [
+        1152,
+        1152
+      ],
+      "standard_sha256": "f7f587374969913e5686984ad07de7333d16af0d750800bedaabd2f85d9e016a",
+      "source_sha256": "9ed1e1c9624d819998e741cffa48cd1cdac8718986cde1418d5175514355a585"
+    },
+    {
+      "file": "eff02.dds",
+      "source": "eff02_4k.dds",
+      "standard_size": [
+        576,
+        576
+      ],
+      "texture_size": [
+        1152,
+        1152
+      ],
+      "standard_sha256": "117aa8cc853a021aa2c0c76ac1648c7a5efab925eed04a62b33d4f36812207c2",
+      "source_sha256": "0117658a81001a2b673e77b83e25b7e5cce56c080628209841e338a251954998"
+    },
+    {
+      "file": "eff03.dds",
+      "source": "eff03_4k.dds",
+      "standard_size": [
+        576,
+        576
+      ],
+      "texture_size": [
+        1152,
+        1152
+      ],
+      "standard_sha256": "a833b2118864081434983d6412c981d7a757e2670832d83d3caa34de00abf795",
+      "source_sha256": "e505b009747fd40010ee1ccdd790360965a2758db8536c32b8811ae135b88e39"
+    },
+    {
+      "file": "eff04.dds",
+      "source": "eff04_4k.dds",
+      "standard_size": [
+        413,
+        407
+      ],
+      "texture_size": [
+        826,
+        814
+      ],
+      "standard_sha256": "64b0579805fbd8c621e02235a1a1edcc77ab0c08901eb1fcaf4b8e8c325bcf10",
+      "source_sha256": "f74fbe8aebceab9d5b484c28aa699faa8829d09e15050374aa329b4bc4fedb14"
+    },
+    {
+      "file": "eff05.dds",
+      "source": "eff05_4k.dds",
+      "standard_size": [
+        576,
+        576
+      ],
+      "texture_size": [
+        1152,
+        1152
+      ],
+      "standard_sha256": "5f67e645991072fd4e22ea6d3871c434bca3553460522c21149d5436348aa7ad",
+      "source_sha256": "7eb3b511c8459e5be93f10461f57f390ae57e3949d43d85898571dec3efb7aee"
+    },
+    {
+      "file": "eff06.dds",
+      "source": "eff06_4k.dds",
+      "standard_size": [
+        576,
+        576
+      ],
+      "texture_size": [
+        1152,
+        1152
+      ],
+      "standard_sha256": "ae99b11d9d22cc6f2ae0b3adf94207d5ddc5a58a0ac4cf9f0cee1e7028729213",
+      "source_sha256": "7557e64437ec119f80fe3635b3905ad902f340bf53e5a3605eede1a505a9d127"
+    },
+    {
+      "file": "eff07.dds",
+      "source": "eff07_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "cdb2ff0a68223b3b7168c626b7c255ed0251235d8d4abf70578fe023dc3d7769",
+      "source_sha256": "c36ede4f205c624b82ff32c5d9c40b6b8e3778b842a172cf64e404ea204996a5"
+    },
+    {
+      "file": "etama3.dds",
+      "source": "etama3_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "5a34efcde724a71b4902b917120f0cdd5a14cfb827661fb585d151d6df1a74d2",
+      "source_sha256": "10d31ae75cd4dfd0f62e9a5052f03a9b5a7d68aaa46e113ef9ea6635c6f37e5f"
+    },
+    {
+      "file": "etama3_2.dds",
+      "source": "etama3_2_4k.dds",
+      "standard_size": [
+        128,
+        128
+      ],
+      "texture_size": [
+        256,
+        256
+      ],
+      "standard_sha256": "3c551eb66e83bd28bb0094f1a80317934ffd20b01b92e4a1c318c23f5868519c",
+      "source_sha256": "f9dfca3f570af0c0e8ebcd404c608279556a26a8d3bf3f3e16252ce6453c97aa"
+    },
+    {
+      "file": "etama4.dds",
+      "source": "etama4_4k.dds",
+      "standard_size": [
+        512,
+        512
+      ],
+      "texture_size": [
+        1024,
+        1024
+      ],
+      "standard_sha256": "141bb1ac7c523d94db67cbb5d65fa6a192c3165523dd9d6db8499c636d1332df",
+      "source_sha256": "312a9d5ad9f8b78f744f26e91c42c656109fb0b4c83d72705f2767dea7c60e84"
+    },
+    {
+      "file": "player00.dds",
+      "source": "player00_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "9441ea81fdf6e4f63647172886c5e2e79b9710ed364ece0e15f9cc77916bbc85",
+      "source_sha256": "9b39bc24769fe4f266367b5ac3364be748fe04bc65734961dfaee064a2b8467b"
+    },
+    {
+      "file": "player01.dds",
+      "source": "player01_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "e78be5b08abf266b31681015b01885a6e8244993fc001b5d827165c721d8134f",
+      "source_sha256": "6a21897a892cf3fddd0f57406bc3b0c144ecba558a6a2c437140558ad3126abf"
+    },
+    {
+      "file": "stg1enm.dds",
+      "source": "stg1enm_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "27791fa630f37530639b9b63d1535b7f58c146f1c372305840bed36f353dc6d1",
+      "source_sha256": "31e604349005be74de22b4df3bdc1d7fe87049188501f4970146bd3962e958b9"
+    },
+    {
+      "file": "stg1enm2.dds",
+      "source": "stg1enm2_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "432d0592d169da3a37362c550dc9fd63708d4e0e2e604cf2d637fb1b49e10e1c",
+      "source_sha256": "a3dd03af1447e87503341fd2a0949a98cd6d5bb1ee1e1edd3e23ed31dfafef0f"
+    },
+    {
+      "file": "stg2enm.dds",
+      "source": "stg2enm_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "549cdb1c15da28f789dff596abbf4a95dfe15d980662600e61c6b1b692c4fbe9",
+      "source_sha256": "9b081fb2c355da24cc41e0c683f7786311b72e523e70738b5fcaa6082404f242"
+    },
+    {
+      "file": "stg2enm2.dds",
+      "source": "stg2enm2_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "8118d4fcd5383d24eceb0e4fd60414c3afdde46a02fb57b13a62730a66f3a4de",
+      "source_sha256": "2de20936ee13edb071764f316edf2958bcfd13a2c05570488c9429fbafe65b94"
+    },
+    {
+      "file": "stg3enm.dds",
+      "source": "stg3enm_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "ba5b5a282498eee97be27b66cc614a9390ba6ac897920daa348ad6d5932a8305",
+      "source_sha256": "31f77f20756dedc3b8a920ab74385965849d17d416340479a5699ab326e73185"
+    },
+    {
+      "file": "stg4enm.dds",
+      "source": "stg4enm_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "cbecf2926c8a220e8b0e15e3e97f46fe8f04c38e10cf06e6327d7822b1a41d6b",
+      "source_sha256": "f426f7f25c40609f631d23749d4f24234b89c288ec9e56c44e55fd1efab91598"
+    },
+    {
+      "file": "stg5enm.dds",
+      "source": "stg5enm_4k.dds",
+      "standard_size": [
+        1024,
+        1024
+      ],
+      "texture_size": [
+        2048,
+        2048
+      ],
+      "standard_sha256": "1fbfd0ee809b114187b0c9734db6a5dc473b7642ed2032411ebdf7385a74ba88",
+      "source_sha256": "690f5e048aa34f4bb53996351d33b22c46875f8a0692557a6271d30769324bdf"
+    },
+    {
+      "file": "stg5enm2.dds",
+      "source": "stg5enm2_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "8799ffac12b0f0c4a3438280da42de11854aea93d1511c7697c924ab264ff1bd",
+      "source_sha256": "cbebb64b4f12a33e65cbf567729a5cc1bdef80566b68ddfaf9f6a792a1dbadf2"
+    },
+    {
+      "file": "stg6enm.dds",
+      "source": "stg6enm_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "a8fc1297bcec48d5b56ecafa0eb19f597892e86bf318af448cb6d5c7b2fc904e",
+      "source_sha256": "ccf0da080f5cec92039e8471d8096ade3789e2aff2164eeff079fc1de0850e8b"
+    },
+    {
+      "file": "stg6enm2.dds",
+      "source": "stg6enm2_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "a643ff8197b37e24b369c1e26920a1c0699d65e50ff0f1fd824490d4dbc22bf9",
+      "source_sha256": "c15ad98d98dd81c166f0a94c028568bdc2a79bcf494ea4297887b87ca92ef2ca"
+    },
+    {
+      "file": "stg7enm.dds",
+      "source": "stg7enm_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "1d56e46b33fe96596336d32d484d1917bc82dd5610eb25f8df86427f93f7cc3f",
+      "source_sha256": "ef7940e08cd45ae9d747d251fa00cbc3b701880165c55236ec17dd1778da81e9"
+    },
+    {
+      "file": "stg7enm2.dds",
+      "source": "stg7enm2_4k.dds",
+      "standard_size": [
+        2048,
+        2048
+      ],
+      "texture_size": [
+        4096,
+        4096
+      ],
+      "standard_sha256": "331c1809676df450d38bb9d1aaf4d767182c8e5548913e1064ac5aa846a3de0d",
+      "source_sha256": "cac946370894f005e26423d1993f8f80b72c15103aecf8882d86d9c630a97d72"
+    }
+  ]
+}

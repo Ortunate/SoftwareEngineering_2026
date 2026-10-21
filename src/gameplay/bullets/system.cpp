@@ -58,10 +58,10 @@ Vector3 Normalize(Vector3 vector) {
 
 }  // namespace
 
-void BulletSystem::Reset() { bullets_.Clear(); }
+void BulletSystem::Reset() { bullets_->Clear(); }
 
 void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget) {
-    bullets_.ForEachActive([deltaTime, targets, enemyAimTarget](Bullet& bullet) {
+    bullets_->ForEachActive([deltaTime, targets, enemyAimTarget](Bullet& bullet) {
         bullet.age += deltaTime;
         const float spawnDelta=std::clamp(bullet.spawnVisualSeconds-(bullet.age-deltaTime),0.0F,deltaTime);
         bullet.position=Add(bullet.position,Scale(bullet.baseVelocity,spawnDelta*bullet.spawnMoveScale));
@@ -138,7 +138,7 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
 Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
                             Vector3 velocity, float radius, Color color,
                             VisualId visual, Vector3 acceleration) {
-    Bullet* bullet = bullets_.Acquire();
+    Bullet* bullet = bullets_->Acquire();
     if (bullet == nullptr) {
         return nullptr;
     }
@@ -170,7 +170,7 @@ Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
 }
 
 void BulletSystem::ClearEnemyBullets() {
-    bullets_.ForEachActive([](Bullet& bullet) {
+    bullets_->ForEachActive([](Bullet& bullet) {
         if (bullet.owner == BulletOwner::Enemy) {
             bullet.active = false;
         }

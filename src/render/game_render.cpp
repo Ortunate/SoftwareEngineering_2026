@@ -136,6 +136,15 @@ void Game::DrawWorld() const {
                                         pickup.value >= 8 ? 1.25F : 0.9F;
             pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample()});
         });
+        if (player_.OptionsVisible()) {
+            const auto positions = player_.OptionPositions();
+            for (int side = 0; side < 2; ++side) {
+                const auto visual = stageContent_->PlayerOptionVisual(side);
+                if (visual == kInvalidVisualId || !assets_.GetVisual(visual).archive) continue;
+                // 与道具共用透明公告板批次，保证圈与副弹按真实深度排序；这些绘制数据不参与拾取或碰撞。
+                pickupSprites_.push_back({positions[side], visual, player_.OptionScale(), &playerOptionAnimations_[side].player.Sample()});
+            }
+        }
     }
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
                          pickupSprites_,

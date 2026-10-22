@@ -262,9 +262,16 @@ void Game::UpdatePlayer(float deltaTime) {
         assets_.PlaySoundEffect("shoot");
         shotSoundTimer_ = 0.10F;
     }
+    std::array<PlayerAimTarget, kEnemyCapacity + 1> aimTargets{};
+    std::size_t aimTargetCount = 0;
+    enemies_.ForEachActive([&](const Enemy& enemy) {
+        aimTargets[aimTargetCount++] = {enemy.position, enemy.hitRadius};
+    });
+    if (boss_ && boss_->active) aimTargets[aimTargetCount++] = {boss_->position, boss_->hitRadius};
     if (player_.Update(deltaTime, input, bullets_,
                        stageContent_->PlayerBulletVisual(),
-                       stageContent_->PlayerHomingVisual(), !dialogueActive_)) {
+                       stageContent_->PlayerHomingVisual(), !dialogueActive_,
+                       {aimTargets.data(), aimTargetCount})) {
         ApplyBombEffect();
     }
     player_.SyncCamera(camera_);

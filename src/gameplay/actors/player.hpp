@@ -4,6 +4,9 @@
 
 #include "gameplay/bullets/system.hpp"
 
+#include <span>
+#include <array>
+
 namespace koumakyou {
 
 /// @brief 单帧玩家输入快照；mouseDelta 为鼠标像素位移，按键值表示当前按下状态，bomb 表示本帧新按下。
@@ -27,6 +30,13 @@ enum class PlayerContact { None, Graze, Hit };
 /// @brief 灵梦两种三维机体：追踪御札保留侧发追踪弹，直射针集中火力且不追踪。
 enum class ShotType { HomingAmulet, Needle };
 
+/// @brief 本帧可瞄准的球形判定体快照；position/radius 为世界坐标/世界单位，radius 须为正。
+/// 仅用于确定准星射线的汇聚深度，不会将弹道吸附到偏离准星的目标中心。
+struct PlayerAimTarget {
+    Vector3 position{};
+    float radius = 0.0F;
+};
+
 /// @brief 持有玩家位置、视角、判定、资源及计时状态，并执行移动、射击和受击规则。
 /// 世界坐标沿用 raylib：正 Z 为初始前方，正 Y 为上方；时间单位为秒，角度单位为弧度。
 class Player {
@@ -38,7 +48,7 @@ public:
     /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
     /// 挑战模式照常计 Miss、扣 Power 和复活，但不扣残机，不会因命中结束一局。
     void ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot);
-    /// @brief 仅重置位置与视角，用于返回菜单或被击中后回到出生点。
+    /// @brief 重置位置、视角、追踪弹周期及太极圈收拢/动画时间，用于返回菜单或复活。
     void ResetPose();
     /// @brief 指定视角并将俯仰角限制在玩家可操作范围内。
     void SetView(float yawRadians, float pitchRadians);
@@ -52,11 +62,15 @@ public:
     /// @param bulletVisual 当前关卡直射弹的外观 ID。
     /// @param homingVisual 当前关卡追踪弹的外观 ID。
     /// @param allowFire 对话期间为 false；Bomb 不受此参数影响。
+    /// @param aimTargets 本次调用期间借用的活动敌人/Boss 判定体；移动和转向后求准星射线交点。
+    /// 射线未指向目标时在前方 20 世界单位汇聚，已发出的直射弹不再随准星改变方向。
+    /// 追踪弹按原作 60 Hz、30 帧射击窗口分批生成；松开射击后完成当前窗口，allowFire=false 则取消。
     /// @return 成功消耗 Bomb 时返回 true，调用方据此处理清弹和范围伤害。
     bool Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
-                VisualId bulletVisual, VisualId homingVisual, bool allowFire);
+                VisualId bulletVisual, VisualId homingVisual, bool allowFire,
+                std::span<const PlayerAimTarget> aimTargets = {});
 
-    /// @brief 增减 Power 并钳制在 0 到 128；收集道具和 Debug 按键共用此入口。
+    /// @brief 增减 Power 并钳制在 0 到 128；收集道具、受击和 Debug 按键共用此入口。
     /// @param delta 正数增加，负数降低，单位为 Power 点。
     /// @return 仅从未满升到满级时返回 true，调用方负责提示和清弹奖励。
     bool AdjustPower(int delta);
@@ -79,6 +93,15 @@ public:
     [[nodiscard]] int Bombs() const { return bombs_; }
     /// @brief 返回当前 Power 点数，范围为 0 到 128。
     [[nodiscard]] int Power() const { return power_; }
+    /// @brief 是否显示两侧太极圈；与原作一致，Power 达到 8 后解锁，两种御札均可显示。
+    [[nodiscard]] bool OptionsVisible() const { return power_ >= 8; }
+    /// @brief 返回左、右太极圈中心的世界坐标，也是本帧副弹的出生位置。
+    /// 位置随视角和 Focus 收拢更新；近距离按当前瞄准深度缩短偏移，渲染与射击必须共用此入口。
+    [[nodiscard]] std::array<Vector3, 2> OptionPositions() const;
+    /// @brief 太极圈的近距离尺寸倍率，范围 (0,1]；随发射位置等比缩小以保持屏幕尺寸，避免遮挡准星。
+    [[nodiscard]] float OptionScale() const;
+    /// @brief 本次姿态重置后经过的游戏秒数，供太极圈原生动画同步；暂停时不推进。
+    [[nodiscard]] double VisualAge() const { return visualAge_; }
 
 private:
     /// @brief 当前视线的单位前向向量。
@@ -87,10 +110,13 @@ private:
     [[nodiscard]] Vector3 Right() const;
     /// @brief 与当前视线正交的屏幕上方单位向量，用于将发射点保持在准星下方。
     [[nodiscard]] Vector3 Up() const;
-    /// @brief gold 从前方偏下的单个模块对称散射，cyan 使用其左右两个发射点。
-    /// gold 沿出射方向直飞，cyan 以散射方向起步后追踪目标；外观由关卡绑定，张角相对当前视线。
+    /// @brief gold 从前方偏下的单个模块对称散射，向准星目标平面的落点直飞。
     void Fire(BulletSystem& bullets, VisualId bulletVisual,
-              VisualId homingVisual);
+              std::span<const PlayerAimTarget> aimTargets);
+    /// @brief 根据 homingFrame_ 与当前 Power 发射本帧到期的 cyan 通道；每个通道左右各一颗。
+    /// 向准星目标平面的散射落点出射后继续追踪，近距离等比缩短模块偏移。
+    void FireHomingFrame(BulletSystem& bullets, VisualId homingVisual,
+                         std::span<const PlayerAimTarget> aimTargets);
     /// @brief 在库存和冷却允许时消耗 Bomb，并设置冷却与无敌时间。
     [[nodiscard]] bool TryUseBomb();
 
@@ -100,8 +126,14 @@ private:
     float fireTimer_ = 0.0F;
     float invulnerableTimer_ = 1.5F;
     float bombCooldown_ = 0.0F;
-    // cyan 奇数发档位的额外弹逐轮交替左右模块；gold 始终为中央单模块对称散射。
-    bool alternateCyanSide_ = false;
+    // cyan 独立采用原作 60 Hz 计时；-1 表示空闲，0…29 为当前窗口帧，相位不能随 Focus/Power 重置。
+    // 小数帧跨 Update 保留，低帧率逐帧补发；窗口结束时仅持续按住射击才启动下一轮。
+    int homingFrame_ = -1;
+    double homingFractionalFrame_ = 0.0;
+    // Focus 在 8/60 秒内收拢到三分之一侧距；进度跨帧保留，反向切换不跳变。
+    float optionFocus_ = 0.0F;
+    float optionAimDepth_ = 20.0F; // 最近一次 Update 的瞄准深度（世界单位），只保存值，不借用目标。
+    double visualAge_ = 0.0;
     // lives_ 是额外残机数；未配置的默认值 3 供独立测试使用，Game 按设置覆盖；-1 时结束。
     int lives_ = 3;
     int bombs_ = 3;

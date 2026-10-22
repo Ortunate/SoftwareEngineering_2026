@@ -91,6 +91,13 @@ void TestBulletAndActorBindings() {
 /// @brief 验证渐变、双位移通道和脚本外部标签；这些效果不能退化为静态裁图。
 void TestEffectSemantics() {
     auto archive=anm::LoadArchive(kAssets/battle::Describe(battle::Atlas::Reimu).anm);
+    anm::Player leftOrb,rightOrb;
+    leftOrb.Start(archive,128);rightOrb.Start(archive,129);
+    assert(leftOrb.Sample().sprite==128 && rightOrb.Sample().sprite==128);
+    leftOrb.Advance(8.0/60);rightOrb.Advance(8.0/60);
+    assert(leftOrb.Sample().visible && rightOrb.Sample().visible);
+    assert(leftOrb.Sample().rotation.z>0 && rightOrb.Sample().rotation.z<0);
+    assert(std::abs(leftOrb.Sample().rotation.z+rightOrb.Sample().rotation.z)<0.0001F);
     anm::Player effect;effect.Start(archive,137);
     const auto initialAlpha=effect.Sample().color.a;
     effect.Advance(30.0/60);

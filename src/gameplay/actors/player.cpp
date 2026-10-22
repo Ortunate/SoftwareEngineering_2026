@@ -4,10 +4,12 @@
 
 #include "app/math.hpp"
 #include "gameplay/arena.hpp"
+#include "gameplay/actors/reimu_homing.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <numbers>
 
 namespace koumakyou {
@@ -17,40 +19,61 @@ constexpr float kFocusSpeed = 2.8F;
 constexpr float kMouseSensitivity = 0.0024F;
 constexpr float kHitRadius = 0.18F;
 constexpr float kGrazeRadius = 0.72F;
-// 发射点使用玩家局部坐标：gold 位于前方偏下，cyan 在其左右各偏移 0.78 世界单位。
+// 发射点使用玩家局部坐标：gold 位于前方偏下，cyan 与太极圈共用视线两侧、略偏下的位置。
 // Power 只改变弹数和张角，不能随通道编号移动这三个发射点。
+// 贴近目标时三个偏移等比缩短，保证发射点仍位于玩家与目标之间。
 constexpr float kMuzzleForward = 1.2F;
 constexpr float kMuzzleDown = 0.6F;
 constexpr float kHomingSide = 0.78F;
+constexpr float kOptionDown = 0.35F;
+// 原作横向间距由 24 像素缩至 8 像素，过渡用 8 个 60 Hz 帧；世界侧距沿用现有三维布局。
+constexpr float kFocusedHomingSide = kHomingSide / 3.0F;
+constexpr float kOptionFocusSeconds = 8.0F / 60.0F;
+constexpr float kDefaultAimDepth = 20.0F;
 // gold 与 cyan 统一使用 20% 不透明度（255×0.2）；渲染时还会乘以贴图自身 Alpha。
 constexpr unsigned char kPlayerBulletAlpha = 51;
-/// @brief 火力档位同时决定弹数和散射宽度；角度为相对视线的单侧最大偏转（度）。
+/// @brief 直射火力档位决定弹数和散射宽度；角度为相对准星的单侧最大偏转（度）。
 struct ShotLevel {
     int threshold;
     int straightCount;
-    int homingCount;
     float straightHalfAngleDegrees;
-    float homingHalfAngleDegrees;
 };
 constexpr std::array<ShotLevel, 9> kShotLevels{{
-    {0, 2, 0, 2.0F, 0.0F}, {8, 2, 2, 3.0F, 3.5F},
-    {16, 3, 2, 4.0F, 4.5F}, {32, 3, 3, 4.5F, 5.5F},
-    {48, 4, 3, 5.0F, 6.5F}, {64, 4, 4, 6.0F, 7.5F},
-    {80, 5, 4, 6.5F, 8.0F}, {96, 5, 5, 7.0F, 9.0F},
-    {128, 6, 6, 8.0F, 10.0F},
+    {0, 2, 2.0F}, {8, 2, 3.0F}, {16, 3, 4.0F}, {32, 3, 4.5F},
+    {48, 4, 5.0F}, {64, 4, 6.0F}, {80, 5, 6.5F}, {96, 5, 7.0F}, {128, 6, 8.0F},
 }};
 
-/// @brief 返回成对散射通道的方向符号（-1 或 +1）；奇数发多出的外侧弹随轮次换边。
-float ShotSideSign(int index, bool alternateSides) {
-    return (index + static_cast<int>(alternateSides)) % 2 == 0 ? -1.0F : 1.0F;
+/// @brief 求最近准星命中球体的深度；forward 须为单位向量，返回正世界单位，未命中时使用默认深度。
+float AimDepth(Vector3 position, Vector3 forward, std::span<const PlayerAimTarget> targets) {
+    float nearestEntry = std::numeric_limits<float>::max();
+    float depth = kDefaultAimDepth;
+    for (const auto& target : targets) {
+        if (target.radius <= 0.0F) continue;
+        const auto relative = game_math::Subtract(target.position, position);
+        const float along = relative.x * forward.x + relative.y * forward.y + relative.z * forward.z;
+        const auto perpendicular = game_math::Subtract(relative, game_math::Scale(forward, along));
+        const float halfChordSquared = target.radius * target.radius -
+            (perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y + perpendicular.z * perpendicular.z);
+        if (along <= 0.0F || halfChordSquared < 0.0F) continue;
+        const float entry = std::max(0.0F, along - std::sqrt(halfChordSquared));
+        if (entry >= nearestEntry) continue;
+        nearestEntry = entry;
+        // 选择首先遮住射线的判定体，但瞄向射线上穿过其内部的点，避免从偏下的模块擦过球面。
+        // 不能直接瞄准球心，否则准星边缘的目标会获得额外吸附；极近距离保留正深度防止零向量。
+        depth = std::max(0.05F, along);
+    }
+    return depth;
 }
-/// @brief 将视线沿横向偏转 angleDegrees（度），返回单位方向；forward/right 须正交且归一化。
-/// angleDegrees 的正负分别指向玩家局部右侧和左侧。
-Vector3 ShotSpreadDirection(Vector3 forward, Vector3 right, float angleDegrees) {
+
+/// @brief 从模块 origin 指向准星目标平面的散射落点；angleDegrees 为相对准星的横向角（度）。
+/// position 为视点，forward/right 须正交归一化，depth 为正世界单位；返回单位方向。
+Vector3 ConvergingShotDirection(Vector3 origin, Vector3 position, Vector3 forward,
+                               Vector3 right, float depth, float angleDegrees) {
     const float angle = angleDegrees * std::numbers::pi_v<float> / 180.0F;
-    // 在局部正交基上偏转，保证高仰俯角下仍保持张角和弹速；不能直接叠加世界 yaw。
-    return game_math::Add(game_math::Scale(forward, std::cos(angle)),
-                          game_math::Scale(right, std::sin(angle)));
+    // 散射落点对称分布在垂直视线的同一深度平面，任意仰俯角下仍以准星为中心。
+    const auto point = game_math::Add(position, game_math::Add(game_math::Scale(forward, depth),
+        game_math::Scale(right, std::tan(angle) * depth)));
+    return BulletSystem::DirectionTo(origin, point);
 }
 }  // namespace
 
@@ -67,6 +90,11 @@ void Player::ResetPose() {
     position_ = {0.0F, 0.0F, -6.5F};
     yaw_ = 0.0F;
     pitch_ = 0.0F;
+    homingFrame_ = -1;
+    homingFractionalFrame_ = 0.0;
+    optionFocus_ = 0.0F;
+    optionAimDepth_ = kDefaultAimDepth;
+    visualAge_ = 0.0;
 }
 
 void Player::SetView(float yawRadians, float pitchRadians) {
@@ -80,10 +108,13 @@ void Player::SetInvulnerability(float seconds) {
 
 bool Player::Update(float deltaTime, const PlayerInput& input,
                     BulletSystem& bullets, VisualId bulletVisual,
-                    VisualId homingVisual, bool allowFire) {
+                    VisualId homingVisual, bool allowFire,
+                    std::span<const PlayerAimTarget> aimTargets) {
     invulnerableTimer_ = std::max(0.0F, invulnerableTimer_ - deltaTime);
     bombCooldown_ = std::max(0.0F, bombCooldown_ - deltaTime);
     fireTimer_ -= deltaTime;
+    visualAge_ += deltaTime;
+    optionFocus_ = std::clamp(optionFocus_ + (input.focus ? deltaTime : -deltaTime) / kOptionFocusSeconds, 0.0F, 1.0F);
 
     SetView(yaw_ - input.mouseDelta.x * kMouseSensitivity * input.mouseSensitivityScale,
             pitch_ - input.mouseDelta.y * kMouseSensitivity * input.mouseSensitivityScale);
@@ -109,10 +140,37 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
     position_.x = std::clamp(position_.x, -limit.x, limit.x);
     position_.y = std::clamp(position_.y, -limit.y, limit.y);
     position_.z = std::clamp(position_.z, -limit.z, limit.z);
+    optionAimDepth_ = AimDepth(position_, forward, aimTargets);
 
     if (allowFire && input.fire && fireTimer_ <= 0.0F) {
-        Fire(bullets, bulletVisual, homingVisual);
+        Fire(bullets, bulletVisual, aimTargets);
         fireTimer_ = input.focus ? 0.075F : 0.09F;
+    }
+    if (!allowFire || shot_ != ShotType::HomingAmulet) {
+        homingFrame_ = -1;
+        homingFractionalFrame_ = 0.0;
+    } else if (homingFrame_ < 0) {
+        if (input.fire) {
+            homingFrame_ = 0;
+            homingFractionalFrame_ = 0.0;
+            FireHomingFrame(bullets, homingVisual, aimTargets);
+        }
+    } else {
+        homingFractionalFrame_ += static_cast<double>(deltaTime) * reimu_homing::kFramesPerSecond;
+        // 用独立的整数逻辑帧补发通道，避免帧率、Focus 和金色弹冷却改变追踪弹相位。
+        // 原作每次开火至少完成 0…29 帧；满火力的 period=16 不能改成连续计时，否则跨窗口节奏会变。
+        while (homingFractionalFrame_ >= 1.0 - 0.000001) {
+            homingFractionalFrame_ = std::max(0.0, homingFractionalFrame_ - 1.0);
+            if (++homingFrame_ == reimu_homing::kCycleFrames) {
+                if (!input.fire) {
+                    homingFrame_ = -1;
+                    homingFractionalFrame_ = 0.0;
+                    break;
+                }
+                homingFrame_ = 0;
+            }
+            FireHomingFrame(bullets, homingVisual, aimTargets);
+        }
     }
     return input.bomb && TryUseBomb();
 }
@@ -175,25 +233,42 @@ Vector3 Player::Up() const {
             -std::cos(yaw_) * std::sin(pitch_)};
 }
 
+std::array<Vector3, 2> Player::OptionPositions() const {
+    const float scale = OptionScale();
+    // 平滑插值只改变局部侧距；不跟随世界坐标轴，转向或仰俯视时仍停留在画面两侧。
+    const float blend = optionFocus_ * optionFocus_ * (3.0F - 2.0F * optionFocus_);
+    const float side = (kHomingSide + (kFocusedHomingSide - kHomingSide) * blend) * scale;
+    const auto center = game_math::Add(position_, game_math::Subtract(
+        game_math::Scale(Forward(), kMuzzleForward * scale), game_math::Scale(Up(), kOptionDown * scale)));
+    const auto offset = game_math::Scale(Right(), side);
+    return {game_math::Subtract(center, offset), game_math::Add(center, offset)};
+}
+
+float Player::OptionScale() const {
+    return std::min(1.0F, optionAimDepth_ / (2.0F * kMuzzleForward));
+}
+
 void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
-                  VisualId homingVisual) {
+                  std::span<const PlayerAimTarget> aimTargets) {
     const Vector3 forward = Forward();
     const Vector3 right = Right();
+    const float depth = AimDepth(position_, forward, aimTargets);
+    const float muzzleScale = std::min(1.0F, depth / (2.0F * kMuzzleForward));
     // 相对屏幕下移而非世界 -Y，避免仰俯视时发射点重新遮挡准星。
     const Vector3 muzzle = game_math::Add(position_,
-        game_math::Subtract(game_math::Scale(forward, kMuzzleForward),
-                            game_math::Scale(Up(), kMuzzleDown)));
+        game_math::Subtract(game_math::Scale(forward, kMuzzleForward * muzzleScale),
+                            game_math::Scale(Up(), kMuzzleDown * muzzleScale)));
     const ShotLevel* level = &kShotLevels.front();
     for (const ShotLevel& candidate : kShotLevels) {
         if (power_ < candidate.threshold) break;
         level = &candidate;
     }
     for (int index = 0; index < level->straightCount; ++index) {
-        // gold 只有一个中央模块：整组弹从同一点均匀展开，奇数发的中央弹沿视线直飞。
+        // gold 从同一模块出射，奇数发的中央弹穿过准星射线，偶数发围绕准星对称展开。
         const float lane = level->straightCount > 1
                                ? 2.0F * index / (level->straightCount - 1) - 1.0F
                                : 0.0F;
-        const Vector3 direction = ShotSpreadDirection(forward, right,
+        const Vector3 direction = ConvergingShotDirection(muzzle, position_, forward, right, depth,
             lane * (shot_ == ShotType::Needle ? 1.5F : level->straightHalfAngleDegrees));
         Bullet* bullet = bullets.Spawn(BulletOwner::Player, muzzle,
             game_math::Scale(direction, 20.0F),
@@ -201,23 +276,29 @@ void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
             Color{255, 255, 255, kPlayerBulletAlpha}, bulletVisual);
         if (bullet) bullet->damage = shot_ == ShotType::Needle ? 3.3F : 2.0F;
     }
-    for (int index = 0; shot_ == ShotType::HomingAmulet && index < level->homingCount; ++index) {
-        const float side = ShotSideSign(index, alternateCyanSide_);
-        const Vector3 origin = game_math::Add(muzzle,
-                                              game_math::Scale(right, side * kHomingSide));
-        const float laneFraction = static_cast<float>(index / 2 + 1) /
-                                   static_cast<float>((level->homingCount + 1) / 2);
-        const Vector3 direction = ShotSpreadDirection(forward, right,
-            side * laneFraction * level->homingHalfAngleDegrees);
-        Bullet* bullet = bullets.Spawn(BulletOwner::Player, origin,
-            game_math::Scale(direction, 14.0F),
-            0.10F, Color{255, 255, 255, kPlayerBulletAlpha}, homingVisual);
-        if (bullet) {
-            bullet->damage = 1.0F;
-            bullet->homingTurnRate = 5.5F;
+}
+
+void Player::FireHomingFrame(BulletSystem& bullets, VisualId homingVisual,
+                             std::span<const PlayerAimTarget> aimTargets) {
+    const auto& level = reimu_homing::ForPower(power_);
+    const auto origins = OptionPositions();
+    for (const auto& pair : level.pairs) {
+        if (homingFrame_ % pair.periodFrames != pair.phaseFrame) continue;
+        const Vector3 forward = Forward();
+        const Vector3 right = Right();
+        const float depth = AimDepth(position_, forward, aimTargets);
+        for (int index = 0; index < 2; ++index) {
+            const float side = index == 0 ? -1.0F : 1.0F;
+            const auto origin = origins[index];
+            const auto direction = ConvergingShotDirection(origin, position_, forward, right, depth,
+                                                           side * pair.halfAngleDegrees);
+            if (auto* bullet = bullets.Spawn(BulletOwner::Player, origin, game_math::Scale(direction, 14.0F),
+                                            0.10F, Color{255, 255, 255, kPlayerBulletAlpha}, homingVisual)) {
+                bullet->damage = 1.0F;
+                bullet->homingTurnRate = 5.5F;
+            }
         }
     }
-    alternateCyanSide_ = !alternateCyanSide_;
 }
 
 bool Player::TryUseBomb() {

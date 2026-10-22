@@ -1,6 +1,7 @@
 // 本文件负责验证玩家封装后的移动、射击、Bomb 和敌弹接触规则。
 
 #include "gameplay/actors/player.hpp"
+#include "app/math.hpp"
 #include "stages/stage1/ids.hpp"
 
 #include <cassert>
@@ -9,9 +10,27 @@
 #include <cmath>
 #include <memory>
 #include <numbers>
+#include <utility>
+#include <vector>
 
 namespace {
-// 验证发射点保持在画面下方、gold 单模块对称散射，以及 cyan 双模块散射和追踪。
+/// @brief 将弹道延伸到距视点 depth 世界单位的准星平面，返回相对视点的落点；forward 须归一化。
+Vector3 ShotPlanePoint(const koumakyou::Bullet& bullet, Vector3 position, Vector3 forward, float depth = 20.0F) {
+    const auto relative = koumakyou::game_math::Subtract(bullet.position, position);
+    const float originDepth = relative.x * forward.x + relative.y * forward.y + relative.z * forward.z;
+    const float speed = bullet.velocity.x * forward.x + bullet.velocity.y * forward.y + bullet.velocity.z * forward.z;
+    assert(speed > 0);
+    return koumakyou::game_math::Add(relative,
+        koumakyou::game_math::Scale(bullet.velocity, (depth - originDepth) / speed));
+}
+
+/// @brief 返回默认汇聚平面的散射角（弧度）；此处仅用于默认朝向的测试。
+float DefaultShotAngle(const koumakyou::Bullet& bullet) {
+    const auto point = ShotPlanePoint(bullet, {0, 0, -6.5F}, {0, 0, 1});
+    return std::abs(std::atan2(point.x, point.z));
+}
+
+// 验证发射点保持在画面下方，散射落点围绕准星对称，cyan 仍保留双模块和后续追踪。
 void TestShotSpread() {
     using koumakyou::Bullet;
     using koumakyou::BulletSystem;
@@ -47,12 +66,13 @@ void TestShotSpread() {
                     const float lateral = dot(bullet.velocity, right);
                     const float forwardSpeed = dot(bullet.velocity, forward);
                     assert(forwardSpeed > 0.0F);
-                    assert(std::abs(dot(bullet.velocity, up)) < 0.0001F);
+                    const auto point = ShotPlanePoint(bullet, player.Position(), forward);
+                    assert(std::abs(dot(point, up)) < 0.0001F);
                     const Vector3 relative{bullet.position.x - player.Position().x,
                                            bullet.position.y - player.Position().y,
                                            bullet.position.z - player.Position().z};
                     assert(std::abs(dot(relative, forward) - 1.2F) < 0.0001F);
-                    assert(std::abs(dot(relative, up) + 0.6F) < 0.0001F);
+                    assert(std::abs(dot(relative, up) + (cyan ? 0.35F : 0.6F)) < 0.0001F);
                     const float originSide = dot(relative, right);
                     if (cyan) {
                         assert(std::abs(std::abs(originSide) - 0.78F) < 0.0001F);
@@ -63,7 +83,7 @@ void TestShotSpread() {
                         assert(std::abs(relative.y - (forward.y * 1.2F - up.y * 0.6F)) < 0.0001F);
                         assert(std::abs(relative.z - (forward.z * 1.2F - up.z * 0.6F)) < 0.0001F);
                     }
-                    const float angle = std::abs(std::atan2(lateral, forwardSpeed));
+                    const float angle = std::abs(std::atan2(dot(point, right), dot(point, forward)));
                     if (cyan) {
                         cyanHalfAngle = std::max(cyanHalfAngle, angle);
                         cyanLateralSum += lateral;
@@ -73,16 +93,16 @@ void TestShotSpread() {
                     }
                 });
                 assert(std::abs(goldHalfAngle - 8.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
-                assert(std::abs(cyanHalfAngle - 10.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
+                assert(std::abs(cyanHalfAngle - 20.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
                 assert(std::abs(goldLateralSum) < 0.0001F && std::abs(cyanLateralSum) < 0.0001F);
             }
         }
     }
 
-    // gold 每轮都对称，cyan 两轮奇数发散射的横向速度互相抵消。
+    // gold 每轮都对称，cyan 每个发射时刻都从左右模块成对生成。
     for (int power : {16, 32, 80, 96}) {
         Player player;
-        player.AdjustPower(power);
+        player.AdjustPower(power - player.Power());
         bullets.Reset();
         for (float deltaTime : {0.0F, 0.09F}) {
             player.Update(deltaTime, {.fire = true}, bullets,
@@ -122,11 +142,250 @@ void TestShotSpread() {
         }
     });
 }
+
+// 在多个朝向、距离和火力档位验证真实弹道落点；近距离不能越过目标生成，偏离准星的敌人不能吸附弹道。
+void TestShotAim() {
+    using namespace koumakyou;
+    using namespace koumakyou::game_math;
+    const auto dot = [](Vector3 a, Vector3 b) { return a.x*b.x + a.y*b.y + a.z*b.z; };
+    auto bullets = std::make_unique<BulletSystem>();
+    for (const auto shot : {ShotType::HomingAmulet, ShotType::Needle}) {
+        for (float yaw : {0.0F, 1.1F, 3.1F}) for (float pitch : {-1.45F, 0.0F, 1.45F}) {
+            const auto forward = BulletSystem::DirectionFromYawPitch(yaw, pitch);
+            const Vector3 right{-std::cos(yaw), 0, std::sin(yaw)};
+            const Vector3 up{-std::sin(yaw)*std::sin(pitch), std::cos(pitch), -std::cos(yaw)*std::sin(pitch)};
+            for (int power : {0, 8, 16, 32, 48, 64, 80, 96, 128}) for (float depth : {0.3F, 1.2F, 3.0F, 12.0F, 30.0F}) {
+                Player player;
+                player.ConfigureRun(3, 3, false, shot);
+                player.SetView(yaw, pitch);
+                player.AdjustPower(power - player.Power());
+                // 先提供远敌人，再提供准星内的近敌人和准星外的更近敌人，防止按数组次序或距离吸附。
+                const auto point = Add(player.Position(), Scale(forward, depth));
+                const std::array<PlayerAimTarget, 4> targets{{
+                    {Add(player.Position(), Scale(forward, depth+5)), 0.1F},
+                    {Add(point, Scale(right, 0.02F)), 0.1F},
+                    {Add(player.Position(), Add(Scale(forward, depth*0.5F), Scale(up, 1))), 0.1F},
+                    {Subtract(player.Position(), Scale(forward, 1)), 0.1F},
+                }};
+                bullets->Reset();
+                player.Update(0, {.fire=true}, *bullets, stage1::kPlayerGoldCard, stage1::kPlayerCyanCard, true, targets);
+                float goldLateralSum = 0;
+                int centerShots = 0;
+                bullets->Pool().ForEachActive([&](const Bullet& bullet) {
+                    const auto relative = Subtract(bullet.position, player.Position());
+                    assert(dot(relative, forward) > 0 && dot(relative, forward) < depth);
+                    assert(dot(relative, up) < 0);
+                    const auto impact = ShotPlanePoint(bullet, player.Position(), forward, depth);
+                    assert(std::abs(dot(impact, up)) < 0.0001F);
+                    assert(std::abs(dot(impact, forward)-depth) < 0.0001F);
+                    assert(std::abs(BulletSystem::Length(bullet.velocity) -
+                        (bullet.homingTurnRate > 0 ? 14.0F : 20.0F)) < 0.0001F);
+                    if (bullet.homingTurnRate > 0) return;
+                    goldLateralSum += dot(impact, right);
+                    if (std::abs(dot(impact, right)) < 0.00001F) {
+                        ++centerShots;
+                        // 奇数发中央弹确实经过准星指向的球体内部，且瞄准点不随偏心球心移动。
+                        assert(DistanceSquared(Add(player.Position(), impact), targets[1].position) < 0.1F*0.1F);
+                    }
+                });
+                assert(std::abs(goldLateralSum) < 0.0001F);
+                const bool oddGoldCount = power==16 || power==32 || power==80 || power==96;
+                assert(centerShots == (oddGoldCount ? 1 : 0));
+            }
+        }
+    }
+
+    // 相交顺序按球体前表面决定，而不是球心深度；准星没碰到任何目标则回退默认距离。
+    for (bool intersects : {false, true}) {
+        Player player;
+        player.AdjustPower(16 - player.Power());
+        const std::array<PlayerAimTarget, 3> targets{{{{0, 0, 3.5F}, intersects ? 6.0F : 0.0F},
+                                                    {{0, 0, 1.5F}, intersects ? 0.1F : 0.0F},
+                                                    {{2, 0, -1.5F}, 0.1F}}};
+        bullets->Reset();
+        player.Update(0, {.fire=true}, *bullets, stage1::kPlayerGoldCard, stage1::kPlayerCyanCard, true, targets);
+        const float depth = intersects ? 10.0F : 20.0F;
+        bullets->Pool().ForEachActive([&](const Bullet& bullet) {
+            const auto impact = ShotPlanePoint(bullet, player.Position(), {0, 0, 1}, depth);
+            assert(std::abs(impact.y) < 0.0001F);
+        });
+    }
+}
+
+// 逐帧核对新典实际发射时刻和角度，尤其是满火力跨 30 帧窗口时的两帧间隔。
+void TestHomingSchedule() {
+    using namespace koumakyou;
+    using Event = std::pair<int, int>; // 发射帧、单侧散射角（度）；每个事件对应左右各一颗。
+    struct Case { int minimum; int maximum; std::vector<Event> events; };
+    const std::array<Case, 9> cases{{
+        {0, 7, {}},
+        {8, 15, {{0,30}}}, {16, 31, {{0,30}}}, {32, 47, {{0,30}}},
+        {48, 63, {{0,30},{15,30}}},
+        {64, 79, {{0,30},{0,60},{15,30}}},
+        {80, 95, {{0,20},{10,40},{20,60}}},
+        {96, 127, {{0,20},{5,40},{10,60},{15,20},{20,40},{25,60}}},
+        {128, 128, {{0,20},{4,40},{8,60},{12,80},{16,20},{20,40},{24,60},{28,80}}},
+    }};
+    auto bullets = std::make_unique<BulletSystem>();
+    const auto collect = [&](int frame, std::vector<Event>& events) {
+        int count = 0;
+        float lateralSum = 0;
+        bullets->Pool().ForEachActive([&](const Bullet& bullet) {
+            if (bullet.homingTurnRate <= 0) return;
+            ++count;
+            lateralSum += bullet.velocity.x;
+            assert(std::abs(bullet.position.x) >= 0.26F-0.0001F && std::abs(bullet.position.x) <= 0.78F+0.0001F);
+            assert(bullet.position.x*bullet.velocity.x > 0);
+            if (bullet.position.x > 0)
+                events.emplace_back(frame, static_cast<int>(std::lround(DefaultShotAngle(bullet)*180/std::numbers::pi_v<float>)));
+        });
+        assert(count % 2 == 0 && std::abs(lateralSum) < 0.0001F);
+        bullets->Reset();
+    };
+    for (const auto& scenario : cases) for (int power : {scenario.minimum, scenario.maximum}) {
+        for (bool focus : {false, true}) {
+            Player player;
+            player.AdjustPower(power - player.Power());
+            std::vector<Event> actual;
+            for (int frame=0; frame<60; ++frame) {
+                player.Update(frame==0 ? 0 : 1.0F/60, {.focus=focus, .fire=true}, *bullets,
+                              stage1::kPlayerGoldCard, stage1::kPlayerCyanCard, true);
+                collect(frame, actual);
+            }
+            auto expected = scenario.events;
+            for (const auto& [frame, angle] : scenario.events) expected.emplace_back(frame+30, angle);
+            assert(actual == expected);
+        }
+        // 不同帧率和中途切换 Focus 均应在一秒内生成相同的左右成对通道。
+        for (int fps : {30, 144}) {
+            Player player;
+            player.AdjustPower(power - player.Power());
+            std::vector<Event> actual;
+            for (int frame=0; frame<fps; ++frame) {
+                player.Update(frame==0 ? 0 : 1.0F/fps, {.focus=frame%2==0, .fire=true}, *bullets,
+                              stage1::kPlayerGoldCard, stage1::kPlayerCyanCard, true);
+                collect(0, actual);
+            }
+            std::vector<Event> expected;
+            for (int cycle=0; cycle<2; ++cycle)
+                for (const auto& event : scenario.events) expected.emplace_back(0, event.second);
+            assert(actual == expected);
+        }
+    }
+    Player player;
+    player.AdjustPower(96 - player.Power());
+    std::vector<Event> burst;
+    player.Update(0, {.fire=true}, *bullets, 0, 1, true);
+    collect(0, burst);
+    player.Update(0.5F, {}, *bullets, 0, 1, true);
+    collect(0, burst);
+    assert(burst.size() == 6); // 点射仍完成当前 30 帧窗口，但松键不会启动第二轮。
+    player.Update(1, {}, *bullets, 0, 1, true);
+    assert(bullets->Pool().ActiveCount() == 0);
+    player.Update(0, {.fire=true}, *bullets, 0, 1, true);
+    bullets->Reset();
+    player.Update(0.5F, {.fire=true}, *bullets, 0, 1, false);
+    assert(bullets->Pool().ActiveCount() == 0);
+    player.Update(0, {.fire=true}, *bullets, 0, 1, true);
+    std::vector<Event> restarted;
+    collect(0, restarted);
+    assert((restarted == std::vector<Event>{{0,20}}));
+
+    // Power 改变只切换通道表，不能重启周期造成升级时额外齐射。
+    player.Reset();
+    player.AdjustPower(8);
+    player.Update(0, {.fire=true}, *bullets, 0, 1, true);
+    bullets->Reset();
+    player.Update(4.0F/60, {.fire=true}, *bullets, 0, 1, true);
+    bullets->Reset();
+    player.AdjustPower(88);
+    player.Update(1.0F/60, {.fire=true}, *bullets, 0, 1, true);
+    std::vector<Event> upgraded;
+    collect(5, upgraded);
+    assert((upgraded == std::vector<Event>{{5,40}}));
+    player.ResetPose();
+    player.Update(0, {.fire=true}, *bullets, 0, 1, true);
+    std::vector<Event> respawned;
+    collect(0, respawned);
+    assert((respawned == std::vector<Event>{{0,20}}));
+}
+
+// 太极圈与副弹共用世界坐标；验证收拢、反向切换、帧率差异及近距离缩放不产生发射点偏移。
+void TestPlayerOptions() {
+    using namespace koumakyou;
+    using namespace koumakyou::game_math;
+    auto bullets = std::make_unique<BulletSystem>();
+    Player visibility;
+    assert(!visibility.OptionsVisible());
+    visibility.AdjustPower(7);assert(!visibility.OptionsVisible());
+    visibility.AdjustPower(1);assert(visibility.OptionsVisible());
+    for (float yaw : {0.0F,1.1F,3.1F}) for (float pitch : {-1.45F,0.0F,1.45F}) {
+        Player player;
+        player.AdjustPower(128);
+        player.SetView(yaw,pitch);
+        const auto forward=BulletSystem::DirectionFromYawPitch(yaw,pitch);
+        const Vector3 right{-std::cos(yaw),0,std::sin(yaw)};
+        const Vector3 up{-std::sin(yaw)*std::sin(pitch),std::cos(pitch),-std::cos(yaw)*std::sin(pitch)};
+        const auto dot=[](Vector3 a,Vector3 b){return a.x*b.x+a.y*b.y+a.z*b.z;};
+        for (int frame=0;frame<=16;++frame) {
+            const bool focus=frame<=8;
+            player.Update(frame==0 ? 0 : 1.0F/60,{.focus=focus,.fire=true},*bullets,
+                          stage1::kPlayerGoldCard,stage1::kPlayerCyanCard,true);
+            const auto positions=player.OptionPositions();
+            const float separation=BulletSystem::Length(Subtract(positions[1],positions[0]));
+            if (frame==0 || frame==16)assert(std::abs(separation-1.56F)<0.0001F);
+            if (frame==8)assert(std::abs(separation-0.52F)<0.0001F);
+            for (int side=0;side<2;++side) {
+                const auto relative=Subtract(positions[side],player.Position());
+                assert(std::abs(dot(relative,forward)-1.2F)<0.0001F);
+                assert(std::abs(dot(relative,up)+0.35F)<0.0001F);
+                assert(dot(relative,right)*(side==0 ? -1 : 1)>0);
+            }
+            bullets->Pool().ForEachActive([&](const Bullet& bullet){
+                if(bullet.homingTurnRate<=0)return;
+                assert(std::min(DistanceSquared(bullet.position,positions[0]),
+                                DistanceSquared(bullet.position,positions[1]))<0.000001F);
+            });
+            bullets->Reset();
+        }
+        assert(std::abs(player.VisualAge()-16.0/60)<0.0001);
+        const auto before=player.OptionPositions();
+        player.Update(0,{.focus=true},*bullets,0,1,false);
+        assert(DistanceSquared(before[0],player.OptionPositions()[0])<0.000001F);
+        player.ResetPose();
+        assert(player.VisualAge()==0 && player.OptionScale()==1);
+    }
+    float expectedSeparation=0;
+    for (int steps : {3,6,14}) {
+        Player player;
+        for(int step=0;step<steps;++step)player.Update(0.1F/steps,{.focus=true},*bullets,0,1,false);
+        const auto positions=player.OptionPositions();
+        const float separation=BulletSystem::Length(Subtract(positions[1],positions[0]));
+        if(expectedSeparation==0)expectedSeparation=separation;
+        assert(std::abs(separation-expectedSeparation)<0.0001F);
+        player.Update(0.05F,{.focus=false},*bullets,0,1,false);
+        const auto wider=player.OptionPositions();
+        assert(BulletSystem::Length(Subtract(wider[1],wider[0]))>separation);
+    }
+    Player close;
+    close.AdjustPower(8);
+    const std::array<PlayerAimTarget,1> target{{{Add(close.Position(),{0,0,0.3F}),0.1F}}};
+    close.Update(0,{.fire=true},*bullets,0,1,true,target);
+    assert(std::abs(close.OptionScale()-0.125F)<0.0001F);
+    const auto positions=close.OptionPositions();
+    bullets->Pool().ForEachActive([&](const Bullet& bullet){
+        if(bullet.homingTurnRate<=0)return;
+        assert(std::min(DistanceSquared(bullet.position,positions[0]),DistanceSquared(bullet.position,positions[1]))<0.000001F);
+    });
+}
 }  // namespace
 
 /// @brief 运行玩家行为回归用例；断言失败时终止进程。
 void RunPlayerTests() {
     TestShotSpread();
+    TestShotAim();
+    TestHomingSchedule();
+    TestPlayerOptions();
     // 挑战模式反复受击仍可继续；标准模式按额外残机数耗尽后失败。
     koumakyou::Player challenge;
     challenge.ConfigureRun(2, 0, true, koumakyou::ShotType::Needle);
@@ -228,7 +487,7 @@ void RunPlayerTests() {
         assert(bullet.position.x == 0.0F && bullet.position.y == -0.6F);
         assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
         assert(bullet.velocity.x != 0.0F);
-        const float angle = std::abs(std::atan2(bullet.velocity.x, bullet.velocity.z));
+        const float angle = DefaultShotAngle(bullet);
         assert(std::abs(angle - 2.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
     });
     player.Update(0.01F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
@@ -238,17 +497,17 @@ void RunPlayerTests() {
                   koumakyou::stage1::kPlayerCyanCard, true);
     assert(bullets.Pool().ActiveCount() == 4);
 
-    // 每个火力档位应增加弹数并扩大外侧散射角，保持单发伤害和速度。
+    // 金色弹仍随档位增强；追踪弹仅统计第 0 帧到期的通道，不能将整个周期压成一轮齐射。
     constexpr std::array<int, 8> thresholds{8, 16, 32, 48, 64, 80, 96, 128};
-    constexpr std::array<std::size_t, 8> shotCounts{4, 5, 6, 7, 8, 9, 10, 12};
+    constexpr std::array<std::size_t, 8> shotCounts{4, 5, 5, 6, 8, 7, 7, 8};
+    constexpr std::array<float, 8> initialCyanAngles{30, 30, 30, 30, 60, 20, 20, 20};
     float previousGoldAngle = 2.0F * std::numbers::pi_v<float> / 180.0F;
-    float previousCyanAngle = 0.0F;
     for (std::size_t index = 0; index < thresholds.size(); ++index) {
         Player upgraded;
         // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
         auto volleyStorage = std::make_unique<BulletSystem>();
         BulletSystem& volley = *volleyStorage;
-        upgraded.AdjustPower(thresholds[index]);
+        upgraded.AdjustPower(thresholds[index] - upgraded.Power());
         assert(upgraded.Power() == thresholds[index]);
         upgraded.Update(0.0F, firing, volley,
                         koumakyou::stage1::kPlayerGoldCard,
@@ -258,7 +517,7 @@ void RunPlayerTests() {
         float maxGoldAngle = 0.0F;
         float maxCyanAngle = 0.0F;
         volley.Pool().ForEachActive([&](const Bullet& bullet) {
-            const float angle = std::abs(std::atan2(bullet.velocity.x, bullet.velocity.z));
+            const float angle = DefaultShotAngle(bullet);
             if (bullet.homingTurnRate > 0.0F) {
                 assert(bullet.visual == koumakyou::stage1::kPlayerCyanCard);
                 assert(bullet.damage == 1.0F && bullet.homingTurnRate == 5.5F);
@@ -277,23 +536,22 @@ void RunPlayerTests() {
             } else {
                 assert(bullet.position.x == 0.0F);
             }
-            assert(bullet.position.y == -0.6F);
+            assert(bullet.position.y == (bullet.homingTurnRate > 0 ? -0.35F : -0.6F));
             assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
-            assert(bullet.velocity.y == 0.0F);
+            assert(bullet.velocity.y > 0.0F);
             assert(bullet.color.a == 51);
         });
         assert(homingCount > 0);
-        assert(maxGoldAngle > previousGoldAngle && maxCyanAngle > previousCyanAngle);
+        assert(maxGoldAngle > previousGoldAngle);
         assert(maxGoldAngle <= 8.0F * std::numbers::pi_v<float> / 180.0F + 0.0001F);
-        assert(maxCyanAngle <= 10.0F * std::numbers::pi_v<float> / 180.0F + 0.0001F);
+        assert(std::abs(maxCyanAngle - initialCyanAngles[index] * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
         previousGoldAngle = maxGoldAngle;
-        previousCyanAngle = maxCyanAngle;
     }
     Player alternating;
     // 弹幕池含 8192 个槽，测试同时使用多个池时改在堆上分配，避免 Windows 栈溢出。
     auto alternatingBulletsStorage = std::make_unique<BulletSystem>();
     BulletSystem& alternatingBullets = *alternatingBulletsStorage;
-    alternating.AdjustPower(16);
+    alternating.AdjustPower(16 - alternating.Power());
     alternating.Update(0.0F, firing, alternatingBullets,
                        koumakyou::stage1::kPlayerGoldCard,
                        koumakyou::stage1::kPlayerCyanCard, true);
@@ -355,6 +613,7 @@ void RunPlayerTests() {
     assert(player.TakeHit());
     assert(player.RemainingLives() == 3);
     assert(player.Bombs() == 2);
+    assert(player.Power() == 0);
     Bullet protectedHit{};
     protectedHit.active = true;
     protectedHit.position = player.Position();
@@ -382,6 +641,7 @@ void RunPlayerTests() {
     player.Reset();
     assert(player.RemainingLives() == 4);
     assert(player.Bombs() == 3);
+    assert(player.Power() == 0);
     assert(player.TakeHit());
     assert(player.TakeHit());
     assert(player.TakeHit());

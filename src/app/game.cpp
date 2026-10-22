@@ -140,6 +140,7 @@ void Game::StartRun(bool captureCursor, bool synchronous) {
     enemies_.Clear();
     drops_.Clear();
     boss_.reset();
+    playerOptionAnimations_ = {};
     assets_.UnloadStage();
     captureCursor_ = captureCursor;
     stage_ = StageDirector{};
@@ -174,6 +175,7 @@ void Game::UpdateLoading(float deltaTime) {
         if (assets_.AdvanceStageLoad()) CompleteStartRun();
     } catch (const std::exception& error) {
         TraceLog(LOG_WARNING, "STAGE: %s", error.what());
+        playerOptionAnimations_ = {};
         assets_.UnloadStage();
         loadingFailed_ = true;
     }
@@ -182,6 +184,7 @@ void Game::UpdateLoading(float deltaTime) {
 void Game::CompleteStartRun() {
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
+    playerOptionAnimations_ = {};
     player_.Reset();
     player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,
                          selectedShot_ == 0 ? ShotType::HomingAmulet : ShotType::Needle);
@@ -240,6 +243,7 @@ void Game::EnterMainMenu() {
     enemies_.Clear();
     drops_.Clear();
     boss_.reset();
+    playerOptionAnimations_ = {};
     assets_.UnloadStage();
     stage_ = StageDirector{};
     stageContent_.reset();
@@ -372,6 +376,12 @@ void Game::UpdateBattleAnimations() {
         if(effect.effectAnimation.player.Finished())effect.active=false;
     });
     if(state_!=RunState::Playing)return;
+    if (stageContent_ && player_.OptionsVisible()) {
+        for (int side = 0; side < 2; ++side) {
+            const auto visual = stageContent_->PlayerOptionVisual(side);
+            if (visual != kInvalidVisualId) sync(playerOptionAnimations_[side], visual, player_.VisualAge());
+        }
+    }
     enemies_.ForEachActive([&](Enemy& enemy) {
         sync(enemy.animation,enemy.visual,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,
              enemy.animationScript,enemy.animationRevision);
@@ -560,6 +570,7 @@ void Game::UpdateState(float deltaTime) {
         UpdateBattleAnimations();
         if (actorEffects_.Pool().ActiveCount() == 0) {
             actorEffects_.Clear();
+            playerOptionAnimations_ = {};
             assets_.UnloadStage();
             if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
             else { state_ = finishResult_; EnableCursor(); }

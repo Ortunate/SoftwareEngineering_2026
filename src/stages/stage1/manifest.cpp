@@ -52,6 +52,8 @@ const std::vector<VisualDefinition> kVisuals=[] {
     for(int effect=0;effect<3;++effect)
         visuals.push_back({.id=static_cast<VisualId>(kNativeDefeat+effect), .worldHeight=1.2F,
                            .animation={battle::Atlas::BulletEffects,3+effect}});
+    visuals.push_back({.id=kPlayerOptionLeft, .worldHeight=0.42F, .animation={battle::Atlas::Reimu,128}});
+    visuals.push_back({.id=kPlayerOptionRight, .worldHeight=0.42F, .animation={battle::Atlas::Reimu,129}});
     return visuals;
 }();
 constexpr std::array<SoundDefinition, 0> kSounds{};

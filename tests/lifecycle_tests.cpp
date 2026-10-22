@@ -514,7 +514,7 @@ struct GameLifecycleProbe {
             game.selectedShot_=shot;
             game.StartPreview();
             game.stage_=StageDirector{};
-            game.player_.AdjustPower(power);
+            game.player_.AdjustPower(power - game.player_.Power());
             const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
             const auto render=[&] {
                 BeginDrawing(); BeginTextureMode(target); ClearBackground(BLACK);
@@ -530,7 +530,7 @@ struct GameLifecycleProbe {
             game.bullets_.Pool().ForEachActive([&](const Bullet& bullet) {
                 if(bullet.homingTurnRate>0) { ++homing; directionBefore+=bullet.velocity.x; }
             });
-            assert(homing==(shot==0 && power>=8 ? (power==128 ? 6 : 2) : 0));
+            assert(homing==(shot==0 && power>=8 ? 2 : 0));
             // 偏右目标迫使成对弹的横向合速度改变；不能只检查 homingTurnRate 字段存在。
             const std::array<Vector3,1> targets{{{4,0,4}}};
             game.bullets_.Update(0.2F,targets,game.player_.Position());
@@ -567,8 +567,72 @@ struct GameLifecycleProbe {
         game.StartPreview();
     }
 
+    /// @brief 隔离真实太极圈资源，检查双圈像素、Focus 收拢、暂停冻结及卸载时动画借用的释放。
+    static void TestPlayerOptions(Game& game, const std::string& prefix) {
+        game.StartPreview();
+        game.stage_=StageDirector{};
+        game.enemies_.Clear();game.boss_.reset();game.bullets_.Reset();game.drops_.Clear();
+        const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+        const auto render=[&](bool hideOptions=false) {
+            BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);
+            // 场上已清空其他关卡对象，临时移出内容接口只隔离太极圈，HUD 绘制前恢复。
+            auto content=hideOptions ? std::move(game.stageContent_) : nullptr;
+            game.DrawWorld();
+            if(content)game.stageContent_=std::move(content);
+            game.DrawHud();EndTextureMode();EndDrawing();
+            Image result=LoadImageFromTexture(target.texture);ImageFlipVertical(&result);return result;
+        };
+        assert(game.player_.Power()==0 && !game.player_.OptionsVisible());
+        Image background=render(true);
+        game.player_.AdjustPower(8);
+        game.UpdateBattleAnimations();
+        const auto outward=game.player_.OptionPositions();
+        for(int focused=0;focused<2;++focused) {
+            if(focused) {
+                game.player_.Update(8.0F/60,{.focus=true},game.bullets_,0,1,true);
+                game.UpdateBattleAnimations();
+            }
+            const auto positions=game.player_.OptionPositions();
+            Image result=render();
+            for(int side=0;side<2;++side) {
+                const auto& cursor=game.playerOptionAnimations_[side];
+                assert(cursor.player.Source()!=nullptr && cursor.player.Sample().sprite==128);
+                assert(cursor.selection.script==128+side && cursor.player.Sample().visible);
+                const auto center=GetWorldToScreen(positions[side],game.camera_);
+                int ink=0;
+                for(int y=std::max(0,int(center.y)-105);y<std::min(result.height,int(center.y)+105);++y)
+                    for(int x=std::max(0,int(center.x)-105);x<std::min(result.width,int(center.x)+105);++x) {
+                        const auto a=GetImageColor(result,x,y),b=GetImageColor(background,x,y);
+                        if(std::abs(int(a.r)-b.r)+std::abs(int(a.g)-b.g)+std::abs(int(a.b)-b.b)>10)++ink;
+                    }
+                assert(ink>100);
+            }
+            if(focused) {
+                const auto distance=[](const std::array<Vector3,2>& points) {
+                    return BulletSystem::Length({points[1].x-points[0].x,points[1].y-points[0].y,points[1].z-points[0].z});
+                };
+                assert(std::abs(distance(positions)*3-distance(outward))<0.0001F);
+            }
+            if(!prefix.empty()) {
+                const auto path=prefix+(focused ? "-options-focus.png" : "-options-normal.png");
+                assert(ExportImage(result,path.c_str()));
+            }
+            UnloadImage(result);
+        }
+        const double age=game.player_.VisualAge();
+        const auto frame=game.playerOptionAnimations_[0].player.Sample();
+        game.TogglePause();game.Update(0.5F);
+        assert(game.player_.VisualAge()==age && game.playerOptionAnimations_[0].player.Sample().rotation.z==frame.rotation.z);
+        game.TogglePause();
+        game.EnterMainMenu();
+        assert(game.playerOptionAnimations_[0].player.Source()==nullptr && game.playerOptionAnimations_[1].player.Source()==nullptr);
+        UnloadImage(background);UnloadRenderTexture(target);
+        game.StartPreview();
+    }
+
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
+        TestPlayerOptions(game,prefix);
         TestPlayerShots(game,prefix);
         TestBossTransitions(game,prefix);
         TestBossHud(game,prefix);
@@ -741,7 +805,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only。
 /// 不初始化音频，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -760,6 +824,8 @@ int main(int argc, char** argv) {
         if(argc>=3 && std::string(argv[2])=="--viewport-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--player-options-only") {
+            koumakyou::GameLifecycleProbe::TestPlayerOptions(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--player-shots-only") {
             koumakyou::GameLifecycleProbe::TestPlayerShots(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--boss-hud-only") {

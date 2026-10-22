@@ -35,7 +35,10 @@ constexpr VisualId kNativeBulletBase = 22;
 constexpr VisualId kLargePowerPoint = kNativeBulletBase + 160;
 constexpr VisualId kNativeLaserBase = kLargePowerPoint + 1;
 constexpr VisualId kNativeDefeat = kNativeLaserBase + 16;
-constexpr std::size_t kVisualCount = kNativeDefeat + 3;
+/// @brief 灵梦左右太极圈，追加在既有外观之后，保持弹种和对话编号不变。
+constexpr VisualId kPlayerOptionLeft = kNativeDefeat + 3;
+constexpr VisualId kPlayerOptionRight = kPlayerOptionLeft + 1;
+constexpr std::size_t kVisualCount = kPlayerOptionRight + 1;
 /// @brief 保留 ECL 弹幕类型与颜色，非法输入回退普通蓝弹；类型内部颜色转换由战斗目录负责。
 constexpr VisualId NativeBulletVisual(int type,int color) {
     return type>=0 && type<10 && color>=0 && color<16

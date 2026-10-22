@@ -18,6 +18,9 @@ public:
     [[nodiscard]] float DialogueLineDuration() const override { return 5.0F; }
     [[nodiscard]] VisualId PlayerBulletVisual() const override { return kPlayerGoldCard; }
     [[nodiscard]] VisualId PlayerHomingVisual() const override { return kPlayerCyanCard; }
+    [[nodiscard]] VisualId PlayerOptionVisual(int side) const override {
+        return side == 0 ? kPlayerOptionLeft : side == 1 ? kPlayerOptionRight : kInvalidVisualId;
+    }
     [[nodiscard]] VisualId PowerPickupVisual() const override { return kPowerPoint; }
     [[nodiscard]] VisualId LargePowerPickupVisual() const override { return kLargePowerPoint; }
     [[nodiscard]] VisualId ScorePickupVisual() const override { return kScorePoint; }

@@ -246,6 +246,8 @@ private:
     // 当前一局是否捕获鼠标，预览和离屏测试在恢复暂停时仍不捕获。
     bool captureCursor_ = true;
     Player player_{};
+    // 只借用本关卡图集；卸载前重置，动画年龄来自 Player，暂停与复活均沿用玩家时间基准。
+    std::array<battle::Cursor, 2> playerOptionAnimations_{};
     std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
@@ -285,7 +287,7 @@ private:
     std::optional<StageEventId> bossEventId_;
     std::optional<StageEventId> dialogueEventId_;
     SpriteRenderer spriteRenderer_{};
-    // 绘制时复用空间；星点可超过普通道具池容量，不能沿用固定长度的道具绘制数组。
+    // 道具与自机太极圈共用公告板缓冲；星点可超过普通道具池容量，不能改成固定长度数组。
     mutable std::vector<PickupSprite> pickupSprites_;
     std::string message_;
     int selectedMenuItem_ = 0; // 首页选项在本次运行中保留；首次启动默认 Start，返回首页不重置。

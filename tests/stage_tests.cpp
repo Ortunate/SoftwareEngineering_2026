@@ -290,6 +290,13 @@ void TestStage1Content() {
     assert(visuals[stage1::kFairy].animation.atlas == battle::Atlas::Stage1Enemies);
     assert(visuals[stage1::kDarkFairy].animation.script == 3);
     assert(visuals[stage1::kRumia].animation.atlas == battle::Atlas::Rumia);
+    for (int side=0;side<2;++side) {
+        const auto id=content->PlayerOptionVisual(side);
+        assert(id==(side==0 ? stage1::kPlayerOptionLeft : stage1::kPlayerOptionRight));
+        assert(visuals[id].id==id && visuals[id].animation.atlas==battle::Atlas::Reimu);
+        assert(visuals[id].animation.script==128+side && visuals[id].worldHeight==0.42F);
+    }
+    assert(content->PlayerOptionVisual(-1)==kInvalidVisualId && content->PlayerOptionVisual(2)==kInvalidVisualId);
     assert(content->BossPortraitVisual()!=stage1::kRumia);
     const std::array<std::string_view,6> reimuFiles{
         "face00a_0.png", "face00a_1.png", "face00b_0.png", "face00b_1.png", "face00c_0.png", "face00c_1.png"};

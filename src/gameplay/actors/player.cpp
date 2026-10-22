@@ -178,7 +178,7 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
 bool Player::AdjustPower(int delta) {
     const int previousPower = power_;
     const long long updated = static_cast<long long>(power_) + delta;
-    power_ = static_cast<int>(std::clamp(updated, 0LL,
+    power_ = static_cast<int>(std::clamp(updated, static_cast<long long>(kMinPower),
                                          static_cast<long long>(kMaxPower)));
     return previousPower < kMaxPower && power_ == kMaxPower;
 }

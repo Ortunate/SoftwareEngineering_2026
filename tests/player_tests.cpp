@@ -154,7 +154,7 @@ void TestShotAim() {
             const auto forward = BulletSystem::DirectionFromYawPitch(yaw, pitch);
             const Vector3 right{-std::cos(yaw), 0, std::sin(yaw)};
             const Vector3 up{-std::sin(yaw)*std::sin(pitch), std::cos(pitch), -std::cos(yaw)*std::sin(pitch)};
-            for (int power : {0, 8, 16, 32, 48, 64, 80, 96, 128}) for (float depth : {0.3F, 1.2F, 3.0F, 12.0F, 30.0F}) {
+            for (int power : {8, 16, 32, 48, 64, 80, 96, 128}) for (float depth : {0.3F, 1.2F, 3.0F, 12.0F, 30.0F}) {
                 Player player;
                 player.ConfigureRun(3, 3, false, shot);
                 player.SetView(yaw, pitch);
@@ -217,8 +217,7 @@ void TestHomingSchedule() {
     using namespace koumakyou;
     using Event = std::pair<int, int>; // 发射帧、单侧散射角（度）；每个事件对应左右各一颗。
     struct Case { int minimum; int maximum; std::vector<Event> events; };
-    const std::array<Case, 9> cases{{
-        {0, 7, {}},
+    const std::array<Case, 8> cases{{
         {8, 15, {{0,30}}}, {16, 31, {{0,30}}}, {32, 47, {{0,30}}},
         {48, 63, {{0,30},{15,30}}},
         {64, 79, {{0,30},{0,60},{15,30}}},
@@ -293,7 +292,6 @@ void TestHomingSchedule() {
 
     // Power 改变只切换通道表，不能重启周期造成升级时额外齐射。
     player.Reset();
-    player.AdjustPower(8);
     player.Update(0, {.fire=true}, *bullets, 0, 1, true);
     bullets->Reset();
     player.Update(4.0F/60, {.fire=true}, *bullets, 0, 1, true);
@@ -316,9 +314,12 @@ void TestPlayerOptions() {
     using namespace koumakyou::game_math;
     auto bullets = std::make_unique<BulletSystem>();
     Player visibility;
-    assert(!visibility.OptionsVisible());
-    visibility.AdjustPower(7);assert(!visibility.OptionsVisible());
-    visibility.AdjustPower(1);assert(visibility.OptionsVisible());
+    assert(visibility.Power() == Player::kMinPower && visibility.OptionsVisible());
+    visibility.AdjustPower(-999);
+    assert(visibility.Power() == Player::kMinPower && visibility.OptionsVisible());
+    visibility.AdjustPower(12);
+    assert(visibility.TakeHit());
+    assert(visibility.Power() == Player::kMinPower && visibility.OptionsVisible());
     for (float yaw : {0.0F,1.1F,3.1F}) for (float pitch : {-1.45F,0.0F,1.45F}) {
         Player player;
         player.AdjustPower(128);
@@ -368,7 +369,6 @@ void TestPlayerOptions() {
         assert(BulletSystem::Length(Subtract(wider[1],wider[0]))>separation);
     }
     Player close;
-    close.AdjustPower(8);
     const std::array<PlayerAimTarget,1> target{{{Add(close.Position(),{0,0,0.3F}),0.1F}}};
     close.Update(0,{.fire=true},*bullets,0,1,true,target);
     assert(std::abs(close.OptionScale()-0.125F)<0.0001F);
@@ -391,6 +391,7 @@ void RunPlayerTests() {
     challenge.ConfigureRun(2, 0, true, koumakyou::ShotType::Needle);
     for (int miss = 0; miss < 12; ++miss) assert(challenge.TakeHit());
     assert(challenge.RemainingLives() == 3);
+    assert(challenge.Power() == koumakyou::Player::kMinPower);
     koumakyou::Player standard;
     standard.ConfigureRun(1, 0, false, koumakyou::ShotType::Needle);
     assert(standard.Bombs() == 0 && standard.TakeHit());
@@ -415,7 +416,7 @@ void RunPlayerTests() {
     BulletSystem& bullets = *bulletsStorage;
     assert(player.RemainingLives() == 4);
     assert(player.Bombs() == 3);
-    assert(player.Power() == 0);
+    assert(player.Power() == Player::kMinPower);
 
     Camera3D camera{};
     player.SyncCamera(camera);
@@ -479,23 +480,26 @@ void RunPlayerTests() {
     assert(bullets.Pool().ActiveCount() == 0);
     player.Update(0.0F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
                   koumakyou::stage1::kPlayerCyanCard, true);
-    assert(bullets.Pool().ActiveCount() == 2);
+    assert(bullets.Pool().ActiveCount() == 4);
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
+        const bool cyan = bullet.visual == koumakyou::stage1::kPlayerCyanCard;
         assert(bullet.owner == BulletOwner::Player);
-        assert(bullet.visual == koumakyou::stage1::kPlayerGoldCard);
+        assert(cyan || bullet.visual == koumakyou::stage1::kPlayerGoldCard);
         assert(bullet.color.a == 51);
-        assert(bullet.position.x == 0.0F && bullet.position.y == -0.6F);
+        assert(bullet.position.y == (cyan ? -0.35F : -0.6F));
+        assert(cyan ? std::abs(std::abs(bullet.position.x) - 0.78F) < 0.0001F
+                    : bullet.position.x == 0.0F);
         assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
         assert(bullet.velocity.x != 0.0F);
         const float angle = DefaultShotAngle(bullet);
-        assert(std::abs(angle - 2.0F * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
+        assert(std::abs(angle - (cyan ? 30.0F : 3.0F) * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
     });
     player.Update(0.01F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
                   koumakyou::stage1::kPlayerCyanCard, true);
-    assert(bullets.Pool().ActiveCount() == 2);
+    assert(bullets.Pool().ActiveCount() == 4);
     player.Update(0.09F, firing, bullets, koumakyou::stage1::kPlayerGoldCard,
                   koumakyou::stage1::kPlayerCyanCard, true);
-    assert(bullets.Pool().ActiveCount() == 4);
+    assert(bullets.Pool().ActiveCount() == 6);
 
     // 金色弹仍随档位增强；追踪弹仅统计第 0 帧到期的通道，不能将整个周期压成一轮齐射。
     constexpr std::array<int, 8> thresholds{8, 16, 32, 48, 64, 80, 96, 128};
@@ -575,8 +579,8 @@ void RunPlayerTests() {
     assert(!player.AdjustPower(1));
     assert(!player.AdjustPower(0));
     assert(!player.AdjustPower(-999));
-    assert(player.Power() == 0);
-    assert(!player.AdjustPower(Player::kMaxPower - 1));
+    assert(player.Power() == Player::kMinPower);
+    assert(!player.AdjustPower(Player::kMaxPower - Player::kMinPower - 1));
     assert(player.AdjustPower(1));
     assert(!player.AdjustPower(8));
     assert(!player.AdjustPower(-Player::kMaxPower));
@@ -613,7 +617,7 @@ void RunPlayerTests() {
     assert(player.TakeHit());
     assert(player.RemainingLives() == 3);
     assert(player.Bombs() == 2);
-    assert(player.Power() == 0);
+    assert(player.Power() == Player::kMinPower);
     Bullet protectedHit{};
     protectedHit.active = true;
     protectedHit.position = player.Position();
@@ -641,7 +645,7 @@ void RunPlayerTests() {
     player.Reset();
     assert(player.RemainingLives() == 4);
     assert(player.Bombs() == 3);
-    assert(player.Power() == 0);
+    assert(player.Power() == Player::kMinPower);
     assert(player.TakeHit());
     assert(player.TakeHit());
     assert(player.TakeHit());

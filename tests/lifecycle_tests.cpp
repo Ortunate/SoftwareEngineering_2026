@@ -510,7 +510,7 @@ struct GameLifecycleProbe {
     /// @brief 通过正式开局绑定检查两种御札，并渲染真实追踪弹，防止生成正常而素材/动画不可见。
     static void TestPlayerShots(Game& game, const std::string& prefix) {
         const int previousShot=game.selectedShot_;
-        for(int shot : {0,1})for(int power : {0,8,128}) {
+        for(int shot : {0,1})for(int power : {Player::kMinPower,16,128}) {
             game.selectedShot_=shot;
             game.StartPreview();
             game.stage_=StageDirector{};
@@ -582,9 +582,8 @@ struct GameLifecycleProbe {
             game.DrawHud();EndTextureMode();EndDrawing();
             Image result=LoadImageFromTexture(target.texture);ImageFlipVertical(&result);return result;
         };
-        assert(game.player_.Power()==0 && !game.player_.OptionsVisible());
+        assert(game.player_.Power()==Player::kMinPower && game.player_.OptionsVisible());
         Image background=render(true);
-        game.player_.AdjustPower(8);
         game.UpdateBattleAnimations();
         const auto outward=game.player_.OptionPositions();
         for(int focused=0;focused<2;++focused) {

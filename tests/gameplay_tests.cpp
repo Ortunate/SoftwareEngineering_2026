@@ -314,7 +314,7 @@ void RunGameplayTests() {
     assert(bullets.Pool().ActiveCount() == 0);
     assert(fairy.health > 0.0F && fairy.health == fairy.maxHealth);
     // 使用真实玩家射击验证低火力直射弹与满火力追踪弹均能一发耗尽妖精血量。
-    for (int power : {0, koumakyou::Player::kMaxPower}) {
+    for (int power : {koumakyou::Player::kMinPower, koumakyou::Player::kMaxPower}) {
         koumakyou::Player player;
         player.AdjustPower(power - player.Power());
         player.Update(0.0F, {.fire = true}, bullets,

@@ -41,9 +41,11 @@ struct PlayerAimTarget {
 /// 世界坐标沿用 raylib：正 Z 为初始前方，正 Y 为上方；时间单位为秒，角度单位为弧度。
 class Player {
 public:
+    /// @brief 本项目 Power 下限及开局值；受击和调试降级后仍保留可显示太极圈的最低火力档。
+    static constexpr int kMinPower = 8;
     /// @brief 原作 Power 上限；普通 P 道具增加 1，大 P 道具增加 8。
     static constexpr int kMaxPower = 128;
-    /// @brief 恢复开局状态，包括初始位置、残机、Bomb 和全部计时器。
+    /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
     void Reset();
     /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
     /// 挑战模式照常计 Miss、扣 Power 和复活，但不扣残机，不会因命中结束一局。
@@ -70,7 +72,7 @@ public:
                 VisualId bulletVisual, VisualId homingVisual, bool allowFire,
                 std::span<const PlayerAimTarget> aimTargets = {});
 
-    /// @brief 增减 Power 并钳制在 0 到 128；收集道具、受击和 Debug 按键共用此入口。
+    /// @brief 增减 Power 并钳制在 8 到 128；收集道具、受击和 Debug 按键共用此入口。
     /// @param delta 正数增加，负数降低，单位为 Power 点。
     /// @return 仅从未满升到满级时返回 true，调用方负责提示和清弹奖励。
     bool AdjustPower(int delta);
@@ -79,7 +81,7 @@ public:
     /// @param bullet 由弹幕池持有的敌弹，玩家只修改 active 或 grazed。
     /// @return 无接触、首次擦弹或可造成伤害的命中；无敌时命中返回 None。
     PlayerContact ContactEnemyBullet(Bullet& bullet) const;
-    /// @brief 普通模式扣除一条残机，挑战模式保留残机；均扣 16 Power、补足 Bomb、复位并给予无敌。
+    /// @brief 普通模式扣除一条残机，挑战模式保留残机；均扣 16 Power（最低 8）、补足 Bomb、复位并给予无敌。
     /// @return 仍有可用残机时返回 true；用尽时返回 false。
     bool TakeHit();
     /// @brief 根据玩家位置和视角更新相机；相机位置始终等于玩家判定中心。
@@ -91,9 +93,9 @@ public:
     [[nodiscard]] int RemainingLives() const;
     /// @brief 返回当前可用 Bomb 数量。
     [[nodiscard]] int Bombs() const { return bombs_; }
-    /// @brief 返回当前 Power 点数，范围为 0 到 128。
+    /// @brief 返回当前 Power 点数，范围为 8 到 128。
     [[nodiscard]] int Power() const { return power_; }
-    /// @brief 是否显示两侧太极圈；与原作一致，Power 达到 8 后解锁，两种御札均可显示。
+    /// @brief 是否显示两侧太极圈；沿用原作的 Power 8 门槛，本项目最低为 8，两种御札从开局均显示。
     [[nodiscard]] bool OptionsVisible() const { return power_ >= 8; }
     /// @brief 返回左、右太极圈中心的世界坐标，也是本帧副弹的出生位置。
     /// 位置随视角和 Focus 收拢更新；近距离按当前瞄准深度缩短偏移，渲染与射击必须共用此入口。
@@ -137,7 +139,7 @@ private:
     // lives_ 是额外残机数；未配置的默认值 3 供独立测试使用，Game 按设置覆盖；-1 时结束。
     int lives_ = 3;
     int bombs_ = 3;
-    int power_ = 0;
+    int power_ = kMinPower;
     bool challenge_ = false;
     ShotType shot_ = ShotType::HomingAmulet;
 };

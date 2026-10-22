@@ -21,6 +21,7 @@ struct PickupSprite {
     VisualId visual = kInvalidVisualId;
     float heightScale = 1.0F;
     const anm::Frame* animation = nullptr; // 借用道具或太极圈的当前帧，只在本次 Draw 内有效。
+    unsigned char alpha = 255; // 额外不透明度（0～255），与贴图及原生动画 Alpha 相乘。
 };
 
 /// @brief 绘制角色、弹幕和道具的公告板与光晕；不持有传入的战斗对象或 GPU 资源。

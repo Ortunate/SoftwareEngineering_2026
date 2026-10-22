@@ -30,8 +30,6 @@ constexpr float kOptionDown = 0.35F;
 constexpr float kFocusedHomingSide = kHomingSide / 3.0F;
 constexpr float kOptionFocusSeconds = 8.0F / 60.0F;
 constexpr float kDefaultAimDepth = 20.0F;
-// gold 与 cyan 统一使用 20% 不透明度（255×0.2）；渲染时还会乘以贴图自身 Alpha。
-constexpr unsigned char kPlayerBulletAlpha = 51;
 /// @brief 直射火力档位决定弹数和散射宽度；角度为相对准星的单侧最大偏转（度）。
 struct ShotLevel {
     int threshold;
@@ -273,7 +271,7 @@ void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
         Bullet* bullet = bullets.Spawn(BulletOwner::Player, muzzle,
             game_math::Scale(direction, 20.0F),
             0.09F,
-            Color{255, 255, 255, kPlayerBulletAlpha}, bulletVisual);
+            Color{255, 255, 255, kShotAlpha}, bulletVisual);
         if (bullet) bullet->damage = shot_ == ShotType::Needle ? 3.3F : 2.0F;
     }
 }
@@ -293,7 +291,7 @@ void Player::FireHomingFrame(BulletSystem& bullets, VisualId homingVisual,
             const auto direction = ConvergingShotDirection(origin, position_, forward, right, depth,
                                                            side * pair.halfAngleDegrees);
             if (auto* bullet = bullets.Spawn(BulletOwner::Player, origin, game_math::Scale(direction, 14.0F),
-                                            0.10F, Color{255, 255, 255, kPlayerBulletAlpha}, homingVisual)) {
+                                            0.10F, Color{255, 255, 255, kShotAlpha}, homingVisual)) {
                 bullet->damage = 1.0F;
                 bullet->homingTurnRate = 5.5F;
             }

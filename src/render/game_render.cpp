@@ -142,7 +142,8 @@ void Game::DrawWorld() const {
                 const auto visual = stageContent_->PlayerOptionVisual(side);
                 if (visual == kInvalidVisualId || !assets_.GetVisual(visual).archive) continue;
                 // 与道具共用透明公告板批次，保证圈与副弹按真实深度排序；这些绘制数据不参与拾取或碰撞。
-                pickupSprites_.push_back({positions[side], visual, player_.OptionScale(), &playerOptionAnimations_[side].player.Sample()});
+                pickupSprites_.push_back({positions[side], visual, player_.OptionScale(),
+                                          &playerOptionAnimations_[side].player.Sample(), Player::kShotAlpha});
             }
         }
     }

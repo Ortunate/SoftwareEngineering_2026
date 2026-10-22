@@ -317,8 +317,9 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         } else if(command.kind==Kind::Pickup) {
             const auto& pickup=pickups[command.index];const auto& visual=FindVisual(visuals,pickup.visual);
             const float height=visual.worldHeight*pickup.heightScale;
-            if(IsTextureValid(visual.texture))DrawSprite(camera,screenUp,Spec(visual,height,pickup.animation),pickup.position);
-            else DrawSphere(pickup.position,height*0.35F,RED);
+            if(IsTextureValid(visual.texture))DrawSprite(camera,screenUp,Spec(visual,height,pickup.animation),
+                                                       pickup.position,{255,255,255,pickup.alpha});
+            else DrawSphere(pickup.position,height*0.35F,Fade(RED,pickup.alpha/255.0F));
         } else if(command.kind==Kind::Bullet) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
             if(visual.mode==VisualMode::Sphere)DrawSphere(bullet.position,bullet.radius,bullet.color);

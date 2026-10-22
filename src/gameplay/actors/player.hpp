@@ -45,6 +45,8 @@ public:
     static constexpr int kMinPower = 8;
     /// @brief 原作 Power 上限；普通 P 道具增加 1，大 P 道具增加 8。
     static constexpr int kMaxPower = 128;
+    /// @brief 自机符卡弹和太极圈共用的不透明度（0～255），与贴图及原生动画 Alpha 相乘。
+    static constexpr unsigned char kShotAlpha = 51;
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
     void Reset();
     /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。

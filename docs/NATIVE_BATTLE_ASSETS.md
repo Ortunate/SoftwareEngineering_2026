@@ -95,6 +95,8 @@ cmake --build --preset macos-debug --target koumakyou_sprite_overlap_tests
 
 灵梦两侧太极圈复用 `player00.anm` 的 128/129 脚本及 sprite 128（36×36 逻辑像素），Z 角速度分别为 +0.1/−0.1 弧度/60 Hz 帧，由既有 ANM 播放器推进，不以程序绘制圆形替代。清单追加左右两个外观，借用同一 Reimu DDS/ANM，保持既有弹幕与立绘编号不变。
 
+太极圈与 gold/cyan 符卡弹共用 `Player::kShotAlpha`，不透明度为 20%（Alpha 51），渲染时与贴图及原生动画 Alpha 相乘。太极圈通过独立的公告板透明度传入，不修改借用的 ANM 帧；普通道具仍使用默认 Alpha 255。
+
 本机新典的 Focus 位置分支使用 8 帧过渡，原始横向偏移由 24 像素缩到 8 像素。三维布局保留该时长与三分之一比例，用可逆 smoothstep 只改变屏幕侧距，不照搬二维垂直位移；常态侧距 0.78、Focus 侧距 0.26 世界单位。Power 8 起显示，圈世界高度 0.42，近目标时随出生位置等比缩小以保持屏幕尺寸。
 
 圈中心与 cyan 副弹出生点由 Player 的同一接口给出，动画年龄使用游戏时间。双圈与弹幕共用透明排序，属于无碰撞的绘制数据；暂停冻结、复活重启，开局与卸载关卡时清理动画游标。`koumakyou_lifecycle_tests <截图前缀> --player-options-only` 可隔离验证原始圈贴图、收拢前后像素、暂停及卸载，并导出 normal/focus 截图。

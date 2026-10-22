@@ -328,6 +328,9 @@ void TestStage1Content() {
     assert(visuals[stage1::kGreenSphere].mode == VisualMode::Bullet);
     assert(content->PlayerBulletVisual() == stage1::kPlayerGoldCard);
     assert(content->PlayerHomingVisual() == stage1::kPlayerCyanCard);
+    assert(content->PlayerNeedleVisual() == stage1::kPlayerNeedle);
+    assert(visuals[stage1::kPlayerNeedle].animation.atlas == battle::Atlas::Reimu);
+    assert(visuals[stage1::kPlayerNeedle].animation.script == 66);
     assert(content->PowerPickupVisual() == stage1::kPowerPoint);
     assert(content->ScorePickupVisual() == stage1::kScorePoint);
     assert(content->StarPickupVisual() == stage1::kStarPoint);

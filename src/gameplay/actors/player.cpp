@@ -5,6 +5,7 @@
 #include "app/math.hpp"
 #include "gameplay/arena.hpp"
 #include "gameplay/actors/reimu_homing.hpp"
+#include "gameplay/actors/reimu_needle.hpp"
 
 #include <algorithm>
 #include <array>
@@ -20,7 +21,7 @@ constexpr float kMouseSensitivity = 0.0024F;
 constexpr float kHitRadius = 0.18F;
 constexpr float kGrazeRadius = 0.72F;
 // 发射点使用玩家局部坐标：gold 位于前方偏下，cyan 与太极圈共用视线两侧、略偏下的位置。
-// Power 只改变弹数和张角，不能随通道编号移动这三个发射点。
+// 三个模块基准位置不随 Power 变化；梦札多束侧针仅在对应圈内叠加原始通道偏移。
 // 贴近目标时三个偏移等比缩短，保证发射点仍位于玩家与目标之间。
 constexpr float kMuzzleForward = 1.2F;
 constexpr float kMuzzleDown = 0.6F;
@@ -30,7 +31,7 @@ constexpr float kOptionDown = 0.35F;
 constexpr float kFocusedHomingSide = kHomingSide / 3.0F;
 constexpr float kOptionFocusSeconds = 8.0F / 60.0F;
 constexpr float kDefaultAimDepth = 20.0F;
-/// @brief 直射火力档位决定弹数和散射宽度；角度为相对准星的单侧最大偏转（度）。
+/// @brief 主符卡火力档位决定弹数和散射宽度；角度为相对准星的单侧最大偏转（度）。
 struct ShotLevel {
     int threshold;
     int straightCount;
@@ -88,8 +89,8 @@ void Player::ResetPose() {
     position_ = {0.0F, 0.0F, -6.5F};
     yaw_ = 0.0F;
     pitch_ = 0.0F;
-    homingFrame_ = -1;
-    homingFractionalFrame_ = 0.0;
+    secondaryFrame_ = -1;
+    secondaryFractionalFrame_ = 0.0;
     optionFocus_ = 0.0F;
     optionAimDepth_ = kDefaultAimDepth;
     visualAge_ = 0.0;
@@ -106,7 +107,7 @@ void Player::SetInvulnerability(float seconds) {
 
 bool Player::Update(float deltaTime, const PlayerInput& input,
                     BulletSystem& bullets, VisualId bulletVisual,
-                    VisualId homingVisual, bool allowFire,
+                    VisualId secondaryVisual, bool allowFire,
                     std::span<const PlayerAimTarget> aimTargets) {
     invulnerableTimer_ = std::max(0.0F, invulnerableTimer_ - deltaTime);
     bombCooldown_ = std::max(0.0F, bombCooldown_ - deltaTime);
@@ -144,30 +145,30 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
         Fire(bullets, bulletVisual, aimTargets);
         fireTimer_ = input.focus ? 0.075F : 0.09F;
     }
-    if (!allowFire || shot_ != ShotType::HomingAmulet) {
-        homingFrame_ = -1;
-        homingFractionalFrame_ = 0.0;
-    } else if (homingFrame_ < 0) {
+    if (!allowFire) {
+        secondaryFrame_ = -1;
+        secondaryFractionalFrame_ = 0.0;
+    } else if (secondaryFrame_ < 0) {
         if (input.fire) {
-            homingFrame_ = 0;
-            homingFractionalFrame_ = 0.0;
-            FireHomingFrame(bullets, homingVisual, aimTargets);
+            secondaryFrame_ = 0;
+            secondaryFractionalFrame_ = 0.0;
+            FireSecondaryFrame(bullets, secondaryVisual, aimTargets);
         }
     } else {
-        homingFractionalFrame_ += static_cast<double>(deltaTime) * reimu_homing::kFramesPerSecond;
-        // 用独立的整数逻辑帧补发通道，避免帧率、Focus 和金色弹冷却改变追踪弹相位。
+        secondaryFractionalFrame_ += static_cast<double>(deltaTime) * reimu_homing::kFramesPerSecond;
+        // 两种副弹均逐整数逻辑帧补发，避免帧率、Focus 和主弹冷却改变副弹相位。
         // 原作每次开火至少完成 0…29 帧；满火力的 period=16 不能改成连续计时，否则跨窗口节奏会变。
-        while (homingFractionalFrame_ >= 1.0 - 0.000001) {
-            homingFractionalFrame_ = std::max(0.0, homingFractionalFrame_ - 1.0);
-            if (++homingFrame_ == reimu_homing::kCycleFrames) {
+        while (secondaryFractionalFrame_ >= 1.0 - 0.000001) {
+            secondaryFractionalFrame_ = std::max(0.0, secondaryFractionalFrame_ - 1.0);
+            if (++secondaryFrame_ == reimu_homing::kCycleFrames) {
                 if (!input.fire) {
-                    homingFrame_ = -1;
-                    homingFractionalFrame_ = 0.0;
+                    secondaryFrame_ = -1;
+                    secondaryFractionalFrame_ = 0.0;
                     break;
                 }
-                homingFrame_ = 0;
+                secondaryFrame_ = 0;
             }
-            FireHomingFrame(bullets, homingVisual, aimTargets);
+            FireSecondaryFrame(bullets, secondaryVisual, aimTargets);
         }
     }
     return input.bomb && TryUseBomb();
@@ -276,12 +277,37 @@ void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
     }
 }
 
-void Player::FireHomingFrame(BulletSystem& bullets, VisualId homingVisual,
-                             std::span<const PlayerAimTarget> aimTargets) {
-    const auto& level = reimu_homing::ForPower(power_);
+void Player::FireSecondaryFrame(BulletSystem& bullets, VisualId secondaryVisual,
+                                std::span<const PlayerAimTarget> aimTargets) {
     const auto origins = OptionPositions();
+    if (shot_ == ShotType::Needle) {
+        const Vector3 forward = Forward();
+        const Vector3 right = Right();
+        const Vector3 up = Up();
+        const float depth = AimDepth(position_, forward, aimTargets);
+        // 太极圈直径为 36 逻辑像素，按同一世界比例还原圈内针束横移及上移；近目标一并缩小。
+        const float pixelUnit = kOptionWorldHeight / 36.0F * OptionScale();
+        // 新典主弹原速为 12、侧针为 22 像素/帧；沿用本项目主弹 20 世界单位/秒的速度基准。
+        constexpr float speed = 20.0F * reimu_needle::kSpeedPixelsPerFrame / 12.0F;
+        for (const auto& pair : reimu_needle::ForPower(power_).pairs) {
+            if (secondaryFrame_ % pair.periodFrames != pair.phaseFrame) continue;
+            for (const auto center : origins) {
+                const auto origin = game_math::Add(center, game_math::Subtract(
+                    game_math::Scale(right, pair.offsetXPixels * pixelUnit),
+                    game_math::Scale(up, reimu_needle::kOffsetYPixels * pixelUnit)));
+                const auto direction = ConvergingShotDirection(origin, position_, forward, right, depth, 0);
+                if (auto* bullet = bullets.Spawn(BulletOwner::Player, origin, game_math::Scale(direction, speed),
+                                                0.09F, Color{255,255,255,kShotAlpha}, secondaryVisual)) {
+                    // 保留原始 12/10 的侧针伤害比例；基础针折算为本项目 1 点，主弹伤害不受影响。
+                    bullet->damage = pair.nativeDamage / 12.0F;
+                }
+            }
+        }
+        return;
+    }
+    const auto& level = reimu_homing::ForPower(power_);
     for (const auto& pair : level.pairs) {
-        if (homingFrame_ % pair.periodFrames != pair.phaseFrame) continue;
+        if (secondaryFrame_ % pair.periodFrames != pair.phaseFrame) continue;
         const Vector3 forward = Forward();
         const Vector3 right = Right();
         const float depth = AimDepth(position_, forward, aimTargets);
@@ -291,7 +317,7 @@ void Player::FireHomingFrame(BulletSystem& bullets, VisualId homingVisual,
             const auto direction = ConvergingShotDirection(origin, position_, forward, right, depth,
                                                            side * pair.halfAngleDegrees);
             if (auto* bullet = bullets.Spawn(BulletOwner::Player, origin, game_math::Scale(direction, 14.0F),
-                                            0.10F, Color{255, 255, 255, kShotAlpha}, homingVisual)) {
+                                            0.10F, Color{255, 255, 255, kShotAlpha}, secondaryVisual)) {
                 bullet->damage = 1.0F;
                 bullet->homingTurnRate = 5.5F;
             }

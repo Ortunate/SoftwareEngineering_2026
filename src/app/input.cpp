@@ -270,7 +270,7 @@ void Game::UpdatePlayer(float deltaTime) {
     if (boss_ && boss_->active) aimTargets[aimTargetCount++] = {boss_->position, boss_->hitRadius};
     if (player_.Update(deltaTime, input, bullets_,
                        stageContent_->PlayerBulletVisual(),
-                       stageContent_->PlayerHomingVisual(), !dialogueActive_,
+                       selectedShot_ == 0 ? stageContent_->PlayerHomingVisual() : stageContent_->PlayerNeedleVisual(), !dialogueActive_,
                        {aimTargets.data(), aimTargetCount})) {
         ApplyBombEffect();
     }

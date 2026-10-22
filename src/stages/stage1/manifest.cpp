@@ -2,6 +2,7 @@
 
 #include "stages/stage1/data.hpp"
 #include "stages/stage1/ids.hpp"
+#include "gameplay/actors/player.hpp"
 
 #include <array>
 #include <vector>
@@ -52,8 +53,12 @@ const std::vector<VisualDefinition> kVisuals=[] {
     for(int effect=0;effect<3;++effect)
         visuals.push_back({.id=static_cast<VisualId>(kNativeDefeat+effect), .worldHeight=1.2F,
                            .animation={battle::Atlas::BulletEffects,3+effect}});
-    visuals.push_back({.id=kPlayerOptionLeft, .worldHeight=0.42F, .animation={battle::Atlas::Reimu,128}});
-    visuals.push_back({.id=kPlayerOptionRight, .worldHeight=0.42F, .animation={battle::Atlas::Reimu,129}});
+    visuals.push_back({.id=kPlayerOptionLeft, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Reimu,128}});
+    visuals.push_back({.id=kPlayerOptionRight, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Reimu,129}});
+    // 针裁图高 104 逻辑像素，沿用太极圈 36 像素的世界比例；判定半径由 Player 固定为 0.09。
+    visuals.push_back({.id=kPlayerNeedle, .mode=VisualMode::Bullet,
+                       .bulletDiameterScale=(104.0F/36)*Player::kOptionWorldHeight/0.09F,
+                       .animation={battle::Atlas::Reimu,66}});
     return visuals;
 }();
 constexpr std::array<SoundDefinition, 0> kSounds{};

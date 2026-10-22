@@ -11,6 +11,7 @@
 #include <memory>
 #include <numbers>
 #include <utility>
+#include <tuple>
 #include <vector>
 
 namespace {
@@ -168,7 +169,7 @@ void TestShotAim() {
                     {Subtract(player.Position(), Scale(forward, 1)), 0.1F},
                 }};
                 bullets->Reset();
-                player.Update(0, {.fire=true}, *bullets, stage1::kPlayerGoldCard, stage1::kPlayerCyanCard, true, targets);
+                player.Update(0, {.fire=true}, *bullets, stage1::kPlayerGoldCard, shot == ShotType::Needle ? stage1::kPlayerNeedle : stage1::kPlayerCyanCard, true, targets);
                 float goldLateralSum = 0;
                 int centerShots = 0;
                 bullets->Pool().ForEachActive([&](const Bullet& bullet) {
@@ -179,8 +180,8 @@ void TestShotAim() {
                     assert(std::abs(dot(impact, up)) < 0.0001F);
                     assert(std::abs(dot(impact, forward)-depth) < 0.0001F);
                     assert(std::abs(BulletSystem::Length(bullet.velocity) -
-                        (bullet.homingTurnRate > 0 ? 14.0F : 20.0F)) < 0.0001F);
-                    if (bullet.homingTurnRate > 0) return;
+                        (bullet.homingTurnRate > 0 ? 14.0F : bullet.visual == stage1::kPlayerNeedle ? 20.0F*22/12 : 20.0F)) < 0.0001F);
+                    if (bullet.visual != stage1::kPlayerGoldCard) return;
                     goldLateralSum += dot(impact, right);
                     if (std::abs(dot(impact, right)) < 0.00001F) {
                         ++centerShots;
@@ -378,6 +379,114 @@ void TestPlayerOptions() {
         assert(std::min(DistanceSquared(bullet.position,positions[0]),DistanceSquared(bullet.position,positions[1]))<0.000001F);
     });
 }
+// 使用原始表的明确帧序核对直射针，不能把多束周期合并成主弹冷却，也不能随 Focus 重启相位。
+void TestNeedleSchedule() {
+    using namespace koumakyou;
+    using namespace koumakyou::game_math;
+    using Event = std::tuple<int,int,int>; // 窗口帧、横移逻辑像素、新典伤害；每个事件左右各一颗。
+    struct Channel { int offset, damage; std::vector<int> frames; };
+    struct Case { int minimum, maximum; std::vector<Channel> channels; };
+    const std::array<Case,8> cases{{
+        {8,15,{{0,12,{0,15}}}}, {16,31,{{0,12,{0,10,20}}}},
+        {32,47,{{0,12,{0,8,16,24}}}}, {48,63,{{0,12,{0,8,16,24}}}},
+        {64,79,{{8,12,{0,5,10,15,20,25}},{-8,10,{0,8,16,24}}}},
+        {80,95,{{8,10,{0,3,6,9,12,15,18,21,24,27}},{-8,10,{0,5,10,15,20,25}}}},
+        {96,127,{{12,10,{0,3,6,9,12,15,18,21,24,27}},{-12,10,{0,5,10,15,20,25}},{0,10,{0,10,20}}}},
+        {128,128,{{12,10,{0,3,6,9,12,15,18,21,24,27}},{-12,10,{0,3,6,9,12,15,18,21,24,27}},{0,10,{0,5,10,15,20,25}}}},
+    }};
+    auto bullets=std::make_unique<BulletSystem>();
+    for(const auto& scenario:cases)for(int power:{scenario.minimum,scenario.maximum})for(bool focus:{false,true}) {
+        std::vector<Event> expected;
+        for(int cycle=0;cycle<2;++cycle)for(const auto& channel:scenario.channels)
+            for(int frame:channel.frames)expected.emplace_back(cycle*30+frame,channel.offset,channel.damage);
+        std::stable_sort(expected.begin(),expected.end(),[](const Event& a,const Event& b){return std::get<0>(a)<std::get<0>(b);});
+        for(int fps:{30,60,144}) {
+            Player player;player.ConfigureRun(3,3,false,ShotType::Needle);player.AdjustPower(power-player.Power());
+            std::vector<Event> actual;
+            int count=0;
+            for(int frame=0;frame<fps;++frame) {
+                player.Update(frame==0 ? 0 : 1.0F/fps,{.focus=focus,.fire=true},*bullets,
+                              stage1::kPlayerGoldCard,stage1::kPlayerNeedle,true);
+                const auto centers=player.OptionPositions();
+                const float unit=Player::kOptionWorldHeight/36*player.OptionScale();
+                int leftCount=0,rightCount=0;
+                bullets->Pool().ForEachActive([&](const Bullet& bullet){
+                    if(bullet.visual!=stage1::kPlayerNeedle)return;
+                    ++count;
+                    assert(bullet.homingTurnRate==0 && bullet.color.a==Player::kShotAlpha);
+                    assert(std::abs(BulletSystem::Length(bullet.velocity)-20.0F*22/12)<0.0001F);
+                    const int side=DistanceSquared(bullet.position,centers[0])<DistanceSquared(bullet.position,centers[1]) ? 0 : 1;
+                    assert(std::abs(bullet.position.y-centers[side].y-16*unit)<0.0001F);
+                    assert(std::abs(bullet.position.z-centers[side].z)<0.0001F);
+                    const int offset=std::lround((centers[side].x-bullet.position.x)/unit);
+                    const int damage=std::lround(bullet.damage*12);
+                    if(side==0) {
+                        ++leftCount;
+                        actual.emplace_back(fps==60 ? frame : 0,offset,damage);
+                    } else ++rightCount;
+                });
+                assert(leftCount==rightCount);
+                bullets->Reset();
+            }
+            auto timedExpected=expected;
+            if(fps!=60)for(auto& event:timedExpected)std::get<0>(event)=0;
+            assert(actual==timedExpected && count==static_cast<int>(expected.size()*2));
+        }
+    }
+
+    // 原有梦札主弹仍为 1.5° 散射、速度 20、伤害 3.3，Focus 只保留既有 0.075/0.09 秒冷却。
+    constexpr std::array<int,8> powers{8,16,32,48,64,80,96,128};
+    constexpr std::array<int,8> counts{2,3,3,4,4,5,5,6};
+    for(std::size_t index=0;index<powers.size();++index)for(bool focus:{false,true}) {
+        Player player;player.ConfigureRun(3,3,false,ShotType::Needle);player.AdjustPower(powers[index]-player.Power());
+        const auto countMain=[&] {
+            int main=0;
+            bullets->Pool().ForEachActive([&](const Bullet& bullet){
+                if(bullet.visual!=stage1::kPlayerGoldCard)return;
+                ++main;
+                assert(bullet.damage==3.3F && bullet.homingTurnRate==0 && bullet.color.a==Player::kShotAlpha);
+                assert(std::abs(BulletSystem::Length(bullet.velocity)-20)<0.0001F);
+                assert(bullet.position.x==0 && bullet.position.y==-0.6F);
+                assert(DefaultShotAngle(bullet)<=1.5F*std::numbers::pi_v<float>/180+0.0001F);
+            });
+            return main;
+        };
+        player.Update(0,{.focus=focus,.fire=true},*bullets,stage1::kPlayerGoldCard,stage1::kPlayerNeedle,true);
+        assert(countMain()==counts[index]);
+        player.Update(focus ? 0.074F : 0.089F,{.focus=focus,.fire=true},*bullets,stage1::kPlayerGoldCard,stage1::kPlayerNeedle,true);
+        assert(countMain()==counts[index]);
+        player.Update(0.002F,{.focus=focus,.fire=true},*bullets,stage1::kPlayerGoldCard,stage1::kPlayerNeedle,true);
+        assert(countMain()==2*counts[index]);
+        bullets->Reset();
+    }
+
+    Player player;player.ConfigureRun(3,3,false,ShotType::Needle);player.AdjustPower(128);
+    player.Update(0,{.fire=true},*bullets,0,1,true);
+    bullets->Reset();
+    player.Update(0.5F,{},*bullets,0,1,true);
+    assert(bullets->Pool().ActiveCount()==46); // 满火力点射总共 52 颗侧针，首帧已经发出 6 颗。
+    const std::array<Vector3,1> target{{{8,0,4}}};
+    std::vector<Vector3> before;
+    bullets->Pool().ForEachActive([&](const Bullet& bullet){before.push_back(bullet.velocity);});
+    bullets->Update(0.1F,target);
+    std::size_t index=0;
+    bullets->Pool().ForEachActive([&](const Bullet& bullet){assert(DistanceSquared(bullet.velocity,before[index++])<0.000001F);});
+    bullets->Reset();
+    player.Update(1,{},*bullets,0,1,true);assert(bullets->Pool().ActiveCount()==0);
+    player.Update(0,{.fire=true},*bullets,0,1,true);bullets->Reset();
+    player.Update(0.1F,{.fire=true},*bullets,0,1,false);assert(bullets->Pool().ActiveCount()==0);
+    player.ResetPose();player.Update(0,{.fire=true},*bullets,0,1,true);
+    int sides=0;bullets->Pool().ForEachActive([&](const Bullet& bullet){if(bullet.visual==1)++sides;});
+    assert(sides==6);bullets->Reset();
+
+    // 从 8 升到 128 时沿用窗口第 4 帧；下一帧只发中心 5 帧通道，不能重新齐射三束。
+    player.Reset();player.ConfigureRun(3,3,false,ShotType::Needle);
+    player.Update(0,{.fire=true},*bullets,0,1,true);bullets->Reset();
+    player.Update(4.0F/60,{.fire=true},*bullets,0,1,true);bullets->Reset();
+    player.AdjustPower(120);player.Update(1.0F/60,{.focus=true,.fire=true},*bullets,0,1,true);
+    sides=0;bullets->Pool().ForEachActive([&](const Bullet& bullet){if(bullet.visual==1)++sides;});
+    assert(sides==2);
+}
 }  // namespace
 
 /// @brief 运行玩家行为回归用例；断言失败时终止进程。
@@ -386,6 +495,7 @@ void RunPlayerTests() {
     TestShotAim();
     TestHomingSchedule();
     TestPlayerOptions();
+    TestNeedleSchedule();
     // 挑战模式反复受击仍可继续；标准模式按额外残机数耗尽后失败。
     koumakyou::Player challenge;
     challenge.ConfigureRun(2, 0, true, koumakyou::ShotType::Needle);
@@ -398,10 +508,12 @@ void RunPlayerTests() {
     assert(!standard.TakeHit());
     auto needlePool = std::make_unique<koumakyou::BulletSystem>();
     challenge.AdjustPower(128);
-    challenge.Update(0, {.fire = true}, *needlePool, 0, 1, true);
-    assert(needlePool->Pool().ActiveCount() == 6);
+    challenge.Update(0, {.fire = true}, *needlePool, koumakyou::stage1::kPlayerGoldCard, koumakyou::stage1::kPlayerNeedle, true);
+    assert(needlePool->Pool().ActiveCount() == 12);
     needlePool->Pool().ForEachActive([](const koumakyou::Bullet& shot) {
-        assert(shot.homingTurnRate == 0 && shot.damage > 3);
+        assert(shot.homingTurnRate == 0);
+        if (shot.visual == koumakyou::stage1::kPlayerGoldCard) assert(shot.damage == 3.3F);
+        else assert(shot.visual == koumakyou::stage1::kPlayerNeedle && std::abs(shot.damage-10.0F/12) < 0.0001F);
     });
     using koumakyou::Bullet;
     using koumakyou::BulletOwner;

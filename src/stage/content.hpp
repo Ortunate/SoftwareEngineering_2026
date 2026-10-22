@@ -79,6 +79,8 @@ public:
     [[nodiscard]] virtual VisualId PlayerBulletVisual() const = 0;
     /// @brief 返回玩家追踪弹的外观 ID。
     [[nodiscard]] virtual VisualId PlayerHomingVisual() const = 0;
+    /// @brief 返回梦之御札侧针的外观 ID；未配置独立针素材的关卡沿用主弹外观。
+    [[nodiscard]] virtual VisualId PlayerNeedleVisual() const { return PlayerBulletVisual(); }
     /// @brief 返回左/右自机太极圈外观；side 为 0/1，未配置时返回 invalid，不绘制该圈。
     [[nodiscard]] virtual VisualId PlayerOptionVisual(int side) const { (void)side; return kInvalidVisualId; }
     /// @brief 返回 Power 道具的外观 ID，贴图由当前 Stage 的素材清单持有。

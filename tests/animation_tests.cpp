@@ -98,6 +98,9 @@ void TestEffectSemantics() {
     assert(leftOrb.Sample().visible && rightOrb.Sample().visible);
     assert(leftOrb.Sample().rotation.z>0 && rightOrb.Sample().rotation.z<0);
     assert(std::abs(leftOrb.Sample().rotation.z+rightOrb.Sample().rotation.z)<0.0001F);
+    anm::Player needle;needle.Start(archive,66);needle.Advance(0.2);
+    assert(needle.Sample().sprite==68 && needle.Sample().source.width==32 && needle.Sample().source.height==104);
+    assert(needle.Sample().visible && needle.Sample().autoRotate==1 && needle.Sample().color.a==160);
     anm::Player effect;effect.Start(archive,137);
     const auto initialAlpha=effect.Sample().color.a;
     effect.Advance(30.0/60);

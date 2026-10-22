@@ -27,7 +27,7 @@ struct PlayerInput {
 
 /// @brief 玩家与一颗敌弹接触后的结果；擦弹只对同一颗弹幕报告一次。
 enum class PlayerContact { None, Graze, Hit };
-/// @brief 灵梦两种三维机体：追踪御札保留侧发追踪弹，直射针集中火力且不追踪。
+/// @brief 灵梦两种三维机体：灵之御札侧发追踪弹，梦之御札侧发直射针；中央主弹沿用各自现有规则。
 enum class ShotType { HomingAmulet, Needle };
 
 /// @brief 本帧可瞄准的球形判定体快照；position/radius 为世界坐标/世界单位，radius 须为正。
@@ -45,14 +45,16 @@ public:
     static constexpr int kMinPower = 8;
     /// @brief 原作 Power 上限；普通 P 道具增加 1，大 P 道具增加 8。
     static constexpr int kMaxPower = 128;
-    /// @brief 自机符卡弹和太极圈共用的不透明度（0～255），与贴图及原生动画 Alpha 相乘。
+    /// @brief 自机弹和太极圈共用的不透明度（0～255），与贴图及原生动画 Alpha 相乘。
     static constexpr unsigned char kShotAlpha = 51;
+    /// @brief 太极圈未缩放的世界高度；原始直径 36 逻辑像素，侧针偏移和外观清单共用该换算。
+    static constexpr float kOptionWorldHeight = 0.42F;
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
     void Reset();
     /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
     /// 挑战模式照常计 Miss、扣 Power 和复活，但不扣残机，不会因命中结束一局。
     void ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot);
-    /// @brief 重置位置、视角、追踪弹周期及太极圈收拢/动画时间，用于返回菜单或复活。
+    /// @brief 重置位置、视角、副弹周期及太极圈收拢/动画时间，用于返回菜单或复活。
     void ResetPose();
     /// @brief 指定视角并将俯仰角限制在玩家可操作范围内。
     void SetView(float yawRadians, float pitchRadians);
@@ -63,15 +65,15 @@ public:
     /// @param deltaTime 本帧经过的非负秒数。
     /// @param input 本帧采集的输入快照。
     /// @param bullets 接收玩家弹的对象池，容量耗尽时射击请求被丢弃。
-    /// @param bulletVisual 当前关卡直射弹的外观 ID。
-    /// @param homingVisual 当前关卡追踪弹的外观 ID。
+    /// @param bulletVisual 当前关卡中央主符卡的外观 ID。
+    /// @param secondaryVisual 当前机体副弹外观 ID，由关卡选择追踪符卡或直射针素材。
     /// @param allowFire 对话期间为 false；Bomb 不受此参数影响。
     /// @param aimTargets 本次调用期间借用的活动敌人/Boss 判定体；移动和转向后求准星射线交点。
     /// 射线未指向目标时在前方 20 世界单位汇聚，已发出的直射弹不再随准星改变方向。
-    /// 追踪弹按原作 60 Hz、30 帧射击窗口分批生成；松开射击后完成当前窗口，allowFire=false 则取消。
+    /// 两种副弹按原作 60 Hz、30 帧射击窗口分批生成；松开射击后完成当前窗口，allowFire=false 则取消。
     /// @return 成功消耗 Bomb 时返回 true，调用方据此处理清弹和范围伤害。
     bool Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
-                VisualId bulletVisual, VisualId homingVisual, bool allowFire,
+                VisualId bulletVisual, VisualId secondaryVisual, bool allowFire,
                 std::span<const PlayerAimTarget> aimTargets = {});
 
     /// @brief 增减 Power 并钳制在 8 到 128；收集道具、受击和 Debug 按键共用此入口。
@@ -99,8 +101,8 @@ public:
     [[nodiscard]] int Power() const { return power_; }
     /// @brief 是否显示两侧太极圈；沿用原作的 Power 8 门槛，本项目最低为 8，两种御札从开局均显示。
     [[nodiscard]] bool OptionsVisible() const { return power_ >= 8; }
-    /// @brief 返回左、右太极圈中心的世界坐标，也是本帧副弹的出生位置。
-    /// 位置随视角和 Focus 收拢更新；近距离按当前瞄准深度缩短偏移，渲染与射击必须共用此入口。
+    /// @brief 返回左、右太极圈中心的世界坐标；追踪弹直接由此出生，侧针再叠加原始圈内偏移。
+    /// 位置随视角和 Focus 收拢更新；近距离按当前瞄准深度缩短偏移，渲染与副弹模块必须共用此入口。
     [[nodiscard]] std::array<Vector3, 2> OptionPositions() const;
     /// @brief 太极圈的近距离尺寸倍率，范围 (0,1]；随发射位置等比缩小以保持屏幕尺寸，避免遮挡准星。
     [[nodiscard]] float OptionScale() const;
@@ -117,9 +119,9 @@ private:
     /// @brief gold 从前方偏下的单个模块对称散射，向准星目标平面的落点直飞。
     void Fire(BulletSystem& bullets, VisualId bulletVisual,
               std::span<const PlayerAimTarget> aimTargets);
-    /// @brief 根据 homingFrame_ 与当前 Power 发射本帧到期的 cyan 通道；每个通道左右各一颗。
-    /// 向准星目标平面的散射落点出射后继续追踪，近距离等比缩短模块偏移。
-    void FireHomingFrame(BulletSystem& bullets, VisualId homingVisual,
+    /// @brief 根据副弹窗口相位与 Power 发射到期的左右通道；灵札追踪，梦札从圈内原始偏移处直射。
+    /// 梦札速度按主弹原速比例换算，伤害以原始 12 点对应本项目 1 点；近距离等比缩短模块偏移。
+    void FireSecondaryFrame(BulletSystem& bullets, VisualId secondaryVisual,
                          std::span<const PlayerAimTarget> aimTargets);
     /// @brief 在库存和冷却允许时消耗 Bomb，并设置冷却与无敌时间。
     [[nodiscard]] bool TryUseBomb();
@@ -130,10 +132,10 @@ private:
     float fireTimer_ = 0.0F;
     float invulnerableTimer_ = 1.5F;
     float bombCooldown_ = 0.0F;
-    // cyan 独立采用原作 60 Hz 计时；-1 表示空闲，0…29 为当前窗口帧，相位不能随 Focus/Power 重置。
+    // 两种副弹独立于主弹采用原作 60 Hz 计时；-1 表示空闲，0…29 为窗口帧，Focus/Power 不重置相位。
     // 小数帧跨 Update 保留，低帧率逐帧补发；窗口结束时仅持续按住射击才启动下一轮。
-    int homingFrame_ = -1;
-    double homingFractionalFrame_ = 0.0;
+    int secondaryFrame_ = -1;
+    double secondaryFractionalFrame_ = 0.0;
     // Focus 在 8/60 秒内收拢到三分之一侧距；进度跨帧保留，反向切换不跳变。
     float optionFocus_ = 0.0F;
     float optionAimDepth_ = 20.0F; // 最近一次 Update 的瞄准深度（世界单位），只保存值，不借用目标。

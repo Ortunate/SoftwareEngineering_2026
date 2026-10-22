@@ -100,3 +100,5 @@ cmake --build --preset macos-debug --target koumakyou_sprite_overlap_tests
 本机新典的 Focus 位置分支使用 8 帧过渡，原始横向偏移由 24 像素缩到 8 像素。三维布局保留该时长与三分之一比例，用可逆 smoothstep 只改变屏幕侧距，不照搬二维垂直位移；常态侧距 0.78、Focus 侧距 0.26 世界单位。Power 8 起显示，圈世界高度 0.42，近目标时随出生位置等比缩小以保持屏幕尺寸。
 
 圈中心与 cyan 副弹出生点由 Player 的同一接口给出，动画年龄使用游戏时间。双圈与弹幕共用透明排序，属于无碰撞的绘制数据；暂停冻结、复活重启，开局与卸载关卡时清理动画游标。`koumakyou_lifecycle_tests <截图前缀> --player-options-only` 可隔离验证原始圈贴图、收拢前后像素、暂停及卸载，并导出 normal/focus 截图。
+
+梦之御札侧针追加独立外观，使用 `player00.anm` 脚本 66、sprite 68（32×104 逻辑像素）。针束按原始像素偏移从圈内上部射出，保留原生 Alpha 160、运动方向旋转及贴图比例，额外不透明度共用 Alpha 51。`--player-shots-only` 同时导出追踪弹与各 Power 档针弹的隔离截图；发射表及三维换算见 [梦之御札侧针对照](REIMU_NEEDLE_REFERENCE.md)。

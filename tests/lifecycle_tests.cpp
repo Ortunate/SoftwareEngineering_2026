@@ -507,7 +507,7 @@ struct GameLifecycleProbe {
         assert(!game.spellPractice_ && !game.practiceMode_ && !game.challengeMode_);
     }
 
-    /// @brief 通过正式开局绑定检查两种御札，并渲染真实追踪弹，防止生成正常而素材/动画不可见。
+    /// @brief 通过正式开局绑定检查两种御札，并渲染真实追踪弹和侧针，防止生成正常而素材/动画不可见。
     static void TestPlayerShots(Game& game, const std::string& prefix) {
         const int previousShot=game.selectedShot_;
         for(int shot : {0,1})for(int power : {Player::kMinPower,16,128}) {
@@ -524,27 +524,30 @@ struct GameLifecycleProbe {
             };
             Image background=render();
             game.player_.Update(0,{.fire=true},game.bullets_,game.stageContent_->PlayerBulletVisual(),
-                                game.stageContent_->PlayerHomingVisual(),true);
-            int homing=0;
+                                shot==0 ? game.stageContent_->PlayerHomingVisual() : game.stageContent_->PlayerNeedleVisual(),true);
+            int homing=0,needles=0;
             float directionBefore=0;
             game.bullets_.Pool().ForEachActive([&](const Bullet& bullet) {
                 if(bullet.homingTurnRate>0) { ++homing; directionBefore+=bullet.velocity.x; }
+                if(bullet.visual==stage1::kPlayerNeedle) { ++needles; directionBefore+=bullet.velocity.x; }
             });
-            assert(homing==(shot==0 && power>=8 ? 2 : 0));
+            assert(homing==(shot==0 ? 2 : 0));
+            assert(needles==(shot==1 ? (power==128 ? 6 : 2) : 0));
             // 偏右目标迫使成对弹的横向合速度改变；不能只检查 homingTurnRate 字段存在。
             const std::array<Vector3,1> targets{{{4,0,4}}};
             game.bullets_.Update(0.2F,targets,game.player_.Position());
             game.UpdateBattleAnimations();
-            if(homing>0) {
+            if(homing>0 || needles>0) {
                 float directionAfter=0;
                 game.bullets_.Pool().ForEachActive([&](Bullet& bullet) {
-                    if(bullet.homingTurnRate>0) {
+                    if(bullet.homingTurnRate>0 || bullet.visual==stage1::kPlayerNeedle) {
                         directionAfter+=bullet.velocity.x;
                         const auto& frame=bullet.animation.player.Sample();
                         assert(frame.visible && frame.sprite>=0 && frame.color.a>0);
-                    } else bullet.active=false; // 隔离直射弹，像素断言只能由追踪弹满足。
+                    } else bullet.active=false; // 隔离主弹，像素断言只能由当前机体副弹满足。
                 });
-                assert(directionAfter>directionBefore+1);
+                if(homing>0)assert(directionAfter>directionBefore+1);
+                else assert(std::abs(directionAfter-directionBefore)<0.0001F);
                 Image image=render();
                 int ink=0,peak=0;
                 for(int y=0;y<image.height;++y)for(int x=0;x<image.width;++x) {
@@ -555,11 +558,11 @@ struct GameLifecycleProbe {
                 }
                 assert(ink>20 && peak>6);
                 if(!prefix.empty()) {
-                    const std::string path=prefix+"-homing-power-"+std::to_string(power)+".png";
+                    const std::string path=prefix+(shot==0 ? "-homing-power-" : "-needle-power-")+std::to_string(power)+".png";
                     assert(ExportImage(image,path.c_str()));
                 }
                 UnloadImage(image);
-                std::cout<<"Homing Power "<<power<<": "<<homing<<" bullets, "<<ink<<" visible pixels, peak "<<peak<<"\n";
+                std::cout<<(shot==0 ? "Homing Power " : "Needle Power ")<<power<<": "<<(homing+needles)<<" bullets, "<<ink<<" visible pixels, peak "<<peak<<"\n";
             }
             UnloadImage(background); UnloadRenderTexture(target);
         }

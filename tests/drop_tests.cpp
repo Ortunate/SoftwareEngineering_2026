@@ -67,7 +67,7 @@ void TestPickupMotion() {
     }
 
     // 从已下落的状态立即转入吸取；拾取后复用槽位须恢复上抛而不继承追踪。
-    assert(drops.Update(1.0F, {5.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.6F}).power == 8);
+    assert(drops.Update(1.0F, {5.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.2F}).power == 8);
     drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 1);
     const auto reused = SinglePickup(drops);
     assert(!reused.homing && reused.velocityZ == 4.0F);
@@ -85,6 +85,32 @@ void KeepHomingPickupUncollected(koumakyou::DropSystem& drops) {
 
 void TestPickupBoundary() {
     using koumakyou::DropSystem;
+    // 不推进时间，直接检查三维球形拾取范围；P 点和分数点必须共用新半径。
+    constexpr std::array<Vector3, 4> inside{{
+        {1.19F, 0.0F, 0.0F}, {0.0F, -1.19F, 0.0F},
+        {0.0F, 0.0F, -1.19F}, {0.69F, 0.69F, -0.69F},
+    }};
+    constexpr std::array<Vector3, 4> outside{{
+        {1.21F, 0.0F, 0.0F}, {0.0F, -1.21F, 0.0F},
+        {0.0F, 0.0F, -1.21F}, {0.7F, 0.7F, -0.7F},
+    }};
+    DropSystem nearby(1234);
+    for (int item : {0, 1}) {
+        for (Vector3 position : outside) {
+            nearby.SpawnReferenceDrop(position, item, false);
+            const auto reward = nearby.Update(0.0F, {});
+            assert(reward.power == 0 && reward.score == 0);
+            assert(!SinglePickup(nearby).homing);
+            nearby.Clear();
+        }
+        for (Vector3 position : inside) {
+            nearby.SpawnReferenceDrop(position, item, false);
+            const auto reward = nearby.Update(0.0F, {});
+            assert(reward.power == (item == 0 ? 1 : 0));
+            assert(reward.score == (item == 1 ? DropSystem::kScorePointValue : 0));
+            nearby.ForEachActive([](const koumakyou::Pickup&) { assert(false); });
+        }
+    }
     constexpr float rearZ = -koumakyou::kArenaHalfExtents.z;
     constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
     constexpr std::array<koumakyou::DropOutcome, 1> outcome{{{1, 1, 1}}};
@@ -116,7 +142,7 @@ void TestPickupBoundary() {
     drops.Clear();
 
     drops.SpawnFixedPower({}, 8);
-    drops.Update(0.0F, {0.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.6F});
+    drops.Update(0.0F, {0.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.2F});
     KeepHomingPickupUncollected(drops);
     assert(drops.Update(1.0F, {}).power == 8);
 }
@@ -206,7 +232,7 @@ void RunDropTests() {
     using koumakyou::DropSystem;
     using koumakyou::Pickup;
     using koumakyou::PickupKind;
-    constexpr float autoCollectZ = koumakyou::kArenaHalfExtents.z * 0.6F;
+    constexpr float autoCollectZ = koumakyou::kArenaHalfExtents.z * 0.2F;
 
     DropSystem drops(1234);
     constexpr std::array<DropOutcome, 2> outcomes{{
@@ -231,8 +257,8 @@ void RunDropTests() {
     });
     assert(powerCount == 1 && scoreCount == 2);
     assert(itemIndex == 3);
-    // 旧吸取线 z=6 已移出前端五分之一区域，停在这里不能提前启动追踪。
-    drops.Update(0.0F, {0.0F, 0.0F, 6.0F});
+    // 触发线之前仍保持上抛；恰好进入前端 2/5 时才为所有道具锁定追踪。
+    drops.Update(0.0F, {0.0F, 0.0F, autoCollectZ - 0.01F});
     drops.ForEachActive([](const Pickup& pickup) { assert(!pickup.homing); });
     const auto falling = drops.Update(1.0F, {0.0F, 0.0F, autoCollectZ - 0.01F});
     assert(falling.power == 0 && falling.score == 0);
@@ -245,7 +271,7 @@ void RunDropTests() {
         assert(std::abs(pickup.velocityZ + 2.5F) < 0.0001F);
     });
     assert(itemIndex == 3);
-    const auto attracted = drops.Update(0.1F, {0.0F, 0.0F, autoCollectZ});
+    const auto attracted = drops.Update(0.02F, {0.0F, 0.0F, autoCollectZ});
     assert(attracted.power == 0 && attracted.score == 0);
     itemIndex = 0;
     drops.ForEachActive([&](const Pickup& pickup) {
@@ -298,7 +324,7 @@ void RunDropTests() {
 
     DropSystem latchedDrops(4321);
     latchedDrops.SpawnFixedPower({}, 1);
-    latchedDrops.Update(0.1F, {0.0F, 0.0F, autoCollectZ});
+    latchedDrops.Update(0.02F, {0.0F, 0.0F, autoCollectZ});
     const auto afterLeaving = latchedDrops.Update(0.05F, {3.0F, 0.0F, 0.0F});
     assert(afterLeaving.power == 0);
     int homingCount = 0;

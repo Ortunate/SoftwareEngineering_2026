@@ -19,9 +19,10 @@ constexpr float kLaunchSpeed = 4.0F;
 constexpr float kFallAcceleration = 8.0F;
 constexpr float kFallSpeed = 2.5F;
 constexpr float kAutoCollectSpeed = 20.0F;
-constexpr float kCollectDistance = 0.6F;
-// 战场 Z 范围为 [-kArenaHalfExtents.z, +kArenaHalfExtents.z]，靠近 +Z 边界的五分之一区域从 +0.6 倍半径开始。
-constexpr float kAutoCollectZ = kArenaHalfExtents.z * 0.6F;
+// 所有道具共用以自机判定中心为球心的拾取半径，单位为世界单位。
+constexpr float kCollectDistance = 1.2F;
+// 战场 Z 范围为 [-kArenaHalfExtents.z, +kArenaHalfExtents.z]，前端 2/5 从 +0.2 倍半长开始。
+constexpr float kAutoCollectZ = kArenaHalfExtents.z * 0.2F;
 constexpr float kSpiralAngle = 2.3999632F;
 }
 

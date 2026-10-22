@@ -81,13 +81,13 @@ public:
     /// @note 不受普通道具池容量限制，已有星点也会继续追踪。
     void ConvertEnemyBulletsToStars(BulletSystem& bullets);
     /// @brief 推进道具并拾取；普通掉落物先向 +Z 上抛，再沿 -Z 加速至下落速度上限。
-    /// @note 玩家进入 +Z 端五分之一区域时，所有活动道具立即持续追踪玩家，优先于上抛和下落。
+    /// @note 玩家进入 +Z 端 2/5 区域时，所有活动道具立即持续追踪玩家，优先于上抛和下落。
     /// 已触发的道具在玩家离开该区域后仍追踪；之后生成的道具重新从上抛开始。
     /// 非追踪道具沿 -Z 下落至 z < -kArenaHalfExtents.z 时消失；刚好位于边界时仍保留。
     /// 星点生成时已触发追踪，不受玩家所处区域限制；追踪中的道具持续到拾取或清场。
     /// @param deltaTime 本帧非负秒数。
     /// @param playerPosition 玩家判定中心的世界坐标。
-    /// @return 本帧近距离拾取的 Power 和分数，调用方负责应用上限与满火力效果。
+    /// @return 本帧距离玩家中心小于 1.2 世界单位的道具奖励，调用方负责应用上限与满火力效果。
     PickupReward Update(float deltaTime, Vector3 playerPosition);
 
     /// @brief 遍历普通道具和星点，只借用对象；回调不得保留引用或修改道具容器。

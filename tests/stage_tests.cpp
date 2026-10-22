@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <string_view>
@@ -323,7 +324,20 @@ void TestStage1Content() {
     assert((DialogueExpressionsAt(before,6)==std::array<int,2>{5,1}));
     assert((DialogueExpressionsAt(before,9)==std::array<int,2>{0,3}));
     assert((DialogueExpressionsAt(before,100)==std::array<int,2>{3,2}));
-    assert((DialogueExpressionsAt(content->Dialogue(true),0)==std::array<int,2>{0,0}));
+    assert((DialogueExpressionsAt(content->Dialogue(true),0)==std::array<int,2>{2,0}));
+    assert((DialogueExpressionsAt(before,2,19.0F/60)==std::array<int,2>{0,0}));
+    assert((DialogueExpressionsAt(before,2,20.0F/60)==std::array<int,2>{5,0}));
+    // 来自 msg1 的实际展开帧，专门覆盖相邻 wait 共用计数及末尾等待，不能按句长重新估算。
+    const std::array<int,15> reimuFrames{361,361,321,151,240,311,301,301,301,301,301,301,301,301,530};
+    for(std::size_t index=0;index<before.size();++index)
+        assert(std::abs(before[index].duration*60-reimuFrames[index])<0.001F);
+    assert(before[0].secondLineReplacesFirst && before[0].textDelay==1);
+    assert(content->Dialogue(true)[0].duration==6 && content->Dialogue(true)[1].duration==16);
+    const auto reimuCues=content->DialogueCues(false,ShotType::HomingAmulet);
+    assert(!DialogueFlagAt(reimuCues,DialogueCueKind::InputEnabled,1745.0F/60,true));
+    assert(DialogueFlagAt(reimuCues,DialogueCueKind::InputEnabled,1775.0F/60,true));
+    assert(!DialogueFlagAt(reimuCues,DialogueCueKind::BossMusic,3851.0F/60));
+    assert(DialogueFlagAt(reimuCues,DialogueCueKind::BossMusic,3852.0F/60));
     assert((DialogueExpressionsAt({},0)==std::array<int,2>{0,0}));
     assert(visuals[stage1::kGreenSphere].mode == VisualMode::Bullet);
     assert(content->PlayerBulletVisual() == stage1::kPlayerGoldCard);
@@ -338,6 +352,18 @@ void TestStage1Content() {
         assert(content->HeroPortraitVisual(0,shot)==stage1::kMarisaPortraits[0]);
         const auto dialogue=content->Dialogue(false,shot);
         assert(dialogue.size()==10 && content->Dialogue(true,shot).size()==2);
+        const std::array<int,10> marisaFrames{361,301,361,340,201,301,301,301,301,430};
+        for(std::size_t index=0;index<dialogue.size();++index)
+            assert(std::abs(dialogue[index].duration*60-marisaFrames[index])<0.001F);
+        const auto cues=content->DialogueCues(false,shot);
+        assert(!DialogueFlagAt(cues,DialogueCueKind::BossMusic,2466.0F/60));
+        assert(DialogueFlagAt(cues,DialogueCueKind::BossMusic,2467.0F/60));
+        assert((DialogueExpressionsAt(content->Dialogue(true,shot),0)==std::array<int,2>{1,0}));
+        for(int index=0;index<6;++index) {
+            const auto id=content->HeroPortraitVisual(index,shot);
+            assert(visuals[id].path.ends_with(std::array<std::string_view,6>{"face01a_0.png","face01a_1.png","face01b_0.png","face01b_1.png","face01c_0.png","face01c_1.png"}[index]));
+            assert(visuals[id].dialogueCrop.height==0.6F);
+        }
         for(const auto& line:dialogue)if(!line.bossSpeaking)assert(std::string_view(line.speaker)=="魔理沙");
     }
     assert(content->PowerPickupVisual() == stage1::kPowerPoint);

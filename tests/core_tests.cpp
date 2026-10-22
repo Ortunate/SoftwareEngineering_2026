@@ -241,6 +241,22 @@ void TestDialogueMotion() {
     for(int frame=0;frame<24;++frame)fast.Advance(true,true,1.0F/240);
     assert(std::abs(slow.Sample(false).focus-fast.Sample(false).focus)<0.00001F);
     assert(std::abs(slow.Sample(true).opacity-fast.Sample(true).opacity)<0.00001F);
+    // 新典脚本的入退场和强调彼此独立；以整段时钟重建，不能受跳句及显示帧率影响。
+    const std::array<koumakyou::DialogueCue,5> cues{{
+        {0,koumakyou::DialogueCueKind::Portrait,0,1},
+        {60,koumakyou::DialogueCueKind::Portrait,1,1},
+        {60,koumakyou::DialogueCueKind::Portrait,0,4},
+        {120,koumakyou::DialogueCueKind::Portrait,0,5},
+        {120,koumakyou::DialogueCueKind::Portrait,1,5},
+    }};
+    motion.Seek(cues,0);assert(motion.Sample(false).slide==1 && motion.Sample(true).opacity==0);
+    motion.Seek(cues,0.5F);assert(motion.Sample(false).slide==0 && motion.Sample(false).opacity==1);
+    motion.Seek(cues,68.0F/60);
+    assert(std::abs(motion.Sample(false).opacity-191.0F/255)<0.0001F);
+    motion.Seek(cues,1.5F);assert(motion.Sample(false).opacity==128.0F/255 && motion.Sample(true).opacity==1);
+    motion.Seek(cues,2.25F);assert(motion.Sample(false).slide>0 && motion.Sample(false).slide<1);
+    motion.Seek(cues,2.5F);assert(motion.Sample(false).opacity==0 && motion.Sample(true).opacity==0);
+    motion.Seek(cues,0.5F);assert(motion.Sample(false).opacity==1 && motion.Sample(true).opacity==0);
 }
 /// @brief 检查同一真实时长在 30/240 FPS 下的选择效果一致，以及快速切换不会保留上一页行号。
 void TestMenuMotion() {

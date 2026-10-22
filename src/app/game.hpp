@@ -276,12 +276,12 @@ private:
     bool stageClearShown_ = false; // 每局至多计算并展示一次；重开时重置，防止事件重入重复加分。
     /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
     [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
-    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，统一确认操作仍只推进一句。
+    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，确认不越过原生退场或结算保护。
     [[nodiscard]] int DialogueIndex(float* lineStart = nullptr) const;
     [[nodiscard]] float DialogueDuration() const;
     bool dialogueAfterBattle_ = false;
     bool dialogueBossMusic_ = false;
-    float dialogueTimer_ = 0.0F;
+    double dialogueTimer_ = 0.0; // 整段对话的游戏秒数；双精度累积，避免长对白在高 FPS 下偏离原生指令帧。
     bool dialogueActive_ = false;
     ui::DialogueMotion dialogueMotion_{}; // 只在 Playing 的对话期间推进；暂停保持当前透明度、缩放与位移。
     std::optional<StageEventId> bossEventId_;

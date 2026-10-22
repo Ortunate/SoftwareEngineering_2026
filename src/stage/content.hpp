@@ -43,12 +43,24 @@ struct DialogueLine {
     const char* secondLine = "";
     int expression = 0; // 当前说话人的关卡局部表情编号；另一方保留最近一句的表情。
     float textDelay = 0;
+    float expressionDelay = 0; // 本句表情相对句首的生效秒数；在此之前保留上一句的差分。
+    float confirmDelay = 8.0F/60; // 原 MSG 等待计数至少达到 8 帧后才接受单次确认。
+    float advanceAfter = -1; // 确认后跳至本句内此秒数；负值跳到下一句，末句保留原始退场/结算等待。
+    bool secondLineReplacesFirst = false; // 原脚本写入同一文字槽时保留覆盖行为，原文仍分别保存。
 };
 
 /// @brief 返回截至 lineIndex 的玩家/Boss 表情编号，数组下标分别为 0/1。
-/// 尚未发言的一方使用 0；空台词返回 {0,0}，越界下标按最后一句处理，不持有台词。
+/// elapsed 为当前句内秒数，默认取完整句末；尚未发言的一方使用 0，不持有台词。
 [[nodiscard]] std::array<int, 2> DialogueExpressionsAt(
-    std::span<const DialogueLine> lines, std::size_t lineIndex);
+    std::span<const DialogueLine> lines, std::size_t lineIndex, float elapsed = 1.0e9F);
+
+/// @brief 原 MSG 展开后的演出指令；frame 是包含 wait 停顿的 60 Hz 实际播放帧，按时间和原指令顺序排列。
+/// Portrait 的 slot=0/1 表示自机/对手，value 是 ANM 中断标签 1/3/4/5；其他指令不使用 slot。
+enum class DialogueCueKind { Portrait, InputEnabled, BossMusic };
+struct DialogueCue { int frame; DialogueCueKind kind; int slot, value; };
+/// @brief 查询已展开指令的布尔状态，未出现指令时返回 initial；seconds 是整段对话已播放秒数。
+[[nodiscard]] bool DialogueFlagAt(std::span<const DialogueCue> cues, DialogueCueKind kind,
+                                float seconds, bool initial = false);
 
 /// @brief 悬浮题签的关卡名称；字符串借用内容模块，须覆盖整个关卡展示期，不包含游玩模式。
 struct StageDisplayInfo {
@@ -74,6 +86,8 @@ public:
     bool HandleEvent(const StageEvent& event, StageEventSink& sink) const;
     /// @brief 返回实际机体所属角色的对话台词；shot 使用四组合编号，底层存储须在展示期间有效。
     [[nodiscard]] virtual std::span<const DialogueLine> Dialogue(bool afterBattle = false, ShotType shot=ShotType::HomingAmulet) const = 0;
+    /// @brief 返回当前对话的原生演出时间轴；缺省空表沿用通用的逐句强调。
+    [[nodiscard]] virtual std::span<const DialogueCue> DialogueCues(bool, ShotType) const { return {}; }
     /// @brief 返回单句台词的展示秒数。
     [[nodiscard]] virtual float DialogueLineDuration() const = 0;
     /// @brief 返回玩家直射弹的外观 ID。

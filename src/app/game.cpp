@@ -419,7 +419,9 @@ void Game::UpdateUiMotion(float deltaTime) {
         const auto lines = CurrentDialogue();
         if (!lines.empty()) {
             const auto& line = lines[DialogueIndex()];
-            dialogueMotion_.Advance(line.bossSpeaking, line.showBoss, deltaTime);
+            const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
+            if(cues.empty())dialogueMotion_.Advance(line.bossSpeaking, line.showBoss, deltaTime);
+            else dialogueMotion_.Seek(cues,dialogueTimer_);
         }
     }
     int detail = 0, selection = -1;
@@ -614,11 +616,14 @@ void Game::UpdateState(float deltaTime) {
         float lineStart=0;
         const auto lines=CurrentDialogue();
         const auto& line=lines[DialogueIndex(&lineStart)];
-        if (dialogueInput.confirm || dialogueInput.click)
-            dialogueTimer_=lineStart+(line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
-        if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))
-            dialogueTimer_=DialogueDuration();
-        if (!dialogueAfterBattle_ && DialogueIndex()>=13 && !dialogueBossMusic_) {
+        const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
+        const bool fastForward=IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+        const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
+            (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
+        if (inputAllowed && (dialogueInput.confirm || dialogueInput.click || fastForward))
+            dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
+                line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
+        if (!dialogueAfterBattle_ && DialogueFlagAt(cues,DialogueCueKind::BossMusic,dialogueTimer_) && !dialogueBossMusic_) {
             assets_.PlayBossMusic(); dialogueBossMusic_=true;
         }
         if (dialogueTimer_+0.00001F>=DialogueDuration()) {
@@ -626,6 +631,8 @@ void Game::UpdateState(float deltaTime) {
             if (dialogueEventId_) { stage_.EndEvent(*dialogueEventId_); dialogueEventId_.reset(); }
             if (dialogueAfterBattle_) { BeginStageClear(); return; }
         }
+        // UpdateUiMotion 在战斗更新之前运行；原生演出需在计时与跳句后重新采样，避免低 FPS 多滞后一帧。
+        if(dialogueActive_ && !cues.empty())dialogueMotion_.Seek(cues,dialogueTimer_);
     }
     if(!dialogueActive_) {
         rankTime_+=deltaTime;
@@ -688,6 +695,8 @@ void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
     dialogueEventId_ = id;
     const auto lines = CurrentDialogue();
     if (!lines.empty()) dialogueMotion_.Reset(lines.front().bossSpeaking, lines.front().showBoss);
+    const auto cues=stageContent_->DialogueCues(afterBattle,player_.Shot());
+    if(!cues.empty())dialogueMotion_.Seek(cues,0);
     messageTimer_ = 0.0F;
 }
 

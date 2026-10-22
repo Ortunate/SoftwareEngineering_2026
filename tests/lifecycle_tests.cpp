@@ -237,7 +237,7 @@ struct GameLifecycleProbe {
                 seconds+=lines[line].duration>0 ? lines[line].duration : game.stageContent_->DialogueLineDuration();
             return seconds;
         };
-        // 用不透明纯色替代纹理，直接验证最终像素混合，防止把变暗 tint 误当作 30% Alpha。
+        // 用不透明纯色替代纹理，直接验证最终像素混合，防止把变暗 tint 误当作原生 Alpha 128。
         auto& visuals=const_cast<StageAssets&>(game.assets_.Stage()).visuals;
         std::vector<std::pair<VisualId,VisualResource>> originals;
         Image redImage=GenImageColor(32,32,RED), greenImage=GenImageColor(32,32,GREEN);
@@ -268,18 +268,20 @@ struct GameLifecycleProbe {
             check(0,RED,leftAlpha); check(image.width-1,GREEN,rightAlpha);
             UnloadImage(image);
         };
-        game.dialogueTimer_=at(8); game.UpdateUiMotion(0.3F);
-        pixels(1,0.3F);
-        game.dialogueTimer_=at(7); game.UpdateUiMotion(0);
-        pixels(1,0.3F);
-        game.UpdateUiMotion(0.13F);
-        pixels(0.65F,0.65F);
+        constexpr float inactive=128.0F/255;
+        const float turn=2648.0F/60;
+        game.dialogueTimer_=turn-1.0F/60; game.UpdateUiMotion(0);
+        pixels(1,inactive);
+        game.dialogueTimer_=turn; game.UpdateUiMotion(0);
+        pixels(1,inactive);
+        game.dialogueTimer_=turn+8.0F/60;game.UpdateUiMotion(0);
+        pixels(191.0F/255,191.0F/255);
         const auto paused=game.dialogueMotion_.Sample(false);
         game.TogglePause(); game.Update(0.5F);
         assert(game.dialogueMotion_.Sample(false).opacity==paused.opacity);
         assert(game.dialogueMotion_.Sample(false).focus==paused.focus);
-        game.TogglePause(); game.UpdateUiMotion(0.13F);
-        pixels(0.3F,1);
+        game.TogglePause();game.dialogueTimer_=turn+16.0F/60;game.UpdateUiMotion(0);
+        pixels(inactive,1);
         for(const auto& [id,original]:originals)visuals[id]=original;
         UnloadTexture(red); UnloadTexture(green); UnloadRenderTexture(target);
 
@@ -287,16 +289,58 @@ struct GameLifecycleProbe {
         game.dialogueTimer_=at(8); game.UpdateUiMotion(0.3F);
         Capture(game,prefix,"dialogue-focus-left");
         for(int direction=0;direction<2;++direction) {
-            game.dialogueTimer_=at(direction==0 ? 7 : 8);
+            const float boundary=(direction==0?2648.0F:2949.0F)/60;
             for(int frame=0;frame<8;++frame) {
-                game.UpdateUiMotion(frame==0 ? 0 : 0.04F);
+                game.dialogueTimer_=boundary+frame*0.04F;game.UpdateUiMotion(0);
                 const std::string name="dialogue-turn-"+std::to_string(direction)+"-"+std::to_string(frame);
                 Capture(game,prefix,name.c_str());
             }
         }
         game.BeginStageDialogue(2,true);
+        assert(game.dialogueMotion_.Sample(false).slide==1 && game.dialogueMotion_.Sample(true).opacity==0);
+        game.dialogueTimer_=0.5F;game.UpdateUiMotion(0);
         assert(game.dialogueMotion_.Sample(false).opacity==1 && game.dialogueMotion_.Sample(true).opacity==0);
         std::cout<<"Dialogue transition opacity, pause and edge tests passed\n";
+    }
+
+    /// @brief 逐句核对两位自机战前/战后真实差分、音乐触发和末尾退场，截图覆盖横屏与竖屏。
+    static void TestNativeDialogue(Game& game,const std::string& prefix) {
+        const int width=GetScreenWidth(),height=GetScreenHeight();
+        for(int character=0;character<2;++character) {
+            game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
+            game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();game.drops_.Clear();
+            for(bool after:{false,true}) {
+                game.BeginStageDialogue(1,after);
+                const auto lines=game.CurrentDialogue();
+                float start=0;
+                for(std::size_t index=0;index<lines.size();++index) {
+                    game.dialogueTimer_=start+std::max(1.1F,lines[index].textDelay+lines[index].line2Delay+0.1F);
+                    game.UpdateUiMotion(0);
+                    const auto expressions=DialogueExpressionsAt(lines,index,game.dialogueTimer_-start);
+                    const auto hero=game.stageContent_->HeroPortraitVisual(expressions[0],game.player_.Shot());
+                    assert(IsTextureValid(game.assets_.GetVisual(hero).texture));
+                    assert(!lines[index].showBoss || game.dialogueMotion_.Sample(true).opacity>0);
+                    for(const auto size:std::array<Vector2,2>{{{1100,760},{390,844}}}) {
+                        SetWindowSize(size.x,size.y);
+                        const auto name="native-dialogue-"+std::to_string(character)+(after?"-after-":"-before-")+
+                            std::to_string(index)+"-"+std::to_string(static_cast<int>(size.x));
+                        Capture(game,prefix,name.c_str());
+                    }
+                    start+=lines[index].duration;
+                }
+                if(!after) {
+                    const float musicFrame=character==0?3852.0F:2467.0F;
+                    game.BeginStageDialogue(1);game.dialogueTimer_=(musicFrame-1)/60;game.Update(0);
+                    assert(!game.dialogueBossMusic_);
+                    game.dialogueTimer_=musicFrame/60;game.Update(0);assert(game.dialogueBossMusic_);
+                    game.dialogueTimer_=game.DialogueDuration()-1.0F/60;game.UpdateUiMotion(0);
+                    assert(game.dialogueMotion_.Sample(false).slide>0.99F && game.dialogueMotion_.Sample(true).slide>0.99F);
+                }
+                game.dialogueActive_=false;
+            }
+        }
+        SetWindowSize(width,height);game.selectedCharacter_=0;game.selectedShot_=0;game.StartPreview();
+        std::cout<<"Both native Stage 1 dialogue branches, portraits, BGM and exits passed\n";
     }
 
     /// @brief 实际加载十个差分，渲染逐句切换及菜单/符卡，验证离开关卡不释放通用立绘。
@@ -780,6 +824,7 @@ struct GameLifecycleProbe {
         TestFullWindow(game,prefix);
         TestDialogueTransitions(game,prefix);
         TestPortraits(game,prefix);
+        TestNativeDialogue(game,prefix);
         TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
         // 经过真实 Game 更新验证高帧率入场，不能把轨道首帧偏移锁定为退场。
@@ -979,6 +1024,7 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestDialogueTransitions(*game,prefix);
             koumakyou::GameLifecycleProbe::TestPortraits(*game,prefix);
+            koumakyou::GameLifecycleProbe::TestNativeDialogue(*game,prefix);
         } else {
             koumakyou::GameLifecycleProbe::Run(*game, prefix);
         }

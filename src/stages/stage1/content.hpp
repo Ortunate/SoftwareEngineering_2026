@@ -15,6 +15,7 @@ public:
     [[nodiscard]] std::unique_ptr<Enemy> CreateEnemy(const EnemySpec& spec) const override;
     [[nodiscard]] std::unique_ptr<Boss> CreateBoss(bool final) const override;
     [[nodiscard]] std::span<const DialogueLine> Dialogue(bool afterBattle = false, ShotType shot=ShotType::HomingAmulet) const override;
+    [[nodiscard]] std::span<const DialogueCue> DialogueCues(bool afterBattle, ShotType shot) const override;
     [[nodiscard]] float DialogueLineDuration() const override { return 5.0F; }
     [[nodiscard]] VisualId PlayerBulletVisual() const override { return kPlayerGoldCard; }
     [[nodiscard]] VisualId PlayerHomingVisual() const override { return kPlayerCyanCard; }

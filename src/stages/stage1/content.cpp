@@ -15,6 +15,9 @@ std::span<const StageEvent> Stage1Content::Events() const { return Stage1Timelin
 std::span<const DialogueLine> Stage1Content::Dialogue(bool afterBattle, ShotType shot) const {
     return Stage1Dialogue(afterBattle,shot==ShotType::MagicMissile || shot==ShotType::IllusionLaser);
 }
+std::span<const DialogueCue> Stage1Content::DialogueCues(bool afterBattle, ShotType shot) const {
+    return Stage1DialogueCues(afterBattle,shot==ShotType::MagicMissile || shot==ShotType::IllusionLaser);
+}
 
 PlayerShotVisuals Stage1Content::PlayerVisuals(ShotType shot) const {
     auto result=StageContent::PlayerVisuals(shot);

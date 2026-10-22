@@ -175,6 +175,12 @@ struct GameLifecycleProbe {
     }
     static float StartCharacterWeight(const Game& game,int role) {return game.startCharacterMotion_.Weight(role);}
     static float DialogueTime(const Game& game) { return game.dialogueTimer_; }
+    /// @brief 使用正式入口定位两位自机的对白保护区间，不让道中时间轴干扰输入回放。
+    static void DialogueAt(Game& game,int character,bool after,float seconds) {
+        game.stage_=StageDirector{};
+        game.player_.ConfigureRun(3,3,false,static_cast<ShotType>(character*2));
+        game.state_=RunState::Playing;game.BeginStageDialogue(2,after);game.dialogueTimer_=seconds;
+    }
     /// @brief 以真实结算入口检查成绩规则；仅替代漫长的整关计分过程，不绕过存档路径。
     static void FinishScoreAttempt(Game& game,long long score,bool challenge,bool spell,bool preview,RunState result) {
         game.practiceMode_=true; game.spellPractice_=spell; game.previewMode_=preview;
@@ -193,7 +199,7 @@ struct GameLifecycleProbe {
     /// @brief 按真实 Update 路径结束战后对话，不直接跳转结算状态。
     static void FinishPostDialogue(Game& game) { game.dialogueTimer_=game.DialogueDuration(); game.Update(0); }
     /// @brief 将战后独白定位到最后一句仍未结束的位置，供真实按键验证层间确认不穿透。
-    static void LastPostLine(Game& game) { game.dialogueTimer_=game.DialogueDuration()-1; }
+    static void LastPostLine(Game& game) { game.dialogueTimer_=game.DialogueDuration()-2; }
     static void ReenterClear(Game& game) { game.BeginStageClear(); }
     static float ClearSeconds(const Game& game) { return game.stageClearSeconds_; }
     static float StageTime(const Game& game) { return game.stage_.Elapsed(); }
@@ -764,6 +770,31 @@ void TestPracticeStages(const std::filesystem::path& screenshots) {
 }
 
 
+/// @brief 独立回放两位自机的对白按键，验证确认别名、名牌保护及退场保护。
+void TestDialogueInputs() {
+    using namespace koumakyou;
+    using Probe=GameLifecycleProbe;
+    Game game;SetTargetFPS(0);game.StartPreview();
+    for(int character=0;character<2;++character) {
+        const float intro=(character==0?1745.0F:1564.0F)/60;
+        for(int key:{KEY_Z,KEY_SPACE,KEY_ENTER}) {
+            Probe::DialogueAt(game,character,false,intro+1.0F/60);
+            const float locked=Probe::DialogueTime(game);Key(game,key);
+            Check(Probe::DialogueTime(game)-locked<0.1F,"dialogue confirmation bypassed native introduction lock");
+            Probe::DialogueAt(game,character,false,intro+31.0F/60);
+            const float enabled=Probe::DialogueTime(game);Key(game,key);
+            Check(Probe::DialogueTime(game)-enabled>1,"dialogue confirmation alias did not advance after native lock");
+        }
+        Probe::DialogueAt(game,character,false,intro+31.0F/60);
+        const float enabled=Probe::DialogueTime(game);Click(game,1,1);
+        Check(Probe::DialogueTime(game)-enabled>1,"dialogue click did not advance after native lock");
+        Probe::DialogueAt(game,character,false,(character==0?4653.0F:3168.0F)/60);
+        const float exit=Probe::DialogueTime(game);Key(game,KEY_Z);
+        Check(Probe::Playing(game) && Probe::DialogueTime(game)-exit<0.1F,"dialogue confirmation bypassed native portrait exit");
+    }
+    std::puts("Native dialogue confirmation aliases, introduction lock and exit lock passed.");
+}
+
 /// @brief 验证结算快照、精确超时、确认不穿透、暂停冻结与整关练习返回选关的完整生命周期。
 void TestStageSettlement(const std::filesystem::path& screenshots) {
     using namespace koumakyou;
@@ -790,6 +821,8 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
     for(const bool practice : {false,true}) {
         game.StartPreview(); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
         Probe::LastPostLine(game); Key(game,KEY_Z);
+        Check(Probe::Playing(game),"confirming the final line skipped the native settlement delay");
+        for(int frame=0;frame<61 && Probe::Playing(game);++frame)Frame(game);
         Check(Probe::State(game)==RunState::StageClear && Probe::ClearSeconds(game)<0.1F,
               "confirming the final post-battle line also dismissed the clear report");
     }
@@ -1123,6 +1156,9 @@ int main(int argc, char** argv) {
             TestStartCharacters(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--spell-only") {
             TestSpellPractice(screenshots);
+        } else if(argc>2 && std::string(argv[2])=="--dialogue-only") {
+            TestDialogueInputs();
+            TestStageSettlement(screenshots);
         } else {
         {
             Event(7,83,147);

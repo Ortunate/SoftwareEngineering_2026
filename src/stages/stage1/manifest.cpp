@@ -78,7 +78,8 @@ const std::vector<VisualDefinition> kVisuals=[] {
         "common/portraits/marisa/face01c_0.png","common/portraits/marisa/face01c_1.png"};
     for(int expression=0;expression<6;++expression)
         visuals.push_back({.id=kMarisaPortraits[expression], .path=marisaFaces[expression], .mode=VisualMode::Character,
-                           .dialogueCrop=(expression%2==1 ? Rectangle{0.20F,0,0.80F,0.60F} : Rectangle{0,0,1,1})});
+                           // 魔理沙六张重绘均为全身图，同一上部取景避免切换到偶数差分时人物突然缩小。
+                           .dialogueCrop={0.20F,0,0.80F,0.60F}});
     return visuals;
 }();
 constexpr std::array<SoundDefinition, 0> kSounds{};

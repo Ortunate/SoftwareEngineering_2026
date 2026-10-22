@@ -30,6 +30,8 @@ public:
 
     /// @brief 接收关卡自适应难度值 10…32；普通演员默认忽略，原作脚本演员用于弹速/弹数。
     virtual void SetChallengeRank(int) {}
+    /// @brief 当前是否允许扣血；原生脚本演员须反映 105 号可受伤开关。
+    [[nodiscard]] virtual bool CanTakeDamage() const { return true; }
     /// @brief 借用本帧脚本产生的音效编号；下次更新失效，普通演员返回空表。
     [[nodiscard]] virtual std::span<const int> SoundEvents() const { return {}; }
     /// @brief 原作掉落编号；-1 为轮换掉落，0 为小 P 点，-3 表示使用 DropDistribution。

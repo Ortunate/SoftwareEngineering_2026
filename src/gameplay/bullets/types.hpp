@@ -17,7 +17,7 @@ enum class PlayerShotKind : std::uint8_t { Projectile, Missile, Laser, Explosion
 /// 普通弹 position 为球形判定中心；光束 position 为起点，beamDirection 为单位方向。
 /// beamLength > 0 时采用线段胶囊判定，预警期不造成接触；active=false 后槽位可复用。
 /// age 和 maxAge 为秒；rotationAxis 是旋转轴，angularVelocity 为弧度/秒。
-/// homingTurnRate 为追踪转向上限（弧度/秒），零表示不追踪；damage 是单次命中伤害。
+/// homingTurnRate 为追踪转向上限（弧度/秒），零表示不追踪；damage 是原始 HP 单位的单次命中基准。
 struct Bullet {
     bool active = false;
     bool grazed = false;
@@ -35,8 +35,9 @@ struct Bullet {
     float angularVelocity = 0.0F;
     float homingTurnRate = 0.0F;
     float damage = 2.0F;
+    std::uint32_t sourceShotRva = 0; // 原生火力通道的来源 RVA，仅在对应 EXE 哈希下有效；手工生成弹为零。
     PlayerShotKind playerShotKind = PlayerShotKind::Projectile;
-    // 持续伤害以点/秒计，damageSeconds 是本次 Update 的有效判定秒数，碰撞总控处理完全部目标后清零。
+    // 持续伤害以原始 HP/秒计，damageSeconds 是本次 Update 的有效判定秒数，碰撞总控处理完全部目标后清零。
     float damagePerSecond = 0, damageSeconds = 0;
     double hitScoreRemainder = 0; // 持续弹命中 Boss 的不足 1 分余数；按原始 60 Hz 的每帧 10 分换算，避免 FPS 改变得分。
     bool pendingExpiration = false; // 持续弹跨过寿命终点时保留最后一段有效秒数，碰撞结算后再回收。

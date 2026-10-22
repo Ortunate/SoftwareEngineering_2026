@@ -8,8 +8,8 @@
 namespace koumakyou::stage1 {
 // 384×448 像素场地映射到 X/Z 平面；原作深度映射到高度 Y，统一比例保持投影角度与轨迹。
 inline constexpr float kReferenceScale = 20.0F / 448.0F;
-// 当前 3D 玩家弹的伤害单位换算；所有原作 HP 和阶段阈值同时除以此值，不改变阶段血量比例。
-inline constexpr float kReferenceHealthUnit = 25.0F;
+// HP、阈值及玩家弹伤害统一采用原始点数；保留单位常量供现有演员适配器和独立 HUD 查询使用。
+inline constexpr float kReferenceHealthUnit = 1.0F;
 /// @brief 将原作像素坐标转换为世界坐标；X 居中，原作 Y=0…448 对应世界 Z=+10…-10，向玩家推进。
 /// 原作 Z=0 对应世界 Y=0，与玩家初始高度一致；原作 Z 正方向对应世界 -Y。
 inline Vector3 ReferencePosition(Vector3 source) {

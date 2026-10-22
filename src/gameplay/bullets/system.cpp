@@ -160,8 +160,8 @@ void BulletSystem::ExplodePlayerMissile(Bullet& bullet) {
     bullet.visual=bullet.impactVisual;bullet.animation={};
     bullet.radius=bullet.explosionRadius;
     bullet.velocity=Scale(bullet.velocity,0.5F);bullet.acceleration={};
-    // 原作按整数取四分之一且至少 1 点；本项目每 12 原始伤害对应 1 点，持续伤害换算为每秒。
-    bullet.damagePerSecond=std::max(1.0F,std::floor(bullet.damage*12/4))*60/12;
+    // 原作按整数取四分之一且至少 1 点；生命、单发及持续伤害均采用原始点数。
+    bullet.damagePerSecond=std::max(1.0F,std::floor(bullet.damage/4))*60;
     bullet.damage=0;bullet.damageSeconds=0;
     bullet.age=0;bullet.maxAge=20.0F/60;
 }

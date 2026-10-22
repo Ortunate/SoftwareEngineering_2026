@@ -67,7 +67,7 @@ void TestMissileMotionAndImpact() {
         assert(missile->visual==stage1::kMarisaExplosion && std::abs(missile->radius-32*Player::kOptionWorldHeight/36*0.5F)<0.0001F);
         assert(missile->age==0 && std::abs(missile->maxAge-20.0F/60)<0.0001F);
         pool->Update(0.1F);
-        assert(std::abs(missile->ContactDamage()-2)<0.0001F); // 原始 18 取四分之一为 4，换算为每秒 20 点。
+        assert(std::abs(missile->ContactDamage()-24)<0.0001F); // 原始 18 取四分之一为 4，每接触帧 4 点，即每秒 240 原始点。
         pool->Update(0.24F);assert(missile->pendingExpiration);
         pool->Update(0);assert(!missile->active);
         pool->Reset();

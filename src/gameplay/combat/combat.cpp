@@ -68,6 +68,13 @@ void Game::ResolveCollisions() {
     if (playerWasHit) HandlePlayerHit();
     if (state_ != RunState::Playing) return;
 
+    const auto shotDamage=[this](const Bullet& bullet,DamageTarget target,const void* identity,bool damageable,bool spell) {
+        const auto source=bullet.playerShotKind==PlayerShotKind::Laser ? DamageSource::Laser :
+                          bullet.playerShotKind==PlayerShotKind::Explosion ? DamageSource::Explosion : DamageSource::Projectile;
+        return ResolveDamage({source,target,player_.Shot(),bullet.ContactDamage(),damageable,spell,
+                              identity,bullet.sourceShotRva,stage_.Elapsed(),bullet.damageSeconds},
+                             stageContent_->DamageRules()).amount;
+    };
     const auto applyShotImpact=[this](Bullet& bullet) {
         if(bullet.playerShotKind==PlayerShotKind::Missile)bullets_.ExplodePlayerMissile(bullet);
         else if(bullet.playerShotKind==PlayerShotKind::Projectile)bullet.active=false;
@@ -75,13 +82,13 @@ void Game::ResolveCollisions() {
             // 原作爆破每个持续接触的逻辑帧继续减半速度；按经过秒数换算，避免低 FPS 减速变弱。
             bullet.velocity=Scale(bullet.velocity,std::pow(0.5F,bullet.damageSeconds*60));
     };
-    enemies_.ForEachActive([this,&applyShotImpact](Enemy& enemy) {
-        bullets_.Pool().ForEachActive([&enemy,&applyShotImpact](Bullet& bullet) {
+    enemies_.ForEachActive([this,&applyShotImpact,&shotDamage](Enemy& enemy) {
+        bullets_.Pool().ForEachActive([&enemy,&applyShotImpact,&shotDamage](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + enemy.hitRadius;
             if (bullet.DistanceSquaredTo(enemy.position) <=
                 collisionDistance * collisionDistance) {
-                enemy.health -= bullet.ContactDamage();
+                enemy.health -= shotDamage(bullet,DamageTarget::Enemy,&enemy,enemy.CanTakeDamage(),false);
                 applyShotImpact(bullet);
             }
         });
@@ -103,13 +110,12 @@ void Game::ResolveCollisions() {
     });
 
     if (boss_ && boss_->active) {
-        bullets_.Pool().ForEachActive([this,&applyShotImpact](Bullet& bullet) {
+        bullets_.Pool().ForEachActive([this,&applyShotImpact,&shotDamage](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + boss_->hitRadius;
             if (bullet.DistanceSquaredTo(boss_->position) <=
                 collisionDistance * collisionDistance) {
-                // 原作符卡将普通射击伤害缩小至约七分之一；HP 阈值本身仍采用原始单位。
-                if (boss_->CanTakeDamage()) boss_->health -= bullet.ContactDamage() * 0.8F / (boss_->SpellName() ? 7.0F : 1.0F);
+                boss_->health -= shotDamage(bullet,DamageTarget::Boss,boss_.get(),boss_->CanTakeDamage(),boss_->SpellName()!=nullptr);
                 if(bullet.damagePerSecond>0) {
                     const double points=bullet.hitScoreRemainder+600.0*bullet.damageSeconds;
                     const auto whole=static_cast<long long>(std::floor(points+0.00001));
@@ -149,8 +155,13 @@ void Game::ApplyBombEffect() {
     assets_.PlaySoundEffect("bomb");
     screenFlashTimer_ = 0.35F;
     bullets_.ClearEnemyBullets();
-    enemies_.ForEachActive([](Enemy& enemy) { enemy.health -= 22.0F; });
-    if (boss_ && boss_->active && boss_->CanTakeDamage()) boss_->health -= 35.0F / (boss_->SpellName() ? 3.0F : 1.0F);
+    enemies_.ForEachActive([this](Enemy& enemy) {
+        enemy.health-=ResolveDamage({DamageSource::Bomb,DamageTarget::Enemy,player_.Shot(),0,enemy.CanTakeDamage(),false,
+                                     &enemy,0,stage_.Elapsed(),0},stageContent_->DamageRules()).amount;
+    });
+    if (boss_ && boss_->active)
+        boss_->health-=ResolveDamage({DamageSource::Bomb,DamageTarget::Boss,player_.Shot(),0,boss_->CanTakeDamage(),boss_->SpellName()!=nullptr,
+                                     boss_.get(),0,stage_.Elapsed(),0},stageContent_->DamageRules()).amount;
     SetMessage("Spatial Bomb", 0.7F);
 }
 

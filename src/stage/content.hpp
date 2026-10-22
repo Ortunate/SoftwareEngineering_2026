@@ -5,6 +5,7 @@
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/actors/enemy.hpp"
 #include "gameplay/actors/player.hpp"
+#include "gameplay/combat/damage_rules.hpp"
 #include "stage/system.hpp"
 #include "resources/visual_assets.hpp"
 
@@ -71,6 +72,10 @@ struct StageDisplayInfo {
 class StageContent {
 public:
     virtual ~StageContent() = default;
+    /// @brief 可选最终伤害规则；默认空指针使用明确标记的基准/回退，供后续原生规则接入。
+    [[nodiscard]] virtual const DamageRuleProvider* DamageRules() const { return nullptr; }
+    /// @brief 关联原始数值目录；默认空表示尚未绑定。DataOnly 记录仍需实现演员和时间轴才可游玩。
+    [[nodiscard]] virtual const native_combat::StageData* CombatData() const { return nullptr; }
     /// @brief 返回本关卡的图片与音频清单；返回的引用由 Stage 持有，调用方不得释放。
     [[nodiscard]] virtual const StageAssetManifest& Assets() const = 0;
     /// @brief 返回按触发顺序排列的时间轴事件；底层存储须覆盖 StageDirector 的生命周期。

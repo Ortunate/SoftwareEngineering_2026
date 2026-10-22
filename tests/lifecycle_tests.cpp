@@ -777,14 +777,14 @@ struct GameLifecycleProbe {
             });
             for(float depth:{4.0F,7.0F}) {
                 auto enemy=std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{origin.x+direction.x*depth,origin.y+direction.y*depth,origin.z+direction.z*depth}});
-                enemy->health=enemy->maxHealth=100;enemy->hitRadius=0.1F;game.enemies_.Add(std::move(enemy));
+                enemy->health=enemy->maxHealth=1000;enemy->hitRadius=0.1F;game.enemies_.Add(std::move(enemy));
             }
             game.boss_=game.stageContent_->CreateBoss(true);game.boss_->hitRadius=0.1F;
             game.boss_->position={origin.x+direction.x*7,origin.y+direction.y*7,origin.z+direction.z*7};
             game.score_=0;
             for(int frame=0;frame<fps;++frame) {game.bullets_.Update(1.0F/fps);game.ResolveCollisions();game.ResolveCollisions();}
             int enemies=0;
-            game.enemies_.ForEachActive([&](const Enemy& enemy){++enemies;assert(std::abs(enemy.health-85)<0.002F);});
+            game.enemies_.ForEachActive([&](const Enemy& enemy){++enemies;assert(std::abs(enemy.health-820)<0.002F);});
             assert(enemies==2); // 一束激光同时穿透两个目标，伤害不随 FPS 或重复结算次数增加。
             if(game.score_!=600)std::cerr<<"Marisa laser score at "<<fps<<" FPS: "<<game.score_<<"\n";
             assert(game.score_==600); // 同一束持续命中的原始 60 个逻辑帧，不能按显示帧重复加分。

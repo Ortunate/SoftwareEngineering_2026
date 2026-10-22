@@ -10,6 +10,7 @@ namespace koumakyou::stage1 {
 /// @brief 第一面完整内容定义；新关卡实现 StageContent 即可接入总控。
 class Stage1Content final : public StageContent {
 public:
+    [[nodiscard]] const native_combat::StageData* CombatData() const override { return native_combat::Stage(1); }
     [[nodiscard]] const StageAssetManifest& Assets() const override;
     [[nodiscard]] std::span<const StageEvent> Events() const override;
     [[nodiscard]] std::unique_ptr<Enemy> CreateEnemy(const EnemySpec& spec) const override;

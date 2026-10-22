@@ -3,6 +3,7 @@
 #pragma once
 
 #include "gameplay/bullets/system.hpp"
+#include "gameplay/data/native_combat.hpp"
 
 #include <span>
 #include <array>
@@ -27,8 +28,6 @@ struct PlayerInput {
 
 /// @brief 玩家与一颗敌弹接触后的结果；擦弹只对同一颗弹幕报告一次。
 enum class PlayerContact { None, Graze, Hit };
-/// @brief 四种机体编号沿用成绩目录的灵/梦/魔/恋顺序；灵梦主弹保留既有规则，魔理沙读取原始火力表。
-enum class ShotType { HomingAmulet, Needle, MagicMissile, IllusionLaser };
 
 /// @brief 本关卡的机体素材编号；各副弹变体和命中外观按原始动画顺序排列，未配置项须为 invalid。
 /// 只复制编号，不拥有纹理；副弹数组供追踪弹/针、四级导弹或三级激光使用。
@@ -78,13 +77,13 @@ public:
     /// @param allowFire 对话期间为 false；Bomb 不受此参数影响。
     /// @param aimTargets 本次调用期间借用的活动敌人/Boss 判定体；移动和转向后求准星射线交点。
     /// 射线未指向目标时在前方 20 世界单位汇聚，已发出的直射弹不再随准星改变方向。
-    /// 灵梦副弹按原作 60 Hz、30 帧射击窗口分批生成；松开射击后完成当前窗口，allowFire=false 则取消。
+    /// 四机体主副弹按原作 60 Hz、30 帧射击窗口分批生成；松开射击后完成当前窗口，allowFire=false 则取消。
     /// @return 成功消耗 Bomb 时返回 true，调用方据此处理清弹和范围伤害。
     bool Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
                 VisualId bulletVisual, VisualId secondaryVisual, bool allowFire,
                 std::span<const PlayerAimTarget> aimTargets = {});
     /// @brief 使用当前关卡的完整机体素材推进一帧；单位与上方重载相同，素材编号仅复制到生成的弹幕。
-    /// 魔理沙两种御札的主副弹共用原始 30 帧窗口，激光以各副机独立冷却控制，不重复叠加。
+    /// 激光以各副机独立冷却控制，不重复叠加；Focus 不修改四机体的原始射击周期。
     bool Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
                 const PlayerShotVisuals& visuals, bool allowFire,
                 std::span<const PlayerAimTarget> aimTargets = {});
@@ -133,15 +132,8 @@ private:
     [[nodiscard]] Vector3 Right() const;
     /// @brief 与当前视线正交的屏幕上方单位向量，用于将发射点保持在准星下方。
     [[nodiscard]] Vector3 Up() const;
-    /// @brief gold 从前方偏下的单个模块对称散射，向准星目标平面的落点直飞。
-    void Fire(BulletSystem& bullets, VisualId bulletVisual,
-              std::span<const PlayerAimTarget> aimTargets);
-    /// @brief 根据副弹窗口相位与 Power 发射到期的左右通道；灵札追踪，梦札从圈内原始偏移处直射。
-    /// 梦札速度按主弹原速比例换算，伤害以原始 12 点对应本项目 1 点；近距离等比缩短模块偏移。
-    void FireSecondaryFrame(BulletSystem& bullets, const PlayerShotVisuals& visuals,
-                            std::span<const PlayerAimTarget> aimTargets);
-    /// @brief 从魔理沙原始主副弹表发射到期通道；激光的 period/phase 表示持续冷却和副机槽号。
-    void FireMarisaFrame(BulletSystem& bullets, const PlayerShotVisuals& visuals,
+    /// @brief 从四机体统一原始火力表发射到期通道，使用原始点数；激光的 period/phase 表示槽冷却和槽号。
+    void FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& visuals,
                          std::span<const PlayerAimTarget> aimTargets);
     /// @brief 维护两个激光槽及其跟随位置和当前视线；禁火或复活取消旧激光，冷却使用游戏秒数。
     void UpdateLasers(bool allowFire, BulletSystem& bullets,
@@ -152,10 +144,9 @@ private:
     Vector3 position_{0.0F, 0.0F, -6.5F};
     float yaw_ = 0.0F;
     float pitch_ = 0.0F;
-    float fireTimer_ = 0.0F;
     float invulnerableTimer_ = 1.5F;
     float bombCooldown_ = 0.0F;
-    // 灵梦副弹及魔理沙主副弹采用原作 60 Hz 计时；-1 表示空闲，0…29 为窗口帧，Focus/Power 不重置相位。
+    // 四机体主副弹采用原作 60 Hz 计时；-1 表示空闲，0…29 为窗口帧，Focus/Power 不重置相位。
     // 小数帧跨 Update 保留，低帧率逐帧补发；窗口结束时仅持续按住射击才启动下一轮。
     int secondaryFrame_ = -1;
     double secondaryFractionalFrame_ = 0.0;

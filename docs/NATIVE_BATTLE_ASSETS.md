@@ -108,3 +108,7 @@ cmake --build --preset macos-debug --target koumakyou_sprite_overlap_tests
 魔／恋机体使用 `player01` 脚本 64 的主弹、65～68 的四档导弹、69～71 的三级激光、97～100 的爆破和 128/129 的星形副机。副机 sprite 128 为 36×36 逻辑像素，两侧均顺时向旋转，不能复用灵梦左右反向的 player00 游标。激光保留原生缩放、颜色、透明度与标签 1 淡出；渲染器按胶囊线段绘制，参与已有透明深度排序和分段，额外 Alpha 与其他自机弹一致。
 
 一面对话增加魔理沙六种表情，引用已有 `common/portraits/marisa` PNG，由 Stage 管理借用和卸载；选人页通用后景仍由 Common 独立持有。`--marisa-only` 会隔离主弹，直接核对导弹/激光的真实像素，并导出两种御札的常态与 Focus 视图。原始表值和生命周期见 [魔理沙御札对照](MARISA_SHOTS_REFERENCE.md)。
+
+## 四种 Bomb
+
+梦想封印绑定 `player00` 的 133～136，封魔阵绑定 137～140；Stardust Reverie 绑定 `player01` 的 5～7，Master Spark 绑定 8～11。复用原始高清图集和 ANM 颜色、Alpha、中断及淡出，将贴图包覆在三维球、星、法阵和圆台网格上。Bomb 实例独立于弹池，攻击和渲染共用世界实体，并加入统一透明排序。`--bomb-only` 验证真实扣血、清弹、掉落、符卡保护及四种主/侧视角画面；`--bomb-audio-only` 静音核对长音效暂停及退出。来源、帧数与三维适配见 [四 Bomb 对照](PLAYER_BOMBS_REFERENCE.md)。

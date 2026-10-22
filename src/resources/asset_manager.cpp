@@ -19,7 +19,7 @@ namespace koumakyou {
 namespace {
 
 /// @brief 音效清单项，资源路径相对 assets 根目录。
-constexpr std::array<SoundDefinition, 18> kCommonSounds{{
+constexpr std::array<SoundDefinition, 19> kCommonSounds{{
     {"menu_move", "common/se/menu_move.wav"},
     {"menu_confirm", "common/se/menu_confirm.wav"},
     {"menu_cancel", "common/se/menu_cancel.wav"},
@@ -27,6 +27,7 @@ constexpr std::array<SoundDefinition, 18> kCommonSounds{{
     {"enemy_down", "common/se/enemy_down.wav"},
     {"hit", "common/se/hit.wav"},
     {"bomb", "common/se/bomb.wav"},
+    {"bomb_master", "common/se/bomb_master.wav"},
     {"graze", "common/se/graze.wav"},
     {"pickup", "common/se/pickup.wav"},
     {"spell", "common/se/spell.wav"},
@@ -534,6 +535,24 @@ void AssetManager::PlaySoundEffect(std::string_view name) const {
         // 同一帧的多个击破/拾取共用一个音效，不能不断重启缓冲产生爆音。
         if (!IsSoundPlaying(commonSound->second)) ::PlaySound(commonSound->second);
     }
+}
+const Sound* AssetManager::FindSoundEffect(std::string_view name) const {
+    if(!IsAudioDeviceReady())return nullptr;
+    const std::string key(name);
+    if(const auto found=stageSounds_.find(key);found!=stageSounds_.end())return &found->second;
+    if(const auto found=commonSounds_.find(key);found!=commonSounds_.end())return &found->second;
+    return nullptr;
+}
+bool AssetManager::PauseSoundEffect(std::string_view name) const {
+    const auto* sound=FindSoundEffect(name);
+    if(!sound || !IsSoundPlaying(*sound))return false;
+    ::PauseSound(*sound);return true;
+}
+void AssetManager::ResumeSoundEffect(std::string_view name) const {
+    if(const auto* sound=FindSoundEffect(name))::ResumeSound(*sound);
+}
+void AssetManager::StopSoundEffect(std::string_view name) const {
+    if(const auto* sound=FindSoundEffect(name))::StopSound(*sound);
 }
 
 }  // namespace koumakyou

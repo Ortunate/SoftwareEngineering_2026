@@ -141,6 +141,7 @@ void Game::StartRun(bool captureCursor, bool synchronous) {
     drops_.Clear();
     boss_.reset();
     playerOptionAnimations_ = {};
+    ClearPlayerBomb();
     assets_.UnloadStage();
     captureCursor_ = captureCursor;
     stage_ = StageDirector{};
@@ -176,6 +177,7 @@ void Game::UpdateLoading(float deltaTime) {
     } catch (const std::exception& error) {
         TraceLog(LOG_WARNING, "STAGE: %s", error.what());
         playerOptionAnimations_ = {};
+        ClearPlayerBomb();
         assets_.UnloadStage();
         loadingFailed_ = true;
     }
@@ -244,6 +246,7 @@ void Game::EnterMainMenu() {
     drops_.Clear();
     boss_.reset();
     playerOptionAnimations_ = {};
+    ClearPlayerBomb();
     assets_.UnloadStage();
     stage_ = StageDirector{};
     stageContent_.reset();
@@ -283,7 +286,7 @@ void Game::BeginStageClear() {
     score_+=stageBonus_;
     stageClearShown_=true;
     RecordStageScore();
-    bullets_.Reset(); drops_.Clear();
+    bullets_.Reset(); drops_.Clear();ClearPlayerBomb();
     spellCutInTimer_=screenFlashTimer_=0;
     state_=RunState::StageClear;
     stageClearSeconds_=0;
@@ -327,6 +330,7 @@ void Game::EndStage(RunState result) {
     dialogueActive_ = false;
     spellCutInTimer_ = messageTimer_ = 0.0F;
     selectedResultItem_ = spellPractice_?2:0;
+    ClearPlayerBomb();
     finishResult_ = result;
     state_ = RunState::Finishing;
 }
@@ -347,10 +351,12 @@ void Game::TogglePause() {
         pausedState_ = state_;
         state_ = RunState::Paused;
         assets_.PauseMusic();
+        PausePlayerBombSounds(true);
         EnableCursor();
     } else if (state_ == RunState::Paused) {
         state_ = pausedState_;
         assets_.ResumeMusic();
+        PausePlayerBombSounds(false);
         if (captureCursor_ && state_!=RunState::StageClear) DisableCursor();
     }
 }
@@ -578,6 +584,7 @@ void Game::UpdateState(float deltaTime) {
         if (actorEffects_.Pool().ActiveCount() == 0) {
             actorEffects_.Clear();
             playerOptionAnimations_ = {};
+            ClearPlayerBomb();
             assets_.UnloadStage();
             if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
             else { state_ = finishResult_; EnableCursor(); }
@@ -651,6 +658,7 @@ void Game::UpdateState(float deltaTime) {
     if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
     bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position());
     UpdateBattleAnimations(); // 本帧击破快照读取已推进的动作，而不是上一帧的动画。
+    UpdatePlayerBomb(deltaTime); // 先让 Bomb 清除接触实体的敌弹，再检查玩家命中和普通弹伤害。
     ResolveCollisions();
     if (state_ == RunState::Playing) UpdatePickups(deltaTime);
 }

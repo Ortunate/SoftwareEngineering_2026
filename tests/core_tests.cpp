@@ -362,6 +362,8 @@ void RunPlayerTests();
 void RunMarisaTests();
 /// @brief 运行七关 HP 目录、四机体原始伤害及未实现规则接口检查。
 void RunNativeCombatTests();
+/// @brief 运行四 Bomb 的真实动画、帧序和玩家保护期回归。
+void RunPlayerBombTests();
 /// @brief 运行时间轴及关卡内容用例，断言失败时终止进程。
 void RunStageTests();
 /// @brief 运行入退场曲线、快照与回收用例，断言失败时终止进程。
@@ -388,6 +390,7 @@ int main() {
     RunDropTests();
     RunPlayerTests();
     RunNativeCombatTests();
+    RunPlayerBombTests();
     RunMarisaTests();
     RunStageTests();
     RunActorEffectTests();

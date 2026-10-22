@@ -244,6 +244,7 @@ void Game::AdjustOption(int offset) {
 }
 
 void Game::UpdatePlayer(float deltaTime) {
+    playerBombStartedThisFrame_=false;
     const PlayerInput input{
         .mouseDelta = GetMouseDelta(),
         .mouseSensitivityScale = mouseSensitivity_ / 100.0F,
@@ -268,11 +269,11 @@ void Game::UpdatePlayer(float deltaTime) {
         aimTargets[aimTargetCount++] = {enemy.position, enemy.hitRadius};
     });
     if (boss_ && boss_->active) aimTargets[aimTargetCount++] = {boss_->position, boss_->hitRadius};
-    if (player_.Update(deltaTime, input, bullets_,stageContent_->PlayerVisuals(player_.Shot()), !dialogueActive_,
-                       {aimTargets.data(), aimTargetCount})) {
-        ApplyBombEffect();
-    }
+    const bool usedBomb=player_.Update(deltaTime,input,bullets_,stageContent_->PlayerVisuals(player_.Shot()),!dialogueActive_,
+                                       {aimTargets.data(),aimTargetCount});
     player_.SyncCamera(camera_);
+    // 战斗总控在敌弹运动后推进攻击；本帧刚释放的 Bomb 保留 frame=0，不能提前消费首个伤害帧。
+    if(usedBomb) { ApplyBombEffect();playerBombStartedThisFrame_=true; }
 }
 
 int Game::BindingAt(int index) const {

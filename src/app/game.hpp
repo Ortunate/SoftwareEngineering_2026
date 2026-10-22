@@ -13,6 +13,7 @@
 #include "config/settings.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/items/drop_system.hpp"
+#include "gameplay/effects/player_bomb.hpp"
 #include "gameplay/arena.hpp"
 #include "stage/system.hpp"
 #include "stage/content.hpp"
@@ -175,8 +176,12 @@ private:
     /// @brief 开始原文对话；战后独白结束才固定 Bonus 并进入奖励明细，关闭后进入胜利收尾。
     void BeginStageDialogue(StageEventId id, bool afterBattle = false) override;
     void StageMessage(std::string_view message, float duration) override;
-    /// @brief 玩家已消耗 Bomb 后清弹、伤害敌人并展示反馈。
+    /// @brief 消耗 Bomb 后启动独立攻击和全道具吸取，仅按初始保护实体清弹，不立即全场扣血。
     void ApplyBombEffect();
+    /// @brief 在敌人和敌弹推进后、玩家碰撞前逐 60 Hz 帧推进 Bomb，所有命中均由真实空间实体决定。
+    void UpdatePlayerBomb(float deltaTime);
+    /// @brief 结算当前 Bomb 逻辑帧；按 region 合并命中并反馈光球累计伤害，同一帧重复调用无效。
+    void ResolvePlayerBombFrame();
     /// @brief 玩家命中后更新场景反馈，并按剩余残机处理游戏失败。
     void HandlePlayerHit();
     /// @brief 结算当前 Boss 阶段并进入下一阶段或一面结算。
@@ -211,6 +216,16 @@ private:
     void DrawStageClear() const;
     /// @brief 在窗口右侧等比滑入完整符卡立绘，独立横幅显示名称。
     void DrawSpellCutIn() const;
+    /// @brief Bomb 背景压暗在透明战斗对象之前绘制，保持原生加色光效；须在 BeginMode3D 内调用。
+    void DrawPlayerBombBackdrop(float width,float height) const;
+    /// @brief 使用对应自机重绘图展示短暂宣告，名称保持至演出结束；暂停只读取冻结采样。
+    void DrawPlayerBombCutIn() const;
+    /// @brief 播放最近一次 Bomb Start/Update 的原始音效事件，同一更新中的重复编号只播放一次。
+    void PlayPlayerBombSounds();
+    /// @brief 取消 Bomb 攻击、世界演出和声音，并丢弃暂停标记；卸载关卡和切换状态之前调用。
+    void ClearPlayerBomb();
+    /// @brief 暂停/恢复确实在播放的 Bomb 音效，避免恢复时播放从未启动的声音。
+    void PausePlayerBombSounds(bool paused);
     /// @brief 根据对话计时器绘制台词及最近表情，以预先采样的透明度和强调程度绘制贴边立绘。
     void DrawDialogue() const;
     /// @brief 绘制开始菜单；motion 可借用离开首页前的展示快照，供 Start 跨页混合使用，空指针读取当前展示。
@@ -252,6 +267,10 @@ private:
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
     ActorEffectSystem actorEffects_{};
+    PlayerBombEffect playerBomb_{}; // 仅借用关卡 ANM；退出、重开、结算及卸载资源前清空。
+    bool playerBombStartedThisFrame_=false;
+    int playerBombResolvedFrame_=-1; // 只属于当前 Bomb，Start/Clear 重置，杜绝重复碰撞入口再次扣血。
+    std::array<bool,4> playerBombSoundPaused_{}; // 与四种音效名字对应，记录本次暂停实际停止的缓冲。
     DropSystem drops_{};
     StageDirector stage_{};
     std::unique_ptr<StageContent> stageContent_{};
@@ -289,6 +308,7 @@ private:
     SpriteRenderer spriteRenderer_{};
     // 道具与自机太极圈共用公告板缓冲；星点可超过普通道具池容量，不能改成固定长度数组。
     mutable std::vector<PickupSprite> pickupSprites_;
+    mutable std::vector<BombVolumeSprite> playerBombVolumes_; // 本帧借用攻击几何快照，下一帧重建。
     std::string message_;
     int selectedMenuItem_ = 0; // 首页选项在本次运行中保留；首次启动默认 Start，返回首页不重置。
     ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。

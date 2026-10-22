@@ -11,6 +11,7 @@ namespace koumakyou::stage1 {
 class Stage1Content final : public StageContent {
 public:
     [[nodiscard]] const native_combat::StageData* CombatData() const override { return native_combat::Stage(1); }
+    [[nodiscard]] std::array<VisualId,4> PlayerBombVisuals(ShotType shot) const override;
     [[nodiscard]] const StageAssetManifest& Assets() const override;
     [[nodiscard]] std::span<const StageEvent> Events() const override;
     [[nodiscard]] std::unique_ptr<Enemy> CreateEnemy(const EnemySpec& spec) const override;

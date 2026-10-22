@@ -111,6 +111,10 @@ public:
         result.secondary.fill(shot==ShotType::Needle ? PlayerNeedleVisual() : PlayerHomingVisual());
         return result;
     }
+    /// @brief 返回对应 Bomb 的四层原生动画外观；未实现项为 invalid，不构造替代贴图。
+    [[nodiscard]] virtual std::array<VisualId,4> PlayerBombVisuals(ShotType) const {
+        return {kInvalidVisualId,kInvalidVisualId,kInvalidVisualId,kInvalidVisualId};
+    }
     /// @brief 返回 Power 道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId PowerPickupVisual() const = 0;
     /// @brief 返回大 P 道具外观；未区分大小的关卡默认复用普通 P 图。

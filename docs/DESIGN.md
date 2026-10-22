@@ -129,6 +129,8 @@ struct Bullet {
 
 魔理沙的 `MagicMissile` / `IllusionLaser` 读取统一的 `native_combat::ForPower`，主副弹统一按原始 30 帧窗口调度；导弹按 60 Hz 原始加速度积分，命中后切换 20 帧的爆破，激光按每副机独立的绝对游戏时间冷却，不能把 120～330 帧槽时间当成发射周期。`PlayerShotVisuals` 由关卡提供四级导弹、三级激光和对应爆破素材，`PlayerOptionVisual(side, shot)` 按实际机体选择灵梦太极圈或魔理沙星形物件。持续弹使用 `damagePerSecond` 与每次更新的有效秒数，胶囊判定支持激光穿透，多目标结算完成后清空本次秒数；跨过寿命终点时保留末段伤害再回收，不能在每个敌人处直接销毁光束。原值、生命周期和换算见 [魔理沙御札对照](MARISA_SHOTS_REFERENCE.md)。一面使用实际角色的对白与六种表情；符卡练习将四组合拆为角色、角色内御札，成绩由实际 `Player::Shot()` 编号写入。
 
+四御札 Bomb 由 `PlayerBombEffect` 统一持有攻击、清弹与世界几何，`BombDefinition` 映射原始脚本、时长、保护和回调来源。`UpdatePlayerBomb` 在敌弹运动后、玩家碰撞前逐个 60 Hz 帧调用 `ResolvePlayerBombFrame`，按 region 合并命中，再经 `ResolveDamage` 处理 70 上限及符卡整数 ÷3，并将原始命中量反馈给封印光球。新符卡排除旧 Bomb 伤害，击破与掉落使用已有正式入口。`BombVolume` 为球、轴对齐符阵薄盒和有限圆台，伤害、清弹和 `DrawBombGeometry` 读取同一份几何。64 颗星飞向 4×4×4 网格格心，保留八个伤害通道，体积覆盖保守下界超过 81.4%；封魔阵前 60 帧无伤蓄力，随后六面从施放点向外扩展，横向尺寸和厚度同步增长；单根巨束从角色位置出射，通过八角投影确定束宽和长度以覆盖正向半场，身后保留盲区；外部具有 16 边圆截面、淡外缘、张开的内芯和发光密度，主视角仅绘制一组沿束轴流动的内部光线，保留中央视野；其轴向/演员深度切片加入 `SpriteRenderer` 统一透明队列。实例可在无 ANM 时运行攻击，不占普通弹池；十五个原生脚本仍由关卡持有。释放吸取所有现有道具，恋札期间三轴移速 0.3 倍；暂停不推进，退出、重开、受击和结算清空攻击、资源借用及声音。详情见 [四 Bomb 对照](PLAYER_BOMBS_REFERENCE.md)。
+
 ### 4.4 Enemy 与 Boss
 
 `Enemy` 是抽象基类，普通演员按出生年龄运行。实际一面使用 `ReferenceEnemyParams` 与 `ReferenceEnemy`：出生坐标、子程序、镜像、原生命/分数/item 字段由只读出生表提供，工厂拒绝非有限坐标和非法参数。`ReferenceScript` 在原像素坐标按 60 Hz 执行移动、插值、调用与发弹，转换为 3D 世界位置。旧 `FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy` 保留为调试和通用算法测试，不参与新典时间轴。
@@ -214,4 +216,4 @@ direction = (r cos(phi), y, r sin(phi))
 
 原始生命与伤害目录位于 `gameplay/data/native_combat.*`，编译时持有七关 3598 条生命记录、四机体 193 条通道。源码记录输入哈希、ECL 偏移、掩码、Normal 指令索引和 PE RVA；运行时不要求安装原作或执行 Python。`Stage(1..7)` 独立于可玩关卡目录：一面为 Playable，其余为 DataOnly，不能据此开放选择。一面时间轴出生表、解释器生命相关指令及 Boss HUD 共用目录原值，`kReferenceHealthUnit=1` 保留兼容接口。未知默认 HP、寄存器生命须由未来关卡提供上下文，`RequireLiteral` 对此拒绝返回假常量。
 
-`ResolveDamage` 是统一伤害入口，`DamageContext` 提供弹种、原始接触伤害、机体、来源 RVA、目标身份、保护/符卡状态及有效秒数。`StageContent::DamageRules()` 可注入原生规则，未处理情况返回 nullopt，默认结果区分 BaseOnly、Fallback 与 NativeRule。当前小怪直接使用原始基准，Boss 仍用临时 0.8 和符卡 ÷7，Bomb 临时使用原始 HP 单位的 550/875（Boss 符卡再 ÷3）；这些倍率不是本次静态表导出的原作规则。原生 Bomb 分段、目标减伤及同帧伤害上限待执行代码进一步解析后接入。普通弹仍用三维球形判定，表中矩形宽高、音效、原始坐标等完整保留在目录供后续适配，不伪称二维运动与碰撞已经完全复刻。详情见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。
+`ResolveDamage` 是统一伤害入口，`DamageContext` 提供原始接触伤害、机体、来源 RVA、目标身份、保护/符卡状态、Bomb 使用状态及有效秒数。`StageContent::DamageRules()` 可覆盖规则；未处理返回 nullopt，默认结果区分 BaseOnly、Fallback 与 NativeRule。Bomb 必须传入同一逻辑帧的通道合计，按本机新典每帧 70 上限、符卡整数 ÷3（最低 1）和新符卡旧 Bomb 保护处理，不再使用固定 550/875 伤害。普通弹在 Bomb 期间按原始接触伤害 ÷3（最低 1）；普通弹对 Boss 的 0.8/符卡 ÷7 回退和普通弹/Bomb 联合上限尚未作为完整原引擎结算重构。普通弹仍用三维球形判定，原表矩形尺寸、音效和坐标完整保留。详情见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。

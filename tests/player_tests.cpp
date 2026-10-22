@@ -609,12 +609,12 @@ void RunPlayerTests() {
                           koumakyou::stage1::kPlayerGoldCard,
                           koumakyou::stage1::kPlayerCyanCard, true));
     assert(player.Bombs() == 2);
-    assert(player.Update(0.5F, bombInput, bullets,
+    assert(player.Update(4.5F, bombInput, bullets,
                          koumakyou::stage1::kPlayerGoldCard,
                          koumakyou::stage1::kPlayerCyanCard, true));
     assert(player.Bombs() == 1);
 
-    player.Update(2.6F, {}, bullets, koumakyou::stage1::kPlayerGoldCard,
+    player.Update(6.0F, {}, bullets, koumakyou::stage1::kPlayerGoldCard,
                   koumakyou::stage1::kPlayerCyanCard, true);
     Bullet graze{};
     graze.active = true;

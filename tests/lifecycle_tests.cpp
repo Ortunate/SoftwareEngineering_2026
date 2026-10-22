@@ -16,6 +16,7 @@
 #include <array>
 #include <utility>
 #include <vector>
+#include <cstring>
 
 namespace koumakyou {
 
@@ -343,6 +344,206 @@ struct GameLifecycleProbe {
         std::cout<<"Both native Stage 1 dialogue branches, portraits, BGM and exits passed\n";
     }
 
+    /// @brief 在真实伤害、清弹、死亡掉落和 Boss 保护入口验证 Bomb，避免仅凭画面通过。
+    static void TestPlayerBombCombat(Game& game) {
+        // 固定靶借用本关外观；不移动或发弹，允许单独控制无敌和原始生命。
+        struct Target final:Enemy {
+            bool damageable=true;
+            Target(Vector3 p,float hp):Enemy(stage1::kFairy,p,{}) {health=maxHealth=hp;hitRadius=0.4F;}
+            bool CanTakeDamage() const override {return damageable;}
+            int ReferenceDropKind() const override {return 0;}
+            void Move(float) override {}
+            void UpdateSkills(float,Vector3,BulletSystem&) override {}
+        };
+        struct SpellTarget final:Boss {
+            bool damageable=true;
+            SpellTarget() {active=true;position={0,0,4};health=maxHealth=1000;visual=stage1::kRumia;}
+            bool Update(float,Vector3,BulletSystem&) override {return false;}
+            bool AdvancePhase() override {return false;}
+            const char* SpellName() const override {return "Bomb test";}
+            bool IsMidboss() const override {return false;}
+            const char* DisplayName() const override {return "Bomb test";}
+            bool CanTakeDamage() const override {return damageable;}
+        };
+        const auto reset=[&](ShotType shot) {
+            game.ClearPlayerBomb();game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();
+            game.bullets_.Reset();game.drops_.Clear();game.actorEffects_.Clear();
+            game.player_.Reset();game.player_.ConfigureRun(3,3,false,shot);game.player_.SyncCamera(game.camera_);
+        };
+        reset(ShotType::Needle);
+        auto center=std::make_unique<Target>(Vector3{9,4,4},1000);auto* untouched=center.get();
+        auto edge=std::make_unique<Target>(Vector3{0,0,-6.2F},1000);auto* touched=edge.get();
+        assert(game.enemies_.Add(std::move(center)) && game.enemies_.Add(std::move(edge)));
+        game.ApplyBombEffect();
+        assert(game.screenFlashTimer_==0 && untouched->health==1000 && touched->health==1000);
+        game.UpdatePlayerBomb(1);
+        assert(game.playerBomb_.Frame()==60 && untouched->health==1000 && touched->health==1000);
+        game.UpdatePlayerBomb(1.0F/60);
+        assert(untouched->health==1000 && touched->health<1000); // 先接触施放中心附近，不能倒着从边界清怪。
+        const float firstHit=touched->health;
+        game.UpdatePlayerBomb(1.0F/60);assert(untouched->health==1000 && touched->health==firstHit);
+        game.UpdatePlayerBomb(77.0F/60);assert(untouched->health<1000);
+
+        reset(ShotType::IllusionLaser);
+        auto front=std::make_unique<Target>(Vector3{0,0,4},24);auto* hit=front.get();assert(game.enemies_.Add(std::move(front)));
+        auto outside=std::make_unique<Target>(Vector3{0,8,-9},1000);auto* miss=outside.get();assert(game.enemies_.Add(std::move(outside)));
+        auto corner=std::make_unique<Target>(Vector3{9,9,-6.25F},1000);auto* covered=corner.get();
+        assert(game.enemies_.Add(std::move(corner)));
+        auto invincible=std::make_unique<Target>(Vector3{0,0,4},1000);auto* safe=invincible.get();safe->damageable=false;
+        assert(game.enemies_.Add(std::move(invincible)));
+        auto* enemy=game.bullets_.Spawn(BulletOwner::Enemy,{0,0,4},{},0.1F,RED,stage1::kBlueBullet);
+        auto* back=game.bullets_.Spawn(BulletOwner::Enemy,{0,0,-9},{},0.1F,RED,stage1::kBlueBullet);
+        auto* friendly=game.bullets_.Spawn(BulletOwner::Player,{0,0,4},{},0.1F,WHITE,stage1::kPlayerGoldCard);
+        auto* beam=game.bullets_.SpawnBeam({0,-5,4},{0,1,0},10,0.1F,0,5,RED);
+        assert(enemy && back && friendly && beam);friendly->damage=0;
+        game.drops_.SpawnFixedPower({-8,8,2},1);game.ApplyBombEffect();
+        assert(hit->health==24 && enemy->active && back->active && beam->active); // 释放时没有全场扣血/清弹。
+        game.drops_.ForEachActive([](const Pickup& item) {assert(item.homing);});
+        game.UpdatePlayerBomb(1.0F/60);
+        assert(hit->health==12 && covered->health==988 && miss->health==1000 && safe->health==1000);
+        assert(!enemy->active && !beam->active && back->active && friendly->active);
+        game.ResolvePlayerBombFrame();assert(hit->health==12);
+        game.TogglePause();game.Update(1);assert(hit->health==12 && game.playerBomb_.Frame()==1);game.TogglePause();
+        game.UpdatePlayerBomb(1.0F/60);assert(hit->health==0);
+        game.ResolveCollisions();assert(!hit->active && PickupCount(game)==2 && game.actorEffects_.Pool().ActiveCount()==1);
+        game.ResolveCollisions();assert(PickupCount(game)==2);
+
+        reset(ShotType::HomingAmulet);
+        auto huge=std::make_unique<Target>(Vector3{0,0,4},3000);auto* orbTarget=huge.get();huge->hitRadius=20;
+        assert(game.enemies_.Add(std::move(huge)));game.ApplyBombEffect();
+        game.UpdatePlayerBomb(93.0F/60);
+        assert(game.playerBomb_.Frame()==93 && orbTarget->health==2826); // 13×8 接触，随后一帧 200 截到 70。
+        assert(game.playerBomb_.Attacks().size()==1 && game.playerBomb_.Attacks()[0].damage==200);
+        game.UpdatePlayerBomb(1.0F/60);assert(orbTarget->health==2826 && game.playerBomb_.Attacks().empty());
+
+        reset(ShotType::IllusionLaser);
+        auto boss=std::make_unique<SpellTarget>();auto* spell=boss.get();game.boss_=std::move(boss);
+        game.spellStartBombs_=game.bombCount_;game.ApplyBombEffect();game.UpdatePlayerBomb(1.0F/60);
+        assert(spell->health==996);
+        spell->damageable=false;game.UpdatePlayerBomb(1.0F/60);assert(spell->health==996);
+        spell->damageable=true;game.spellStartBombs_=game.bombCount_; // 模拟新符卡开始，旧 Bomb 不得带入伤害。
+        game.UpdatePlayerBomb(1.0F/60);assert(spell->health==996);
+        game.ApplyBombEffect();game.UpdatePlayerBomb(1.0F/60);assert(spell->health==992);
+        reset(ShotType::HomingAmulet);
+        std::cout<<"Bomb spatial damage, channel union, cancellation, defeat drops, homing burst, spell protection and pause passed\n";
+    }
+
+    /// @brief 使用真实 Game 入口绑定四 Bomb；隔离特效像素，验证主/侧视角、暂停及资源卸载。
+    static void TestPlayerBombs(Game& game,const std::string& prefix) {
+        const int width=GetScreenWidth(),height=GetScreenHeight();
+        game.StartPreview();
+        TestPlayerBombCombat(game);
+        for(int type=0;type<4;++type) {
+            SetWindowSize(width,height);
+            game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();game.bullets_.Reset();
+            game.player_.Reset();game.player_.ConfigureRun(3,3,false,static_cast<ShotType>(type));
+            game.player_.SyncCamera(game.camera_);
+            const bool consumed=game.player_.Update(0,{.bomb=true},game.bullets_,game.stageContent_->PlayerVisuals(game.player_.Shot()),true);
+            assert(consumed && game.player_.Bombs()==2);game.ApplyBombEffect();
+            assert(game.playerBomb_.Active() && game.playerBomb_.Shot()==game.player_.Shot() && game.playerBomb_.Frame()==0);
+            const auto visuals=game.stageContent_->PlayerBombVisuals(game.player_.Shot());
+            const auto& definition=BombDefinition(game.player_.Shot());
+            for(int layer=0;layer<definition.layers;++layer) {
+                const auto& visual=game.assets_.GetVisual(visuals[layer]);
+                assert(visual.archive && IsTextureValid(visual.texture));
+                assert(visual.animation.script==definition.firstScript+layer);
+            }
+            for(int frame=1;frame<=120;++frame) {
+                game.Update(1.0F/60);
+                if(!prefix.empty() && (type==1 || type==3) && (frame==30 || frame==61 || frame==90))
+                    Capture(game,prefix,("bomb-"+std::to_string(type)+"-frame-"+std::to_string(frame)).c_str());
+            }
+            assert(game.playerBomb_.Frame()==120);
+            const auto target=LoadRenderTexture(1100,760);
+            BeginDrawing();BeginTextureMode(target);ClearBackground(WHITE);BeginMode3D(game.camera_);
+            const auto beforeView=rlGetMatrixModelview(),beforeProjection=rlGetMatrixProjection();
+            game.DrawPlayerBombBackdrop(1100,760);
+            const auto afterView=rlGetMatrixModelview(),afterProjection=rlGetMatrixProjection();
+            assert(std::memcmp(&beforeView,&afterView,sizeof(Matrix))==0 && std::memcmp(&beforeProjection,&afterProjection,sizeof(Matrix))==0);
+            EndMode3D();EndTextureMode();EndDrawing();
+            Image dimmed=LoadImageFromTexture(target.texture);
+            for(const auto point:std::array<Vector2,3>{{{0,0},{550,380},{1099,759}}}) {
+                const auto pixel=GetImageColor(dimmed,point.x,point.y);
+                assert(std::abs(int(pixel.r)-(255-game.playerBomb_.BackdropAlpha()))<=2);
+            }
+            UnloadImage(dimmed);
+            std::vector<BombVolumeSprite> volumes;
+            for(const auto& sprite:game.playerBomb_.Sprites())volumes.push_back({&sprite,visuals[sprite.layer]});
+            BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(game.camera_);
+            game.spriteRenderer_.Draw(game.camera_,game.bullets_,{},nullptr,{},game.assets_.Stage().visuals,
+                                      game.assets_.Stage().shaders,game.actorEffects_,volumes);
+            EndMode3D();EndTextureMode();EndDrawing();
+            Image image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);
+            const auto* pixels=static_cast<const Color*>(image.data);int ink=0,bright=0;
+            for(int i=0;i<image.width*image.height;++i) {
+                const int sum=pixels[i].r+pixels[i].g+pixels[i].b;
+                if(sum>24)++ink;if(sum>500)++bright;
+            }
+            std::cout<<"Bomb "<<type<<": "<<game.playerBomb_.Sprites().size()<<" visual layers, "<<ink<<" isolated pixels\n";
+            assert(ink>1000); // 不能让背景压暗或宣告文字冒充 Bomb 本体已经渲染。
+            if(type==0)assert(bright<image.width*image.height/2); // 近眼盘旋不能把整屏染亮。
+            if(type==3) {
+                // 保留整个瞄准区域，而非只挖空中心一个像素；真实束内流光不得变成白色圆盘。
+                for(int x=image.width/2-30;x<=image.width/2+30;++x)
+                    for(int y=image.height/2-30;y<=image.height/2+30;++y) {
+                        const auto center=GetImageColor(image,x,y);
+                        assert(center.r+center.g+center.b<30);
+                    }
+            }
+            if(!prefix.empty())assert(ExportImage(image,(prefix+"-bomb-"+std::to_string(type)+"-isolated.png").c_str()));
+            UnloadImage(image);UnloadRenderTexture(target);
+            const auto originalCamera=game.camera_;
+            game.camera_=type==3 ? Camera3D{{45,35,-25},{0,0,6},{0,1,0},50,CAMERA_PERSPECTIVE} :
+                                 Camera3D{{18,12,-2},{0,0,5},{0,1,0},50,CAMERA_PERSPECTIVE};
+            Capture(game,prefix,("bomb-"+std::to_string(type)+"-side").c_str());
+            game.camera_=originalCamera;
+            if(type==3) {
+                const auto begin=std::chrono::steady_clock::now();
+                for(int frame=0;frame<24;++frame) {BeginDrawing();game.Draw();EndDrawing();}
+                const auto milliseconds=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count()/24;
+                std::cout<<"Master Spark full scene render: "<<milliseconds<<" ms/frame (24 frames, no image readback)\n";
+                const auto saved=game.playerBomb_;game.playerBomb_.Clear();
+                const auto baseline=std::chrono::steady_clock::now();
+                for(int frame=0;frame<24;++frame) {BeginDrawing();game.Draw();EndDrawing();}
+                std::cout<<"Baseline full scene render: "<<std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-baseline).count()/24<<" ms/frame\n";
+                game.playerBomb_=saved;
+            }
+            for(const auto size:std::array<Vector2,2>{{{1100,760},{390,844}}}) {
+                SetWindowSize(size.x,size.y);
+                const auto name="bomb-"+std::to_string(type)+"-"+std::to_string(static_cast<int>(size.x));
+                Capture(game,prefix,name.c_str());
+            }
+            const auto frozen=game.playerBomb_.Frame();
+            game.TogglePause();game.Update(0.5F);assert(game.playerBomb_.Frame()==frozen);
+            BeginDrawing();game.Draw();game.Draw();EndDrawing();assert(game.playerBomb_.Frame()==frozen);
+            game.TogglePause();
+            game.playerBomb_.Update((definition.durationFrames-frozen)/60.0F,game.camera_);
+            assert(!game.playerBomb_.Active() && game.playerBomb_.Sprites().empty());
+            game.ApplyBombEffect();assert(game.playerBomb_.Active());
+            game.EndStage(RunState::Won);assert(!game.playerBomb_.Active());
+            game.state_=RunState::Playing;
+        }
+        game.ApplyBombEffect();assert(game.playerBomb_.Active());
+        game.EnterMainMenu();assert(!game.playerBomb_.Active() && game.playerBomb_.Sprites().empty());
+        SetWindowSize(width,height);
+        std::cout<<"Four native Bomb effects, isolated rendering, portrait/landscape, pause and cleanup passed\n";
+    }
+
+    /// @brief 静音加载真实 Master Spark 波形，检查暂停、恢复和退出不会遗留五秒长音效。
+    static void TestPlayerBombAudio(Game& game) {
+        assert(IsAudioDeviceReady());game.StartPreview();
+        game.player_.ConfigureRun(3,3,false,ShotType::IllusionLaser);game.ApplyBombEffect();
+        assert(game.playerBomb_.Active());
+        game.TogglePause();assert(game.playerBombSoundPaused_[3]);
+        assert(!game.assets_.PauseSoundEffect("bomb_master"));
+        game.TogglePause();assert(!game.playerBombSoundPaused_[3]);
+        assert(game.assets_.PauseSoundEffect("bomb_master"));game.assets_.ResumeSoundEffect("bomb_master");
+        game.EnterMainMenu();
+        assert(!game.playerBomb_.Active() && !game.assets_.PauseSoundEffect("bomb_master"));
+        for(bool paused:game.playerBombSoundPaused_)assert(!paused);
+        std::cout<<"Native Master Spark WAV pause, resume and exit cancellation passed (muted)\n";
+    }
+
     /// @brief 实际加载十个差分，渲染逐句切换及菜单/符卡，验证离开关卡不释放通用立绘。
     static void TestPortraits(Game& game, const std::string& prefix) {
         game.StartPreview();
@@ -546,6 +747,7 @@ struct GameLifecycleProbe {
         game.Update(0.6F);
         Capture(game, prefix, "beam-active");
         game.ApplyBombEffect();
+        game.UpdatePlayerBomb(0);
         assert(game.bullets_.Pool().ActiveCount() == 0);
         game.StartPreview(); // 恢复整关模式，不能把练习设置泄漏给后续调用方。
         assert(!game.spellPractice_ && !game.practiceMode_ && !game.challengeMode_);
@@ -991,8 +1193,8 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only。
-/// 不初始化音频，设置与成绩只写临时目录。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
+/// 仅 --bomb-audio-only 初始化音频且强制静音，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
     const std::string prefix = argc >= 2 ? std::filesystem::absolute(argv[1]).string() : "";
@@ -1004,12 +1206,18 @@ int main(int argc, char** argv) {
     SetConfigFlags(FLAG_WINDOW_HIDDEN | FLAG_WINDOW_UNFOCUSED | FLAG_WINDOW_ALWAYS_RUN);
     InitWindow(1100, 760, "Actor lifecycle tests");
     SetExitKey(KEY_NULL);
+    const bool audioTest=argc>=3 && std::string(argv[2])=="--bomb-audio-only";
+    if(audioTest) {InitAudioDevice();SetMasterVolume(0);}
     {
         auto game = std::make_unique<koumakyou::Game>();
         SetTargetFPS(0);
-        if(argc>=3 && std::string(argv[2])=="--viewport-only") {
+        if(audioTest) {
+            koumakyou::GameLifecycleProbe::TestPlayerBombAudio(*game);
+        } else if(argc>=3 && std::string(argv[2])=="--viewport-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--bomb-only") {
+            koumakyou::GameLifecycleProbe::TestPlayerBombs(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--marisa-only") {
             koumakyou::GameLifecycleProbe::TestMarisa(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--player-options-only") {
@@ -1029,6 +1237,7 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::Run(*game, prefix);
         }
     }
+    if(audioTest)CloseAudioDevice();
     CloseWindow();
     std::filesystem::current_path(originalDirectory);
     std::filesystem::remove_all(scratch);

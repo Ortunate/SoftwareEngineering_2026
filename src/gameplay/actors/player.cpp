@@ -4,6 +4,7 @@
 
 #include "app/math.hpp"
 #include "gameplay/arena.hpp"
+#include "gameplay/effects/player_bomb.hpp"
 
 #include <algorithm>
 #include <array>
@@ -82,6 +83,7 @@ void Player::ResetPose() {
     optionFocus_ = 0.0F;
     optionAimDepth_ = kDefaultAimDepth;
     visualAge_ = 0.0;
+    bombCooldown_ = 0.0F;
 }
 
 void Player::SetView(float yawRadians, float pitchRadians) {
@@ -104,6 +106,8 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
 bool Player::Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
                     const PlayerShotVisuals& visuals, bool allowFire,
                     std::span<const PlayerAimTarget> aimTargets) {
+    // 恋札在整个 300 帧演出内保持原作 0.3 倍速度；跨过终点的大帧只缩放仍有效的时间段。
+    const float slowedSeconds=shot_==ShotType::IllusionLaser ? std::min(deltaTime,bombCooldown_) : 0;
     invulnerableTimer_ = std::max(0.0F, invulnerableTimer_ - deltaTime);
     bombCooldown_ = std::max(0.0F, bombCooldown_ - deltaTime);
     visualAge_ += deltaTime;
@@ -126,7 +130,7 @@ bool Player::Update(float deltaTime, const PlayerInput& input, BulletSystem& bul
     movement = game_math::Normalize(movement);
     const float speed = (input.focus ? kFocusSpeed : kSpeed) * (IsMarisa() ? 1.25F : 1.0F);
     position_ = game_math::Add(position_,
-                               game_math::Scale(movement, speed * deltaTime));
+                               game_math::Scale(movement, speed * (deltaTime-0.7F*slowedSeconds)));
     constexpr Vector3 limit{kArenaHalfExtents.x - kArenaPadding,
                             kArenaHalfExtents.y - kArenaPadding,
                             kArenaHalfExtents.z - kArenaPadding};
@@ -310,8 +314,10 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
 bool Player::TryUseBomb() {
     if (bombs_ <= 0 || bombCooldown_ > 0.0F) return false;
     --bombs_;
-    bombCooldown_ = 1.0F;
-    invulnerableTimer_ = 2.6F;
+    const auto& bomb=BombDefinition(shot_);
+    // 原作同一时间只允许一场 Bomb，保护期覆盖完整演出及其后的恢复时间。
+    bombCooldown_ = bomb.durationFrames/60.0F;
+    invulnerableTimer_ = bomb.invulnerabilityFrames/60.0F;
     return true;
 }
 

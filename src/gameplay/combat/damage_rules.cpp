@@ -1,5 +1,6 @@
-// 本文件集中管理尚未逆向的伤害规则回退，避免临时倍率混入原始数据或散落在碰撞逻辑中。
+// 本文件集中管理新典 Bomb 的帧伤害、符卡保护及尚未替换的普通弹 Boss 倍率。
 #include "gameplay/combat/damage_rules.hpp"
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -13,11 +14,21 @@ DamageResult ResolveDamage(const DamageContext& context,const DamageRuleProvider
         if(!valid(result->amount))throw std::invalid_argument("Invalid damage rule result");
         return *result;
     }
-    // 旧项目 HP 曾除以 25；临时 Bomb 22/35 恢复到相同的原始 HP 量纲，不宣称是新典 Bomb。
-    if(context.source==DamageSource::Bomb)
-        return {context.target==DamageTarget::Enemy ? 550.0F : 875.0F/(context.spell ? 3.0F : 1.0F),DamageCoverage::Fallback};
+    // 新典 RVA 0x393dd 先截到 70，0x3943b 起区分该符卡是否使用 Bomb，再按整数 /3。
+    // 调用方先合并本帧命中通道；若逐纹理层调用，这个上限和恋札的单通道约束都会失效。
+    if(context.source==DamageSource::Bomb) {
+        float damage=std::min(70.0F,std::floor(context.baseDamage));
+        if(context.spell)damage=!context.bombUsedDuringSpell ? 0 : damage>0 ? std::max(1.0F,std::floor(damage/3)) : 0;
+        return {damage,DamageCoverage::NativeRule};
+    }
+    float base=context.baseDamage;
+    if(context.bombActive && base>0) {
+        const float frames=context.contactSeconds>0 ? context.contactSeconds*60 : 1;
+        // 原通道伤害为整数；先消除 HP/秒和秒数换算误差，避免 144 FPS 把应为 16 的值向下取成 15。
+        base=std::max(1.0F,std::floor(base/frames/3+0.00001F))*frames;
+    }
     if(context.target==DamageTarget::Boss)
-        return {context.baseDamage*0.8F/(context.spell ? 7.0F : 1.0F),DamageCoverage::Fallback};
-    return {context.baseDamage,DamageCoverage::BaseOnly};
+        return {base*0.8F/(context.spell ? 7.0F : 1.0F),DamageCoverage::Fallback};
+    return {base,DamageCoverage::BaseOnly};
 }
 } // namespace koumakyou

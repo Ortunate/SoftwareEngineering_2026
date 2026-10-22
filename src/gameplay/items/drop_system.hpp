@@ -60,6 +60,8 @@ public:
 
     /// @brief 清除场上道具；随机序列继续推进，不因重新开始而重复。
     void Clear();
+    /// @brief Bomb 释放时令当前所有道具立即追踪玩家；之后新生成的道具不继承这次吸取。
+    void MagnetAllItems();
     /// @brief 在敌人死亡位置抽取一次结果并生成相应数量的两类道具。
     /// @param position 敌人死亡时的世界坐标。
     /// @param distribution 由敌人持有的只读结果表；仅在调用期间借用。

@@ -98,8 +98,16 @@ public:
     /// @brief 按清单中的名字播放通用或当前关卡的音效。
     /// @param name 音效资源名；未配置或同一音效仍在播放时不重启缓冲。
     void PlaySoundEffect(std::string_view name) const;
+    /// @brief 暂停正在播放的长音效并返回是否实际暂停；无音频设备、未配置或未播放返回 false。
+    [[nodiscard]] bool PauseSoundEffect(std::string_view name) const;
+    /// @brief 恢复先前成功暂停的音效；调用方负责仅对实际暂停项调用，资源缺失时忽略。
+    void ResumeSoundEffect(std::string_view name) const;
+    /// @brief 取消指定音效并复位，供长演出退出使用；无设备或资源时忽略。
+    void StopSoundEffect(std::string_view name) const;
 
 private:
+    /// @brief 优先查询关卡音效，借用指针仅在对应资源表有效期内使用；无设备或资源返回空。
+    [[nodiscard]] const Sound* FindSoundEffect(std::string_view name) const;
     struct StageLoad; // 独占后台任务与 CPU 图片；取消/析构时等待当前解码完成，再释放结果。
     /// @brief 在纹理缓存已备好后绑定外观、着色器与音频；只允许在主线程调用。
     void FinishStageLoad(const StageAssetManifest& manifest);

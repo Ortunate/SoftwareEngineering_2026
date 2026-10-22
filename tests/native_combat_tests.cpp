@@ -130,14 +130,19 @@ void TestDamageExtension() {
     assert(std::abs(ResolveDamage(context).amount-48*0.8F/7)<0.0001F);
     assert(ResolveDamage(context).coverage==DamageCoverage::Fallback);
     context.source=DamageSource::Bomb;
-    assert(std::abs(ResolveDamage(context).amount-875.0F/3)<0.0001F);
+    assert(ResolveDamage(context).amount==16 && ResolveDamage(context).coverage==DamageCoverage::NativeRule);
+    context.baseDamage=200;
+    assert(ResolveDamage(context).amount==23); // 先截到 70，再按原作整数 /3。
+    context.bombUsedDuringSpell=false;
+    assert(ResolveDamage(context).amount==0);
+    context.bombUsedDuringSpell=true;
     struct Rules final:DamageRuleProvider {
         std::optional<DamageResult> Resolve(const DamageContext& value) const override {
             if(value.source==DamageSource::Bomb)return std::nullopt;
             return DamageResult{12,DamageCoverage::NativeRule};
         }
     } rules;
-    assert(ResolveDamage(context,&rules).coverage==DamageCoverage::Fallback);
+    assert(ResolveDamage(context,&rules).coverage==DamageCoverage::NativeRule);
     context.source=DamageSource::Laser;
     assert(ResolveDamage(context,&rules).amount==12 && ResolveDamage(context,&rules).coverage==DamageCoverage::NativeRule);
     context.damageable=false;
@@ -146,6 +151,15 @@ void TestDamageExtension() {
     bool invalid=false;
     try { (void)ResolveDamage(context); } catch(const std::invalid_argument&) { invalid=true; }
     assert(invalid);
+    DamageContext duringBomb{DamageSource::Projectile,DamageTarget::Enemy,ShotType::HomingAmulet,48,true,false,nullptr,0,0,0,true};
+    assert(ResolveDamage(duringBomb).amount==16);
+    duringBomb.baseDamage=2;assert(ResolveDamage(duringBomb).amount==1);
+    duringBomb.source=DamageSource::Laser;duringBomb.baseDamage=48;duringBomb.contactSeconds=2.0F/60;
+    assert(ResolveDamage(duringBomb).amount==16); // 持续弹先恢复每接触帧的原始伤害再 /3，不能按显示帧重复取最低值。
+    for(int fps:{30,60,144}) {
+        duringBomb.contactSeconds=1.0F/fps;duringBomb.baseDamage=48*60*duringBomb.contactSeconds;
+        assert(std::abs(ResolveDamage(duringBomb).amount-16*60*duringBomb.contactSeconds)<0.00001F);
+    }
 }
 } // namespace
 

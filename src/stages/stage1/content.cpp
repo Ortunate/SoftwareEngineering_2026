@@ -9,6 +9,12 @@
 #include <type_traits>
 
 namespace koumakyou::stage1 {
+std::array<VisualId,4> Stage1Content::PlayerBombVisuals(ShotType shot) const {
+    const VisualId first=shot==ShotType::HomingAmulet ? kReimuBombSeal : shot==ShotType::Needle ? kReimuBombBarrier :
+                         shot==ShotType::MagicMissile ? kMarisaBombStars : kMarisaBombSpark;
+    return {first,static_cast<VisualId>(first+1),static_cast<VisualId>(first+2),
+            shot==ShotType::MagicMissile ? kInvalidVisualId : static_cast<VisualId>(first+3)};
+}
 
 const StageAssetManifest& Stage1Content::Assets() const { return Stage1Manifest(); }
 std::span<const StageEvent> Stage1Content::Events() const { return Stage1Timeline(); }

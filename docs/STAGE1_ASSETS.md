@@ -32,11 +32,14 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 | menu_move / menu_confirm / menu_cancel | select00 / ok00 / cancel00 |
 | shoot / enemy_down / hit | plst00 / enep00 / pldead00 |
 | bomb / graze / pickup | gun00 / graze / item00 |
+| bomb_master | nep00，Master Spark 原生音效 |
 | spell / clear / full_power | kira00 / extend / powerup |
 | reference_6 / 7 / 8 / 9 | power1 / tan00 / tan01 / tan02 |
 | reference_16 / 18 | lazer00 / enep01 |
 
 `reference_*` 按原始帧指令 106 的编号播放。`tools/generate_sound_assets.py` 仍保留为无参考素材时的合成替代工具；运行它会覆盖同名 WAV，不是当前素材的重建命令。
+
+四种 Bomb 的原始纹理和动画直接复用已加载的 `player00/player01`，不新增替代贴图。新增的 `bomb_master.wav` 来自相同 IN 包，其校验值、十五个动画层和音效事件映射见 [四 Bomb 对照](PLAYER_BOMBS_REFERENCE.md)。
 
 ## 中文字体
 

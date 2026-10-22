@@ -37,6 +37,10 @@ void DropSystem::Clear() {
     referenceItemIndex_ = std::uniform_int_distribution<unsigned>(0,7)(random_);
 }
 
+void DropSystem::MagnetAllItems() {
+    ForEachActive([](Pickup& pickup) { pickup.homing=true; });
+}
+
 void DropSystem::Spawn(PickupKind kind, Vector3 position, int value) {
     if (value <= 0) return;
     if (Pickup* pickup = pickups_.Acquire()) {

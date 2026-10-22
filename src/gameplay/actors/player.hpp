@@ -68,7 +68,7 @@ public:
     /// @brief 设置剩余无敌时间；预览模式可传入较长的秒数。
     void SetInvulnerability(float seconds);
 
-    /// @brief 推进计时器、视角和移动，并根据输入生成玩家弹或消耗 Bomb。
+    /// @brief 推进计时器、视角和移动，并生成玩家弹或消耗 Bomb；恋札 Bomb 期间三轴移速为正常的 0.3 倍。
     /// @param deltaTime 本帧经过的非负秒数。
     /// @param input 本帧采集的输入快照。
     /// @param bullets 接收玩家弹的对象池，容量耗尽时射击请求被丢弃。
@@ -138,7 +138,7 @@ private:
     /// @brief 维护两个激光槽及其跟随位置和当前视线；禁火或复活取消旧激光，冷却使用游戏秒数。
     void UpdateLasers(bool allowFire, BulletSystem& bullets,
                       std::span<const PlayerAimTarget> aimTargets);
-    /// @brief 在库存和冷却允许时消耗 Bomb，并设置冷却与无敌时间。
+    /// @brief 在库存和冷却允许时消耗 Bomb，按当前御札设置完整演出的冷却与原生保护时间。
     [[nodiscard]] bool TryUseBomb();
 
     Vector3 position_{0.0F, 0.0F, -6.5F};

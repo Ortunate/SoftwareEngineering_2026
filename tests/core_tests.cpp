@@ -46,7 +46,8 @@ void TestSpellPracticeCatalog() {
         assert(spell::Find(card.stage,card.group,card.difficulty)==&card);++counts[card.stage];
         playable+=spell::Playable(&card,0);
         assert(spell::Playable(&card,0)==spell::Playable(&card,1));
-        assert(!spell::Playable(&card,2) && !spell::Playable(&card,3));
+        assert(spell::Playable(&card,0)==spell::Playable(&card,2));
+        assert(spell::Playable(&card,0)==spell::Playable(&card,3));
     }
     assert(counts==totals && playable==2);
     assert(!spell::Find(0,0,0) && !spell::Find(0,0,1));
@@ -70,13 +71,13 @@ void TestSpellPracticeCatalog() {
     assert(records.Get(0,3).attempts==2 && records.Get(0,3).captured==1 && records.Get(0,3).bestScore==1000);
     assert(records.Get(1,3).attempts==0 && records.Get(1,7).mainCaptured==1 && records.Get(1,7).bestScore==0);
     assert(records.Get(-1,0).bestScore==0);
-    // 四种组合的遇见状态逐一检查；魔理沙即使拥有记录，也仍受战斗实现门禁限制。
+    // 四种组合均已接通，但每一种仍必须独立遇见，不能借其他御札的记录解锁。
     for(int encountered=0;encountered<spell::kCharacterCount;++encountered) {
         spell::Records isolated;
         isolated.Begin(encountered,3,false);
         for(int selected=0;selected<spell::kCharacterCount;++selected) {
             assert(isolated.Seen(selected,3)==(selected==encountered));
-            assert(spell::Available(night,selected,isolated)==(selected==encountered && selected<2));
+            assert(spell::Available(night,selected,isolated)==(selected==encountered));
             assert(!isolated.Seen(selected,7));
         }
         assert(!isolated.Seen(-1,3) && !isolated.Seen(4,3));
@@ -341,6 +342,8 @@ void RunGameplayTests();
 void RunDropTests();
 /// @brief 运行玩家封装后的移动、射击与受击用例，断言失败时终止进程。
 void RunPlayerTests();
+/// @brief 运行魔理沙原始火力时序、导弹加速爆破和持续激光用例。
+void RunMarisaTests();
 /// @brief 运行时间轴及关卡内容用例，断言失败时终止进程。
 void RunStageTests();
 /// @brief 运行入退场曲线、快照与回收用例，断言失败时终止进程。
@@ -366,6 +369,7 @@ int main() {
     RunGameplayTests();
     RunDropTests();
     RunPlayerTests();
+    RunMarisaTests();
     RunStageTests();
     RunActorEffectTests();
     RunAnimationTests();

@@ -102,3 +102,9 @@ cmake --build --preset macos-debug --target koumakyou_sprite_overlap_tests
 圈中心与 cyan 副弹出生点由 Player 的同一接口给出，动画年龄使用游戏时间。双圈与弹幕共用透明排序，属于无碰撞的绘制数据；暂停冻结、复活重启，开局与卸载关卡时清理动画游标。`koumakyou_lifecycle_tests <截图前缀> --player-options-only` 可隔离验证原始圈贴图、收拢前后像素、暂停及卸载，并导出 normal/focus 截图。
 
 梦之御札侧针追加独立外观，使用 `player00.anm` 脚本 66、sprite 68（32×104 逻辑像素）。针束按原始像素偏移从圈内上部射出，保留原生 Alpha 160、运动方向旋转及贴图比例，额外不透明度共用 Alpha 51。`--player-shots-only` 同时导出追踪弹与各 Power 档针弹的隔离截图；发射表及三维换算见 [梦之御札侧针对照](REIMU_NEEDLE_REFERENCE.md)。
+
+## 魔理沙主副弹与物件
+
+魔／恋机体使用 `player01` 脚本 64 的主弹、65～68 的四档导弹、69～71 的三级激光、97～100 的爆破和 128/129 的星形副机。副机 sprite 128 为 36×36 逻辑像素，两侧均顺时向旋转，不能复用灵梦左右反向的 player00 游标。激光保留原生缩放、颜色、透明度与标签 1 淡出；渲染器按胶囊线段绘制，参与已有透明深度排序和分段，额外 Alpha 与其他自机弹一致。
+
+一面对话增加魔理沙六种表情，引用已有 `common/portraits/marisa` PNG，由 Stage 管理借用和卸载；选人页通用后景仍由 Common 独立持有。`--marisa-only` 会隔离主弹，直接核对导弹/激光的真实像素，并导出两种御札的常态与 Focus 视图。原始表值和生命周期见 [魔理沙御札对照](MARISA_SHOTS_REFERENCE.md)。

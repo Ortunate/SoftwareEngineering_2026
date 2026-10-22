@@ -23,7 +23,7 @@ struct Card { int number,stage,group,difficulty; const char* name; const char* u
 [[nodiscard]] std::span<const Card> Cards();
 /// @brief 查询关内符卡组与难度；不存在的难度返回 nullptr，不允许把空槽映射为其他符卡。
 [[nodiscard]] const Card* Find(int stage,int group,int difficulty);
-/// @brief 只检查战斗实现：当前仅灵梦两种御札的 Normal 夜符/暗符；实际练习入口须使用 Available 追加遇见条件。
+/// @brief 只检查战斗实现：四种御札均支持 Normal 夜符/暗符；实际练习入口须使用 Available 追加遇见条件。
 [[nodiscard]] bool Playable(const Card* card,int character);
 /// @brief 返回关内符卡组的使用者原文；无此组返回空串，字符串具有静态生命周期。
 [[nodiscard]] const char* GroupUser(int stage,int group);

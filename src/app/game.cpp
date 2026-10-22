@@ -187,7 +187,7 @@ void Game::CompleteStartRun() {
     playerOptionAnimations_ = {};
     player_.Reset();
     player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,
-                         selectedShot_ == 0 ? ShotType::HomingAmulet : ShotType::Needle);
+                         static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
     missCount_ = bombCount_ = 0;
     spellStartMisses_=spellStartBombs_=0;
     shotSoundTimer_ = 0.0F;
@@ -378,7 +378,7 @@ void Game::UpdateBattleAnimations() {
     if(state_!=RunState::Playing)return;
     if (stageContent_ && player_.OptionsVisible()) {
         for (int side = 0; side < 2; ++side) {
-            const auto visual = stageContent_->PlayerOptionVisual(side);
+            const auto visual = stageContent_->PlayerOptionVisual(side,player_.Shot());
             if (visual != kInvalidVisualId) sync(playerOptionAnimations_[side], visual, player_.VisualAge());
         }
     }
@@ -397,6 +397,11 @@ void Game::UpdateBattleAnimations() {
             selected=battle::BulletSpawn(bullet.nativeType,bullet.nativeColor,static_cast<int>(std::round(bullet.spawnVisualSeconds*60)));
         } else if(bullet.nativeType>=0)age=std::max(0.0F,bullet.age-bullet.spawnVisualSeconds);
         const auto& atlas=assets_.LoadBattleAtlas(selected.atlas);
+        if(bullet.playerShotKind==PlayerShotKind::Laser && !bullet.laserFadeStarted && age>=bullet.laserFadeAt) {
+            // 先推进到中断发生点，再推进余下时间；低帧率跨过淡出边界时不能延迟或重复中断。
+            bullet.animation.Sync(*atlas.archive,selected,bullet.laserFadeAt);
+            bullet.animation.player.Interrupt(1);bullet.laserFadeStarted=true;
+        }
         bullet.animation.Sync(*atlas.archive,selected,age);
     });
     drops_.ForEachActive([&](Pickup& pickup) {
@@ -692,7 +697,7 @@ void Game::AdjustReferenceRank(int subrank) {
     while(referenceSubrank_<0) { --referenceRank_; referenceSubrank_+=100; }
     referenceRank_=std::clamp(referenceRank_,10,32);
 }
-std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->Dialogue(dialogueAfterBattle_); }
+std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->Dialogue(dialogueAfterBattle_,player_.Shot()); }
 int Game::DialogueIndex(float* lineStart) const {
     float start=0; const auto lines=CurrentDialogue();
     for (int index=0;index<static_cast<int>(lines.size());++index) {

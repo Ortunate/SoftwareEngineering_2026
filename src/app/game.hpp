@@ -308,15 +308,15 @@ private:
     int bestScore_ = 0;
     StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
-    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前仅 Normal、灵梦与第一面可玩；魔理沙候选可浏览，未开放机体不启动游戏。
-    int selectedCharacter_ = 0; // Start/Practice Start 的角色候选，0 灵梦/1 魔理沙；魔理沙目前仅支持选择与浏览。
+    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前支持两位角色的四种御札、Normal 与第一面。
+    int selectedCharacter_ = 0; // 实际角色候选，0 灵梦/1 魔理沙；普通开局和符卡练习均沿用该编号。
     ui::MenuMotion startCharacterMotion_{}; // 角色切换时前景、背景及人物摘要共用的渐变权重。
     int selectedPracticeStage_ = 0; // kPracticeStages 的局部索引，始终指向已注册关卡。
-    int selectedShot_ = 0; // 普通选择页为角色内 0/1；符卡练习战斗为目录的四组合编号，目前仅 0/1 能启动。
+    int selectedShot_ = 0; // 始终为角色内御札 0/1；成绩四组合编号由实际 Player::Shot() 给出。
     bool challengeMode_ = false;
     bool practiceMode_ = false;
     bool previewMode_ = false; // 静默截图不写入本机通关成绩，StartRun 会恢复普通记录规则。
-    spell::Selection spellSelection_{}; // 浏览身份与当前战斗御札独立，魔理沙不可借灵梦入口开局。
+    spell::Selection spellSelection_{}; // 浏览身份与当前战斗御札独立，确认时拆分为角色及角色内御札。
     spell::Records spellRecords_{};
     ui::MenuMotion spellCharacterMotion_{}; // 四组合展示权重，切换人物与文字共用，不影响鼠标命中。
     ui::MenuMotion spellGroupMotion_{},spellDifficultyMotion_{}; // 同页两列分别保存强调，焦点递进不清空另列或重播页面动画。

@@ -147,6 +147,7 @@ if(BUILD_TESTING)
         tests/drop_tests.cpp
         tests/gameplay_tests.cpp
         tests/player_tests.cpp
+        tests/marisa_tests.cpp
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
     target_link_libraries(koumakyou_tests PRIVATE koumakyou_engine)

@@ -12,9 +12,24 @@ namespace koumakyou::stage1 {
 
 const StageAssetManifest& Stage1Content::Assets() const { return Stage1Manifest(); }
 std::span<const StageEvent> Stage1Content::Events() const { return Stage1Timeline(); }
-std::span<const DialogueLine> Stage1Content::Dialogue(bool afterBattle) const { return Stage1Dialogue(afterBattle); }
+std::span<const DialogueLine> Stage1Content::Dialogue(bool afterBattle, ShotType shot) const {
+    return Stage1Dialogue(afterBattle,shot==ShotType::MagicMissile || shot==ShotType::IllusionLaser);
+}
 
-VisualId Stage1Content::HeroPortraitVisual(int expression) const {
+PlayerShotVisuals Stage1Content::PlayerVisuals(ShotType shot) const {
+    auto result=StageContent::PlayerVisuals(shot);
+    if(shot!=ShotType::MagicMissile && shot!=ShotType::IllusionLaser)return result;
+    result.primary=kMarisaPrimary;
+    for(int index=0;index<4;++index) {
+        result.secondary[index]=static_cast<VisualId>(shot==ShotType::MagicMissile ? kMarisaMissile+index : kMarisaLaser+std::min(index,2));
+        result.impact[index]=static_cast<VisualId>(kMarisaExplosion+index);
+    }
+    return result;
+}
+
+VisualId Stage1Content::HeroPortraitVisual(int expression, ShotType shot) const {
+    if(shot==ShotType::MagicMissile || shot==ShotType::IllusionLaser)
+        return expression>=0 && expression<static_cast<int>(kMarisaPortraits.size()) ? kMarisaPortraits[expression] : kMarisaPortraits.front();
     return expression >= 0 && expression < static_cast<int>(kReimuPortraits.size())
         ? kReimuPortraits[expression] : kReimuPortraits.front();
 }

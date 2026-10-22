@@ -14,13 +14,13 @@
 
 namespace koumakyou {
 
-/// @brief 道具或自机太极圈的临时公告板数据；position 为世界坐标，heightScale 乘以外观的世界高度。
+/// @brief 道具或自机副机的临时公告板数据；position 为世界坐标，heightScale 乘以外观的世界高度。
 /// visual 是当前 Stage 的外观 ID；渲染器只在本帧借用此数据。
 struct PickupSprite {
     Vector3 position{};
     VisualId visual = kInvalidVisualId;
     float heightScale = 1.0F;
-    const anm::Frame* animation = nullptr; // 借用道具或太极圈的当前帧，只在本次 Draw 内有效。
+    const anm::Frame* animation = nullptr; // 借用道具或副机的当前帧，只在本次 Draw 内有效。
     unsigned char alpha = 255; // 额外不透明度（0～255），与贴图及原生动画 Alpha 相乘。
 };
 
@@ -33,7 +33,7 @@ public:
     /// @param bullets 全部活动弹幕。
     /// @param enemies 当前可见敌人指针序列；调用期间所有指针须有效。
     /// @param boss 当前 Boss 状态。
-    /// @param pickups 当前道具与太极圈的临时绘制数据；调用期间 span 须有效。
+    /// @param pickups 当前道具与副机的临时绘制数据；调用期间 span 须有效。
     /// @param visuals 当前 Stage 的稠密外观资源表，索引即 VisualId。
     /// @param shaders 兼容旧清单的借用参数；透明绘制使用默认着色器，不再按阈值裁剪柔边。
     /// @param effects 本关卡退场快照；调用期间须保留对应外观资源。

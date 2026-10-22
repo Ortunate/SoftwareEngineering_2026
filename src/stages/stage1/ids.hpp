@@ -40,7 +40,16 @@ constexpr VisualId kPlayerOptionLeft = kNativeDefeat + 3;
 constexpr VisualId kPlayerOptionRight = kPlayerOptionLeft + 1;
 /// @brief 梦之御札侧针，使用 player00 的独立针弹动画，不复用中央符卡外观。
 constexpr VisualId kPlayerNeedle = kPlayerOptionRight + 1;
-constexpr std::size_t kVisualCount = kPlayerNeedle + 1;
+/// @brief 魔理沙 player01 独立主弹、副弹、爆破及副机物件，全部追加，保持既有素材编号稳定。
+constexpr VisualId kMarisaPrimary = kPlayerNeedle + 1;
+constexpr VisualId kMarisaMissile = kMarisaPrimary + 1; // 连续四项，对应脚本 65～68。
+constexpr VisualId kMarisaLaser = kMarisaMissile + 4; // 连续三项，对应脚本 69～71。
+constexpr VisualId kMarisaExplosion = kMarisaLaser + 3; // 连续四项，对应脚本 97～100。
+constexpr VisualId kMarisaOptionLeft = kMarisaExplosion + 4;
+constexpr VisualId kMarisaOptionRight = kMarisaOptionLeft + 1;
+constexpr std::array<VisualId,6> kMarisaPortraits{kMarisaOptionRight+1,kMarisaOptionRight+2,kMarisaOptionRight+3,
+                                              kMarisaOptionRight+4,kMarisaOptionRight+5,kMarisaOptionRight+6};
+constexpr std::size_t kVisualCount = kMarisaPortraits.back() + 1;
 /// @brief 保留 ECL 弹幕类型与颜色，非法输入回退普通蓝弹；类型内部颜色转换由战斗目录负责。
 constexpr VisualId NativeBulletVisual(int type,int color) {
     return type>=0 && type<10 && color>=0 && color<16

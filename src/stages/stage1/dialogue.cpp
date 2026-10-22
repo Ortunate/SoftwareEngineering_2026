@@ -1,4 +1,4 @@
-// 本文件保存新典 msg1 与 zh-CN 翻译表中的灵梦战前/战后原文、等待时长和入场顺序。
+// 本文件保存新典 msg1 与 zh-CN 翻译表中两位自机的战前/战后原文、等待时长和入场顺序。
 #include "stages/stage1/data.hpp"
 #include <array>
 namespace koumakyou::stage1 {
@@ -24,6 +24,26 @@ constexpr std::array<DialogueLine,2> kAfter{{
     {"灵梦", "但是不是良药", false, 6.016666666666667F, 0, false, false, "", 0},
     {"灵梦", "只有喝了才知道哦", false, 15.5F, 0, false, false, "", 0},
 }};
+// msg1.dat 的第 10/11 段属于魔理沙；两种御札共用同一对话，索引 ST_MSG1_17…28。
+constexpr std::array<DialogueLine,10> kMarisaBefore{{
+    {"魔理沙","这种感觉，该怎么形容呢...",false,6.0F,0,false,false,"",0,1.0F},
+    {"魔理沙","换做是那家伙，肯定会说什么",false,301.0F/60,0,false,false,"「感觉真惬意」吧",0},
+    {"魔理沙","但我可不喜欢夜晚",false,361.0F/60,0,false,false,"",1},
+    {"魔理沙","路上碰到的全是怪胎",false,340.0F/60,0,false,false,"",1},
+    {"露米娅","你说谁是怪胎呢",true,201.0F/60,0,true,false,"",3},
+    {"魔理沙","我可没说你",false,331.0F/60,0,true,true,"",3},
+    {"露米娅","这个嘛，我当然不是",true,301.0F/60,0,true,false,"",0},
+    {"魔理沙","所以，你把手伸这么开干嘛",false,301.0F/60,0,true,false,"",0},
+    {"露米娅","这样看起来像不像",true,301.0F/60,0,true,false,"「圣人被钉在十字架上」？",2},
+    {"魔理沙","我看更像是",false,430.0F/60,0,true,false,"「人类采用了十进制」",3},
+}};
+constexpr std::array<DialogueLine,2> kMarisaAfter{{
+    {"魔理沙","难道说",false,6.0F,0,false,false,"",1,1.0F},
+    {"魔理沙","只有人类是十根手指吗",false,560.0F/60,0,false,false,"",1},
+}};
 }
-std::span<const DialogueLine> Stage1Dialogue(bool afterBattle) { return afterBattle ? std::span<const DialogueLine>(kAfter) : std::span<const DialogueLine>(kBefore); }
+std::span<const DialogueLine> Stage1Dialogue(bool afterBattle, bool marisa) {
+    if(marisa)return afterBattle ? std::span<const DialogueLine>(kMarisaAfter) : std::span<const DialogueLine>(kMarisaBefore);
+    return afterBattle ? std::span<const DialogueLine>(kAfter) : std::span<const DialogueLine>(kBefore);
+}
 } // namespace koumakyou::stage1

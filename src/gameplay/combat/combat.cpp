@@ -68,14 +68,21 @@ void Game::ResolveCollisions() {
     if (playerWasHit) HandlePlayerHit();
     if (state_ != RunState::Playing) return;
 
-    enemies_.ForEachActive([this](Enemy& enemy) {
-        bullets_.Pool().ForEachActive([&enemy](Bullet& bullet) {
-            if (bullet.owner != BulletOwner::Player) return;
+    const auto applyShotImpact=[this](Bullet& bullet) {
+        if(bullet.playerShotKind==PlayerShotKind::Missile)bullets_.ExplodePlayerMissile(bullet);
+        else if(bullet.playerShotKind==PlayerShotKind::Projectile)bullet.active=false;
+        else if(bullet.playerShotKind==PlayerShotKind::Explosion)
+            // 原作爆破每个持续接触的逻辑帧继续减半速度；按经过秒数换算，避免低 FPS 减速变弱。
+            bullet.velocity=Scale(bullet.velocity,std::pow(0.5F,bullet.damageSeconds*60));
+    };
+    enemies_.ForEachActive([this,&applyShotImpact](Enemy& enemy) {
+        bullets_.Pool().ForEachActive([&enemy,&applyShotImpact](Bullet& bullet) {
+            if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + enemy.hitRadius;
-            if (DistanceSquared(bullet.position, enemy.position) <=
+            if (bullet.DistanceSquaredTo(enemy.position) <=
                 collisionDistance * collisionDistance) {
-                bullet.active = false;
-                enemy.health -= bullet.damage;
+                enemy.health -= bullet.ContactDamage();
+                applyShotImpact(bullet);
             }
         });
         if (enemy.health <= 0.0F) {
@@ -96,19 +103,28 @@ void Game::ResolveCollisions() {
     });
 
     if (boss_ && boss_->active) {
-        bullets_.Pool().ForEachActive([this](Bullet& bullet) {
-            if (bullet.owner != BulletOwner::Player) return;
+        bullets_.Pool().ForEachActive([this,&applyShotImpact](Bullet& bullet) {
+            if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + boss_->hitRadius;
-            if (DistanceSquared(bullet.position, boss_->position) <=
+            if (bullet.DistanceSquaredTo(boss_->position) <=
                 collisionDistance * collisionDistance) {
-                bullet.active = false;
                 // 原作符卡将普通射击伤害缩小至约七分之一；HP 阈值本身仍采用原始单位。
-                if (boss_->CanTakeDamage()) boss_->health -= bullet.damage * 0.8F / (boss_->SpellName() ? 7.0F : 1.0F);
-                score_ += 10;
+                if (boss_->CanTakeDamage()) boss_->health -= bullet.ContactDamage() * 0.8F / (boss_->SpellName() ? 7.0F : 1.0F);
+                if(bullet.damagePerSecond>0) {
+                    const double points=bullet.hitScoreRemainder+600.0*bullet.damageSeconds;
+                    const auto whole=static_cast<long long>(std::floor(points+0.00001));
+                    score_+=whole;bullet.hitScoreRemainder=points-static_cast<double>(whole);
+                } else score_+=10;
+                applyShotImpact(bullet);
             }
         });
         if (boss_->ShouldAdvanceFromDamage()) AdvanceBossPhase();
     }
+    // 持续弹可穿过多个目标，但同一份经过秒数只能结算一次，重复碰撞调用不能再次扣血。
+    bullets_.Pool().ForEachActive([](Bullet& bullet){
+        if(bullet.damagePerSecond>0)bullet.damageSeconds=0;
+        if(bullet.pendingExpiration)bullet.active=false;
+    });
 }
 
 void Game::UpdatePickups(float deltaTime) {

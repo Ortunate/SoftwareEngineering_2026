@@ -6,6 +6,7 @@
 #include "gameplay/arena.hpp"
 #include "gameplay/actors/reimu_homing.hpp"
 #include "gameplay/actors/reimu_needle.hpp"
+#include "gameplay/actors/marisa_shots.hpp"
 
 #include <algorithm>
 #include <array>
@@ -91,6 +92,7 @@ void Player::ResetPose() {
     pitch_ = 0.0F;
     secondaryFrame_ = -1;
     secondaryFractionalFrame_ = 0.0;
+    laserReadyAt_={};++weaponEpoch_;
     optionFocus_ = 0.0F;
     optionAimDepth_ = kDefaultAimDepth;
     visualAge_ = 0.0;
@@ -108,6 +110,13 @@ void Player::SetInvulnerability(float seconds) {
 bool Player::Update(float deltaTime, const PlayerInput& input,
                     BulletSystem& bullets, VisualId bulletVisual,
                     VisualId secondaryVisual, bool allowFire,
+                    std::span<const PlayerAimTarget> aimTargets) {
+    PlayerShotVisuals visuals;visuals.primary=bulletVisual;visuals.secondary.fill(secondaryVisual);
+    return Update(deltaTime,input,bullets,visuals,allowFire,aimTargets);
+}
+
+bool Player::Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
+                    const PlayerShotVisuals& visuals, bool allowFire,
                     std::span<const PlayerAimTarget> aimTargets) {
     invulnerableTimer_ = std::max(0.0F, invulnerableTimer_ - deltaTime);
     bombCooldown_ = std::max(0.0F, bombCooldown_ - deltaTime);
@@ -130,7 +139,7 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
 
     // 归一化后斜向移动不会比单轴移动更快。
     movement = game_math::Normalize(movement);
-    const float speed = input.focus ? kFocusSpeed : kSpeed;
+    const float speed = (input.focus ? kFocusSpeed : kSpeed) * (IsMarisa() ? 1.25F : 1.0F);
     position_ = game_math::Add(position_,
                                game_math::Scale(movement, speed * deltaTime));
     constexpr Vector3 limit{kArenaHalfExtents.x - kArenaPadding,
@@ -141,8 +150,9 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
     position_.z = std::clamp(position_.z, -limit.z, limit.z);
     optionAimDepth_ = AimDepth(position_, forward, aimTargets);
 
-    if (allowFire && input.fire && fireTimer_ <= 0.0F) {
-        Fire(bullets, bulletVisual, aimTargets);
+    UpdateLasers(allowFire,bullets,aimTargets);
+    if (!IsMarisa() && allowFire && input.fire && fireTimer_ <= 0.0F) {
+        Fire(bullets, visuals.primary, aimTargets);
         fireTimer_ = input.focus ? 0.075F : 0.09F;
     }
     if (!allowFire) {
@@ -152,7 +162,7 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
         if (input.fire) {
             secondaryFrame_ = 0;
             secondaryFractionalFrame_ = 0.0;
-            FireSecondaryFrame(bullets, secondaryVisual, aimTargets);
+            FireSecondaryFrame(bullets, visuals, aimTargets);
         }
     } else {
         secondaryFractionalFrame_ += static_cast<double>(deltaTime) * reimu_homing::kFramesPerSecond;
@@ -168,7 +178,7 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
                 }
                 secondaryFrame_ = 0;
             }
-            FireSecondaryFrame(bullets, secondaryVisual, aimTargets);
+            FireSecondaryFrame(bullets, visuals, aimTargets);
         }
     }
     return input.bomb && TryUseBomb();
@@ -277,8 +287,10 @@ void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
     }
 }
 
-void Player::FireSecondaryFrame(BulletSystem& bullets, VisualId secondaryVisual,
+void Player::FireSecondaryFrame(BulletSystem& bullets, const PlayerShotVisuals& visuals,
                                 std::span<const PlayerAimTarget> aimTargets) {
+    if(IsMarisa()) {FireMarisaFrame(bullets,visuals,aimTargets);return;}
+    const VisualId secondaryVisual=visuals.secondary[0];
     const auto origins = OptionPositions();
     if (shot_ == ShotType::Needle) {
         const Vector3 forward = Forward();
@@ -320,6 +332,74 @@ void Player::FireSecondaryFrame(BulletSystem& bullets, VisualId secondaryVisual,
                                             0.10F, Color{255, 255, 255, kShotAlpha}, secondaryVisual)) {
                 bullet->damage = 1.0F;
                 bullet->homingTurnRate = 5.5F;
+            }
+        }
+    }
+}
+
+void Player::UpdateLasers(bool allowFire, BulletSystem& bullets,
+                          std::span<const PlayerAimTarget> aimTargets) {
+    if(!allowFire)laserReadyAt_={};
+    const auto centers=OptionPositions();
+    bullets.Pool().ForEachActive([&](Bullet& bullet) {
+        if(bullet.owner!=BulletOwner::Player || bullet.playerShotKind!=PlayerShotKind::Laser)return;
+        if(!allowFire || !IsMarisa() || bullet.weaponEpoch!=weaponEpoch_ || bullet.playerSlot<0 || bullet.playerSlot>1) {bullet.active=false;return;}
+        bullet.position=centers[bullet.playerSlot];
+        const float depth=AimDepth(position_,Forward(),aimTargets);
+        bullet.beamDirection=ConvergingShotDirection(bullet.position,position_,Forward(),Right(),depth,0);
+    });
+}
+
+void Player::FireMarisaFrame(BulletSystem& bullets, const PlayerShotVisuals& visuals,
+                             std::span<const PlayerAimTarget> aimTargets) {
+    const bool laser=shot_==ShotType::IllusionLaser;
+    const auto centers=OptionPositions();
+    const auto forward=Forward(),right=Right(),up=Up();
+    const float depth=AimDepth(position_,forward,aimTargets);
+    const float scale=OptionScale(),pixelUnit=kOptionWorldHeight/36*scale;
+    // 低帧率一次补发多个逻辑帧时，按各帧实际时刻检查副机槽，不能让整个显示帧提前冷却完成。
+    const double fireTime=visualAge_-secondaryFractionalFrame_/60;
+    const auto main=game_math::Add(position_,game_math::Subtract(
+        game_math::Scale(forward,kMuzzleForward*scale),game_math::Scale(up,kMuzzleDown*scale)));
+    for(const auto& shot:marisa_shots::ForPower(laser,power_).shots) {
+        if(shot.kind==3) {
+            const int slot=shot.phase;
+            // 原表的 period 是槽冷却（120～330 帧），phase 是槽号；持续射击也只能各保留一束。
+            if(laserReadyAt_[slot]>fireTime+0.000001)continue;
+            bool existing=false;
+            bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+                existing|=bullet.owner==BulletOwner::Player && bullet.playerShotKind==PlayerShotKind::Laser &&
+                          bullet.weaponEpoch==weaponEpoch_ && bullet.playerSlot==slot;
+            });
+            if(existing)continue;
+            const auto origin=centers[slot];
+            if(auto* beam=bullets.Spawn(BulletOwner::Player,origin,{},shot.width*pixelUnit*0.5F,
+                                       Color{255,255,255,kShotAlpha},visuals.secondary[shot.script-69])) {
+                beam->playerShotKind=PlayerShotKind::Laser;beam->playerSlot=slot;beam->weaponEpoch=weaponEpoch_;
+                beam->beamDirection=ConvergingShotDirection(origin,position_,forward,right,depth,0);
+                beam->beamLength=32;beam->damage=0;beam->damagePerSecond=shot.damage*60/12;
+                // 原动画在剩余 70 帧收到标签 1，再淡出 30 帧；槽冷却仍持续至表中 period 结束。
+                beam->laserFadeAt=(shot.period-70)/60.0F;beam->maxAge=(shot.period-40)/60.0F;
+                laserReadyAt_[slot]=fireTime+shot.period/60.0;
+            }
+            continue;
+        }
+        // 保留原表相位，即使 phase>=period 不可达也不能归一化，否则会凭空增加低档导弹。
+        if(secondaryFrame_%shot.period!=shot.phase)continue;
+        const auto base=shot.module==0 ? main : centers[shot.module-1];
+        const auto origin=game_math::Add(base,game_math::Subtract(game_math::Scale(right,shot.x*pixelUnit),
+                                                                 game_math::Scale(up,shot.y*pixelUnit)));
+        const auto direction=ConvergingShotDirection(origin,position_,forward,right,depth,shot.angleDegrees);
+        const auto visual=shot.kind==0 ? visuals.primary : visuals.secondary[shot.script-65];
+        if(auto* bullet=bullets.Spawn(BulletOwner::Player,origin,game_math::Scale(direction,shot.speed*20/12),
+                                     0.09F,Color{255,255,255,kShotAlpha},visual)) {
+            bullet->damage=shot.damage/12;
+            if(shot.kind==2) {
+                bullet->playerShotKind=PlayerShotKind::Missile;
+                bullet->acceleration=game_math::Scale(forward,marisa_shots::kMissileAccelerationPixelsPerFrameSquared*60*20/12);
+                bullet->impactVisual=visuals.impact[shot.script-65];
+                const float pixels=shot.script==65 ? 32 : shot.script==66 ? 42 : 48;
+                bullet->explosionRadius=pixels*kOptionWorldHeight/36*0.5F;
             }
         }
     }

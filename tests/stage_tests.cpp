@@ -331,6 +331,15 @@ void TestStage1Content() {
     assert(content->PlayerNeedleVisual() == stage1::kPlayerNeedle);
     assert(visuals[stage1::kPlayerNeedle].animation.atlas == battle::Atlas::Reimu);
     assert(visuals[stage1::kPlayerNeedle].animation.script == 66);
+    for(auto shot:{ShotType::MagicMissile,ShotType::IllusionLaser}) {
+        const auto player=content->PlayerVisuals(shot);
+        assert(player.primary==stage1::kMarisaPrimary && visuals[player.primary].animation.atlas==battle::Atlas::Marisa);
+        assert(content->PlayerOptionVisual(0,shot)==stage1::kMarisaOptionLeft && content->PlayerOptionVisual(1,shot)==stage1::kMarisaOptionRight);
+        assert(content->HeroPortraitVisual(0,shot)==stage1::kMarisaPortraits[0]);
+        const auto dialogue=content->Dialogue(false,shot);
+        assert(dialogue.size()==10 && content->Dialogue(true,shot).size()==2);
+        for(const auto& line:dialogue)if(!line.bossSpeaking)assert(std::string_view(line.speaker)=="魔理沙");
+    }
     assert(content->PowerPickupVisual() == stage1::kPowerPoint);
     assert(content->ScorePickupVisual() == stage1::kScorePoint);
     assert(content->StarPickupVisual() == stage1::kStarPoint);

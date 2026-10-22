@@ -128,7 +128,7 @@ void Game::DrawHud() const {
     if (!l.compact)
         Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
     row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
-    const long long displayedBest=spellPractice_?spellRecords_.Get(selectedShot_,practicePhase_==2?3:7).bestScore:bestScore_;
+    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practicePhase_==2?3:7).bestScore:bestScore_;
     row("最高得分", TextFormat("%09lld", displayedBest), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
         DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,
@@ -230,7 +230,7 @@ void Game::DrawDialogue() const {
                         Fade(WHITE, pose.opacity));
     };
     // 先画未发言者，避免灵梦展开的手臂覆盖正在说话的角色；裁剪仍取自各差分的元数据。
-    const auto hero = stageContent_->HeroPortraitVisual(expressions[0]);
+    const auto hero = stageContent_->HeroPortraitVisual(expressions[0],player_.Shot());
     const auto boss = stageContent_->BossPortraitVisual(expressions[1]);
     if (line.bossSpeaking) {
         portrait(hero, false);

@@ -12,6 +12,9 @@
 namespace koumakyou {
 namespace {
 
+// 恋之御札激光额外加宽以改善三维视角下的辨识度；只影响显示，不改变原生判定宽度。
+constexpr float kMarisaLaserVisualWidthScale = 1.5F;
+
 /// @brief 单张精灵的贴图、世界高度与归一化锚点。
 struct SpriteSpec {
     Texture2D texture;
@@ -344,7 +347,10 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                 auto frame=Spec(visual,1,&beam.animation.player.Sample()).animation;
                 frame.source.y+=(1-command.to)*frame.source.height;
                 frame.source.height*=command.to-command.from;
-                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,width*2);
+                // 自机激光三级原生脚本以 scale.x 控制横向宽度，不能只换颜色而丢失强度档位的形状。
+                const float nativeScale=beam.playerShotKind==PlayerShotKind::Laser
+                    ? std::abs(frame.scale.x)*kMarisaLaserVisualWidthScale : 1.0F;
+                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,width*2*nativeScale,{255,255,255,beam.color.a});
             } else if(!beam.Dangerous() && beam.beamGrowSeconds<=0) {
                 DrawLine3D(start,end,Fade(beam.color,0.7F));
                 DrawBeamShell(start,end,beam.radius*0.3F,Fade(beam.color,0.4F),command.from==0,command.to==1,true);

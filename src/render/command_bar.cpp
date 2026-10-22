@@ -36,7 +36,7 @@ void Game::DrawCommandBar() const {
                 add("A / D / ←→","切换角色");add("鼠标移动","选择");
                 add("Z / Space / 左键","确认");add("X / Esc / 右键","返回");
             } else if(setupStep_==StartSetupStep::Ready) {
-                add("Z / Space / 左键","开始游戏",selectedCharacter_==0);add("X / Esc / 右键","返回");
+                add("Z / Space / 左键","开始游戏");add("X / Esc / 右键","返回");
             } else menu();
             break;
         case RunState::MusicRoom:menu("播放");break;

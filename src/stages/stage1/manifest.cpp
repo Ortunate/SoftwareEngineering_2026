@@ -59,6 +59,26 @@ const std::vector<VisualDefinition> kVisuals=[] {
     visuals.push_back({.id=kPlayerNeedle, .mode=VisualMode::Bullet,
                        .bulletDiameterScale=(104.0F/36)*Player::kOptionWorldHeight/0.09F,
                        .animation={battle::Atlas::Reimu,66}});
+    visuals.push_back({.id=kMarisaPrimary, .mode=VisualMode::Bullet, .bulletDiameterScale=8.0F,
+                       .animation={battle::Atlas::Marisa,64}});
+    for(int level=0;level<4;++level)
+        visuals.push_back({.id=static_cast<VisualId>(kMarisaMissile+level), .mode=VisualMode::Bullet,
+                           .bulletDiameterScale=8.0F, .animation={battle::Atlas::Marisa,65+level}});
+    for(int level=0;level<3;++level)
+        visuals.push_back({.id=static_cast<VisualId>(kMarisaLaser+level), .mode=VisualMode::Bullet,
+                           .animation={battle::Atlas::Marisa,69+level}});
+    for(int level=0;level<4;++level)
+        visuals.push_back({.id=static_cast<VisualId>(kMarisaExplosion+level), .mode=VisualMode::Bullet,
+                           .bulletDiameterScale=2.0F, .animation={battle::Atlas::Marisa,97+level}});
+    visuals.push_back({.id=kMarisaOptionLeft, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Marisa,128}});
+    visuals.push_back({.id=kMarisaOptionRight, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Marisa,129}});
+    constexpr std::array<std::string_view,6> marisaFaces{
+        "common/portraits/marisa/face01a_0.png","common/portraits/marisa/face01a_1.png",
+        "common/portraits/marisa/face01b_0.png","common/portraits/marisa/face01b_1.png",
+        "common/portraits/marisa/face01c_0.png","common/portraits/marisa/face01c_1.png"};
+    for(int expression=0;expression<6;++expression)
+        visuals.push_back({.id=kMarisaPortraits[expression], .path=marisaFaces[expression], .mode=VisualMode::Character,
+                           .dialogueCrop=(expression%2==1 ? Rectangle{0.20F,0,0.80F,0.60F} : Rectangle{0,0,1,1})});
     return visuals;
 }();
 constexpr std::array<SoundDefinition, 0> kSounds{};

@@ -101,6 +101,19 @@ void TestEffectSemantics() {
     anm::Player needle;needle.Start(archive,66);needle.Advance(0.2);
     assert(needle.Sample().sprite==68 && needle.Sample().source.width==32 && needle.Sample().source.height==104);
     assert(needle.Sample().visible && needle.Sample().autoRotate==1 && needle.Sample().color.a==160);
+    auto marisa=anm::LoadArchive(kAssets/battle::Describe(battle::Atlas::Marisa).anm);
+    for(int script:{64,65,66,67,68,69,70,71,97,98,99,100,128,129}) {
+        anm::Player effect;effect.Start(marisa,script);effect.Advance(0.2);
+        assert(effect.Sample().visible && effect.Sample().sprite>=0);
+        if(script==128 || script==129)assert(effect.Sample().sprite==128 && effect.Sample().rotation.z>0);
+        if(script>=69 && script<=71) {
+            assert(effect.Sample().sprite==68 && effect.Sample().color.a>0);
+            effect.Advance(1);const auto alpha=effect.Sample().color.a;
+            assert(effect.Interrupt(1));effect.Advance(15.0/60);
+            assert(effect.Sample().color.a<alpha);effect.Advance(16.0/60);assert(effect.Finished());
+        }
+        if(script>=97 && script<=100) {effect.Advance(0.2);assert(effect.Finished());}
+    }
     anm::Player effect;effect.Start(archive,137);
     const auto initialAlpha=effect.Sample().color.a;
     effect.Advance(30.0/60);

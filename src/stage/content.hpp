@@ -4,6 +4,7 @@
 
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/player.hpp"
 #include "stage/system.hpp"
 #include "resources/visual_assets.hpp"
 
@@ -71,8 +72,8 @@ public:
     /// @return Boss 与对话返回 false，结束后通过 StageDirector::EndEvent 报告；其他返回 true。
     /// @throws std::invalid_argument 未规范的批次、缺少异步 ID 或动作参数非法。
     bool HandleEvent(const StageEvent& event, StageEventSink& sink) const;
-    /// @brief 返回本关卡的对话台词；底层存储须在展示期间有效。
-    [[nodiscard]] virtual std::span<const DialogueLine> Dialogue(bool afterBattle = false) const = 0;
+    /// @brief 返回实际机体所属角色的对话台词；shot 使用四组合编号，底层存储须在展示期间有效。
+    [[nodiscard]] virtual std::span<const DialogueLine> Dialogue(bool afterBattle = false, ShotType shot=ShotType::HomingAmulet) const = 0;
     /// @brief 返回单句台词的展示秒数。
     [[nodiscard]] virtual float DialogueLineDuration() const = 0;
     /// @brief 返回玩家直射弹的外观 ID。
@@ -81,8 +82,16 @@ public:
     [[nodiscard]] virtual VisualId PlayerHomingVisual() const = 0;
     /// @brief 返回梦之御札侧针的外观 ID；未配置独立针素材的关卡沿用主弹外观。
     [[nodiscard]] virtual VisualId PlayerNeedleVisual() const { return PlayerBulletVisual(); }
-    /// @brief 返回左/右自机太极圈外观；side 为 0/1，未配置时返回 invalid，不绘制该圈。
-    [[nodiscard]] virtual VisualId PlayerOptionVisual(int side) const { (void)side; return kInvalidVisualId; }
+    /// @brief 返回实际机体左/右副机外观；side 为 0/1，未配置时返回 invalid，不绘制该物件。
+    [[nodiscard]] virtual VisualId PlayerOptionVisual(int side, ShotType shot=ShotType::HomingAmulet) const {
+        (void)side; (void)shot; return kInvalidVisualId;
+    }
+    /// @brief 返回实际机体的主副弹及命中外观；默认实现兼容只配置灵梦素材的关卡。
+    [[nodiscard]] virtual PlayerShotVisuals PlayerVisuals(ShotType shot) const {
+        PlayerShotVisuals result;result.primary=PlayerBulletVisual();
+        result.secondary.fill(shot==ShotType::Needle ? PlayerNeedleVisual() : PlayerHomingVisual());
+        return result;
+    }
     /// @brief 返回 Power 道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId PowerPickupVisual() const = 0;
     /// @brief 返回大 P 道具外观；未区分大小的关卡默认复用普通 P 图。
@@ -91,8 +100,8 @@ public:
     [[nodiscard]] virtual VisualId ScorePickupVisual() const = 0;
     /// @brief 返回清弹星点的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId StarPickupVisual() const = 0;
-    /// @brief 按关卡局部表情编号返回玩家立绘；未知编号回退到默认表情 0。
-    [[nodiscard]] virtual VisualId HeroPortraitVisual(int expression = 0) const = 0;
+    /// @brief 按实际机体及关卡局部表情编号返回玩家立绘；未知表情回退到该角色默认表情 0。
+    [[nodiscard]] virtual VisualId HeroPortraitVisual(int expression = 0, ShotType shot=ShotType::HomingAmulet) const = 0;
     /// @brief 按关卡局部表情编号返回 Boss 立绘；未知编号回退到默认表情 0。
     [[nodiscard]] virtual VisualId BossPortraitVisual(int expression = 0) const = 0;
     /// @brief 返回符卡演出的完整立绘；默认沿用 Boss 默认表情，关卡可独立选择差分。

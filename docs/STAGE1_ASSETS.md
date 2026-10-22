@@ -15,7 +15,7 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 
 灵梦按 a0、a1、b0、b1、c0、c1 对应表情 0–5，露米娅按 a0、a1、b0、b1 对应 0–3。灵梦 a1 为已修正手指的样图；露米娅保留原素材右侧袖子出画面的构图。原 PNG 尺寸分别为 976×1612 和 887×1774，不重采样。对话通过清单中的 `dialogueCrop` 等比绘制上部；符卡使用完整图；世界露米娅使用独立 stg1enm2 动画，判定锚点为 `(0.5,0.5)`。
 
-10 张差分在进入 Stage 1 时加载，退出时释放；世界露米娅由 DDS/ANM 图集缓存加载，与对话 PNG 独立。开局选择页独立持有通用生命周期的灵梦 a1 后景纹理，不受关卡卸载影响；前景改用自机选人重绘图，魔理沙后景另用原典提围裙姿势的现代重绘，见 `START_CHARACTER_SELECTION.md`。
+灵梦 6 张、露米娅 4 张及魔理沙 6 张差分在进入 Stage 1 时加载，退出时释放；世界露米娅由 DDS/ANM 图集缓存加载，与对话 PNG 独立。魔理沙战斗引用已有 `common/portraits/marisa` 差分，不复制素材；开局选择页独立持有通用生命周期的灵梦 a1 后景纹理，不受关卡卸载影响，魔理沙后景同样独立持有。前景使用自机选人重绘图，见 `START_CHARACTER_SELECTION.md`。
 
 ## 新典界面图集
 
@@ -51,6 +51,6 @@ python3 tools/subset_ui_font.py /path/to/NotoSerifCJKsc-Bold.otf src assets/runt
 
 生成器同时保存 `ui_charset.txt`；运行时按该清单加载字形，避免只加载默认拉丁字符。
 
-加载页补入的“女、祈、祷”使用 Google Fonts 提供的同源 [Noto Serif SC](https://fonts.google.com/noto/specimen/Noto+Serif+SC) 600 字重字形，按现有 1000 units/em 转入子集字体；原有 UI 字形和度量保持不变，沿用同一 SIL OFL 许可。后续使用完整 Noto Serif CJK SC 原字体运行上述生成器，也会包含这三个字。
+两种字重现均以完整的 Noto Serif CJK SC 原字体重新裁剪，复用同一字符表，覆盖加载页“女、祈、祷”和新增魔理沙对白所需汉字；保留现有独立家族名及 SIL OFL 许可。
 
 全窗口 HUD 的关卡题签另以同一官方字形来源补齐“幻、卷”；其他现有字形保持不变。重建时仍可使用上述完整原字体与生成器。

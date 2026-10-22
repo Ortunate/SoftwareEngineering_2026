@@ -69,8 +69,6 @@ void Game::UpdateStartSetup() {
         }
     }
     if(!confirm)return;
-    // 魔理沙候选可完整浏览两种御札和后续页面，但实战尚未接通，不能悄悄启动灵梦的机体。
-    if(setupStep_==StartSetupStep::Ready && selectedCharacter_!=0) {assets_.PlaySoundEffect("menu_cancel");return;}
     menuMotion_.Confirm(); assets_.PlaySoundEffect("menu_confirm");
     // 点击先选择再推进当前页；每帧只处理一个步骤，持续按住左键或确认键不会穿过最终确认页。
     switch(setupStep_) {

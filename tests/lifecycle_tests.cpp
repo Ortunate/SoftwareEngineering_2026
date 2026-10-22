@@ -27,7 +27,7 @@ struct GameLifecycleProbe {
         assert(common.uiFont.texture.id != common.hudFont.texture.id);
         for (const Font font : {common.uiFont, common.hudFont}) {
             assert(font.texture.id != GetFontDefault().texture.id);
-            for (int codepoint : std::array<int, 8>{'0', '9', 'Z', 0x4e2d, 0x300c, 0x2605, 0x5e7b, 0x5377})
+            for (int codepoint : std::array<int, 10>{'0', '9', 'Z', 0x4e2d, 0x300c, 0x2605, 0x5e7b, 0x5377,0x5723,0x9489})
                 assert(font.glyphs[GetGlyphIndex(font, codepoint)].value == codepoint);
             const float zeroWidth = ui::MeasureText(font, "000000000", 38).x;
             assert(std::abs(zeroWidth - ui::MeasureText(font, "111111111", 38).x) < 0.001F);
@@ -632,10 +632,149 @@ struct GameLifecycleProbe {
         game.StartPreview();
     }
 
+    /// @brief 验证魔理沙独立图集、两种副机状态、真实导弹/激光像素及持续激光穿透与帧率无关伤害。
+    static void TestMarisa(Game& game, const std::string& prefix) {
+        TestUiFont(game);
+        const int previousCharacter=game.selectedCharacter_,previousShot=game.selectedShot_;
+        game.selectedCharacter_=1;game.selectedShot_=0;game.StartPreview();
+        game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();game.drops_.Clear();
+        const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+        for(auto shot:{ShotType::MagicMissile,ShotType::IllusionLaser})for(bool focus:{false,true}) {
+            game.player_.Reset();game.player_.ConfigureRun(3,3,false,shot);game.player_.AdjustPower(128);
+            game.bullets_.Reset();game.playerOptionAnimations_={};
+            const auto visuals=game.stageContent_->PlayerVisuals(shot);
+            game.player_.Update(0,{.focus=focus,.fire=true},game.bullets_,visuals,true);
+            for(int frame=0;frame<20;++frame) {
+                game.player_.Update(1.0F/60,{.focus=focus,.fire=true},game.bullets_,visuals,true);
+                game.bullets_.Update(1.0F/60);
+            }
+            game.player_.SyncCamera(game.camera_);game.UpdateBattleAnimations();
+            for(int side=0;side<2;++side) {
+                const auto& cursor=game.playerOptionAnimations_[side];
+                assert(cursor.selection.atlas==battle::Atlas::Marisa && cursor.selection.script==128+side);
+                assert(cursor.player.Sample().sprite==128 && cursor.player.Sample().rotation.z>0);
+                assert(cursor.player.Source()!=game.assets_.GetVisual(stage1::kPlayerOptionLeft).archive.get());
+            }
+            const auto positions=game.player_.OptionPositions();
+            const float separation=BulletSystem::Length({positions[1].x-positions[0].x,positions[1].y-positions[0].y,positions[1].z-positions[0].z});
+            assert(std::abs(separation-(focus?0.52F:1.56F))<0.0001F);
+            int secondary=0;
+            game.bullets_.Pool().ForEachActive([&](const Bullet& bullet) {
+                assert(bullet.animation.selection.atlas==battle::Atlas::Marisa);
+                if(bullet.playerShotKind==PlayerShotKind::Missile || bullet.playerShotKind==PlayerShotKind::Laser) {
+                    ++secondary;assert(bullet.animation.player.Sample().visible && bullet.animation.player.Sample().color.a>0);
+                }
+            });
+            assert(secondary>0);
+            BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);
+            game.DrawWorld();game.DrawHud();EndTextureMode();EndDrawing();
+            if(!prefix.empty()) {
+                Image screenshot=LoadImageFromTexture(target.texture);ImageFlipVertical(&screenshot);
+                const auto path=prefix+(shot==ShotType::MagicMissile?"-missile":"-laser")+(focus?"-focus.png":"-normal.png");
+                assert(ExportImage(screenshot,path.c_str()));UnloadImage(screenshot);
+            }
+            // 隔离主弹与副机背景，以像素差验证副弹本身可见；不能让主弹替不可见激光满足截图检查。
+            game.bullets_.Pool().ForEachActive([](Bullet& bullet){if(bullet.playerShotKind==PlayerShotKind::Projectile)bullet.active=false;});
+            const auto renderSecondary=[&] {
+                BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);game.DrawWorld();EndTextureMode();EndDrawing();
+                Image result=LoadImageFromTexture(target.texture);ImageFlipVertical(&result);return result;
+            };
+            Image secondaryImage=renderSecondary();
+            std::vector<Bullet*> sideBullets;
+            game.bullets_.Pool().ForEachActive([&](Bullet& bullet){sideBullets.push_back(&bullet);bullet.active=false;});
+            Image background=renderSecondary();
+            for(auto* bullet:sideBullets)bullet->active=true;
+            int ink=0;
+            for(int y=0;y<secondaryImage.height;++y)for(int x=0;x<secondaryImage.width;++x) {
+                const auto a=GetImageColor(secondaryImage,x,y),b=GetImageColor(background,x,y);
+                if(std::abs(int(a.r)-b.r)+std::abs(int(a.g)-b.g)+std::abs(int(a.b)-b.b)>5)++ink;
+            }
+            if(!prefix.empty()) {
+                const auto path=prefix+(shot==ShotType::MagicMissile?"-missile":"-laser")+(focus?"-focus-secondary.png":"-normal-secondary.png");
+                assert(ExportImage(secondaryImage,path.c_str()));
+            }
+            UnloadImage(secondaryImage);UnloadImage(background);
+            std::cout<<"Marisa "<<(shot==ShotType::MagicMissile?"missile":"laser")<<" focus "<<focus<<": "<<ink<<" secondary pixels\n";
+            assert(ink>100);
+            if(shot==ShotType::MagicMissile) {
+                bool impact=false;
+                game.bullets_.Pool().ForEachActive([&](Bullet& bullet){
+                    if(!impact && bullet.playerShotKind==PlayerShotKind::Missile) {
+                        game.bullets_.ExplodePlayerMissile(bullet);impact=true;
+                    }
+                });
+                assert(impact);game.UpdateBattleAnimations();
+                game.bullets_.Pool().ForEachActive([](const Bullet& bullet){
+                    if(bullet.playerShotKind==PlayerShotKind::Explosion)
+                        assert(bullet.animation.selection.atlas==battle::Atlas::Marisa && bullet.animation.player.Sample().additive);
+                });
+            } else {
+                // 一次跨过淡出边界，原生中断必须只执行一次，年龄相同的重复同步不能重启动画。
+                game.bullets_.Pool().ForEachActive([](Bullet& bullet){
+                    if(bullet.playerShotKind==PlayerShotKind::Laser)bullet.age=bullet.laserFadeAt+15.0F/60;
+                });
+                game.UpdateBattleAnimations();game.UpdateBattleAnimations();
+                game.bullets_.Pool().ForEachActive([](const Bullet& bullet){
+                    if(bullet.playerShotKind==PlayerShotKind::Laser) {
+                        assert(bullet.laserFadeStarted && bullet.animation.player.Sample().color.a>0 && bullet.animation.player.Sample().color.a<160);
+                    }
+                });
+            }
+        }
+
+        for(int fps:{30,60,144}) {
+            game.bullets_.Reset();game.enemies_.Clear();
+            game.player_.Reset();game.player_.ConfigureRun(3,3,false,ShotType::IllusionLaser);
+            game.player_.Update(0,{.fire=true},game.bullets_,game.stageContent_->PlayerVisuals(game.player_.Shot()),true);
+            Vector3 origin{},direction{};
+            game.bullets_.Pool().ForEachActive([&](Bullet& bullet){
+                if(bullet.playerShotKind!=PlayerShotKind::Laser)bullet.active=false;
+                else if(bullet.playerSlot==0){origin=bullet.position;direction=bullet.beamDirection;}
+            });
+            for(float depth:{4.0F,7.0F}) {
+                auto enemy=std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{origin.x+direction.x*depth,origin.y+direction.y*depth,origin.z+direction.z*depth}});
+                enemy->health=enemy->maxHealth=100;enemy->hitRadius=0.1F;game.enemies_.Add(std::move(enemy));
+            }
+            game.boss_=game.stageContent_->CreateBoss(true);game.boss_->hitRadius=0.1F;
+            game.boss_->position={origin.x+direction.x*7,origin.y+direction.y*7,origin.z+direction.z*7};
+            game.score_=0;
+            for(int frame=0;frame<fps;++frame) {game.bullets_.Update(1.0F/fps);game.ResolveCollisions();game.ResolveCollisions();}
+            int enemies=0;
+            game.enemies_.ForEachActive([&](const Enemy& enemy){++enemies;assert(std::abs(enemy.health-85)<0.002F);});
+            assert(enemies==2); // 一束激光同时穿透两个目标，伤害不随 FPS 或重复结算次数增加。
+            if(game.score_!=600)std::cerr<<"Marisa laser score at "<<fps<<" FPS: "<<game.score_<<"\n";
+            assert(game.score_==600); // 同一束持续命中的原始 60 个逻辑帧，不能按显示帧重复加分。
+            game.boss_.reset();
+            game.bullets_.Reset();game.enemies_.Clear();
+            auto enemy=std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{0,0,0}});
+            enemy->health=enemy->maxHealth=100;enemy->hitRadius=0.1F;game.enemies_.Add(std::move(enemy));
+            auto* burst=game.bullets_.Spawn(BulletOwner::Player,{}, {1,0,0},0.5F,WHITE,stage1::kMarisaExplosion);
+            assert(burst);burst->playerShotKind=PlayerShotKind::Explosion;burst->damage=0;burst->damagePerSecond=20;
+            for(int frame=0;frame<fps/6;++frame){game.bullets_.Update(1.0F/fps);game.ResolveCollisions();}
+            assert(std::abs(burst->velocity.x-1.0F/1024)<0.00001F); // 1/6 秒恰为十个原始减速帧。
+            game.enemies_.ForEachActive([](const Enemy& enemy){assert(std::abs(enemy.health-(100-20.0F/6))<0.002F);});
+        }
+
+        // 以实际遭遇入口记录魔/恋组合，不能误写到灵梦的两栏。
+        game.previewMode_=false;game.spellPractice_=false;game.practiceMode_=true;
+        for(int combination:{2,3}) {
+            game.FinishSpellRecord(false);game.selectedCharacter_=1;game.selectedShot_=combination%2;
+            game.player_.ConfigureRun(3,3,false,static_cast<ShotType>(combination));
+            const int before=game.spellRecords_.Get(combination,3).mainAttempts;
+            game.BeginStageBoss(true,3);game.AdvanceBossPhase();
+            assert(game.player_.IsMarisa() && game.spellRecords_.Get(combination,3).mainAttempts==before+1);
+            game.FinishSpellRecord(false);
+        }
+        UnloadRenderTexture(target);
+        game.selectedCharacter_=previousCharacter;game.selectedShot_=previousShot;game.StartPreview();
+        std::cout<<"Marisa native atlases, Focus, missiles, lasers, piercing damage and combination records passed\n";
+    }
+
     static void Run(Game& game, const std::string& prefix) {
         TestUiFont(game);
         TestPlayerOptions(game,prefix);
         TestPlayerShots(game,prefix);
+        TestMarisa(game,prefix);
         TestBossTransitions(game,prefix);
         TestBossHud(game,prefix);
         TestFullWindow(game,prefix);
@@ -807,7 +946,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only。
 /// 不初始化音频，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -826,6 +965,8 @@ int main(int argc, char** argv) {
         if(argc>=3 && std::string(argv[2])=="--viewport-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--marisa-only") {
+            koumakyou::GameLifecycleProbe::TestMarisa(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--player-options-only") {
             koumakyou::GameLifecycleProbe::TestPlayerOptions(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--player-shots-only") {

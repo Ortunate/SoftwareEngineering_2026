@@ -101,6 +101,12 @@ void PlayerBombEffect::ReportHit(int region,int damage) {
     if(Active() && shot_==ShotType::HomingAmulet && region>0 && region<8 && orbBurst_[region]<0)
         orbDamage_[region]=std::min(100,orbDamage_[region]+std::clamp(damage,0,100));
 }
+std::array<int,8> PlayerBombEffect::ContactDamage(Vector3 center,float radius) const {
+    std::array<int,8> channels{};
+    for(const auto& attack:Attacks())if(attack.volume.IntersectsSphere(center,radius))
+        channels[attack.region]=std::max(channels[attack.region],attack.damage);
+    return channels;
+}
 void PlayerBombEffect::Tick(const Camera3D& camera,std::span<const Vector3> targets) {
     if(++frame_>=BombDefinition(shot_).durationFrames) { Clear();return; }
     if(shot_==ShotType::HomingAmulet) {

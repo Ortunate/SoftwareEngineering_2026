@@ -180,7 +180,7 @@ private:
     void ApplyBombEffect();
     /// @brief 在敌人和敌弹推进后、玩家碰撞前逐 60 Hz 帧推进 Bomb，所有命中均由真实空间实体决定。
     void UpdatePlayerBomb(float deltaTime);
-    /// @brief 结算当前 Bomb 逻辑帧；按 region 合并命中并反馈光球累计伤害，同一帧重复调用无效。
+    /// @brief 结算当前 Bomb 逻辑帧；只将真实接触交给伤害提供方，并反馈光球原始累计，同一帧重复调用无效。
     void ResolvePlayerBombFrame();
     /// @brief 玩家命中后更新场景反馈，并按剩余残机处理游戏失败。
     void HandlePlayerHit();

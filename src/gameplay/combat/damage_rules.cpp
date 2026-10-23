@@ -10,6 +10,8 @@ DamageResult ResolveDamage(const DamageContext& context,const DamageRuleProvider
     if(!valid(context.baseDamage) || !valid(context.contactSeconds))
         throw std::invalid_argument("Invalid damage context");
     if(!context.damageable)return {0,DamageCoverage::BaseOnly};
+    // Bomb 的全零通道表示本逻辑帧没有攻击接触；即使提供方返回固定伤害也不能制造全场扣血。
+    if(context.source==DamageSource::Bomb && context.baseDamage==0)return {0,DamageCoverage::BaseOnly};
     if(provider)if(auto result=provider->Resolve(context)) {
         if(!valid(result->amount))throw std::invalid_argument("Invalid damage rule result");
         return *result;

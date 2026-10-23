@@ -59,7 +59,12 @@ public:
     [[nodiscard]] int Frame() const { return frame_; }
     [[nodiscard]] std::span<const PlayerBombSprite> Sprites() const { return {sprites_.data(),spriteCount_}; }
     [[nodiscard]] std::span<const PlayerBombAttack> Attacks() const { return {attacks_.data(),attackCount_}; }
-    /// @brief 当前帧清弹实体；封魔阵蓄力后偶数帧仍清弹，光球爆破只在触发帧具有攻击实体。
+    /// @brief 查询当前逻辑帧与目标球接触的八个通道原始 HP，同通道实体取最大值，未接触返回全零。
+    /// center/radius 为世界坐标/非负世界半径；不计纹理柔边、拖影或清弹容差，不反馈光球累计。
+    /// 调用方仅对可受伤且存活目标求和结算，并在本帧 resolve 中逐通道 ReportHit 一次。
+    [[nodiscard]] std::array<int,8> ContactDamage(Vector3 center,float radius) const;
+    /// @brief 当前帧清弹实体；梦札蓄力后每帧清弹，魔/恋札分别跳过 3/4 的倍数帧。
+    /// 封印初始保护只在 0 帧，光球爆破只在触发帧清弹；视觉残留不延长实体寿命。
     [[nodiscard]] std::span<const BombVolume> CancelVolumes() const { return {cancelVolumes_.data(),cancelCount_}; }
     /// @brief 最近一次 Start/Update 的音效编号，借用至下次更新；调用方同帧合并相同编号。
     [[nodiscard]] std::span<const int> SoundEvents() const { return {sounds_.data(),soundCount_}; }

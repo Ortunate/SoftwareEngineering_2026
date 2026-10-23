@@ -143,6 +143,20 @@ void TestDamageExtension() {
         }
     } rules;
     assert(ResolveDamage(context,&rules).coverage==DamageCoverage::NativeRule);
+    // 提供方可以替换接触后的 HP，但不能在 Bomb 无接触或目标无敌时制造命中。
+    struct BombRules final:DamageRuleProvider {
+        mutable int calls=0;
+        std::optional<DamageResult> Resolve(const DamageContext&) const override {
+            ++calls;return DamageResult{9,DamageCoverage::Fallback};
+        }
+    } bombRules;
+    auto bombContext=context;bombContext.baseDamage=0;
+    assert(ResolveDamage(bombContext,&bombRules).amount==0 && bombRules.calls==0);
+    bombContext.baseDamage=200;bombContext.damageable=false;
+    assert(ResolveDamage(bombContext,&bombRules).amount==0 && bombRules.calls==0);
+    bombContext.damageable=true;
+    const auto overridden=ResolveDamage(bombContext,&bombRules);
+    assert(overridden.amount==9 && overridden.coverage==DamageCoverage::Fallback && bombRules.calls==1);
     context.source=DamageSource::Laser;
     assert(ResolveDamage(context,&rules).amount==12 && ResolveDamage(context,&rules).coverage==DamageCoverage::NativeRule);
     context.damageable=false;

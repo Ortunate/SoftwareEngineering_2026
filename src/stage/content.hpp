@@ -72,7 +72,8 @@ struct StageDisplayInfo {
 class StageContent {
 public:
     virtual ~StageContent() = default;
-    /// @brief 可选最终伤害规则；默认空指针使用明确标记的基准/回退，供后续原生规则接入。
+    /// @brief 可选最终 HP 规则，不定义接触几何；无敌目标及 Bomb 零接触不进入提供方。
+    /// 默认空指针使用明确标记的基准/回退及已核对的 Bomb 规则。
     [[nodiscard]] virtual const DamageRuleProvider* DamageRules() const { return nullptr; }
     /// @brief 关联原始数值目录；默认空表示尚未绑定。DataOnly 记录仍需实现演员和时间轴才可游玩。
     [[nodiscard]] virtual const native_combat::StageData* CombatData() const { return nullptr; }

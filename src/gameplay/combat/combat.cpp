@@ -199,11 +199,11 @@ void Game::ResolvePlayerBombFrame() {
         }
     });
     const auto damage=[this](Vector3 position,float radius,DamageTarget target,const void* identity,bool spell) {
-        std::array<int,8> channels{};
-        for(const auto& attack:playerBomb_.Attacks())
-            if(attack.volume.IntersectsSphere(position,radius))channels[attack.region]=std::max(channels[attack.region],attack.damage);
+        const auto channels=playerBomb_.ContactDamage(position,radius);
         int total=0;
         for(int region=0;region<8;++region) { total+=channels[region];playerBomb_.ReportHit(region,channels[region]); }
+        // 提供方只能调整真实接触后的 HP，不能在蓄力/跳帧或范围外凭空生成命中。
+        if(total==0)return 0.0F;
         // 原作积分在 70 上限之后、符卡减伤之前；不能让四层恋札或 Z 扩展把单帧伤害重复乘倍。
         score_+=(std::min(total,70)/5)*10;
         return ResolveDamage({DamageSource::Bomb,target,playerBomb_.Shot(),static_cast<float>(total),true,spell,

@@ -172,10 +172,9 @@ int TotalDamage(ShotType shot,int fps,std::vector<int>& bursts) {
     bomb.Update(0,kCamera,{},[&](PlayerBombEffect&) { assert(false); });
     for(int step=0;step<fps*6;++step)bomb.Update(1.0F/fps,kCamera,{},[&](PlayerBombEffect& current) {
         ++callbacks;
-        std::array<int,8> channels{};
+        const auto channels=current.ContactDamage({},1000);
         for(const auto& attack:current.Attacks()) {
             assert(attack.volume.IntersectsSphere({},1000));
-            channels[attack.region]=std::max(channels[attack.region],attack.damage);
             if(attack.damage==200)bursts.push_back(current.Frame());
         }
         int raw=0;
@@ -221,6 +220,26 @@ void TestAttackCadenceAndCoverage() {
     auto turned=kCamera;turned.target={10,0,-6.5F};int extra=0;
     spark.Update(0,turned,{},[&](PlayerBombEffect&) {++extra;});assert(extra==0);
     assert(spark.Attacks().size()==1 && spark.Attacks()[0].volume.IntersectsSphere({10,0,-6.5F},0.5F));
+}
+
+void TestContactBoundaries() {
+    const auto noDamage=[](const auto& channels) {return std::all_of(channels.begin(),channels.end(),[](int hp){return hp==0;});};
+    PlayerBombEffect bomb;bomb.Start(ShotType::HomingAmulet,kCamera);
+    assert(noDamage(bomb.ContactDamage(kCamera.position,1000)) && bomb.CancelVolumes().size()==1);
+    bomb.Update(80.0F/60,kCamera);
+    const auto sphere=bomb.Attacks()[0].volume;
+    assert(bomb.ContactDamage(sphere.origin,0)[1]==8);
+    // 进入清弹容差仍没有敌机接触；光晕距离与追踪目标距离均不能反馈累计爆破。
+    const auto marginPoint=game_math::Add(sphere.origin,{sphere.radius+kBombCancelMargin/2,0,0});
+    assert(noDamage(bomb.ContactDamage(marginPoint,0.01F)));
+    assert(bomb.CancelVolumes()[0].IntersectsSphere(marginPoint,0.01F+kBombCancelMargin));
+    bomb.Update(13.0F/60,kCamera,std::array<Vector3,1>{sphere.origin});
+    assert(bomb.Frame()==93 && bomb.Attacks().size()==1 && bomb.Attacks()[0].damage==8);
+    bomb.Update(177.0F/60,kCamera);
+    for(const auto& attack:bomb.Attacks())assert(attack.damage==200);
+    bomb.Update(1.0F/60,kCamera);
+    assert(bomb.Attacks().empty() && bomb.CancelVolumes().empty()); // 第 271 帧仍有演出，不能继续扣血或清弹。
+    bomb.Clear();assert(noDamage(bomb.ContactDamage({},1000)));
 }
 
 void TestSealOutwardAndSparkField() {
@@ -290,5 +309,5 @@ void TestStarVolumeCoverage() {
 /// @brief 无图形上下文运行四 Bomb 的素材、时序和生命周期回归，断言失败即终止。
 void RunPlayerBombTests() {
     TestNativeBombs();TestSealScheduleAndClear();TestBombConsumption();
-    TestSpatialVolumes();TestAttackCadenceAndCoverage();TestSealOutwardAndSparkField();TestStarVolumeCoverage();
+    TestSpatialVolumes();TestAttackCadenceAndCoverage();TestContactBoundaries();TestSealOutwardAndSparkField();TestStarVolumeCoverage();
 }

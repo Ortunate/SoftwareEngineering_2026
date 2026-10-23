@@ -479,6 +479,30 @@ struct GameLifecycleProbe {
         spell->damageable=true;game.spellStartBombs_=game.bombCount_; // 模拟新符卡开始，旧 Bomb 不得带入伤害。
         game.UpdatePlayerBomb(1.0F/60);assert(spell->health==996);
         game.ApplyBombEffect();game.UpdatePlayerBomb(1.0F/60);assert(spell->health==992);
+
+        // 每帧重新生成敌弹及两端在外的横穿激光，验证后续来弹也会清除；不能只在释放时清一次。
+        // 使用独立帧条件核对数量，跳过伤害帧时不得沿用上一帧残留实体。
+        for(int type=0;type<4;++type) {
+            const auto shot=static_cast<ShotType>(type);reset(shot);game.ApplyBombEffect();
+            for(int frame=0;frame<BombDefinition(shot).durationFrames;++frame) {
+                auto next=game.playerBomb_;
+                if(frame>0)next.Update(1.0F/60,game.camera_);
+                const std::size_t expected=type==0 ? (frame==0 ? 1 : frame<80 || frame>270 ? 0 : std::min(7,(frame-80)/16+1)) :
+                    type==1 ? (frame>60 ? 6 : 0) : type==2 ? (frame>0 && frame%3!=0 ? 64 : 0) :
+                    (frame>0 && frame%4!=0 ? 1 : 0);
+                assert(next.CancelVolumes().size()==expected);
+                const auto center=expected ? next.CancelVolumes()[0].origin : game.camera_.position;
+                game.bullets_.Reset();
+                auto* incoming=game.bullets_.Spawn(BulletOwner::Enemy,center,{},0.1F,RED,stage1::kBlueBullet);
+                auto* playerShot=game.bullets_.Spawn(BulletOwner::Player,center,{},0.1F,WHITE,stage1::kPlayerGoldCard);
+                auto* crossing=game.bullets_.SpawnBeam({center.x-50,center.y,center.z},{1,0,0},100,0.1F,0,5,RED);
+                assert(incoming && playerShot && crossing);
+                game.UpdatePlayerBomb(frame==0 ? 0 : 1.0F/60);
+                assert(incoming->active==(expected==0) && crossing->active==(expected==0) && playerShot->active);
+            }
+            game.UpdatePlayerBomb(1.0F/60);
+            assert(!game.playerBomb_.Active() && game.playerBomb_.CancelVolumes().empty());
+        }
         reset(ShotType::HomingAmulet);
         std::cout<<"Bomb spatial damage, channel union, cancellation, defeat drops, homing burst, spell protection and pause passed\n";
     }

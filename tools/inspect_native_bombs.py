@@ -23,6 +23,14 @@ def inspect(exe, assets):
         0xecc7: 'c746f400000043', 0xecb7: '8d04523bc87448', 0xecff: '41c70608000000',
         0xf22d: '2503000080', 0xf293: 'c787000300000c000000', 0xf1d9: 'c787147700009a99993e',
         0x393dd: '83f846', 0x39446: '4183f803', 0x3944c: 'b856555555', 0x6b561: 'b856555555',
+        # 帧首分别清空攻击宽度和清弹宽度；回调未写入的通道不会沿用上一帧。
+        0x69f5b: '89b180010000', 0x6a01b: '89b154770000',
+        # 爆破状态跳过几何写入；梦札仅跳过伤害写入，魔/恋札同时跳过伤害及清弹写入。
+        0xdd70: '0f8537020000', 0xe5cf: '747b', 0xecbc: '7448', 0xf23d: '745e',
+        # 同一次接触先累加原始 HP，再反馈对应通道；不是按追踪/视觉距离引爆。
+        0x6b7bb: '4403f0', 0x6b7be: '0107',
+        # 清弹查询遍历 16 个矩形；敌弹传入的矩形边界额外扩展 20 像素。
+        0x6c064: '83f810', 0x11849: 'f30f5cd1', 0x352bc8: '0000a041',
     }
     for rva, expected_hex in witnesses.items():
         expected = bytes.fromhex(expected_hex)
@@ -32,13 +40,16 @@ def inspect(exe, assets):
     attacks = (
         {'damage': 8, 'size_px': [48, 48], 'burst_damage': 200, 'burst_size_px': [256, 256],
          'burst_after_raw_contacts': 100, 'burst_force_frame': 270, 'burst_damage_frames': 1,
+         'cancel': 'initial frame 0; flying orb every frame; burst trigger frame only',
          'initial_cancel_size_px': [256, 256], 'spawn_frames': list(range(80, 177, 16))},
         {'damage': 8, 'damage_frame_predicate': 'frame > 0 and frame % 2 != 0',
          'size_px': [[62, 448], [384, 62]], 'channels': 4, 'cancel_each_frame': True},
         {'damage': 8, 'damage_frame_predicate': 'frame > 0 and frame % 3 != 0',
-         'size_px': [128, 128], 'channels': 8, 'radial_speed_px_per_frame': 2},
+         'size_px': [128, 128], 'channels': 8, 'radial_speed_px_per_frame': 2,
+         'cancel_frame_predicate': 'frame > 0 and frame % 3 != 0'},
         {'damage': 12, 'damage_frame_predicate': 'frame > 0 and frame % 4 != 0',
-         'channels': 1, 'size_px': [384, 'player_y'], 'movement_multiplier': 0.3},
+         'channels': 1, 'size_px': [384, 'player_y'], 'movement_multiplier': 0.3,
+         'cancel_frame_predicate': 'frame > 0 and frame % 4 != 0'},
     )
     table = image.offset(image.base + 0x426eb0, 64)
     if table is None:
@@ -75,6 +86,10 @@ def inspect(exe, assets):
                         'attack': attacks[identity]})
     return {'exe_sha256': digest, 'table_rva': '0x426eb0', 'frames_per_second': 60,
             'damage_frame_cap': 70, 'spell_bomb_divisor': 3, 'normal_shot_divisor_during_bomb': 3,
+            'cancel_margin_px': 20,
+            'runtime_boundary': {'geometry': '二维矩形由项目适配为三维体积，不是原生三维判定',
+                                 'provider': '仅替换有效接触后的 HP，不产生接触或清弹',
+                                 'unimplemented': ['普通弹与 Bomb 联合上限', '普通弹完整 Boss 结算']},
             'instruction_witnesses': {hex(rva): value for rva, value in witnesses.items()}, 'bombs': records}
 
 

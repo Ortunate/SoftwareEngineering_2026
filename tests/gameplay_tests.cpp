@@ -18,6 +18,7 @@
 #include <cmath>
 #include <filesystem>
 #include <memory>
+#include <limits>
 #include <string_view>
 #include <numbers>
 #include <stdexcept>
@@ -207,12 +208,55 @@ void TestBeamContacts() {
     }
 }
 
+/// @brief 本体接触使用三维命中球和统一保护期；不依赖敌方是否免伤，也不触发擦弹或自行扣残机。
+void TestEnemyBodyContacts() {
+    using namespace koumakyou;
+    Player player;player.Reset();const auto origin=player.Position();
+    assert(!player.ContactEnemyBody(origin,0.5F)); // 开局保护覆盖本体。
+    player.SetInvulnerability(0);
+    for(const Vector3 offset:{Vector3{0.679F,0,0},{0,-0.679F,0},{0,0,0.679F},{0,0,-0.679F}})
+        assert(player.ContactEnemyBody({origin.x+offset.x,origin.y+offset.y,origin.z+offset.z},0.5F));
+    assert(!player.ContactEnemyBody({origin.x+0.681F,origin.y,origin.z},0.5F));
+    assert(!player.ContactEnemyBody({origin.x+0.45F,origin.y+0.45F,origin.z+0.45F},0.5F));
+    for(float invalid:{0.0F,-1.0F,std::numeric_limits<float>::infinity(),std::numeric_limits<float>::quiet_NaN()})
+        assert(!player.ContactEnemyBody(origin,invalid));
+    assert(player.ContactEnemyBody(origin,0.5F) && player.RemainingLives()==4 && player.Bombs()==3);
+    auto bullets=std::make_unique<BulletSystem>();
+    for(const auto shot:{ShotType::HomingAmulet,ShotType::Needle,ShotType::MagicMissile,ShotType::IllusionLaser}) {
+        player.Reset();player.ConfigureRun(3,3,false,shot);player.SetInvulnerability(0);
+        assert(player.Update(0,{.bomb=true},*bullets,PlayerShotVisuals{},false));
+        assert(!player.ContactEnemyBody(player.Position(),0.5F));
+    }
+    player.SetInvulnerability(0);assert(player.TakeHit());
+    assert(!player.ContactEnemyBody(player.Position(),0.5F));
+    player.Update(2.81F,{},*bullets,PlayerShotVisuals{},false);
+    assert(player.ContactEnemyBody(player.Position(),0.5F));
+
+    struct ImmuneEnemy final:Enemy {
+        ImmuneEnemy():Enemy(kInvalidVisualId,{},{}){}
+        bool CanTakeDamage() const override {return false;}
+        void Move(float) override {}
+        void UpdateSkills(float,Vector3,BulletSystem&) override {}
+    } enemy;
+    assert(!enemy.CanTakeDamage() && enemy.CanContactPlayer());
+    enemy.presentation.PrepareExit(0);assert(enemy.CanContactPlayer()); // 视觉淡出不能自行清除战斗本体。
+    enemy.health=0;assert(!enemy.CanContactPlayer());
+    enemy.health=10;enemy.active=false;assert(!enemy.CanContactPlayer());
+
+    stage1::RumiaBoss boss;assert(!boss.CanContactPlayer());
+    boss.StartMidboss();assert(!boss.CanTakeDamage() && boss.CanContactPlayer());
+    assert(boss.AdvancePhase() && boss.active && !boss.CanContactPlayer()); // 超时退场仍有演员与占位生命。
+    boss.StartFinalBoss();assert(boss.CanContactPlayer());
+    boss.health=0;assert(!boss.CanContactPlayer());
+}
+
 }  // namespace
 
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
     TestBossHealthGroups();
     TestBeamContacts();
+    TestEnemyBodyContacts();
     using koumakyou::BulletOwner;
     using koumakyou::BulletSystem;
     const Vector3 forward = BulletSystem::DirectionFromYawPitch(0.0F, 0.0F);

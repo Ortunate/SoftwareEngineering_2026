@@ -185,6 +185,8 @@ direction = (r cos(phi), y, r sin(phi))
 
 玩家只有一个判定球，因此敌弹检测为 O(B)。玩家弹和敌人数量较少，首版采用 O(Bp * E) 检测。
 
+本体接触由 `Player::ContactEnemyBody` 比较玩家半径 0.18 与敌方 `hitRadius`，查询不改变敌方状态或自行扣残机。`Enemy::CanContactPlayer` / `Boss::CanContactPlayer` 排除失活和零生命对象，与 `CanTakeDamage` 独立；露米娅覆盖该接口关闭退场脚本期间的本体伤害。视觉入退场不修改判定球，对话阶段不检查本体。`ResolveCollisions` 将敌弹、普通敌人和 Boss 本体的接触合并后调用一次 `HandlePlayerHit`，沿用复活/Bomb/Debug 无敌、清弹、Miss 计数及资源扣除；本体不产生擦弹、撞击伤害或击破掉落。退场效果快照不参与查询。
+
 ## 6 游戏流程
 
 ```text

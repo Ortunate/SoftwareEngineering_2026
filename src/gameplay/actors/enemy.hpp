@@ -32,6 +32,9 @@ public:
     virtual void SetChallengeRank(int) {}
     /// @brief 当前是否允许扣血；原生脚本演员须反映 105 号可受伤开关。
     [[nodiscard]] virtual bool CanTakeDamage() const { return true; }
+    /// @brief 活动且存活的本体可接触玩家；与 CanTakeDamage 独立，敌方免伤不等于本体无害。
+    /// 只做视觉淡入/淡出的演员仍按真实生命周期判定；需要无害准备/退场的子类可覆盖此接口。
+    [[nodiscard]] virtual bool CanContactPlayer() const { return active && health>0; }
     /// @brief 借用本帧脚本产生的音效编号；下次更新失效，普通演员返回空表。
     [[nodiscard]] virtual std::span<const int> SoundEvents() const { return {}; }
     /// @brief 原作掉落编号；-1 为轮换掉落，0 为小 P 点，-3 表示使用 DropDistribution。
@@ -44,7 +47,7 @@ public:
     float age = 0.0F;
     float health = 10.0F;
     float maxHealth = 10.0F;
-    float hitRadius = 0.55F;
+    float hitRadius = 0.55F; // 世界半径，自机弹与本体接触共用，不随视觉入退场缩放。
     int scoreValue = 500;
     /// @brief 独立视觉状态；不决定活动标记、判定或技能时钟。
     ActorPresentation presentation;

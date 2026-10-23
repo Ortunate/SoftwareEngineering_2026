@@ -1,4 +1,4 @@
-// 本文件负责在隐藏图形窗口中验证自机射击可见性、Game 战斗演出、结算及资源生命周期。
+// 本文件负责在隐藏图形窗口中验证自机射击、本体碰撞、Game 战斗演出、结算及资源生命周期。
 
 #include "app/game.hpp"
 #include "rlgl.h"
@@ -64,6 +64,61 @@ struct GameLifecycleProbe {
             UnloadImage(image);
         }
         UnloadRenderTexture(target);
+    }
+
+    /// @brief 经过正式碰撞总控，检查本体/弹幕同帧只扣一次、无敌和对话门禁、敌方不受碰撞伤害。
+    static void TestActorContacts(Game& game) {
+        struct Target final:Enemy {
+            explicit Target(Vector3 p):Enemy(stage1::kFairy,p,{}){health=maxHealth=100;hitRadius=0.5F;}
+            bool CanTakeDamage() const override {return false;}
+            void Move(float) override {}
+            void UpdateSkills(float,Vector3,BulletSystem&) override {}
+        };
+        struct TargetBoss final:Boss {
+            explicit TargetBoss(Vector3 p){active=true;position=p;health=maxHealth=100;visual=stage1::kRumia;}
+            bool Update(float,Vector3,BulletSystem&) override {return false;}
+            bool AdvancePhase() override {return false;}
+            const char* SpellName() const override {return nullptr;}
+            bool IsMidboss() const override {return false;}
+            const char* DisplayName() const override {return "Body contact target";}
+            bool CanTakeDamage() const override {return false;}
+        };
+        game.StartPreview();game.stage_=StageDirector{};
+        const auto reset=[&] {
+            game.ClearPlayerBomb();game.enemies_.Clear();game.boss_.reset();game.bullets_.Reset();
+            game.actorEffects_.Clear();game.drops_.Clear();game.dialogueActive_=false;game.state_=RunState::Playing;
+            game.player_.Reset();game.player_.ConfigureRun(3,3,false,ShotType::HomingAmulet);
+            game.player_.SetInvulnerability(0);game.player_.AdjustPower(72);game.player_.SyncCamera(game.camera_);
+            game.missCount_=game.graze_=0;game.score_=0;
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+            game.debugInvincible_=false;
+#endif
+        };
+        reset();const auto position=game.player_.Position();
+        assert(game.enemies_.Add(std::make_unique<Target>(position)));
+        assert(game.enemies_.Add(std::make_unique<Target>(position)));
+        game.boss_=std::make_unique<TargetBoss>(position);
+        auto* bullet=game.bullets_.Spawn(BulletOwner::Enemy,position,{},0.1F,RED,stage1::kBlueBullet);assert(bullet);
+        game.ResolveCollisions();
+        assert(game.missCount_==1 && game.player_.RemainingLives()==3 && game.player_.Power()==64);
+        assert(game.score_==0 && game.graze_==0 && PickupCount(game)==0 && game.actorEffects_.Pool().ActiveCount()==0);
+        game.enemies_.ForEachActive([](const Enemy& enemy){assert(enemy.health==100);});
+        assert(EnemyCount(game)==2 && game.boss_->health==100 && !bullet->active);
+        game.ResolveCollisions();assert(game.missCount_==1); // 重叠不绕过复活无敌。
+        game.player_.SetInvulnerability(0);game.ResolveCollisions();assert(game.missCount_==2);
+
+        reset();game.boss_=std::make_unique<TargetBoss>(position);game.ResolveCollisions();
+        assert(game.missCount_==1); // Boss 单独接触也必须生效。
+        reset();assert(game.enemies_.Add(std::make_unique<Target>(position)));
+        game.dialogueActive_=true;game.ResolveCollisions();assert(game.missCount_==0);
+        game.dialogueActive_=false;game.state_=RunState::Paused;game.ResolveCollisions();assert(game.missCount_==0);
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+        reset();assert(game.enemies_.Add(std::make_unique<Target>(position)));
+        game.debugInvincible_=true;game.ResolveCollisions();assert(game.missCount_==0 && game.player_.Power()==80);
+#endif
+        reset();game.BeginStageBoss(false,3);game.boss_->position=position;
+        assert(game.boss_->AdvancePhase());game.ResolveCollisions();assert(game.missCount_==0);
+        game.Reset();std::cout<<"Player/enemy/Boss body contacts and protection gates passed\n";
     }
 
     /// @brief 独立绘制世界，检查四边没有留黑，左右边缘随镜头变化，防止旧侧栏或裁切恢复。
@@ -1193,7 +1248,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --actor-contacts-only、--viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
 /// 仅 --bomb-audio-only 初始化音频且强制静音，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -1213,6 +1268,8 @@ int main(int argc, char** argv) {
         SetTargetFPS(0);
         if(audioTest) {
             koumakyou::GameLifecycleProbe::TestPlayerBombAudio(*game);
+        } else if(argc>=3 && std::string(argv[2])=="--actor-contacts-only") {
+            koumakyou::GameLifecycleProbe::TestActorContacts(*game);
         } else if(argc>=3 && std::string(argv[2])=="--viewport-only") {
             koumakyou::GameLifecycleProbe::TestUiFont(*game);
             koumakyou::GameLifecycleProbe::TestFullWindow(*game,prefix);

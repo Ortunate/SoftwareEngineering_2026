@@ -161,7 +161,7 @@ private:
     /// @brief 增减玩家 Power，首次升满时显示提示并将当前敌弹转成自动吸取的星点。
     /// @param delta Power 点数，可为负；下降后再次升满可重新触发。
     void AdjustPlayerPower(int delta);
-    /// @brief 处理玩家命中/擦弹及敌人、Boss 的受击判定。
+    /// @brief 合并敌弹与敌人/Boss 本体对玩家的同帧命中，再处理擦弹及敌方受伤；对话不判定本体接触。
     void ResolveCollisions();
     /// @brief 将关卡事件转换为出怪、对话或 Boss 战操作。
     /// @param event 已到触发时刻的关卡事件。

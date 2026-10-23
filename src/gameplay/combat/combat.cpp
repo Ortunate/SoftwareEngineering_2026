@@ -47,15 +47,11 @@ void Game::UpdateBoss(float deltaTime) {
 
 void Game::ResolveCollisions() {
     bool playerWasHit = false;
-    // 本帧可能同时接触多颗敌弹；先统一标记受击，再只扣一次残机。
+    // 敌弹、普通敌人和 Boss 本体共同标记受击，所有接触都采样后只结算一次，避免复活位置影响同帧结果。
     bullets_.Pool().ForEachActive([this, &playerWasHit](Bullet& bullet) {
         switch (player_.ContactEnemyBullet(bullet)) {
             case PlayerContact::Hit: {
-                bool canTakeDamage = true;
-#ifdef KOUMAKYOU_DEBUG_FEATURES
-                canTakeDamage = !debugInvincible_;
-#endif
-                if (canTakeDamage) playerWasHit = true;
+                playerWasHit = true;
                 break;
             }
             case PlayerContact::Graze:
@@ -68,6 +64,16 @@ void Game::ResolveCollisions() {
                 break;
         }
     });
+    if(state_==RunState::Playing && !dialogueActive_) {
+        // 对话人物及退场快照不在本体判定中；本体只让玩家受击，不给敌人扣血、生成掉落或产生擦弹。
+        enemies_.ForEachActive([&](const Enemy& enemy) {
+            if(enemy.CanContactPlayer() && player_.ContactEnemyBody(enemy.position,enemy.hitRadius))playerWasHit=true;
+        });
+        if(boss_ && boss_->CanContactPlayer() && player_.ContactEnemyBody(boss_->position,boss_->hitRadius))playerWasHit=true;
+    }
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+    if(debugInvincible_)playerWasHit=false;
+#endif
     if (playerWasHit) HandlePlayerHit();
     if (state_ != RunState::Playing) return;
 

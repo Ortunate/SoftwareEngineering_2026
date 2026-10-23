@@ -97,6 +97,9 @@ public:
     /// @param bullet 由弹幕池持有的敌弹，玩家只修改 active 或 grazed。
     /// @return 无接触、首次擦弹或可造成伤害的命中；无敌时命中返回 None。
     PlayerContact ContactEnemyBullet(Bullet& bullet) const;
+    /// @brief 查询玩家命中球与敌方本体球是否接触；position/radius 为世界坐标/世界半径，半径须正且有限。
+    /// 复活或 Bomb 无敌时、半径无效时返回 false；不修改敌人，不产生擦弹，受击结算由 Game 统一合并。
+    [[nodiscard]] bool ContactEnemyBody(Vector3 position,float radius) const;
     /// @brief 普通模式扣除一条残机，挑战模式保留残机；均扣 16 Power（最低 8）、补足 Bomb、复位并给予无敌。
     /// @return 仍有可用残机时返回 true；用尽时返回 false。
     bool TakeHit();

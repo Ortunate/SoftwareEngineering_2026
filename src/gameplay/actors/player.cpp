@@ -1,4 +1,4 @@
-// 本文件负责实现玩家移动、视角、射击、Bomb 消耗及敌弹接触规则。
+// 本文件负责实现玩家移动、视角、射击、Bomb 消耗及敌弹/敌方本体接触规则。
 
 #include "gameplay/actors/player.hpp"
 
@@ -195,6 +195,12 @@ PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
         return PlayerContact::Graze;
     }
     return PlayerContact::None;
+}
+
+bool Player::ContactEnemyBody(Vector3 position,float radius) const {
+    if(invulnerableTimer_>0 || !std::isfinite(radius) || radius<=0)return false;
+    const float contactRadius=kHitRadius+radius;
+    return game_math::DistanceSquared(position_,position)<=contactRadius*contactRadius;
 }
 
 bool Player::TakeHit() {

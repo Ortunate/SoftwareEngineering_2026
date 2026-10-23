@@ -34,6 +34,8 @@ public:
 
     /// @brief 当前准备/退场期是否接受玩家弹和 Bomb 伤害。
     [[nodiscard]] virtual bool CanTakeDamage() const { return true; }
+    /// @brief 活动且存活的本体可接触玩家，独立于受伤开关；子类须排除只保留演员的无害退场状态。
+    [[nodiscard]] virtual bool CanContactPlayer() const { return active && health>0; }
     /// @brief 生命耗尽或达到下一阶段阈值时返回 true；Game 统一清弹并调用 AdvancePhase。
     [[nodiscard]] virtual bool ShouldAdvanceFromDamage() const { return health <= 0; }
     /// @brief 当前阶段原始时间上限（秒）；负值表示退场或无计时阶段。
@@ -61,7 +63,7 @@ public:
     Vector3 position{0.0F, 2.0F, 7.2F};
     float health = 0.0F;
     float maxHealth = 0.0F;
-    float hitRadius = 0.95F;
+    float hitRadius = 0.95F; // 世界半径，自机弹与本体接触共用，不随视觉入退场缩放。
     /// @brief 当前阶段已运行秒数；换阶段时归零，超时由具体 Boss 决定。
     float phaseTimer = 0.0F;
     float fireTimer = 0.0F;

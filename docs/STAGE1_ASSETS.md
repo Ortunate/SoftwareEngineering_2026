@@ -15,7 +15,9 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 
 灵梦按 a0、a1、b0、b1、c0、c1 对应表情 0–5，露米娅按 a0、a1、b0、b1 对应 0–3。灵梦 a1 为已修正手指的样图；露米娅保留原素材右侧袖子出画面的构图。原 PNG 尺寸分别为 976×1612 和 887×1774，不重采样。对话通过清单中的 `dialogueCrop` 等比绘制上部；符卡使用完整图；世界露米娅使用独立 stg1enm2 动画，判定锚点为 `(0.5,0.5)`。
 
-10 张差分在进入 Stage 1 时加载，退出时释放；世界露米娅由 DDS/ANM 图集缓存加载，与对话 PNG 独立。开局选择页独立持有通用生命周期的灵梦 a1 后景纹理，不受关卡卸载影响；前景改用自机选人重绘图，魔理沙后景另用原典提围裙姿势的现代重绘，见 `START_CHARACTER_SELECTION.md`。
+灵梦 6 张、露米娅 4 张及魔理沙 6 张差分在进入 Stage 1 时加载，退出时释放；世界露米娅由 DDS/ANM 图集缓存加载，与对话 PNG 独立。魔理沙战斗引用已有 `common/portraits/marisa` 差分，不复制素材；开局选择页独立持有通用生命周期的灵梦 a1 后景纹理，不受关卡卸载影响，魔理沙后景同样独立持有。前景使用自机选人重绘图，见 `START_CHARACTER_SELECTION.md`。
+
+一面对话逐句原文、差分编号和原生切换时序见 [对话对照](STAGE1_DIALOGUE_REFERENCE.md)。灵梦战后使用差分 2，魔理沙战后使用差分 1；第三句灵梦的差分延迟与第二行同时生效。魔理沙六张重绘均按全身图取上部，切换偶数／奇数差分时保持相同取景规则。
 
 ## 新典界面图集
 
@@ -30,11 +32,14 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 | menu_move / menu_confirm / menu_cancel | select00 / ok00 / cancel00 |
 | shoot / enemy_down / hit | plst00 / enep00 / pldead00 |
 | bomb / graze / pickup | gun00 / graze / item00 |
+| bomb_master | nep00，Master Spark 原生音效 |
 | spell / clear / full_power | kira00 / extend / powerup |
 | reference_6 / 7 / 8 / 9 | power1 / tan00 / tan01 / tan02 |
 | reference_16 / 18 | lazer00 / enep01 |
 
 `reference_*` 按原始帧指令 106 的编号播放。`tools/generate_sound_assets.py` 仍保留为无参考素材时的合成替代工具；运行它会覆盖同名 WAV，不是当前素材的重建命令。
+
+四种 Bomb 的原始纹理和动画直接复用已加载的 `player00/player01`，不新增替代贴图。新增的 `bomb_master.wav` 来自相同 IN 包，其校验值、十五个动画层和音效事件映射见 [四 Bomb 对照](PLAYER_BOMBS_REFERENCE.md)。
 
 ## 中文字体
 
@@ -51,6 +56,6 @@ python3 tools/subset_ui_font.py /path/to/NotoSerifCJKsc-Bold.otf src assets/runt
 
 生成器同时保存 `ui_charset.txt`；运行时按该清单加载字形，避免只加载默认拉丁字符。
 
-加载页补入的“女、祈、祷”使用 Google Fonts 提供的同源 [Noto Serif SC](https://fonts.google.com/noto/specimen/Noto+Serif+SC) 600 字重字形，按现有 1000 units/em 转入子集字体；原有 UI 字形和度量保持不变，沿用同一 SIL OFL 许可。后续使用完整 Noto Serif CJK SC 原字体运行上述生成器，也会包含这三个字。
+两种字重现均以完整的 Noto Serif CJK SC 原字体重新裁剪，复用同一字符表，覆盖加载页“女、祈、祷”和新增魔理沙对白所需汉字；保留现有独立家族名及 SIL OFL 许可。
 
 全窗口 HUD 的关卡题签另以同一官方字形来源补齐“幻、卷”；其他现有字形保持不变。重建时仍可使用上述完整原字体与生成器。

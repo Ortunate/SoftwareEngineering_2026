@@ -239,8 +239,7 @@ void Game::DrawStartSetup() const {
         p.Text("准备好了吗？",{band.x+band.width*0.15F,band.y+28*s,band.width*0.7F,58*s},56*s,kIvory,0,true,0.6F);
         auto button=layout.ReadyButton();button.y+=18*s*(1-ready);
         const float hover=CheckCollisionPointRec(GetMousePosition(),layout.ReadyButton())?1:0.55F;
-        p.Text(selectedCharacter_==0?"START GAME":"魔理沙玩法尚未开放",button,selectedCharacter_==0?46*s:30*s,
-               selectedCharacter_==0?kIvory:Color{161,138,132,255},0.12F,true,selectedCharacter_==0?hover*menuMotion_.Pulse():0);
+        p.Text("START GAME",button,46*s,kIvory,0.12F,true,hover*menuMotion_.Pulse());
         p.Rule(button,ui::WithOpacity(kGold,0.65F));
     }
 }

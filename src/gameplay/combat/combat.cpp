@@ -12,6 +12,9 @@
 
 namespace koumakyou {
 using namespace game_math;
+namespace {
+constexpr std::array<std::string_view,4> kBombSounds{"reference_6","bomb","reference_7","bomb_master"};
+}
 
 void Game::UpdateEnemies(float deltaTime) {
     enemies_.ForEachActive([this, deltaTime](Enemy& enemy) {
@@ -44,15 +47,11 @@ void Game::UpdateBoss(float deltaTime) {
 
 void Game::ResolveCollisions() {
     bool playerWasHit = false;
-    // 本帧可能同时接触多颗敌弹；先统一标记受击，再只扣一次残机。
+    // 敌弹、普通敌人和 Boss 本体共同标记受击，所有接触都采样后只结算一次，避免复活位置影响同帧结果。
     bullets_.Pool().ForEachActive([this, &playerWasHit](Bullet& bullet) {
         switch (player_.ContactEnemyBullet(bullet)) {
             case PlayerContact::Hit: {
-                bool canTakeDamage = true;
-#ifdef KOUMAKYOU_DEBUG_FEATURES
-                canTakeDamage = !debugInvincible_;
-#endif
-                if (canTakeDamage) playerWasHit = true;
+                playerWasHit = true;
                 break;
             }
             case PlayerContact::Graze:
@@ -65,17 +64,41 @@ void Game::ResolveCollisions() {
                 break;
         }
     });
+    if(state_==RunState::Playing && !dialogueActive_) {
+        // 对话人物及退场快照不在本体判定中；本体只让玩家受击，不给敌人扣血、生成掉落或产生擦弹。
+        enemies_.ForEachActive([&](const Enemy& enemy) {
+            if(enemy.CanContactPlayer() && player_.ContactEnemyBody(enemy.position,enemy.hitRadius))playerWasHit=true;
+        });
+        if(boss_ && boss_->CanContactPlayer() && player_.ContactEnemyBody(boss_->position,boss_->hitRadius))playerWasHit=true;
+    }
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+    if(debugInvincible_)playerWasHit=false;
+#endif
     if (playerWasHit) HandlePlayerHit();
     if (state_ != RunState::Playing) return;
 
-    enemies_.ForEachActive([this](Enemy& enemy) {
-        bullets_.Pool().ForEachActive([&enemy](Bullet& bullet) {
-            if (bullet.owner != BulletOwner::Player) return;
+    const auto shotDamage=[this](const Bullet& bullet,DamageTarget target,const void* identity,bool damageable,bool spell) {
+        const auto source=bullet.playerShotKind==PlayerShotKind::Laser ? DamageSource::Laser :
+                          bullet.playerShotKind==PlayerShotKind::Explosion ? DamageSource::Explosion : DamageSource::Projectile;
+        return ResolveDamage({source,target,player_.Shot(),bullet.ContactDamage(),damageable,spell,
+                              identity,bullet.sourceShotRva,stage_.Elapsed(),bullet.damageSeconds,playerBomb_.Active()},
+                             stageContent_->DamageRules()).amount;
+    };
+    const auto applyShotImpact=[this](Bullet& bullet) {
+        if(bullet.playerShotKind==PlayerShotKind::Missile)bullets_.ExplodePlayerMissile(bullet);
+        else if(bullet.playerShotKind==PlayerShotKind::Projectile)bullet.active=false;
+        else if(bullet.playerShotKind==PlayerShotKind::Explosion)
+            // 原作爆破每个持续接触的逻辑帧继续减半速度；按经过秒数换算，避免低 FPS 减速变弱。
+            bullet.velocity=Scale(bullet.velocity,std::pow(0.5F,bullet.damageSeconds*60));
+    };
+    enemies_.ForEachActive([this,&applyShotImpact,&shotDamage](Enemy& enemy) {
+        bullets_.Pool().ForEachActive([&enemy,&applyShotImpact,&shotDamage](Bullet& bullet) {
+            if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + enemy.hitRadius;
-            if (DistanceSquared(bullet.position, enemy.position) <=
+            if (bullet.DistanceSquaredTo(enemy.position) <=
                 collisionDistance * collisionDistance) {
-                bullet.active = false;
-                enemy.health -= bullet.damage;
+                enemy.health -= shotDamage(bullet,DamageTarget::Enemy,&enemy,enemy.CanTakeDamage(),false);
+                applyShotImpact(bullet);
             }
         });
         if (enemy.health <= 0.0F) {
@@ -96,19 +119,27 @@ void Game::ResolveCollisions() {
     });
 
     if (boss_ && boss_->active) {
-        bullets_.Pool().ForEachActive([this](Bullet& bullet) {
-            if (bullet.owner != BulletOwner::Player) return;
+        bullets_.Pool().ForEachActive([this,&applyShotImpact,&shotDamage](Bullet& bullet) {
+            if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + boss_->hitRadius;
-            if (DistanceSquared(bullet.position, boss_->position) <=
+            if (bullet.DistanceSquaredTo(boss_->position) <=
                 collisionDistance * collisionDistance) {
-                bullet.active = false;
-                // 原作符卡将普通射击伤害缩小至约七分之一；HP 阈值本身仍采用原始单位。
-                if (boss_->CanTakeDamage()) boss_->health -= bullet.damage * 0.8F / (boss_->SpellName() ? 7.0F : 1.0F);
-                score_ += 10;
+                boss_->health -= shotDamage(bullet,DamageTarget::Boss,boss_.get(),boss_->CanTakeDamage(),boss_->SpellName()!=nullptr);
+                if(bullet.damagePerSecond>0) {
+                    const double points=bullet.hitScoreRemainder+600.0*bullet.damageSeconds;
+                    const auto whole=static_cast<long long>(std::floor(points+0.00001));
+                    score_+=whole;bullet.hitScoreRemainder=points-static_cast<double>(whole);
+                } else score_+=10;
+                applyShotImpact(bullet);
             }
         });
         if (boss_->ShouldAdvanceFromDamage()) AdvanceBossPhase();
     }
+    // 持续弹可穿过多个目标，但同一份经过秒数只能结算一次，重复碰撞调用不能再次扣血。
+    bullets_.Pool().ForEachActive([](Bullet& bullet){
+        if(bullet.damagePerSecond>0)bullet.damageSeconds=0;
+        if(bullet.pendingExpiration)bullet.active=false;
+    });
 }
 
 void Game::UpdatePickups(float deltaTime) {
@@ -130,15 +161,85 @@ void Game::AdjustPlayerPower(int delta) {
 void Game::ApplyBombEffect() {
     ++bombCount_;
     AdjustReferenceRank(-200);
-    assets_.PlaySoundEffect("bomb");
-    screenFlashTimer_ = 0.35F;
-    bullets_.ClearEnemyBullets();
-    enemies_.ForEachActive([](Enemy& enemy) { enemy.health -= 22.0F; });
-    if (boss_ && boss_->active && boss_->CanTakeDamage()) boss_->health -= 35.0F / (boss_->SpellName() ? 3.0F : 1.0F);
-    SetMessage("Spatial Bomb", 0.7F);
+    ClearPlayerBomb();
+    const auto visuals=stageContent_->PlayerBombVisuals(player_.Shot());
+    const anm::Archive* archive=nullptr;
+    if(visuals[0]!=kInvalidVisualId) {
+        archive=assets_.GetVisual(visuals[0]).archive.get();
+    }
+    player_.SyncCamera(camera_);
+    playerBomb_.Start(player_.Shot(),camera_,archive,static_cast<std::uint32_t>(bombCount_));
+    drops_.MagnetAllItems();
+    PlayPlayerBombSounds();
+    screenFlashTimer_ = player_.Shot()==ShotType::Needle ? 0 : 0.12F;
+    messageTimer_=0; // 独立 Bomb 宣告使用原名并由演出时钟驱动，避免与普通提示重复。
+}
+void Game::UpdatePlayerBomb(float deltaTime) {
+    if(!playerBomb_.Active())return;
+    // 初始清弹也放在敌弹推进之后，覆盖释放本帧由敌人新生成的弹；frame=0 没有伤害通道。
+    if(playerBomb_.Frame()==0)ResolvePlayerBombFrame();
+    if(playerBombStartedThisFrame_)return;
+    std::array<Vector3,kEnemyCapacity+1> targets{};std::size_t count=0;
+    enemies_.ForEachActive([&](const Enemy& enemy) {
+        if(enemy.health>0 && enemy.CanTakeDamage())targets[count++]=enemy.position;
+    });
+    if(boss_ && boss_->active && boss_->health>0 && boss_->CanTakeDamage())targets[count++]=boss_->position;
+    playerBomb_.Update(deltaTime,camera_,{targets.data(),count},[this](PlayerBombEffect&) { ResolvePlayerBombFrame(); });
+    PlayPlayerBombSounds();
+}
+void Game::ResolvePlayerBombFrame() {
+    if(!playerBomb_.Active() || playerBombResolvedFrame_==playerBomb_.Frame())return;
+    playerBombResolvedFrame_=playerBomb_.Frame();
+    bullets_.Pool().ForEachActive([this](Bullet& bullet) {
+        if(bullet.owner!=BulletOwner::Enemy)return;
+        for(const auto& volume:playerBomb_.CancelVolumes()) {
+            const float radius=bullet.radius+kBombCancelMargin;
+            if(bullet.beamLength>0 ? volume.IntersectsCapsule(bullet.position,bullet.BeamEnd(),radius) :
+                                    volume.IntersectsSphere(bullet.position,radius)) { bullet.active=false;break; }
+        }
+    });
+    const auto damage=[this](Vector3 position,float radius,DamageTarget target,const void* identity,bool spell) {
+        const auto channels=playerBomb_.ContactDamage(position,radius);
+        int total=0;
+        for(int region=0;region<8;++region) { total+=channels[region];playerBomb_.ReportHit(region,channels[region]); }
+        // 提供方只能调整真实接触后的 HP，不能在蓄力/跳帧或范围外凭空生成命中。
+        if(total==0)return 0.0F;
+        // 原作积分在 70 上限之后、符卡减伤之前；不能让四层恋札或 Z 扩展把单帧伤害重复乘倍。
+        score_+=(std::min(total,70)/5)*10;
+        return ResolveDamage({DamageSource::Bomb,target,playerBomb_.Shot(),static_cast<float>(total),true,spell,
+                              identity,0,stage_.Elapsed(),1.0F/60,true,!spell || bombCount_>spellStartBombs_},
+                             stageContent_->DamageRules()).amount;
+    };
+    enemies_.ForEachActive([&](Enemy& enemy) {
+        if(enemy.health>0 && enemy.CanTakeDamage())enemy.health-=damage(enemy.position,enemy.hitRadius,DamageTarget::Enemy,&enemy,false);
+    });
+    if(boss_ && boss_->active && boss_->health>0 && boss_->CanTakeDamage())
+        boss_->health-=damage(boss_->position,boss_->hitRadius,DamageTarget::Boss,boss_.get(),boss_->SpellName()!=nullptr);
+}
+void Game::PlayPlayerBombSounds() {
+    std::array<bool,20> played{};
+    for(const int id:playerBomb_.SoundEvents()) {
+        if(id<0 || id>=static_cast<int>(played.size()) || played[id])continue;
+        played[id]=true;
+        const char* sound=id==6 ? "reference_6" : id==13 ? "bomb" : id==15 ? "reference_7" : id==19 ? "bomb_master" : nullptr;
+        if(sound)assets_.PlaySoundEffect(sound);
+    }
+}
+void Game::ClearPlayerBomb() {
+    playerBomb_.Clear();playerBombSoundPaused_.fill(false);playerBombResolvedFrame_=-1;playerBombStartedThisFrame_=false;
+    for(const auto name:kBombSounds)assets_.StopSoundEffect(name);
+}
+void Game::PausePlayerBombSounds(bool paused) {
+    for(std::size_t i=0;i<kBombSounds.size();++i) {
+        if(paused)playerBombSoundPaused_[i]=assets_.PauseSoundEffect(kBombSounds[i]);
+        else if(playerBombSoundPaused_[i]) {
+            assets_.ResumeSoundEffect(kBombSounds[i]);playerBombSoundPaused_[i]=false;
+        }
+    }
 }
 
 void Game::HandlePlayerHit() {
+    ClearPlayerBomb();
     AdjustReferenceRank(-1600);
     ++missCount_;
     assets_.PlaySoundEffect("hit");

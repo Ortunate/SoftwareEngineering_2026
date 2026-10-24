@@ -125,6 +125,7 @@ void Game::DrawWorld() const {
     });
     const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
     pickupSprites_.clear();
+    playerBombVolumes_.clear();
     if (stageContent_) {
         drops_.ForEachActive([&](const Pickup& pickup) {
             VisualId visual = stageContent_->ScorePickupVisual();
@@ -136,11 +137,30 @@ void Game::DrawWorld() const {
                                         pickup.value >= 8 ? 1.25F : 0.9F;
             pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample()});
         });
+        if (player_.OptionsVisible()) {
+            const auto positions = player_.OptionPositions();
+            for (int side = 0; side < 2; ++side) {
+                const auto visual = stageContent_->PlayerOptionVisual(side,player_.Shot());
+                if (visual == kInvalidVisualId || !assets_.GetVisual(visual).archive) continue;
+                // 与道具共用透明公告板批次，保证圈与副弹按真实深度排序；这些绘制数据不参与拾取或碰撞。
+                pickupSprites_.push_back({positions[side], visual, player_.OptionScale(),
+                                          &playerOptionAnimations_[side].player.Sample(), Player::kShotAlpha});
+            }
+        }
+        if(playerBomb_.Active()) {
+            const auto visuals=stageContent_->PlayerBombVisuals(playerBomb_.Shot());
+            for(const auto& sprite:playerBomb_.Sprites()) {
+                const auto visual=visuals[sprite.layer];
+                if(visual==kInvalidVisualId)continue;
+                playerBombVolumes_.push_back({&sprite,visual});
+            }
+        }
     }
+    DrawPlayerBombBackdrop(viewport.width,viewport.height);
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
-                         actorEffects_);
+                         actorEffects_,playerBombVolumes_);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
@@ -211,7 +231,7 @@ void Game::DrawOverlay() const {
     }
 
     DrawDialogue();
-    DrawSpellCutIn();
+    if(playerBomb_.Active())DrawPlayerBombCutIn();else DrawSpellCutIn();
     if(state_==RunState::StageClear || (state_==RunState::Paused && pausedState_==RunState::StageClear))DrawStageClear();
 
     // 暂停与符卡结果共用底板和文字操作样式，禁用项只降透明度，不产生选中动效。

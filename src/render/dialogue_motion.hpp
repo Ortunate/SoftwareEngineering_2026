@@ -1,21 +1,63 @@
-// 本文件保存对话双方的发言强调和显现过渡；只由 Update 推进，不持有立绘资源或改变台词时序。
+// 本文件按游戏时钟采样原生对话入退场及发言强调，并为无原生时间轴的关卡保留通用过渡。
 #pragma once
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include "stage/content.hpp"
 
 namespace koumakyou::ui {
-/// @brief 对话角色的瞬时展示参数；focus 为 0～1，opacity 已合并显现进度与非发言者的 30% 不透明度。
+/// @brief 对话角色的瞬时展示参数；focus/opacity 为 0～1，slide 为向窗口外退场的比例。
 struct DialoguePose {
     float focus, opacity;
+    float slide = 0;
 };
 
-/// @brief false/true 分别表示左侧玩家与右侧 Boss；独立于帧数和窗口尺寸，暂停时不要调用 Advance。
+/// @brief false/true 分别表示左侧玩家与右侧 Boss；不持有纹理，暂停时保持已有采样。
 /// 位置及尺寸由布局根据 focus 计算，Draw 只读取 Sample，不可在绘制期间推进过渡。
 class DialogueMotion {
 public:
+    /// @brief 按整段对话的游戏秒数重建原生中断标签，支持跳句和任意帧率；暂停时保持已有采样。
+    /// 标签 1/5 在 30 帧内入退场，3/4 的 Alpha 用 16 帧变为 255/128；对手位置过渡用 30 帧。
+    void Seek(std::span<const DialogueCue> cues, float seconds) {
+        struct Channel {
+            float from=0,to=0,at=0,duration=0;
+            float Sample(float frame,bool ease) const {
+                float t=duration>0 ? std::clamp((frame-at)/duration,0.0F,1.0F) : 1;
+                if(ease)t=1-(1-t)*(1-t);
+                return from+(to-from)*t;
+            }
+            void Set(float frame,float value,float frames,bool ease) {
+                from=Sample(frame,ease);to=value;at=frame;duration=frames;
+            }
+        };
+        std::array<Channel,2> focus{},alpha{},slide{};
+        std::array<bool,2> visible{};
+        const float frame=std::floor(std::max(0.0F,seconds)*60+0.001F);
+        for(const auto& cue:cues) {
+            if(cue.frame>frame)break;
+            if(cue.kind!=DialogueCueKind::Portrait || cue.slot<0 || cue.slot>1)continue;
+            const int slot=cue.slot;
+            if(cue.value==1) {
+                visible[slot]=true;focus[slot]={1,1,0,0};alpha[slot]={1,1,0,0};
+                slide[slot]={1,0,static_cast<float>(cue.frame),30};
+            } else if(cue.value==3 || cue.value==4) {
+                const bool speaking=cue.value==3;
+                focus[slot].Set(cue.frame,speaking?1:0,slot==0?16:30,true);
+                alpha[slot].Set(cue.frame,speaking?1:128.0F/255,16,false);
+            } else if(cue.value==5) {
+                slide[slot].Set(cue.frame,1,30,true);
+            }
+        }
+        for(int slot=0;slot<2;++slot) {
+            const float offset=slide[slot].Sample(frame,true);
+            nativePoses_[slot]={focus[slot].Sample(frame,true),
+                visible[slot] && offset<1 ? std::floor(alpha[slot].Sample(frame,false)*255+0.001F)/255 : 0,offset};
+        }
+        native_=true;
+    }
     /// @brief 新对话从本句的稳定状态开始；隐藏角色的显现进度为零，不继承上一段对话。
     void Reset(bool bossSpeaking, bool showBoss) {
+        native_=false;
         target_ = Targets(bossSpeaking, showBoss);
         current_ = from_ = target_;
         elapsed_ = kDuration;
@@ -40,8 +82,9 @@ public:
         for (std::size_t index = 0; index < current_.size(); ++index)
             current_[index] = from_[index] + (target_[index] - from_[index]) * blend;
     }
-    /// @brief 返回借用动画时钟的值采样；非发言者稳定 opacity=0.3，发言者为 1，未登场角色为 0。
+    /// @brief 返回已更新的值采样；原生非发言者 opacity=128/255，通用过渡为 0.3，隐藏角色为 0。
     [[nodiscard]] DialoguePose Sample(bool right) const {
+        if(native_)return nativePoses_[right?1:0];
         const float focus = current_[right ? 1 : 0];
         return {focus, (0.3F + 0.7F * focus) * (right ? current_[2] : 1.0F)};
     }
@@ -56,5 +99,7 @@ private:
     std::array<float, 3> current_{1, 0, 0}, from_{1, 0, 0}, target_{1, 0, 0};
     float elapsed_ = 0;
     bool initialized_ = false;
+    bool native_ = false;
+    std::array<DialoguePose,2> nativePoses_{};
 };
 } // namespace koumakyou::ui

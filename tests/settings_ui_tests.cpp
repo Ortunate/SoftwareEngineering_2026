@@ -127,6 +127,8 @@ struct GameLifecycleProbe {
     static bool Waiting(const Game& game) { return game.waitingForBinding_; }
     static bool General(const Game& game) { return game.optionsPage_==Game::OptionsPage::General; }
     static bool Playing(const Game& game) { return game.state_==RunState::Playing; }
+    /// @brief 检查实际机体，防止菜单显示魔理沙但战斗仍绑定灵梦。
+    static ShotType ActualShot(const Game& game) { return game.player_.Shot(); }
     static RunState State(const Game& game) { return game.state_; }
     /// @brief 读取当前页的局部选项编号，供真实输入回放检查悬停与键盘切换。
     static int UiSelection(const Game& game) {
@@ -155,7 +157,9 @@ struct GameLifecycleProbe {
     /// @brief 隔离已经加载的实际关卡遭遇；保留 previewMode_，通过正式阶段交接记录遇见，不代写 Records。
     static void PrepareStageEncounter(Game& game,bool stagePractice,int shot) {
         game.stage_=StageDirector{};game.practiceMode_=stagePractice;game.spellPractice_=false;
-        game.selectedShot_=shot;game.BeginStageBoss(true,3);
+        game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;
+        game.player_.ConfigureRun(game.initialLives_,game.initialBombs_,game.challengeMode_,static_cast<ShotType>(shot));
+        game.BeginStageBoss(true,3);
     }
     /// @brief 以真实阶段结算入口分别触发击破与超时；不代写成绩，实际记录由 Game 保存。
     static void FinishSpell(Game& game,bool capture) {
@@ -171,6 +175,12 @@ struct GameLifecycleProbe {
     }
     static float StartCharacterWeight(const Game& game,int role) {return game.startCharacterMotion_.Weight(role);}
     static float DialogueTime(const Game& game) { return game.dialogueTimer_; }
+    /// @brief 使用正式入口定位两位自机的对白保护区间，不让道中时间轴干扰输入回放。
+    static void DialogueAt(Game& game,int character,bool after,float seconds) {
+        game.stage_=StageDirector{};
+        game.player_.ConfigureRun(3,3,false,static_cast<ShotType>(character*2));
+        game.state_=RunState::Playing;game.BeginStageDialogue(2,after);game.dialogueTimer_=seconds;
+    }
     /// @brief 以真实结算入口检查成绩规则；仅替代漫长的整关计分过程，不绕过存档路径。
     static void FinishScoreAttempt(Game& game,long long score,bool challenge,bool spell,bool preview,RunState result) {
         game.practiceMode_=true; game.spellPractice_=spell; game.previewMode_=preview;
@@ -189,7 +199,7 @@ struct GameLifecycleProbe {
     /// @brief 按真实 Update 路径结束战后对话，不直接跳转结算状态。
     static void FinishPostDialogue(Game& game) { game.dialogueTimer_=game.DialogueDuration(); game.Update(0); }
     /// @brief 将战后独白定位到最后一句仍未结束的位置，供真实按键验证层间确认不穿透。
-    static void LastPostLine(Game& game) { game.dialogueTimer_=game.DialogueDuration()-1; }
+    static void LastPostLine(Game& game) { game.dialogueTimer_=game.DialogueDuration()-2; }
     static void ReenterClear(Game& game) { game.BeginStageClear(); }
     static float ClearSeconds(const Game& game) { return game.stageClearSeconds_; }
     static float StageTime(const Game& game) { return game.stage_.Elapsed(); }
@@ -418,7 +428,7 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
     std::puts("Five-step Start flow, confirmation, backtracking, input and persisted selections passed.");
 }
 
-/// @brief 回放 Start/Practice Start 双角色选择，核验前后层独立、箭头不穿透、切换动画、记忆与未实现机体门禁。
+/// @brief 回放 Start/Practice Start 双角色选择，核验前后层、箭头、切换动画、记忆及魔理沙实际开局。
 void TestStartCharacters(const std::filesystem::path& screenshots) {
     using namespace koumakyou;using Probe=GameLifecycleProbe;
     const int width=GetScreenWidth(),height=GetScreenHeight();
@@ -463,10 +473,11 @@ void TestStartCharacters(const std::filesystem::path& screenshots) {
         Capture(game,(screenshots/(practice?"practice-marisa-shot.png":"start-marisa-shot.png")).string().c_str());
         Key(game,KEY_Z);Key(game,KEY_Z);if(practice)Key(game,KEY_Z);
         Check(Probe::SetupStep(game)==StartSetupStep::Ready,"Marisa browsing lost mode or stage step");
-        Key(game,KEY_Z);Key(game,KEY_SPACE);click(layout.ReadyButton());
-        Check(Probe::SetupStep(game)==StartSetupStep::Ready && !game.IsLoading(),"unimplemented Marisa silently launched Reimu");
         Capture(game,(screenshots/(practice?"practice-marisa-ready.png":"start-marisa-ready.png")).string().c_str());
-        while(Probe::SetupStep(game)!=StartSetupStep::Character)Key(game,KEY_X);
+        Key(game,KEY_Z);WaitForStage(game);Frame(game);
+        Check(Probe::Playing(game) && Probe::ActualShot(game)==ShotType::IllusionLaser,"Marisa selection did not launch the actual laser shot");
+        game.Reset();Key(game,KEY_Z);Key(game,KEY_Z);
+        Check(Probe::SetupStep(game)==StartSetupStep::Character,"returning from Marisa battle lost setup flow");
         for(Vector2 size:{Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
             SetWindowSize(size.x,size.y);Event(7,0,0);Frame(game);
             for(int role:{0,1}) {
@@ -486,7 +497,7 @@ void TestStartCharacters(const std::filesystem::path& screenshots) {
         Check(Probe::Selection(restarted).character==1 && Probe::Selection(restarted).shot==1,"restart lost chosen character/shot");
         SetWindowSize(width,height);
     }
-    std::puts("Start/Practice Start two-character layers, arrows, removed name buttons, blending, persistence and unavailable gate passed.");
+    std::puts("Start/Practice Start two-character layers, arrows, blending, persistence and actual Marisa battle passed.");
 }
 
 /// @brief 检查所有页面在小窗口、竖屏、方形、超宽屏和常用宽屏下的呈现，并回放缩放后的行内改键与暂停按钮。
@@ -759,6 +770,31 @@ void TestPracticeStages(const std::filesystem::path& screenshots) {
 }
 
 
+/// @brief 独立回放两位自机的对白按键，验证确认别名、名牌保护及退场保护。
+void TestDialogueInputs() {
+    using namespace koumakyou;
+    using Probe=GameLifecycleProbe;
+    Game game;SetTargetFPS(0);game.StartPreview();
+    for(int character=0;character<2;++character) {
+        const float intro=(character==0?1745.0F:1564.0F)/60;
+        for(int key:{KEY_Z,KEY_SPACE,KEY_ENTER}) {
+            Probe::DialogueAt(game,character,false,intro+1.0F/60);
+            const float locked=Probe::DialogueTime(game);Key(game,key);
+            Check(Probe::DialogueTime(game)-locked<0.1F,"dialogue confirmation bypassed native introduction lock");
+            Probe::DialogueAt(game,character,false,intro+31.0F/60);
+            const float enabled=Probe::DialogueTime(game);Key(game,key);
+            Check(Probe::DialogueTime(game)-enabled>1,"dialogue confirmation alias did not advance after native lock");
+        }
+        Probe::DialogueAt(game,character,false,intro+31.0F/60);
+        const float enabled=Probe::DialogueTime(game);Click(game,1,1);
+        Check(Probe::DialogueTime(game)-enabled>1,"dialogue click did not advance after native lock");
+        Probe::DialogueAt(game,character,false,(character==0?4653.0F:3168.0F)/60);
+        const float exit=Probe::DialogueTime(game);Key(game,KEY_Z);
+        Check(Probe::Playing(game) && Probe::DialogueTime(game)-exit<0.1F,"dialogue confirmation bypassed native portrait exit");
+    }
+    std::puts("Native dialogue confirmation aliases, introduction lock and exit lock passed.");
+}
+
 /// @brief 验证结算快照、精确超时、确认不穿透、暂停冻结与整关练习返回选关的完整生命周期。
 void TestStageSettlement(const std::filesystem::path& screenshots) {
     using namespace koumakyou;
@@ -785,6 +821,8 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
     for(const bool practice : {false,true}) {
         game.StartPreview(); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
         Probe::LastPostLine(game); Key(game,KEY_Z);
+        Check(Probe::Playing(game),"confirming the final line skipped the native settlement delay");
+        for(int frame=0;frame<61 && Probe::Playing(game);++frame)Frame(game);
         Check(Probe::State(game)==RunState::StageClear && Probe::ClearSeconds(game)<0.1F,
               "confirming the final post-battle line also dismissed the clear report");
     }
@@ -1063,7 +1101,7 @@ void TestSpellPractice(const std::filesystem::path& screenshots) {
     {
         Game restarted;Check(Probe::SpellRecord(restarted,0,3).captured==captured.captured,"spell records lost on restart");
     }
-    // 第二种灵梦御札必须接到暗符阶段；魔理沙只能浏览，不能暗中回退为灵梦战斗。
+    // 第二种灵梦御札必须接到暗符阶段；未遇见的魔理沙符卡仍必须被独立记录门禁阻止。
     Probe::SpellBrowse(game,{spell::Page::Group,0,2,1,1});
     Key(game,KEY_Z);Key(game,KEY_Z);WaitForStage(game);Frame(game);
     Check(Probe::BossPhase(game)==4 && Probe::Selection(game).shot==1,"Reimu B Demarcation mapped to a different phase or shot");
@@ -1073,7 +1111,7 @@ void TestSpellPractice(const std::filesystem::path& screenshots) {
     for(int character:{2,3}) {
         Probe::SpellBrowse(game,{spell::Page::Difficulty,0,1,1,character});
         Key(game,KEY_Z);expect(spell::Page::Difficulty);
-        Check(!game.IsLoading(),"unimplemented Marisa combination silently started Reimu");
+        Check(!game.IsLoading(),"unseen Marisa combination bypassed its own encounter record");
     }
     const int width=GetScreenWidth(),height=GetScreenHeight();
     for(Vector2 size:{Vector2{1280,720},{390,844},{900,900},{1600,400},{320,240}}) {
@@ -1118,6 +1156,9 @@ int main(int argc, char** argv) {
             TestStartCharacters(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--spell-only") {
             TestSpellPractice(screenshots);
+        } else if(argc>2 && std::string(argv[2])=="--dialogue-only") {
+            TestDialogueInputs();
+            TestStageSettlement(screenshots);
         } else {
         {
             Event(7,83,147);

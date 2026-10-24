@@ -158,7 +158,7 @@ const Card* Find(int stage,int group,int difficulty) {
     for(const auto& card:kCards)if(card.stage==stage && card.group==group && card.difficulty==difficulty)return &card;
     return nullptr;
 }
-bool Playable(const Card* card,int character) { return card && card->stage==0 && card->difficulty==1 && card->phase!=0 && character>=0 && character<2; }
+bool Playable(const Card* card,int character) { return card && card->stage==0 && card->difficulty==1 && card->phase!=0 && character>=0 && character<kCharacterCount; }
 const char* GroupUser(int stage,int group) {
     for(const auto& card:kCards)if(card.stage==stage && card.group==group)return card.user;
     return "";

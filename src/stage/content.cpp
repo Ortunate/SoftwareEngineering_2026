@@ -8,12 +8,20 @@
 namespace koumakyou {
 
 std::array<int, 2> DialogueExpressionsAt(
-    std::span<const DialogueLine> lines, std::size_t lineIndex) {
+    std::span<const DialogueLine> lines, std::size_t lineIndex, float elapsed) {
     std::array<int, 2> expressions{};
     // 从台词重建状态，保证跳句、战后独白和截图跳转都不继承上一次对话的表情。
     for (std::size_t index = 0; index < lines.size() && index <= lineIndex; ++index)
-        expressions[lines[index].bossSpeaking ? 1 : 0] = lines[index].expression;
+        if(index<lineIndex || elapsed+0.00001F>=lines[index].expressionDelay)
+            expressions[lines[index].bossSpeaking ? 1 : 0] = lines[index].expression;
     return expressions;
+}
+bool DialogueFlagAt(std::span<const DialogueCue> cues, DialogueCueKind kind, float seconds, bool initial) {
+    for(const auto& cue:cues) {
+        if(cue.frame>seconds*60+0.001F)break;
+        if(cue.kind==kind)initial=cue.value!=0;
+    }
+    return initial;
 }
 namespace {
 // 各重载明确列出动作类型；新增 variant 分支而未补充执行器时必须编译失败。

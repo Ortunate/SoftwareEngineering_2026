@@ -195,6 +195,7 @@ void ReferenceEnemy::Update(float deltaTime, Vector3 playerPosition, BulletSyste
     age += deltaTime; presentation.Update(deltaTime);
     script_.health = health*kReferenceHealthUnit;
     script_.Update(deltaTime,playerPosition,bullets);
+    health=script_.health;maxHealth=script_.maxHealth;
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(script_.deathEffect,0,2));
     animationScript=script_.animationScript;animationAge=script_.animationAge;animationRevision=script_.animationRevision;
     position = script_.Position();

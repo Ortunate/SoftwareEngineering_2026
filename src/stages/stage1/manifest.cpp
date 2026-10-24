@@ -1,7 +1,9 @@
 // 本文件负责第一面专用贴图、音乐和音效的素材清单。
 
 #include "stages/stage1/data.hpp"
+#include "gameplay/effects/player_bomb.hpp"
 #include "stages/stage1/ids.hpp"
+#include "gameplay/actors/player.hpp"
 
 #include <array>
 #include <vector>
@@ -52,6 +54,41 @@ const std::vector<VisualDefinition> kVisuals=[] {
     for(int effect=0;effect<3;++effect)
         visuals.push_back({.id=static_cast<VisualId>(kNativeDefeat+effect), .worldHeight=1.2F,
                            .animation={battle::Atlas::BulletEffects,3+effect}});
+    visuals.push_back({.id=kPlayerOptionLeft, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Reimu,128}});
+    visuals.push_back({.id=kPlayerOptionRight, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Reimu,129}});
+    // 针裁图高 104 逻辑像素，沿用太极圈 36 像素的世界比例；判定半径由 Player 固定为 0.09。
+    visuals.push_back({.id=kPlayerNeedle, .mode=VisualMode::Bullet,
+                       .bulletDiameterScale=(104.0F/36)*Player::kOptionWorldHeight/0.09F,
+                       .animation={battle::Atlas::Reimu,66}});
+    visuals.push_back({.id=kMarisaPrimary, .mode=VisualMode::Bullet, .bulletDiameterScale=8.0F,
+                       .animation={battle::Atlas::Marisa,64}});
+    for(int level=0;level<4;++level)
+        visuals.push_back({.id=static_cast<VisualId>(kMarisaMissile+level), .mode=VisualMode::Bullet,
+                           .bulletDiameterScale=8.0F, .animation={battle::Atlas::Marisa,65+level}});
+    for(int level=0;level<3;++level)
+        visuals.push_back({.id=static_cast<VisualId>(kMarisaLaser+level), .mode=VisualMode::Bullet,
+                           .animation={battle::Atlas::Marisa,69+level}});
+    for(int level=0;level<4;++level)
+        visuals.push_back({.id=static_cast<VisualId>(kMarisaExplosion+level), .mode=VisualMode::Bullet,
+                           .bulletDiameterScale=2.0F, .animation={battle::Atlas::Marisa,97+level}});
+    visuals.push_back({.id=kMarisaOptionLeft, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Marisa,128}});
+    visuals.push_back({.id=kMarisaOptionRight, .worldHeight=Player::kOptionWorldHeight, .animation={battle::Atlas::Marisa,129}});
+    constexpr std::array<std::string_view,6> marisaFaces{
+        "common/portraits/marisa/face01a_0.png","common/portraits/marisa/face01a_1.png",
+        "common/portraits/marisa/face01b_0.png","common/portraits/marisa/face01b_1.png",
+        "common/portraits/marisa/face01c_0.png","common/portraits/marisa/face01c_1.png"};
+    for(int expression=0;expression<6;++expression)
+        visuals.push_back({.id=kMarisaPortraits[expression], .path=marisaFaces[expression], .mode=VisualMode::Character,
+                           // 魔理沙六张重绘均为全身图，同一上部取景避免切换到偶数差分时人物突然缩小。
+                           .dialogueCrop={0.20F,0,0.80F,0.60F}});
+    for(const auto shot:{ShotType::HomingAmulet,ShotType::Needle,ShotType::MagicMissile,ShotType::IllusionLaser}) {
+        const auto& bomb=BombDefinition(shot);
+        const VisualId first=shot==ShotType::HomingAmulet ? kReimuBombSeal : shot==ShotType::Needle ? kReimuBombBarrier :
+                             shot==ShotType::MagicMissile ? kMarisaBombStars : kMarisaBombSpark;
+        for(int layer=0;layer<bomb.layers;++layer)
+            visuals.push_back({.id=static_cast<VisualId>(first+layer),.worldHeight=1,
+                               .animation={bomb.atlas,bomb.firstScript+layer}});
+    }
     return visuals;
 }();
 constexpr std::array<SoundDefinition, 0> kSounds{};

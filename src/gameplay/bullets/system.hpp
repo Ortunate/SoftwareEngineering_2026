@@ -38,6 +38,10 @@ public:
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
                   float radius, Color color, VisualId visual,
                   Vector3 acceleration = {});
+    /// @brief 将活动自机导弹切为 20/60 秒爆破：保留对象槽，速度减半，切换原生爆破外观。
+    /// 每个 60 Hz 接触帧伤害为 max(1,floor(原始单发伤害/4))，按有效秒数累计，可命中多个目标。
+    /// 无命中外观或并非导弹时仅令弹幕失活；调用后动画游标重置，不继续借用旧动画。
+    void ExplodePlayerMissile(Bullet& bullet);
 
     /// @brief 生成固定三维敌方光束；方向在生成时锁定，预警后才有胶囊碰撞。
     /// direction 自动归一化；length/radius 为正世界单位，warning/duration 为非负/正秒数。

@@ -62,7 +62,22 @@ void BulletSystem::Reset() { bullets_->Clear(); }
 
 void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget) {
     bullets_->ForEachActive([deltaTime, targets, enemyAimTarget](Bullet& bullet) {
+        if(bullet.pendingExpiration) {bullet.active=false;return;}
+        const float oldAge=bullet.age;
         bullet.age += deltaTime;
+        // 在本帧内裁剪有效区间，避免两个累计年龄相减产生精度损失，进而漏算伤害及整数得分。
+        bullet.damageSeconds=std::max(0.0F,std::min({deltaTime,bullet.maxAge-oldAge,bullet.dangerEndSeconds-oldAge})-
+            std::max({0.0F,bullet.warningSeconds-oldAge,bullet.spawnVisualSeconds-oldAge}));
+        if(bullet.playerShotKind==PlayerShotKind::Missile) {
+            // 原作每帧先增加 0.3 的前向速度再移动；此积分在 60 Hz 与原序列一致，其他帧率保持相同轨迹。
+            bullet.position=Add(bullet.position,Add(Scale(bullet.velocity,deltaTime),
+                Scale(bullet.acceleration,0.5F*deltaTime*(deltaTime+1.0F/60))));
+            bullet.velocity=Add(bullet.velocity,Scale(bullet.acceleration,deltaTime));
+            if(bullet.age>bullet.maxAge || std::abs(bullet.position.x)>kArenaHalfExtents.x+3 ||
+               std::abs(bullet.position.y)>kArenaHalfExtents.y+3 || std::abs(bullet.position.z)>kArenaHalfExtents.z+3)
+                bullet.active=false;
+            return;
+        }
         const float spawnDelta=std::clamp(bullet.spawnVisualSeconds-(bullet.age-deltaTime),0.0F,deltaTime);
         bullet.position=Add(bullet.position,Scale(bullet.baseVelocity,spawnDelta*bullet.spawnMoveScale));
         const float motionDelta=deltaTime-spawnDelta;
@@ -126,13 +141,29 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
         bullet.position = Add(bullet.position, Scale(bullet.velocity, motionDelta));
 
         constexpr float margin = 3.0F;
-        if (bullet.age > bullet.maxAge ||
+        if (bullet.age > bullet.maxAge && bullet.damagePerSecond>0 && bullet.damageSeconds>0) {
+            bullet.pendingExpiration=true;
+        } else if (bullet.age > bullet.maxAge ||
             std::abs(bullet.position.x) > kArenaHalfExtents.x + margin ||
             std::abs(bullet.position.y) > kArenaHalfExtents.y + margin ||
             std::abs(bullet.position.z) > kArenaHalfExtents.z + margin) {
             bullet.active = false;
         }
     });
+}
+
+void BulletSystem::ExplodePlayerMissile(Bullet& bullet) {
+    if(!bullet.active || bullet.owner!=BulletOwner::Player || bullet.playerShotKind!=PlayerShotKind::Missile || bullet.impactVisual==kInvalidVisualId) {
+        bullet.active=false;return;
+    }
+    bullet.playerShotKind=PlayerShotKind::Explosion;
+    bullet.visual=bullet.impactVisual;bullet.animation={};
+    bullet.radius=bullet.explosionRadius;
+    bullet.velocity=Scale(bullet.velocity,0.5F);bullet.acceleration={};
+    // 原作按整数取四分之一且至少 1 点；生命、单发及持续伤害均采用原始点数。
+    bullet.damagePerSecond=std::max(1.0F,std::floor(bullet.damage/4))*60;
+    bullet.damage=0;bullet.damageSeconds=0;
+    bullet.age=0;bullet.maxAge=20.0F/60;
 }
 
 Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,

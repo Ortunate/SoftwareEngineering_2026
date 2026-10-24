@@ -46,7 +46,8 @@ void TestSpellPracticeCatalog() {
         assert(spell::Find(card.stage,card.group,card.difficulty)==&card);++counts[card.stage];
         playable+=spell::Playable(&card,0);
         assert(spell::Playable(&card,0)==spell::Playable(&card,1));
-        assert(!spell::Playable(&card,2) && !spell::Playable(&card,3));
+        assert(spell::Playable(&card,0)==spell::Playable(&card,2));
+        assert(spell::Playable(&card,0)==spell::Playable(&card,3));
     }
     assert(counts==totals && playable==2);
     assert(!spell::Find(0,0,0) && !spell::Find(0,0,1));
@@ -70,13 +71,13 @@ void TestSpellPracticeCatalog() {
     assert(records.Get(0,3).attempts==2 && records.Get(0,3).captured==1 && records.Get(0,3).bestScore==1000);
     assert(records.Get(1,3).attempts==0 && records.Get(1,7).mainCaptured==1 && records.Get(1,7).bestScore==0);
     assert(records.Get(-1,0).bestScore==0);
-    // 四种组合的遇见状态逐一检查；魔理沙即使拥有记录，也仍受战斗实现门禁限制。
+    // 四种组合均已接通，但每一种仍必须独立遇见，不能借其他御札的记录解锁。
     for(int encountered=0;encountered<spell::kCharacterCount;++encountered) {
         spell::Records isolated;
         isolated.Begin(encountered,3,false);
         for(int selected=0;selected<spell::kCharacterCount;++selected) {
             assert(isolated.Seen(selected,3)==(selected==encountered));
-            assert(spell::Available(night,selected,isolated)==(selected==encountered && selected<2));
+            assert(spell::Available(night,selected,isolated)==(selected==encountered));
             assert(!isolated.Seen(selected,7));
         }
         assert(!isolated.Seen(-1,3) && !isolated.Seen(4,3));
@@ -240,6 +241,22 @@ void TestDialogueMotion() {
     for(int frame=0;frame<24;++frame)fast.Advance(true,true,1.0F/240);
     assert(std::abs(slow.Sample(false).focus-fast.Sample(false).focus)<0.00001F);
     assert(std::abs(slow.Sample(true).opacity-fast.Sample(true).opacity)<0.00001F);
+    // 新典脚本的入退场和强调彼此独立；以整段时钟重建，不能受跳句及显示帧率影响。
+    const std::array<koumakyou::DialogueCue,5> cues{{
+        {0,koumakyou::DialogueCueKind::Portrait,0,1},
+        {60,koumakyou::DialogueCueKind::Portrait,1,1},
+        {60,koumakyou::DialogueCueKind::Portrait,0,4},
+        {120,koumakyou::DialogueCueKind::Portrait,0,5},
+        {120,koumakyou::DialogueCueKind::Portrait,1,5},
+    }};
+    motion.Seek(cues,0);assert(motion.Sample(false).slide==1 && motion.Sample(true).opacity==0);
+    motion.Seek(cues,0.5F);assert(motion.Sample(false).slide==0 && motion.Sample(false).opacity==1);
+    motion.Seek(cues,68.0F/60);
+    assert(std::abs(motion.Sample(false).opacity-191.0F/255)<0.0001F);
+    motion.Seek(cues,1.5F);assert(motion.Sample(false).opacity==128.0F/255 && motion.Sample(true).opacity==1);
+    motion.Seek(cues,2.25F);assert(motion.Sample(false).slide>0 && motion.Sample(false).slide<1);
+    motion.Seek(cues,2.5F);assert(motion.Sample(false).opacity==0 && motion.Sample(true).opacity==0);
+    motion.Seek(cues,0.5F);assert(motion.Sample(false).opacity==1 && motion.Sample(true).opacity==0);
 }
 /// @brief 检查同一真实时长在 30/240 FPS 下的选择效果一致，以及快速切换不会保留上一页行号。
 void TestMenuMotion() {
@@ -341,6 +358,12 @@ void RunGameplayTests();
 void RunDropTests();
 /// @brief 运行玩家封装后的移动、射击与受击用例，断言失败时终止进程。
 void RunPlayerTests();
+/// @brief 运行魔理沙原始火力时序、导弹加速爆破和持续激光用例。
+void RunMarisaTests();
+/// @brief 运行七关 HP 目录、四机体原始伤害及未实现规则接口检查。
+void RunNativeCombatTests();
+/// @brief 运行四 Bomb 的真实动画、帧序和玩家保护期回归。
+void RunPlayerBombTests();
 /// @brief 运行时间轴及关卡内容用例，断言失败时终止进程。
 void RunStageTests();
 /// @brief 运行入退场曲线、快照与回收用例，断言失败时终止进程。
@@ -366,6 +389,9 @@ int main() {
     RunGameplayTests();
     RunDropTests();
     RunPlayerTests();
+    RunNativeCombatTests();
+    RunPlayerBombTests();
+    RunMarisaTests();
     RunStageTests();
     RunActorEffectTests();
     RunAnimationTests();

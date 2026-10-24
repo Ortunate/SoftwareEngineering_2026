@@ -140,6 +140,8 @@ void Game::StartRun(bool captureCursor, bool synchronous) {
     enemies_.Clear();
     drops_.Clear();
     boss_.reset();
+    playerOptionAnimations_ = {};
+    ClearPlayerBomb();
     assets_.UnloadStage();
     captureCursor_ = captureCursor;
     stage_ = StageDirector{};
@@ -174,6 +176,8 @@ void Game::UpdateLoading(float deltaTime) {
         if (assets_.AdvanceStageLoad()) CompleteStartRun();
     } catch (const std::exception& error) {
         TraceLog(LOG_WARNING, "STAGE: %s", error.what());
+        playerOptionAnimations_ = {};
+        ClearPlayerBomb();
         assets_.UnloadStage();
         loadingFailed_ = true;
     }
@@ -182,9 +186,10 @@ void Game::UpdateLoading(float deltaTime) {
 void Game::CompleteStartRun() {
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
+    playerOptionAnimations_ = {};
     player_.Reset();
     player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,
-                         selectedShot_ == 0 ? ShotType::HomingAmulet : ShotType::Needle);
+                         static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
     missCount_ = bombCount_ = 0;
     spellStartMisses_=spellStartBombs_=0;
     shotSoundTimer_ = 0.0F;
@@ -240,6 +245,8 @@ void Game::EnterMainMenu() {
     enemies_.Clear();
     drops_.Clear();
     boss_.reset();
+    playerOptionAnimations_ = {};
+    ClearPlayerBomb();
     assets_.UnloadStage();
     stage_ = StageDirector{};
     stageContent_.reset();
@@ -279,7 +286,7 @@ void Game::BeginStageClear() {
     score_+=stageBonus_;
     stageClearShown_=true;
     RecordStageScore();
-    bullets_.Reset(); drops_.Clear();
+    bullets_.Reset(); drops_.Clear();ClearPlayerBomb();
     spellCutInTimer_=screenFlashTimer_=0;
     state_=RunState::StageClear;
     stageClearSeconds_=0;
@@ -323,6 +330,7 @@ void Game::EndStage(RunState result) {
     dialogueActive_ = false;
     spellCutInTimer_ = messageTimer_ = 0.0F;
     selectedResultItem_ = spellPractice_?2:0;
+    ClearPlayerBomb();
     finishResult_ = result;
     state_ = RunState::Finishing;
 }
@@ -343,10 +351,12 @@ void Game::TogglePause() {
         pausedState_ = state_;
         state_ = RunState::Paused;
         assets_.PauseMusic();
+        PausePlayerBombSounds(true);
         EnableCursor();
     } else if (state_ == RunState::Paused) {
         state_ = pausedState_;
         assets_.ResumeMusic();
+        PausePlayerBombSounds(false);
         if (captureCursor_ && state_!=RunState::StageClear) DisableCursor();
     }
 }
@@ -372,6 +382,12 @@ void Game::UpdateBattleAnimations() {
         if(effect.effectAnimation.player.Finished())effect.active=false;
     });
     if(state_!=RunState::Playing)return;
+    if (stageContent_ && player_.OptionsVisible()) {
+        for (int side = 0; side < 2; ++side) {
+            const auto visual = stageContent_->PlayerOptionVisual(side,player_.Shot());
+            if (visual != kInvalidVisualId) sync(playerOptionAnimations_[side], visual, player_.VisualAge());
+        }
+    }
     enemies_.ForEachActive([&](Enemy& enemy) {
         sync(enemy.animation,enemy.visual,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,
              enemy.animationScript,enemy.animationRevision);
@@ -387,6 +403,11 @@ void Game::UpdateBattleAnimations() {
             selected=battle::BulletSpawn(bullet.nativeType,bullet.nativeColor,static_cast<int>(std::round(bullet.spawnVisualSeconds*60)));
         } else if(bullet.nativeType>=0)age=std::max(0.0F,bullet.age-bullet.spawnVisualSeconds);
         const auto& atlas=assets_.LoadBattleAtlas(selected.atlas);
+        if(bullet.playerShotKind==PlayerShotKind::Laser && !bullet.laserFadeStarted && age>=bullet.laserFadeAt) {
+            // 先推进到中断发生点，再推进余下时间；低帧率跨过淡出边界时不能延迟或重复中断。
+            bullet.animation.Sync(*atlas.archive,selected,bullet.laserFadeAt);
+            bullet.animation.player.Interrupt(1);bullet.laserFadeStarted=true;
+        }
         bullet.animation.Sync(*atlas.archive,selected,age);
     });
     drops_.ForEachActive([&](Pickup& pickup) {
@@ -404,7 +425,9 @@ void Game::UpdateUiMotion(float deltaTime) {
         const auto lines = CurrentDialogue();
         if (!lines.empty()) {
             const auto& line = lines[DialogueIndex()];
-            dialogueMotion_.Advance(line.bossSpeaking, line.showBoss, deltaTime);
+            const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
+            if(cues.empty())dialogueMotion_.Advance(line.bossSpeaking, line.showBoss, deltaTime);
+            else dialogueMotion_.Seek(cues,dialogueTimer_);
         }
     }
     int detail = 0, selection = -1;
@@ -560,6 +583,8 @@ void Game::UpdateState(float deltaTime) {
         UpdateBattleAnimations();
         if (actorEffects_.Pool().ActiveCount() == 0) {
             actorEffects_.Clear();
+            playerOptionAnimations_ = {};
+            ClearPlayerBomb();
             assets_.UnloadStage();
             if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
             else { state_ = finishResult_; EnableCursor(); }
@@ -598,11 +623,14 @@ void Game::UpdateState(float deltaTime) {
         float lineStart=0;
         const auto lines=CurrentDialogue();
         const auto& line=lines[DialogueIndex(&lineStart)];
-        if (dialogueInput.confirm || dialogueInput.click)
-            dialogueTimer_=lineStart+(line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
-        if (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL))
-            dialogueTimer_=DialogueDuration();
-        if (!dialogueAfterBattle_ && DialogueIndex()>=13 && !dialogueBossMusic_) {
+        const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
+        const bool fastForward=IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+        const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
+            (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
+        if (inputAllowed && (dialogueInput.confirm || dialogueInput.click || fastForward))
+            dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
+                line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
+        if (!dialogueAfterBattle_ && DialogueFlagAt(cues,DialogueCueKind::BossMusic,dialogueTimer_) && !dialogueBossMusic_) {
             assets_.PlayBossMusic(); dialogueBossMusic_=true;
         }
         if (dialogueTimer_+0.00001F>=DialogueDuration()) {
@@ -610,6 +638,8 @@ void Game::UpdateState(float deltaTime) {
             if (dialogueEventId_) { stage_.EndEvent(*dialogueEventId_); dialogueEventId_.reset(); }
             if (dialogueAfterBattle_) { BeginStageClear(); return; }
         }
+        // UpdateUiMotion 在战斗更新之前运行；原生演出需在计时与跳句后重新采样，避免低 FPS 多滞后一帧。
+        if(dialogueActive_ && !cues.empty())dialogueMotion_.Seek(cues,dialogueTimer_);
     }
     if(!dialogueActive_) {
         rankTime_+=deltaTime;
@@ -628,6 +658,7 @@ void Game::UpdateState(float deltaTime) {
     if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
     bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position());
     UpdateBattleAnimations(); // 本帧击破快照读取已推进的动作，而不是上一帧的动画。
+    UpdatePlayerBomb(deltaTime); // 先让 Bomb 清除接触实体的敌弹，再检查玩家命中和普通弹伤害。
     ResolveCollisions();
     if (state_ == RunState::Playing) UpdatePickups(deltaTime);
 }
@@ -672,6 +703,8 @@ void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
     dialogueEventId_ = id;
     const auto lines = CurrentDialogue();
     if (!lines.empty()) dialogueMotion_.Reset(lines.front().bossSpeaking, lines.front().showBoss);
+    const auto cues=stageContent_->DialogueCues(afterBattle,player_.Shot());
+    if(!cues.empty())dialogueMotion_.Seek(cues,0);
     messageTimer_ = 0.0F;
 }
 
@@ -681,7 +714,7 @@ void Game::AdjustReferenceRank(int subrank) {
     while(referenceSubrank_<0) { --referenceRank_; referenceSubrank_+=100; }
     referenceRank_=std::clamp(referenceRank_,10,32);
 }
-std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->Dialogue(dialogueAfterBattle_); }
+std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->Dialogue(dialogueAfterBattle_,player_.Shot()); }
 int Game::DialogueIndex(float* lineStart) const {
     float start=0; const auto lines=CurrentDialogue();
     for (int index=0;index<static_cast<int>(lines.size());++index) {

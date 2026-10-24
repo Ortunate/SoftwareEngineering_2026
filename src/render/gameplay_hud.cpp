@@ -128,7 +128,7 @@ void Game::DrawHud() const {
     if (!l.compact)
         Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
     row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
-    const long long displayedBest=spellPractice_?spellRecords_.Get(selectedShot_,practicePhase_==2?3:7).bestScore:bestScore_;
+    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practicePhase_==2?3:7).bestScore:bestScore_;
     row("最高得分", TextFormat("%09lld", displayedBest), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
         DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,
@@ -215,8 +215,8 @@ void Game::DrawDialogue() const {
     float start = 0;
     const int lineIndex = DialogueIndex(&start);
     const DialogueLine& line = lines[lineIndex];
-    const auto expressions = DialogueExpressionsAt(lines, lineIndex);
     const float elapsed = dialogueTimer_ - start;
+    const auto expressions = DialogueExpressionsAt(lines, lineIndex, elapsed);
     const auto portrait = [&](VisualId id, bool right) {
         const auto& visual = assets_.GetVisual(id);
         const Texture2D texture = visual.texture;
@@ -226,11 +226,13 @@ void Game::DrawDialogue() const {
                                crop.width * texture.width, crop.height * texture.height};
         if (source.width <= 0 || source.height <= 0) return;
         const auto pose = dialogueMotion_.Sample(right);
-        DrawTexturePro(texture, source, l.DialoguePortrait(source.width / source.height, right, pose.focus), {}, 0,
+        auto destination=l.DialoguePortrait(source.width / source.height, right, pose.focus);
+        destination.x+=(right?1:-1)*destination.width*pose.slide;
+        DrawTexturePro(texture, source, destination, {}, 0,
                         Fade(WHITE, pose.opacity));
     };
     // 先画未发言者，避免灵梦展开的手臂覆盖正在说话的角色；裁剪仍取自各差分的元数据。
-    const auto hero = stageContent_->HeroPortraitVisual(expressions[0]);
+    const auto hero = stageContent_->HeroPortraitVisual(expressions[0],player_.Shot());
     const auto boss = stageContent_->BossPortraitVisual(expressions[1]);
     if (line.bossSpeaking) {
         portrait(hero, false);
@@ -248,8 +250,10 @@ void Game::DrawDialogue() const {
         // 每句的两个原文行共享字号，长句按可用宽度收敛，不能静默裁掉末尾或改变等待时序。
         const float size = std::min(ui::FittedSize(font, line.text, 26 * l.scale, w),
                                     ui::FittedSize(font, line.secondLine, 26 * l.scale, w));
-        Label(font, line.text, {x, panel.y + 48 * l.scale}, size, w, kInk);
-        if (elapsed >= line.textDelay + line.line2Delay)
+        const bool secondVisible=elapsed>=line.textDelay+line.line2Delay;
+        Label(font, line.secondLineReplacesFirst && secondVisible ? line.secondLine : line.text,
+              {x, panel.y + 48 * l.scale}, size, w, kInk);
+        if (secondVisible && !line.secondLineReplacesFirst)
             Label(font, line.secondLine, {x, panel.y + 89 * l.scale}, size, w, kInk);
     }
     if (line.introduce) {

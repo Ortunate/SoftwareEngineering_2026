@@ -1,13 +1,15 @@
-// 本文件负责实现玩家移动、视角、射击、Bomb 消耗及敌弹接触规则。
+// 本文件负责实现玩家移动、视角、射击、Bomb 消耗及敌弹/敌方本体接触规则。
 
 #include "gameplay/actors/player.hpp"
 
 #include "app/math.hpp"
 #include "gameplay/arena.hpp"
+#include "gameplay/effects/player_bomb.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <numbers>
 
 namespace koumakyou {
@@ -17,40 +19,48 @@ constexpr float kFocusSpeed = 2.8F;
 constexpr float kMouseSensitivity = 0.0024F;
 constexpr float kHitRadius = 0.18F;
 constexpr float kGrazeRadius = 0.72F;
-// 发射点使用玩家局部坐标：gold 位于前方偏下，cyan 在其左右各偏移 0.78 世界单位。
-// Power 只改变弹数和张角，不能随通道编号移动这三个发射点。
+// 发射点使用玩家局部坐标：gold 位于前方偏下，cyan 与太极圈共用视线两侧、略偏下的位置。
+// 三个模块基准位置不随 Power 变化；梦札多束侧针仅在对应圈内叠加原始通道偏移。
+// 贴近目标时三个偏移等比缩短，保证发射点仍位于玩家与目标之间。
 constexpr float kMuzzleForward = 1.2F;
 constexpr float kMuzzleDown = 0.6F;
 constexpr float kHomingSide = 0.78F;
-// gold 与 cyan 统一使用 20% 不透明度（255×0.2）；渲染时还会乘以贴图自身 Alpha。
-constexpr unsigned char kPlayerBulletAlpha = 51;
-/// @brief 火力档位同时决定弹数和散射宽度；角度为相对视线的单侧最大偏转（度）。
-struct ShotLevel {
-    int threshold;
-    int straightCount;
-    int homingCount;
-    float straightHalfAngleDegrees;
-    float homingHalfAngleDegrees;
-};
-constexpr std::array<ShotLevel, 9> kShotLevels{{
-    {0, 2, 0, 2.0F, 0.0F}, {8, 2, 2, 3.0F, 3.5F},
-    {16, 3, 2, 4.0F, 4.5F}, {32, 3, 3, 4.5F, 5.5F},
-    {48, 4, 3, 5.0F, 6.5F}, {64, 4, 4, 6.0F, 7.5F},
-    {80, 5, 4, 6.5F, 8.0F}, {96, 5, 5, 7.0F, 9.0F},
-    {128, 6, 6, 8.0F, 10.0F},
-}};
-
-/// @brief 返回成对散射通道的方向符号（-1 或 +1）；奇数发多出的外侧弹随轮次换边。
-float ShotSideSign(int index, bool alternateSides) {
-    return (index + static_cast<int>(alternateSides)) % 2 == 0 ? -1.0F : 1.0F;
+constexpr float kOptionDown = 0.35F;
+// 原作横向间距由 24 像素缩至 8 像素，过渡用 8 个 60 Hz 帧；世界侧距沿用现有三维布局。
+constexpr float kFocusedHomingSide = kHomingSide / 3.0F;
+constexpr float kOptionFocusSeconds = 8.0F / 60.0F;
+constexpr float kDefaultAimDepth = 20.0F;
+/// @brief 求最近准星命中球体的深度；forward 须为单位向量，返回正世界单位，未命中时使用默认深度。
+float AimDepth(Vector3 position, Vector3 forward, std::span<const PlayerAimTarget> targets) {
+    float nearestEntry = std::numeric_limits<float>::max();
+    float depth = kDefaultAimDepth;
+    for (const auto& target : targets) {
+        if (target.radius <= 0.0F) continue;
+        const auto relative = game_math::Subtract(target.position, position);
+        const float along = relative.x * forward.x + relative.y * forward.y + relative.z * forward.z;
+        const auto perpendicular = game_math::Subtract(relative, game_math::Scale(forward, along));
+        const float halfChordSquared = target.radius * target.radius -
+            (perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y + perpendicular.z * perpendicular.z);
+        if (along <= 0.0F || halfChordSquared < 0.0F) continue;
+        const float entry = std::max(0.0F, along - std::sqrt(halfChordSquared));
+        if (entry >= nearestEntry) continue;
+        nearestEntry = entry;
+        // 选择首先遮住射线的判定体，但瞄向射线上穿过其内部的点，避免从偏下的模块擦过球面。
+        // 不能直接瞄准球心，否则准星边缘的目标会获得额外吸附；极近距离保留正深度防止零向量。
+        depth = std::max(0.05F, along);
+    }
+    return depth;
 }
-/// @brief 将视线沿横向偏转 angleDegrees（度），返回单位方向；forward/right 须正交且归一化。
-/// angleDegrees 的正负分别指向玩家局部右侧和左侧。
-Vector3 ShotSpreadDirection(Vector3 forward, Vector3 right, float angleDegrees) {
+
+/// @brief 从模块 origin 指向准星目标平面的散射落点；angleDegrees 为相对准星的横向角（度）。
+/// position 为视点，forward/right 须正交归一化，depth 为正世界单位；返回单位方向。
+Vector3 ConvergingShotDirection(Vector3 origin, Vector3 position, Vector3 forward,
+                               Vector3 right, float depth, float angleDegrees) {
     const float angle = angleDegrees * std::numbers::pi_v<float> / 180.0F;
-    // 在局部正交基上偏转，保证高仰俯角下仍保持张角和弹速；不能直接叠加世界 yaw。
-    return game_math::Add(game_math::Scale(forward, std::cos(angle)),
-                          game_math::Scale(right, std::sin(angle)));
+    // 散射落点对称分布在垂直视线的同一深度平面，任意仰俯角下仍以准星为中心。
+    const auto point = game_math::Add(position, game_math::Add(game_math::Scale(forward, depth),
+        game_math::Scale(right, std::tan(angle) * depth)));
+    return BulletSystem::DirectionTo(origin, point);
 }
 }  // namespace
 
@@ -67,6 +77,13 @@ void Player::ResetPose() {
     position_ = {0.0F, 0.0F, -6.5F};
     yaw_ = 0.0F;
     pitch_ = 0.0F;
+    secondaryFrame_ = -1;
+    secondaryFractionalFrame_ = 0.0;
+    laserReadyAt_={};++weaponEpoch_;
+    optionFocus_ = 0.0F;
+    optionAimDepth_ = kDefaultAimDepth;
+    visualAge_ = 0.0;
+    bombCooldown_ = 0.0F;
 }
 
 void Player::SetView(float yawRadians, float pitchRadians) {
@@ -80,10 +97,21 @@ void Player::SetInvulnerability(float seconds) {
 
 bool Player::Update(float deltaTime, const PlayerInput& input,
                     BulletSystem& bullets, VisualId bulletVisual,
-                    VisualId homingVisual, bool allowFire) {
+                    VisualId secondaryVisual, bool allowFire,
+                    std::span<const PlayerAimTarget> aimTargets) {
+    PlayerShotVisuals visuals;visuals.primary=bulletVisual;visuals.secondary.fill(secondaryVisual);
+    return Update(deltaTime,input,bullets,visuals,allowFire,aimTargets);
+}
+
+bool Player::Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
+                    const PlayerShotVisuals& visuals, bool allowFire,
+                    std::span<const PlayerAimTarget> aimTargets) {
+    // 恋札在整个 300 帧演出内保持原作 0.3 倍速度；跨过终点的大帧只缩放仍有效的时间段。
+    const float slowedSeconds=shot_==ShotType::IllusionLaser ? std::min(deltaTime,bombCooldown_) : 0;
     invulnerableTimer_ = std::max(0.0F, invulnerableTimer_ - deltaTime);
     bombCooldown_ = std::max(0.0F, bombCooldown_ - deltaTime);
-    fireTimer_ -= deltaTime;
+    visualAge_ += deltaTime;
+    optionFocus_ = std::clamp(optionFocus_ + (input.focus ? deltaTime : -deltaTime) / kOptionFocusSeconds, 0.0F, 1.0F);
 
     SetView(yaw_ - input.mouseDelta.x * kMouseSensitivity * input.mouseSensitivityScale,
             pitch_ - input.mouseDelta.y * kMouseSensitivity * input.mouseSensitivityScale);
@@ -100,19 +128,43 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
 
     // 归一化后斜向移动不会比单轴移动更快。
     movement = game_math::Normalize(movement);
-    const float speed = input.focus ? kFocusSpeed : kSpeed;
+    const float speed = (input.focus ? kFocusSpeed : kSpeed) * (IsMarisa() ? 1.25F : 1.0F);
     position_ = game_math::Add(position_,
-                               game_math::Scale(movement, speed * deltaTime));
+                               game_math::Scale(movement, speed * (deltaTime-0.7F*slowedSeconds)));
     constexpr Vector3 limit{kArenaHalfExtents.x - kArenaPadding,
                             kArenaHalfExtents.y - kArenaPadding,
                             kArenaHalfExtents.z - kArenaPadding};
     position_.x = std::clamp(position_.x, -limit.x, limit.x);
     position_.y = std::clamp(position_.y, -limit.y, limit.y);
     position_.z = std::clamp(position_.z, -limit.z, limit.z);
+    optionAimDepth_ = AimDepth(position_, forward, aimTargets);
 
-    if (allowFire && input.fire && fireTimer_ <= 0.0F) {
-        Fire(bullets, bulletVisual, homingVisual);
-        fireTimer_ = input.focus ? 0.075F : 0.09F;
+    UpdateLasers(allowFire,bullets,aimTargets);
+    if (!allowFire) {
+        secondaryFrame_ = -1;
+        secondaryFractionalFrame_ = 0.0;
+    } else if (secondaryFrame_ < 0) {
+        if (input.fire) {
+            secondaryFrame_ = 0;
+            secondaryFractionalFrame_ = 0.0;
+            FireNativeFrame(bullets, visuals, aimTargets);
+        }
+    } else {
+        secondaryFractionalFrame_ += static_cast<double>(deltaTime) * native_combat::kFramesPerSecond;
+        // 四机体主副弹共用原始逻辑窗口，Focus 不再改变主弹冷却。
+        // 原作每次开火至少完成 0…29 帧；满火力的 period=16 不能改成连续计时，否则跨窗口节奏会变。
+        while (secondaryFractionalFrame_ >= 1.0 - 0.000001) {
+            secondaryFractionalFrame_ = std::max(0.0, secondaryFractionalFrame_ - 1.0);
+            if (++secondaryFrame_ == native_combat::kShotWindowFrames) {
+                if (!input.fire) {
+                    secondaryFrame_ = -1;
+                    secondaryFractionalFrame_ = 0.0;
+                    break;
+                }
+                secondaryFrame_ = 0;
+            }
+            FireNativeFrame(bullets, visuals, aimTargets);
+        }
     }
     return input.bomb && TryUseBomb();
 }
@@ -120,7 +172,7 @@ bool Player::Update(float deltaTime, const PlayerInput& input,
 bool Player::AdjustPower(int delta) {
     const int previousPower = power_;
     const long long updated = static_cast<long long>(power_) + delta;
-    power_ = static_cast<int>(std::clamp(updated, 0LL,
+    power_ = static_cast<int>(std::clamp(updated, static_cast<long long>(kMinPower),
                                          static_cast<long long>(kMaxPower)));
     return previousPower < kMaxPower && power_ == kMaxPower;
 }
@@ -143,6 +195,12 @@ PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
         return PlayerContact::Graze;
     }
     return PlayerContact::None;
+}
+
+bool Player::ContactEnemyBody(Vector3 position,float radius) const {
+    if(invulnerableTimer_>0 || !std::isfinite(radius) || radius<=0)return false;
+    const float contactRadius=kHitRadius+radius;
+    return game_math::DistanceSquared(position_,position)<=contactRadius*contactRadius;
 }
 
 bool Player::TakeHit() {
@@ -175,56 +233,97 @@ Vector3 Player::Up() const {
             -std::cos(yaw_) * std::sin(pitch_)};
 }
 
-void Player::Fire(BulletSystem& bullets, VisualId bulletVisual,
-                  VisualId homingVisual) {
-    const Vector3 forward = Forward();
-    const Vector3 right = Right();
-    // 相对屏幕下移而非世界 -Y，避免仰俯视时发射点重新遮挡准星。
-    const Vector3 muzzle = game_math::Add(position_,
-        game_math::Subtract(game_math::Scale(forward, kMuzzleForward),
-                            game_math::Scale(Up(), kMuzzleDown)));
-    const ShotLevel* level = &kShotLevels.front();
-    for (const ShotLevel& candidate : kShotLevels) {
-        if (power_ < candidate.threshold) break;
-        level = &candidate;
-    }
-    for (int index = 0; index < level->straightCount; ++index) {
-        // gold 只有一个中央模块：整组弹从同一点均匀展开，奇数发的中央弹沿视线直飞。
-        const float lane = level->straightCount > 1
-                               ? 2.0F * index / (level->straightCount - 1) - 1.0F
-                               : 0.0F;
-        const Vector3 direction = ShotSpreadDirection(forward, right,
-            lane * (shot_ == ShotType::Needle ? 1.5F : level->straightHalfAngleDegrees));
-        Bullet* bullet = bullets.Spawn(BulletOwner::Player, muzzle,
-            game_math::Scale(direction, 20.0F),
-            0.09F,
-            Color{255, 255, 255, kPlayerBulletAlpha}, bulletVisual);
-        if (bullet) bullet->damage = shot_ == ShotType::Needle ? 3.3F : 2.0F;
-    }
-    for (int index = 0; shot_ == ShotType::HomingAmulet && index < level->homingCount; ++index) {
-        const float side = ShotSideSign(index, alternateCyanSide_);
-        const Vector3 origin = game_math::Add(muzzle,
-                                              game_math::Scale(right, side * kHomingSide));
-        const float laneFraction = static_cast<float>(index / 2 + 1) /
-                                   static_cast<float>((level->homingCount + 1) / 2);
-        const Vector3 direction = ShotSpreadDirection(forward, right,
-            side * laneFraction * level->homingHalfAngleDegrees);
-        Bullet* bullet = bullets.Spawn(BulletOwner::Player, origin,
-            game_math::Scale(direction, 14.0F),
-            0.10F, Color{255, 255, 255, kPlayerBulletAlpha}, homingVisual);
-        if (bullet) {
-            bullet->damage = 1.0F;
-            bullet->homingTurnRate = 5.5F;
+std::array<Vector3, 2> Player::OptionPositions() const {
+    const float scale = OptionScale();
+    // 平滑插值只改变局部侧距；不跟随世界坐标轴，转向或仰俯视时仍停留在画面两侧。
+    const float blend = optionFocus_ * optionFocus_ * (3.0F - 2.0F * optionFocus_);
+    const float side = (kHomingSide + (kFocusedHomingSide - kHomingSide) * blend) * scale;
+    const auto center = game_math::Add(position_, game_math::Subtract(
+        game_math::Scale(Forward(), kMuzzleForward * scale), game_math::Scale(Up(), kOptionDown * scale)));
+    const auto offset = game_math::Scale(Right(), side);
+    return {game_math::Subtract(center, offset), game_math::Add(center, offset)};
+}
+
+float Player::OptionScale() const {
+    return std::min(1.0F, optionAimDepth_ / (2.0F * kMuzzleForward));
+}
+
+void Player::UpdateLasers(bool allowFire, BulletSystem& bullets,
+                          std::span<const PlayerAimTarget> aimTargets) {
+    if(!allowFire)laserReadyAt_={};
+    const auto centers=OptionPositions();
+    bullets.Pool().ForEachActive([&](Bullet& bullet) {
+        if(bullet.owner!=BulletOwner::Player || bullet.playerShotKind!=PlayerShotKind::Laser)return;
+        if(!allowFire || !IsMarisa() || bullet.weaponEpoch!=weaponEpoch_ || bullet.playerSlot<0 || bullet.playerSlot>1) {bullet.active=false;return;}
+        bullet.position=centers[bullet.playerSlot];
+        const float depth=AimDepth(position_,Forward(),aimTargets);
+        bullet.beamDirection=ConvergingShotDirection(bullet.position,position_,Forward(),Right(),depth,0);
+    });
+}
+
+void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& visuals,
+                             std::span<const PlayerAimTarget> aimTargets) {
+    const auto centers=OptionPositions();
+    const auto forward=Forward(),right=Right(),up=Up();
+    const float depth=AimDepth(position_,forward,aimTargets);
+    const float scale=OptionScale(),pixelUnit=kOptionWorldHeight/36*scale;
+    // 低帧率一次补发多个逻辑帧时，按各帧实际时刻检查副机槽，不能让整个显示帧提前冷却完成。
+    const double fireTime=visualAge_-secondaryFractionalFrame_/60;
+    const auto main=game_math::Add(position_,game_math::Subtract(
+        game_math::Scale(forward,kMuzzleForward*scale),game_math::Scale(up,kMuzzleDown*scale)));
+    for(const auto& shot:native_combat::ForPower(shot_,power_).shots) {
+        if(shot.kind==3) {
+            const int slot=shot.phase;
+            // 原表的 period 是槽冷却（120～330 帧），phase 是槽号；持续射击也只能各保留一束。
+            if(laserReadyAt_[slot]>fireTime+0.000001)continue;
+            bool existing=false;
+            bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+                existing|=bullet.owner==BulletOwner::Player && bullet.playerShotKind==PlayerShotKind::Laser &&
+                          bullet.weaponEpoch==weaponEpoch_ && bullet.playerSlot==slot;
+            });
+            if(existing)continue;
+            const auto origin=centers[slot];
+            if(auto* beam=bullets.Spawn(BulletOwner::Player,origin,{},shot.width*pixelUnit*0.5F,
+                                       Color{255,255,255,kShotAlpha},visuals.secondary[shot.script-1125])) {
+                beam->sourceShotRva=shot.sourceRva;beam->playerShotKind=PlayerShotKind::Laser;beam->playerSlot=slot;beam->weaponEpoch=weaponEpoch_;
+                beam->beamDirection=ConvergingShotDirection(origin,position_,forward,right,depth,0);
+                beam->beamLength=32;beam->damage=0;beam->damagePerSecond=shot.damage*60;
+                // 原动画在剩余 70 帧收到标签 1，再淡出 30 帧；槽冷却仍持续至表中 period 结束。
+                beam->laserFadeAt=(shot.period-70)/60.0F;beam->maxAge=(shot.period-40)/60.0F;
+                laserReadyAt_[slot]=fireTime+shot.period/60.0;
+            }
+            continue;
+        }
+        // 保留原表相位，即使 phase>=period 不可达也不能归一化，否则会凭空增加低档导弹。
+        if(secondaryFrame_%shot.period!=shot.phase)continue;
+        const auto base=shot.module==0 ? main : centers[shot.module-1];
+        const auto origin=game_math::Add(base,game_math::Subtract(game_math::Scale(right,shot.x*pixelUnit),
+                                                                 game_math::Scale(up,shot.y*pixelUnit)));
+        const auto direction=ConvergingShotDirection(origin,position_,forward,right,depth,shot.angle*180/std::numbers::pi_v<float>+90);
+        const auto visual=shot.module==0 ? visuals.primary : IsMarisa() ? visuals.secondary[shot.script-1121] : visuals.secondary[0];
+        // 普通弹的原始矩形判定仍由目录保留，三维适配沿用既有球形半径；追踪弹维持 0.10。
+        if(auto* bullet=bullets.Spawn(BulletOwner::Player,origin,game_math::Scale(direction,shot.speed*20/12),
+                                     shot.kind==1 ? 0.10F : 0.09F,Color{255,255,255,kShotAlpha},visual)) {
+            bullet->damage=shot.damage;bullet->sourceShotRva=shot.sourceRva;
+            if(shot.kind==1)bullet->homingTurnRate=5.5F; // 转向仍使用三维引导；原生转向规则未导出。
+            if(shot.kind==2) {
+                bullet->playerShotKind=PlayerShotKind::Missile;
+                bullet->acceleration=game_math::Scale(forward,0.3F*60*20/12);
+                bullet->impactVisual=visuals.impact[shot.script-1121];
+                const float pixels=shot.script==1121 ? 32 : shot.script==1122 ? 42 : 48;
+                bullet->explosionRadius=pixels*kOptionWorldHeight/36*0.5F;
+            }
         }
     }
-    alternateCyanSide_ = !alternateCyanSide_;
 }
 
 bool Player::TryUseBomb() {
     if (bombs_ <= 0 || bombCooldown_ > 0.0F) return false;
     --bombs_;
-    bombCooldown_ = 1.0F;
-    invulnerableTimer_ = 2.6F;
+    const auto& bomb=BombDefinition(shot_);
+    // 原作同一时间只允许一场 Bomb，保护期覆盖完整演出及其后的恢复时间。
+    bombCooldown_ = bomb.durationFrames/60.0F;
+    invulnerableTimer_ = bomb.invulnerabilityFrames/60.0F;
     return true;
 }
 

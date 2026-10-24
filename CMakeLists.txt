@@ -43,9 +43,13 @@ add_library(koumakyou_engine STATIC
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
     src/gameplay/actors/player.cpp
+    src/gameplay/data/native_combat.cpp
     src/gameplay/bullets/system.cpp
     src/gameplay/combat/combat.cpp
+    src/gameplay/combat/damage_rules.cpp
     src/gameplay/effects/actor_effects.cpp
+    src/gameplay/effects/player_bomb.cpp
+    src/gameplay/effects/bomb_volume.cpp
     src/gameplay/items/drop_system.cpp
     src/platform/window_input.cpp
     src/render/menu_render.cpp
@@ -53,6 +57,8 @@ add_library(koumakyou_engine STATIC
     src/render/game_render.cpp
     src/render/command_bar.cpp
     src/render/gameplay_hud.cpp
+    src/render/player_bomb_render.cpp
+    src/render/bomb_geometry.cpp
     src/render/sprite_renderer.cpp
     src/render/animated_sprite.cpp
     src/resources/asset_manager.cpp
@@ -147,6 +153,9 @@ if(BUILD_TESTING)
         tests/drop_tests.cpp
         tests/gameplay_tests.cpp
         tests/player_tests.cpp
+        tests/marisa_tests.cpp
+        tests/native_combat_tests.cpp
+        tests/player_bomb_tests.cpp
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
     target_link_libraries(koumakyou_tests PRIVATE koumakyou_engine)

@@ -21,6 +21,8 @@ public:
     [[nodiscard]] bool IsMidboss() const override { return encounter_==Encounter::Midboss; }
     [[nodiscard]] const char* DisplayName() const override { return "Rumia"; }
     [[nodiscard]] bool CanTakeDamage() const override { return !retiring_ && script_.damageable; }
+    /// @brief 准备期的免伤不关闭本体；退场脚本可能保留正生命和 active，但已经不再伤害玩家。
+    [[nodiscard]] bool CanContactPlayer() const override { return Boss::CanContactPlayer() && !retiring_; }
     /// @brief 只在可受击期检查伤害阈值；阶段交接及脚本准备期不能因碰撞重复推进。
     [[nodiscard]] bool ShouldAdvanceFromDamage() const override;
     [[nodiscard]] float TimeLimit() const override { return script_.timeoutFrames/60.0F; }

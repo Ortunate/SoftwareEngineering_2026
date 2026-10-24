@@ -13,6 +13,7 @@
 #include "config/settings.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/items/drop_system.hpp"
+#include "gameplay/effects/player_bomb.hpp"
 #include "gameplay/arena.hpp"
 #include "stage/system.hpp"
 #include "stage/content.hpp"
@@ -160,7 +161,7 @@ private:
     /// @brief 增减玩家 Power，首次升满时显示提示并将当前敌弹转成自动吸取的星点。
     /// @param delta Power 点数，可为负；下降后再次升满可重新触发。
     void AdjustPlayerPower(int delta);
-    /// @brief 处理玩家命中/擦弹及敌人、Boss 的受击判定。
+    /// @brief 合并敌弹与敌人/Boss 本体对玩家的同帧命中，再处理擦弹及敌方受伤；对话不判定本体接触。
     void ResolveCollisions();
     /// @brief 将关卡事件转换为出怪、对话或 Boss 战操作。
     /// @param event 已到触发时刻的关卡事件。
@@ -175,8 +176,12 @@ private:
     /// @brief 开始原文对话；战后独白结束才固定 Bonus 并进入奖励明细，关闭后进入胜利收尾。
     void BeginStageDialogue(StageEventId id, bool afterBattle = false) override;
     void StageMessage(std::string_view message, float duration) override;
-    /// @brief 玩家已消耗 Bomb 后清弹、伤害敌人并展示反馈。
+    /// @brief 消耗 Bomb 后启动独立攻击和全道具吸取，仅按初始保护实体清弹，不立即全场扣血。
     void ApplyBombEffect();
+    /// @brief 在敌人和敌弹推进后、玩家碰撞前逐 60 Hz 帧推进 Bomb，所有命中均由真实空间实体决定。
+    void UpdatePlayerBomb(float deltaTime);
+    /// @brief 结算当前 Bomb 逻辑帧；只将真实接触交给伤害提供方，并反馈光球原始累计，同一帧重复调用无效。
+    void ResolvePlayerBombFrame();
     /// @brief 玩家命中后更新场景反馈，并按剩余残机处理游戏失败。
     void HandlePlayerHit();
     /// @brief 结算当前 Boss 阶段并进入下一阶段或一面结算。
@@ -211,6 +216,16 @@ private:
     void DrawStageClear() const;
     /// @brief 在窗口右侧等比滑入完整符卡立绘，独立横幅显示名称。
     void DrawSpellCutIn() const;
+    /// @brief Bomb 背景压暗在透明战斗对象之前绘制，保持原生加色光效；须在 BeginMode3D 内调用。
+    void DrawPlayerBombBackdrop(float width,float height) const;
+    /// @brief 使用对应自机重绘图展示短暂宣告，名称保持至演出结束；暂停只读取冻结采样。
+    void DrawPlayerBombCutIn() const;
+    /// @brief 播放最近一次 Bomb Start/Update 的原始音效事件，同一更新中的重复编号只播放一次。
+    void PlayPlayerBombSounds();
+    /// @brief 取消 Bomb 攻击、世界演出和声音，并丢弃暂停标记；卸载关卡和切换状态之前调用。
+    void ClearPlayerBomb();
+    /// @brief 暂停/恢复确实在播放的 Bomb 音效，避免恢复时播放从未启动的声音。
+    void PausePlayerBombSounds(bool paused);
     /// @brief 根据对话计时器绘制台词及最近表情，以预先采样的透明度和强调程度绘制贴边立绘。
     void DrawDialogue() const;
     /// @brief 绘制开始菜单；motion 可借用离开首页前的展示快照，供 Start 跨页混合使用，空指针读取当前展示。
@@ -246,10 +261,16 @@ private:
     // 当前一局是否捕获鼠标，预览和离屏测试在恢复暂停时仍不捕获。
     bool captureCursor_ = true;
     Player player_{};
+    // 只借用本关卡图集；卸载前重置，动画年龄来自 Player，暂停与复活均沿用玩家时间基准。
+    std::array<battle::Cursor, 2> playerOptionAnimations_{};
     std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
     EnemyPool<kEnemyCapacity> enemies_{};
     ActorEffectSystem actorEffects_{};
+    PlayerBombEffect playerBomb_{}; // 仅借用关卡 ANM；退出、重开、结算及卸载资源前清空。
+    bool playerBombStartedThisFrame_=false;
+    int playerBombResolvedFrame_=-1; // 只属于当前 Bomb，Start/Clear 重置，杜绝重复碰撞入口再次扣血。
+    std::array<bool,4> playerBombSoundPaused_{}; // 与四种音效名字对应，记录本次暂停实际停止的缓冲。
     DropSystem drops_{};
     StageDirector stage_{};
     std::unique_ptr<StageContent> stageContent_{};
@@ -274,19 +295,20 @@ private:
     bool stageClearShown_ = false; // 每局至多计算并展示一次；重开时重置，防止事件重入重复加分。
     /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
     [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
-    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，统一确认操作仍只推进一句。
+    /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，确认不越过原生退场或结算保护。
     [[nodiscard]] int DialogueIndex(float* lineStart = nullptr) const;
     [[nodiscard]] float DialogueDuration() const;
     bool dialogueAfterBattle_ = false;
     bool dialogueBossMusic_ = false;
-    float dialogueTimer_ = 0.0F;
+    double dialogueTimer_ = 0.0; // 整段对话的游戏秒数；双精度累积，避免长对白在高 FPS 下偏离原生指令帧。
     bool dialogueActive_ = false;
     ui::DialogueMotion dialogueMotion_{}; // 只在 Playing 的对话期间推进；暂停保持当前透明度、缩放与位移。
     std::optional<StageEventId> bossEventId_;
     std::optional<StageEventId> dialogueEventId_;
     SpriteRenderer spriteRenderer_{};
-    // 绘制时复用空间；星点可超过普通道具池容量，不能沿用固定长度的道具绘制数组。
+    // 道具与自机太极圈共用公告板缓冲；星点可超过普通道具池容量，不能改成固定长度数组。
     mutable std::vector<PickupSprite> pickupSprites_;
+    mutable std::vector<BombVolumeSprite> playerBombVolumes_; // 本帧借用攻击几何快照，下一帧重建。
     std::string message_;
     int selectedMenuItem_ = 0; // 首页选项在本次运行中保留；首次启动默认 Start，返回首页不重置。
     ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。
@@ -306,15 +328,15 @@ private:
     int bestScore_ = 0;
     StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
-    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前仅 Normal、灵梦与第一面可玩；魔理沙候选可浏览，未开放机体不启动游戏。
-    int selectedCharacter_ = 0; // Start/Practice Start 的角色候选，0 灵梦/1 魔理沙；魔理沙目前仅支持选择与浏览。
+    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前支持两位角色的四种御札、Normal 与第一面。
+    int selectedCharacter_ = 0; // 实际角色候选，0 灵梦/1 魔理沙；普通开局和符卡练习均沿用该编号。
     ui::MenuMotion startCharacterMotion_{}; // 角色切换时前景、背景及人物摘要共用的渐变权重。
     int selectedPracticeStage_ = 0; // kPracticeStages 的局部索引，始终指向已注册关卡。
-    int selectedShot_ = 0; // 普通选择页为角色内 0/1；符卡练习战斗为目录的四组合编号，目前仅 0/1 能启动。
+    int selectedShot_ = 0; // 始终为角色内御札 0/1；成绩四组合编号由实际 Player::Shot() 给出。
     bool challengeMode_ = false;
     bool practiceMode_ = false;
     bool previewMode_ = false; // 静默截图不写入本机通关成绩，StartRun 会恢复普通记录规则。
-    spell::Selection spellSelection_{}; // 浏览身份与当前战斗御札独立，魔理沙不可借灵梦入口开局。
+    spell::Selection spellSelection_{}; // 浏览身份与当前战斗御札独立，确认时拆分为角色及角色内御札。
     spell::Records spellRecords_{};
     ui::MenuMotion spellCharacterMotion_{}; // 四组合展示权重，切换人物与文字共用，不影响鼠标命中。
     ui::MenuMotion spellGroupMotion_{},spellDifficultyMotion_{}; // 同页两列分别保存强调，焦点递进不清空另列或重播页面动画。

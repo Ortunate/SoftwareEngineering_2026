@@ -1,7 +1,8 @@
-// 本文件负责实现敌人、Boss、弹幕与道具的公告板绘制、光晕及调试图层。
+// 本文件统一绘制角色、弹幕、道具及 Bomb 视觉精灵/光束，处理透明排序、光晕和调试图层。
 
 #include "render/sprite_renderer.hpp"
 #include "render/animated_sprite.hpp"
+#include "render/bomb_geometry.hpp"
 
 #include "rlgl.h"
 
@@ -11,6 +12,9 @@
 
 namespace koumakyou {
 namespace {
+
+// 恋之御札激光额外加宽以改善三维视角下的辨识度；只影响显示，不改变原生判定宽度。
+constexpr float kMarisaLaserVisualWidthScale = 1.5F;
 
 /// @brief 单张精灵的贴图、世界高度与归一化锚点。
 struct SpriteSpec {
@@ -196,7 +200,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                           std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
                           const SpriteShaders& shaders,
-                          const ActorEffectSystem& effects) const {
+                          const ActorEffectSystem& effects,std::span<const BombVolumeSprite> bombVolumes) const {
     // 旧清单仍可持有 cutout/core shader；所有透明贴图改用连续 Alpha，不能让裁剪阈值切断柔边。
     (void)shaders;
     using Kind=TransparentDraw::Kind;
@@ -215,10 +219,12 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         for(const auto point:points) {center.x+=point.x/4;center.y+=point.y/4;center.z+=point.z/4;}
         return depth(center);
     };
-    transparentDraws_.clear();translucentActors_.clear();beams_.clear();spriteDepths_.clear();
+    transparentDraws_.clear();translucentActors_.clear();beams_.clear();spriteDepths_.clear();bombActorDepths_.clear();
     glowCounts_.assign(visuals.size(),0);
     const auto queue=[&](TransparentDraw command) {
-        spriteDepths_.push_back(command.depth);transparentDraws_.push_back(command);
+        spriteDepths_.push_back(command.depth);
+        if(command.kind==Kind::Actor)bombActorDepths_.push_back(command.depth);
+        transparentDraws_.push_back(command);
     };
     const auto addActor=[&](Vector3 position,VisualId id,float radius,ActorKind kind,
                             ActorAppearance appearance,const anm::Frame& animation) {
@@ -270,27 +276,43 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         queue({Kind::Bullet,d,0,&bullet});
     });
 
-    if(!beams_.empty()) {
+    if(!beams_.empty() || !bombVolumes.empty()) {
         std::sort(spriteDepths_.begin(),spriteDepths_.end());
         spriteDepths_.erase(std::unique(spriteDepths_.begin(),spriteDepths_.end()),spriteDepths_.end());
+        std::sort(bombActorDepths_.begin(),bombActorDepths_.end());
+        bombActorDepths_.erase(std::unique(bombActorDepths_.begin(),bombActorDepths_.end()),bombActorDepths_.end());
     }
-    for(const Bullet* beam:beams_) {
-        const float first=depth(beam->position),last=depth(beam->BeamEnd()),difference=last-first;
+    const auto queueBeam=[&](Vector3 origin,Vector3 end,Kind kind,std::size_t index,const Bullet* beam) {
+        const float first=depth(origin),last=depth(end),difference=last-first;
         beamCuts_={0,1};
+        // 立体巨束自身也需要轴向分段，侧视和沿光轴观看时均按真实前后顺序混合三个光壳。
+        if(kind==Kind::BombVolume)for(int i=1;i<12;++i)beamCuts_.push_back(i/12.0F);
         // 一条光束可能同时在演员前后：在精灵平面处切开，UV 仍沿整束连续，不能整束按中点排序。
         if(std::abs(difference)>1e-5F) {
-            const auto begin=std::upper_bound(spriteDepths_.begin(),spriteDepths_.end(),std::min(first,last));
-            const auto end=std::lower_bound(spriteDepths_.begin(),spriteDepths_.end(),std::max(first,last));
+            // 巨束按演员精确切分，小弹和小道具使用轴向区间排序；否则数千星点会把四个网格切成几万份。
+            // 普通战斗激光保留既有的逐精灵切分，Bomb 的攻击判定完全不受渲染分段数影响。
+            const auto& depths=kind==Kind::BombVolume ? bombActorDepths_ : spriteDepths_;
+            const auto begin=std::upper_bound(depths.begin(),depths.end(),std::min(first,last));
+            const auto end=std::lower_bound(depths.begin(),depths.end(),std::max(first,last));
             for(auto it=begin;it!=end;++it) {
                 const float t=(*it-first)/difference;
                 if(t>1e-5F && t<1-1e-5F)beamCuts_.push_back(t);
             }
         }
         std::sort(beamCuts_.begin(),beamCuts_.end());
+        beamCuts_.erase(std::unique(beamCuts_.begin(),beamCuts_.end()),beamCuts_.end());
         for(std::size_t i=1;i<beamCuts_.size();++i) {
             const float from=beamCuts_[i-1],to=beamCuts_[i];
-            transparentDraws_.push_back({Kind::Beam,first+(from+to)*0.5F*difference,0,beam,from,to});
+            transparentDraws_.push_back({kind,first+(from+to)*0.5F*difference,index,beam,from,to});
         }
+    };
+    for(const Bullet* beam:beams_)queueBeam(beam->position,beam->BeamEnd(),Kind::Beam,0,beam);
+    for(std::size_t i=0;i<bombVolumes.size();++i) {
+        const auto* sprite=bombVolumes[i].sprite;
+        if(!sprite)continue;
+        if(sprite->shape==PlayerBombSprite::Shape::Beam)
+            queueBeam(sprite->volume.origin,sprite->volume.end,Kind::BombVolume,i,nullptr);
+        else transparentDraws_.push_back({Kind::BombVolume,depth(sprite->volume.origin),i});
     }
     // 沿视线投影的深度才决定遮挡；到相机的欧氏距离会在斜视/大公告板重叠时反转顺序。
     std::stable_sort(transparentDraws_.begin(),transparentDraws_.end(),
@@ -317,8 +339,9 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         } else if(command.kind==Kind::Pickup) {
             const auto& pickup=pickups[command.index];const auto& visual=FindVisual(visuals,pickup.visual);
             const float height=visual.worldHeight*pickup.heightScale;
-            if(IsTextureValid(visual.texture))DrawSprite(camera,screenUp,Spec(visual,height,pickup.animation),pickup.position);
-            else DrawSphere(pickup.position,height*0.35F,RED);
+            if(IsTextureValid(visual.texture))DrawSprite(camera,screenUp,Spec(visual,height,pickup.animation),
+                                                       pickup.position,{255,255,255,pickup.alpha});
+            else DrawSphere(pickup.position,height*0.35F,Fade(RED,pickup.alpha/255.0F));
         } else if(command.kind==Kind::Bullet) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
             if(visual.mode==VisualMode::Sphere)DrawSphere(bullet.position,bullet.radius,bullet.color);
@@ -333,6 +356,29 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             DrawSprite(camera,screenUp,Spec(visual,bullet.radius*(distance<1.1F ? 2.6F : 3.15F)),
                        bullet.position,{255,255,255,opacity});
             EndBlendMode();
+        } else if(command.kind==Kind::BombVolume) {
+            const auto& volume=bombVolumes[command.index];const auto& visual=FindVisual(visuals,volume.visual);
+            if(visual.archive && volume.sprite) {
+                auto sample=*volume.sprite;
+                bool interiorBeam=false;
+                if(sample.shape==PlayerBombSprite::Shape::Beam) {
+                    const auto axis=Normalized(Subtract(sample.volume.end,sample.volume.origin));
+                    interiorBeam=DistanceSquared(camera.position,sample.volume.origin)<0.8F*0.8F &&
+                                 forward.x*axis.x+forward.y*axis.y+forward.z*axis.z>0.9F;
+                    // 从束内观察改画有视差的流光而非圆台外壁，曝光由绘制器统一控制；外部仍显示完整巨束。
+                }
+                if(sample.shape==PlayerBombSprite::Shape::Sphere || sample.shape==PlayerBombSprite::Shape::Star) {
+                    // 镜头进入球体时保留实际几何和攻击，仅减弱近眼曝光，防止回旋光球把第一人称画面染成整屏白块。
+                    const float distance=std::sqrt(DistanceSquared(camera.position,sample.volume.origin));
+                    const float visualRadius=sample.height*0.5F*std::max(std::abs(sample.frame.scale.y),
+                        std::abs(sample.frame.scale.x)*sample.frame.source.width/std::max(1.0F,sample.frame.source.height));
+                    const float radius=std::max({0.01F,sample.volume.radius,visualRadius});
+                    const float near=std::clamp((distance/radius-0.35F)/1.3F,0.0F,1.0F);
+                    const float minimum=sample.shape==PlayerBombSprite::Shape::Star ? 0.005F : 0.075F;
+                    sample.frame.color.a=static_cast<unsigned char>(sample.frame.color.a*std::max(minimum,near*near*near*near));
+                }
+                DrawBombGeometry(visual.texture,*visual.archive,sample,command.from,command.to,interiorBeam);
+            }
         } else {
             const auto& beam=*command.bullet;const auto& visual=FindVisual(visuals,beam.visual);
             const auto point=[&](float t) {return Vector3{beam.position.x+beam.beamDirection.x*beam.beamLength*t,
@@ -343,7 +389,10 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                 auto frame=Spec(visual,1,&beam.animation.player.Sample()).animation;
                 frame.source.y+=(1-command.to)*frame.source.height;
                 frame.source.height*=command.to-command.from;
-                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,width*2);
+                // 自机激光三级原生脚本以 scale.x 控制横向宽度，不能只换颜色而丢失强度档位的形状。
+                const float nativeScale=beam.playerShotKind==PlayerShotKind::Laser
+                    ? std::abs(frame.scale.x)*kMarisaLaserVisualWidthScale : 1.0F;
+                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,width*2*nativeScale,{255,255,255,beam.color.a});
             } else if(!beam.Dangerous() && beam.beamGrowSeconds<=0) {
                 DrawLine3D(start,end,Fade(beam.color,0.7F));
                 DrawBeamShell(start,end,beam.radius*0.3F,Fade(beam.color,0.4F),command.from==0,command.to==1,true);

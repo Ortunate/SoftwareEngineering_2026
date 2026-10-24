@@ -17,3 +17,6 @@ koumakyou_settings.cfg
 # 本机原生应用与视觉检查截图
 /output/koumakyou.app/
 /output/stage1-review/
+
+# 本机原作血量与弹伤害的只读解析结果
+/output/native-combat-data/

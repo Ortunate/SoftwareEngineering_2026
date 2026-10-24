@@ -4,6 +4,8 @@
 
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/player.hpp"
+#include "gameplay/combat/damage_rules.hpp"
 #include "stage/system.hpp"
 #include "resources/visual_assets.hpp"
 
@@ -42,12 +44,24 @@ struct DialogueLine {
     const char* secondLine = "";
     int expression = 0; // 当前说话人的关卡局部表情编号；另一方保留最近一句的表情。
     float textDelay = 0;
+    float expressionDelay = 0; // 本句表情相对句首的生效秒数；在此之前保留上一句的差分。
+    float confirmDelay = 8.0F/60; // 原 MSG 等待计数至少达到 8 帧后才接受单次确认。
+    float advanceAfter = -1; // 确认后跳至本句内此秒数；负值跳到下一句，末句保留原始退场/结算等待。
+    bool secondLineReplacesFirst = false; // 原脚本写入同一文字槽时保留覆盖行为，原文仍分别保存。
 };
 
 /// @brief 返回截至 lineIndex 的玩家/Boss 表情编号，数组下标分别为 0/1。
-/// 尚未发言的一方使用 0；空台词返回 {0,0}，越界下标按最后一句处理，不持有台词。
+/// elapsed 为当前句内秒数，默认取完整句末；尚未发言的一方使用 0，不持有台词。
 [[nodiscard]] std::array<int, 2> DialogueExpressionsAt(
-    std::span<const DialogueLine> lines, std::size_t lineIndex);
+    std::span<const DialogueLine> lines, std::size_t lineIndex, float elapsed = 1.0e9F);
+
+/// @brief 原 MSG 展开后的演出指令；frame 是包含 wait 停顿的 60 Hz 实际播放帧，按时间和原指令顺序排列。
+/// Portrait 的 slot=0/1 表示自机/对手，value 是 ANM 中断标签 1/3/4/5；其他指令不使用 slot。
+enum class DialogueCueKind { Portrait, InputEnabled, BossMusic };
+struct DialogueCue { int frame; DialogueCueKind kind; int slot, value; };
+/// @brief 查询已展开指令的布尔状态，未出现指令时返回 initial；seconds 是整段对话已播放秒数。
+[[nodiscard]] bool DialogueFlagAt(std::span<const DialogueCue> cues, DialogueCueKind kind,
+                                float seconds, bool initial = false);
 
 /// @brief 悬浮题签的关卡名称；字符串借用内容模块，须覆盖整个关卡展示期，不包含游玩模式。
 struct StageDisplayInfo {
@@ -58,6 +72,11 @@ struct StageDisplayInfo {
 class StageContent {
 public:
     virtual ~StageContent() = default;
+    /// @brief 可选最终 HP 规则，不定义接触几何；无敌目标及 Bomb 零接触不进入提供方。
+    /// 默认空指针使用明确标记的基准/回退及已核对的 Bomb 规则。
+    [[nodiscard]] virtual const DamageRuleProvider* DamageRules() const { return nullptr; }
+    /// @brief 关联原始数值目录；默认空表示尚未绑定。DataOnly 记录仍需实现演员和时间轴才可游玩。
+    [[nodiscard]] virtual const native_combat::StageData* CombatData() const { return nullptr; }
     /// @brief 返回本关卡的图片与音频清单；返回的引用由 Stage 持有，调用方不得释放。
     [[nodiscard]] virtual const StageAssetManifest& Assets() const = 0;
     /// @brief 返回按触发顺序排列的时间轴事件；底层存储须覆盖 StageDirector 的生命周期。
@@ -71,14 +90,32 @@ public:
     /// @return Boss 与对话返回 false，结束后通过 StageDirector::EndEvent 报告；其他返回 true。
     /// @throws std::invalid_argument 未规范的批次、缺少异步 ID 或动作参数非法。
     bool HandleEvent(const StageEvent& event, StageEventSink& sink) const;
-    /// @brief 返回本关卡的对话台词；底层存储须在展示期间有效。
-    [[nodiscard]] virtual std::span<const DialogueLine> Dialogue(bool afterBattle = false) const = 0;
+    /// @brief 返回实际机体所属角色的对话台词；shot 使用四组合编号，底层存储须在展示期间有效。
+    [[nodiscard]] virtual std::span<const DialogueLine> Dialogue(bool afterBattle = false, ShotType shot=ShotType::HomingAmulet) const = 0;
+    /// @brief 返回当前对话的原生演出时间轴；缺省空表沿用通用的逐句强调。
+    [[nodiscard]] virtual std::span<const DialogueCue> DialogueCues(bool, ShotType) const { return {}; }
     /// @brief 返回单句台词的展示秒数。
     [[nodiscard]] virtual float DialogueLineDuration() const = 0;
     /// @brief 返回玩家直射弹的外观 ID。
     [[nodiscard]] virtual VisualId PlayerBulletVisual() const = 0;
     /// @brief 返回玩家追踪弹的外观 ID。
     [[nodiscard]] virtual VisualId PlayerHomingVisual() const = 0;
+    /// @brief 返回梦之御札侧针的外观 ID；未配置独立针素材的关卡沿用主弹外观。
+    [[nodiscard]] virtual VisualId PlayerNeedleVisual() const { return PlayerBulletVisual(); }
+    /// @brief 返回实际机体左/右副机外观；side 为 0/1，未配置时返回 invalid，不绘制该物件。
+    [[nodiscard]] virtual VisualId PlayerOptionVisual(int side, ShotType shot=ShotType::HomingAmulet) const {
+        (void)side; (void)shot; return kInvalidVisualId;
+    }
+    /// @brief 返回实际机体的主副弹及命中外观；默认实现兼容只配置灵梦素材的关卡。
+    [[nodiscard]] virtual PlayerShotVisuals PlayerVisuals(ShotType shot) const {
+        PlayerShotVisuals result;result.primary=PlayerBulletVisual();
+        result.secondary.fill(shot==ShotType::Needle ? PlayerNeedleVisual() : PlayerHomingVisual());
+        return result;
+    }
+    /// @brief 返回对应 Bomb 的四层原生动画外观；未实现项为 invalid，不构造替代贴图。
+    [[nodiscard]] virtual std::array<VisualId,4> PlayerBombVisuals(ShotType) const {
+        return {kInvalidVisualId,kInvalidVisualId,kInvalidVisualId,kInvalidVisualId};
+    }
     /// @brief 返回 Power 道具的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId PowerPickupVisual() const = 0;
     /// @brief 返回大 P 道具外观；未区分大小的关卡默认复用普通 P 图。
@@ -87,8 +124,8 @@ public:
     [[nodiscard]] virtual VisualId ScorePickupVisual() const = 0;
     /// @brief 返回清弹星点的外观 ID，贴图由当前 Stage 的素材清单持有。
     [[nodiscard]] virtual VisualId StarPickupVisual() const = 0;
-    /// @brief 按关卡局部表情编号返回玩家立绘；未知编号回退到默认表情 0。
-    [[nodiscard]] virtual VisualId HeroPortraitVisual(int expression = 0) const = 0;
+    /// @brief 按实际机体及关卡局部表情编号返回玩家立绘；未知表情回退到该角色默认表情 0。
+    [[nodiscard]] virtual VisualId HeroPortraitVisual(int expression = 0, ShotType shot=ShotType::HomingAmulet) const = 0;
     /// @brief 按关卡局部表情编号返回 Boss 立绘；未知编号回退到默认表情 0。
     [[nodiscard]] virtual VisualId BossPortraitVisual(int expression = 0) const = 0;
     /// @brief 返回符卡演出的完整立绘；默认沿用 Boss 默认表情，关卡可独立选择差分。

@@ -2,6 +2,7 @@
 #include "stages/stage1/reference_script.hpp"
 #include "stages/stage1/ids.hpp"
 #include "gameplay/bullets/patterns.hpp"
+#include "gameplay/data/native_combat.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -110,6 +111,13 @@ void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, B
     const auto& a = i.args;
     const auto v = [&](int n) { return Value(a[n]); };
     const auto jump = [&] { context_.frame = static_cast<int>(a[0]); context_.pc = static_cast<int>(a[1]); };
+    // 生命相关值只从统一目录读取；normalIndex 与当前解释器已核对的一面 570 条指令一一对应。
+    // 缺失目录数据不能回退旧硬编码，否则新增关卡会在数值尚未接通时被误判为已实现。
+    const auto healthValue=[&] {
+        const auto* record=native_combat::Instruction(1,context_.sub,context_.pc-1);
+        if(!record || record->opcode!=i.opcode || !record->value)throw std::logic_error("Missing native health instruction");
+        return Value(static_cast<float>(*record->value));
+    };
     switch (i.opcode) {
     case 0: break;
     case 1: finished = true; break;
@@ -161,14 +169,14 @@ void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, B
     }
     case 93: case 94: bullets.ClearEnemyBullets(); rankInfluence_={-0.5F,0.5F,0,0,0,0}; break;
     case 106: soundEvents.push_back(static_cast<int>(a[0])); break;
-    case 105: damageable = a[0]!=0; break;
-    case 108: deathCallback_=static_cast<int>(a[0]); break;
-    case 111: health=maxHealth=a[0]; break;
-    case 112: phaseFrames=static_cast<int>(a[0]); break;
-    case 113: lifeThreshold_=a[0]; break;
-    case 114: lifeCallback_=static_cast<int>(a[0]); break;
-    case 115: timeoutFrames=static_cast<int>(a[0]); break;
-    case 116: timerCallback_=static_cast<int>(a[0]); break;
+    case 105: damageable = healthValue()!=0; break;
+    case 108: deathCallback_=static_cast<int>(healthValue()); break;
+    case 111: health=maxHealth=healthValue(); break;
+    case 112: phaseFrames=static_cast<int>(healthValue()); break;
+    case 113: lifeThreshold_=healthValue(); break;
+    case 114: lifeCallback_=static_cast<int>(healthValue()); break;
+    case 115: timeoutFrames=static_cast<int>(healthValue()); break;
+    case 116: timerCallback_=static_cast<int>(healthValue()); break;
     case 119: dropEvents.push_back(static_cast<int>(a[0])); break;
     case 97: SetAnimation(static_cast<int>(a[0])); break;
     case 100: deathEffect=static_cast<int>(a[0])&255;break;

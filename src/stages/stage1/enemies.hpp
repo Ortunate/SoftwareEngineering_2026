@@ -67,9 +67,10 @@ private:
 /// @brief 按新典 Normal 原始子程序运行的妖精；出生、转弯、停止与发弹以 60 Hz 帧为准。
 class ReferenceEnemy final : public Enemy {
 public:
-    /// @brief 复制出生参数；像素 HP 转换到当前玩家伤害单位，RandomX 只在这里求值一次。
+    /// @brief 复制原始 HP 出生参数，RandomX 只在这里求值一次。
     explicit ReferenceEnemy(const ReferenceEnemyParams& params);
     void SetChallengeRank(int rank) override { script_.SetRank(rank); }
+    [[nodiscard]] bool CanTakeDamage() const override { return script_.damageable; }
     [[nodiscard]] std::span<const int> SoundEvents() const override { return script_.soundEvents; }
     [[nodiscard]] int ReferenceDropKind() const override { return sourceItem_; }
     void Update(float deltaTime, Vector3 playerPosition, BulletSystem& bullets) override;

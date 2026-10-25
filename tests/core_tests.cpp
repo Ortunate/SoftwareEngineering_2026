@@ -373,9 +373,12 @@ void RunAnimationTests();
 
 /// @brief 对比重构前解释器与带参行为的完整轨迹和技能。
 void RunBehaviorTests();
+/// @brief 独立验证一面的空间面积采样、三维弹道和等路程移动。
+void RunSpatialBehaviorTests();
 
 int main() {
     RunBehaviorTests();
+    RunSpatialBehaviorTests();
     assert(koumakyou::ui::BossSeconds(35,0)==35 && koumakyou::ui::BossSeconds(35,0.01F)==34);
     assert(koumakyou::ui::BossSeconds(25,5)==20 && koumakyou::ui::BossSeconds(25,25)==0);
     assert(koumakyou::ui::BossSeconds(25,26)==0 && koumakyou::ui::BossSeconds(-1,0)==-1);

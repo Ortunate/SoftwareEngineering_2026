@@ -171,7 +171,7 @@ struct GameLifecycleProbe {
         game.stage_=StageDirector{};
         game.player_.SetInvulnerability(1000);
         for(int fps : {30,60,120,240}) for(bool timeout : {false,true}) {
-            // 击破可能发生在一个 120 Hz 行为更新步中的任意渲染帧；只测整 1/120 秒会漏掉准备期空隙。
+            // 在不同显示帧间隙送入伤害，最多等待一个 120 Hz 战斗步；准备期仍须立即保护。
             for(int alignment=0;alignment<std::max(1,fps/60);++alignment) {
                 const float dt=1.0F/fps;
                 game.bullets_.Reset(); game.drops_.Clear();
@@ -187,7 +187,9 @@ struct GameLifecycleProbe {
                 const auto hit=[&] {
                     auto* shot=game.bullets_.Spawn(BulletOwner::Player,game.boss_->position,{},0.1F,WHITE,kInvalidVisualId);
                     assert(shot); shot->damage=100000;
-                    game.Update(dt); // 包含 UpdateBoss、弹幕移动及 ResolveCollisions，不能直接调用 AdvancePhase 代替。
+                    const int phase=game.boss_->phase;
+                    for(int frame=0;frame<std::max(1,(fps+119)/120)&&game.boss_->phase==phase;++frame)
+                        game.Update(dt); // 经过实际固定步、弹幕移动与碰撞，不能直接推进阶段。
                 };
                 ready(1); hit();
                 assert(game.boss_->phase==2);
@@ -384,9 +386,9 @@ struct GameLifecycleProbe {
                 }
                 if(!after) {
                     const float musicFrame=character==0?3852.0F:2467.0F;
-                    game.BeginStageDialogue(1);game.dialogueTimer_=(musicFrame-1)/60;game.Update(0);
+                    game.BeginStageDialogue(1);game.dialogueTimer_=(musicFrame-1)/60;game.Update(1.0F/120);
                     assert(!game.dialogueBossMusic_);
-                    game.dialogueTimer_=musicFrame/60;game.Update(0);assert(game.dialogueBossMusic_);
+                    game.dialogueTimer_=musicFrame/60;game.Update(1.0F/120);assert(game.dialogueBossMusic_);
                     game.dialogueTimer_=game.DialogueDuration()-1.0F/60;game.UpdateUiMotion(0);
                     assert(game.dialogueMotion_.Sample(false).slide>0.99F && game.dialogueMotion_.Sample(true).slide>0.99F);
                 }
@@ -724,12 +726,84 @@ struct GameLifecycleProbe {
             game.Update(0.1F);
             assert(EnemyCount(game) == 1);
             game.actors_.ForEachActive([](const behavior::Actor& enemy) {
-                assert(enemy.age == 0.1F && enemy.position.z < 5.0F);
+                assert(std::abs(enemy.age-0.1F)<1e-6F && enemy.position.z < 5.0F);
             });
             assert(enemyShot->active && enemyShot->position.x > -4.0F);
             assert(playerShot->active && playerShot->position.x > -4.0F);
             assert(PickupCount(game) == pickups);
         }
+    }
+
+    /// @brief 从真实 Game 更新比较各遭遇的弹池轨迹，确保显示帧率不改变补发、延迟转向或空间位置。
+    static void TestSpatialFrameRates(Game& game,const std::string& prefix) {
+        // 跨重开只保留数值，不复制借用关卡 ANM 的动画游标，避免期望快照延长素材借用期。
+        struct BulletSample {
+            Vector3 position,velocity,acceleration,rotationAxis,launchDirection;
+            float age;
+            int nativeType,nativeColor;
+            bool turnApplied;
+        };
+        std::size_t peak=0;
+        for(int phase:{0,1,2,3,4}) {
+            std::vector<BulletSample> expected;Vector3 expectedBoss{};float expectedTimer=0;
+            for(int fps:{120,30,60,144,240}) {
+                game.StartPreview();game.stage_=StageDirector{};game.BeginStageBoss(phase!=0,3);
+                while(game.boss_->phase<phase)game.boss_->AdvancePhase();
+                // 以同频率的原编排给出实际位移预算；包含原边界与插值终点补偿，不能用任意速度上限代替。
+                behavior::Actor original;
+                original.Reset(phase==0 ? Vector3{0,0,11.4285717F} : Vector3{0,0,5.71428585F},game.boss_->health,phase==0 ? 1882 : 5093);
+                stage1::ConfigureBehavior(original,false);
+                constexpr std::array<behavior::Entry,5> entries{stage1::rumia::Midboss,stage1::rumia::FirstNonspell,
+                    stage1::rumia::NightBird,stage1::rumia::SecondNonspell,stage1::rumia::Demarcation};
+                original.Start(entries[phase](original));auto referenceBullets=std::make_unique<BulletSystem>();
+                double referenceTicks=0;
+                for(int frame=0;frame<6*fps;++frame) {
+                    referenceTicks+=static_cast<double>(1.0F/fps)*120;
+                    float budget=0;
+                    while(referenceTicks+0.00001>=1) {
+                        referenceTicks-=1;const auto before=original.Position();
+                        original.Update(1.0F/120,game.player_.Position(),*referenceBullets);
+                        const auto after=original.Position();budget+=BulletSystem::Length({after.x-before.x,after.y-before.y,after.z-before.z});
+                    }
+                    const Vector3 before=game.boss_->position;game.Update(1.0F/fps);
+                    const Vector3 after=game.boss_->position;
+                    assert(BulletSystem::Length({after.x-before.x,after.y-before.y,after.z-before.z})<=budget+0.0001F);
+                }
+                std::vector<BulletSample> actual;
+                game.bullets_.Pool().ForEachActive([&](const Bullet& bullet){
+                    actual.push_back({bullet.position,bullet.velocity,bullet.acceleration,bullet.rotationAxis,bullet.launchDirection,
+                                      bullet.age,bullet.nativeType,bullet.nativeColor,bullet.turnApplied});
+                });
+                assert(game.bullets_.Pool().DroppedSpawns()==0);peak=std::max(peak,actual.size());
+                const auto equal=[](Vector3 a,Vector3 b) {
+                    assert(std::abs(a.x-b.x)<1e-5F&&std::abs(a.y-b.y)<1e-5F&&std::abs(a.z-b.z)<1e-5F);
+                };
+                if(fps==120) {expected=actual;expectedBoss=game.boss_->position;expectedTimer=game.boss_->phaseTimer;}
+                else {
+                    assert(expected.size()==actual.size());equal(expectedBoss,game.boss_->position);
+                    assert(expectedTimer==game.boss_->phaseTimer);
+                    for(std::size_t i=0;i<actual.size();++i) {
+                        equal(expected[i].position,actual[i].position);equal(expected[i].velocity,actual[i].velocity);
+                        equal(expected[i].acceleration,actual[i].acceleration);equal(expected[i].rotationAxis,actual[i].rotationAxis);
+                        equal(expected[i].launchDirection,actual[i].launchDirection);
+                        assert(expected[i].age==actual[i].age&&expected[i].turnApplied==actual[i].turnApplied);
+                        assert(expected[i].nativeColor==actual[i].nativeColor&&expected[i].nativeType==actual[i].nativeType);
+                    }
+                }
+                if(fps==120) {
+                    const auto name="spatial-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());
+                }
+            }
+        }
+        // 高 FPS 尚未到战斗步时保留边沿；暂停清输入且不追赶暂停的墙钟时间。
+        game.StartPreview();game.stage_=StageDirector{};
+        game.pendingPlayerInput_.mouseDelta={3,4};game.pendingPlayerInput_.bomb=true;
+        game.Update(1.0F/240);assert(game.pendingPlayerInput_.bomb&&game.bombCount_==0);
+        game.Update(1.0F/240);assert(!game.pendingPlayerInput_.bomb&&game.bombCount_==1);
+        game.Update(1.0F/30);assert(game.bombCount_==1);
+        const auto paused=game.stage_.Elapsed();game.TogglePause();game.Update(3);assert(game.stage_.Elapsed()==paused);
+        game.TogglePause();game.Update(1.0F/120);assert(std::abs(game.stage_.Elapsed()-paused-1.0F/120)<1e-5F);
+        std::cout<<"Spatial Game trajectories identical at 30/60/120/144/240 FPS; sampled peak "<<peak<<" bullets\n";
     }
 
     /// @brief 不跳过事件，按 60 Hz 从开场推进到结算，并渲染对话、每个 Boss 阶段和光束。
@@ -738,9 +812,11 @@ struct GameLifecycleProbe {
         game.previewMode_ = false; // 本用例在临时目录验证标准模式成绩保存。
         bool midbossSeen = false, dialogueSeen = false;
         std::array<bool, 4> phases{};
-        int frame = 0;
+        int frame = 0;std::size_t peakBullets=0;
         for (; frame < 400 * 60 && game.state_ != RunState::Won; ++frame) {
             game.Update(1.0F / 60.0F);
+            assert(game.bullets_.Pool().DroppedSpawns()==0);
+            peakBullets=std::max(peakBullets,game.bullets_.Pool().ActiveCount());
             if (frame == 12 * 60) {
                 const int width=GetScreenWidth(),height=GetScreenHeight();
                 for(const auto size:std::array<Vector2,3>{{{1280,720},{960,720},{1680,720}}}) {
@@ -783,7 +859,7 @@ struct GameLifecycleProbe {
         assert(game.assets_.Stage().visuals.empty());
         assert(game.bestScore_ >= 120000);
         Capture(game, prefix, "whole-stage-clear");
-        std::cout << "Whole Stage 1 cleared at " << frame / 60.0F << " seconds\n";
+        std::cout << "Whole Stage 1 cleared at " << frame / 60.0F << " seconds; peak "<<peakBullets<<" / "<<BulletSystem::kCapacity<<" bullets\n";
 
         for (int phase : {2, 4}) {
             game.practiceMode_ = game.spellPractice_ = true;
@@ -811,7 +887,7 @@ struct GameLifecycleProbe {
         Capture(game, prefix, "beam-warning");
         game.TogglePause();
         game.Update(3);
-        game.bullets_.Pool().ForEachActive([](const Bullet& bullet) { assert(bullet.age == 0.5F); });
+        game.bullets_.Pool().ForEachActive([](const Bullet& bullet) { assert(std::abs(bullet.age-0.5F)<1e-5F); });
         Capture(game, prefix, "pause");
         game.TogglePause();
         game.Update(0.6F);
@@ -1095,8 +1171,14 @@ struct GameLifecycleProbe {
         TestDialogueTransitions(game,prefix);
         TestPortraits(game,prefix);
         TestNativeDialogue(game,prefix);
+        TestSpatialFrameRates(game,prefix);
         TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
+        TestActorLifecycle(game,prefix);
+    }
+
+    /// @brief 单独覆盖演员池复用、完整退场、暂停冻结及资源卸载，便于定位整关结束后的生命周期问题。
+    static void TestActorLifecycle(Game& game,const std::string& prefix) {
         // 经过真实 Game 更新验证高帧率下直接行为演员的入场与独立视觉时钟。
         game.StartPreview();game.stage_=StageDirector{};
         game.actors_.Spawn(testing::SpawnAt({0,-0.5F,8.8F}));
@@ -1184,7 +1266,7 @@ struct GameLifecycleProbe {
         assert(game.state_==RunState::Playing && game.dialogueActive_ && game.dialogueTimer_==0);
         assert(!game.stageClearShown_);
         game.dialogueTimer_=game.DialogueDuration();
-        game.Update(0);
+        game.Update(1.0F/120);
         assert(game.state_==RunState::StageClear && !game.dialogueActive_);
         game.ContinueStageClear();
         assert(game.state_ == RunState::Finishing);
@@ -1197,12 +1279,16 @@ struct GameLifecycleProbe {
         assert(game.score_ == finalScore);
         game.Update(0.2F);
         Capture(game, prefix, "boss-defeat");
+        float pausedEffectAge=0;
+        game.actorEffects_.Pool().ForEachActive([&](const ActorExitEffect& effect) {
+            assert(effect.age>=0.2F&&effect.age<0.22F);pausedEffectAge=effect.age;
+        });
         game.TogglePause();
         game.Update(2.0F);
         assert(game.state_ == RunState::Paused);
         assert(!game.assets_.Stage().visuals.empty());
-        game.actorEffects_.Pool().ForEachActive([](const ActorExitEffect& effect) {
-            assert(effect.age == 0.2F);
+        game.actorEffects_.Pool().ForEachActive([&](const ActorExitEffect& effect) {
+            assert(effect.age==pausedEffectAge);
         });
         game.TogglePause();
         assert(game.state_ == RunState::Finishing);
@@ -1259,7 +1345,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --actor-contacts-only、--viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --stage-only、--lifecycle-only、--spatial-only、--actor-contacts-only、--viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
 /// 仅 --bomb-audio-only 初始化音频且强制静音，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -1279,6 +1365,14 @@ int main(int argc, char** argv) {
         SetTargetFPS(0);
         if(audioTest) {
             koumakyou::GameLifecycleProbe::TestPlayerBombAudio(*game);
+        } else if(argc>=3 && std::string(argv[2])=="--stage-only") {
+            koumakyou::GameLifecycleProbe::TestWholeStage(*game,prefix);
+            koumakyou::GameLifecycleProbe::TestActorLifecycle(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--lifecycle-only") {
+            koumakyou::GameLifecycleProbe::TestBossEntryPreservesField(*game);
+            koumakyou::GameLifecycleProbe::TestActorLifecycle(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--spatial-only") {
+            koumakyou::GameLifecycleProbe::TestSpatialFrameRates(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--actor-contacts-only") {
             koumakyou::GameLifecycleProbe::TestActorContacts(*game);
         } else if(argc>=3 && std::string(argv[2])=="--viewport-only") {

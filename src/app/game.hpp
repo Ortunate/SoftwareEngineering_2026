@@ -150,6 +150,12 @@ private:
     /// @brief 采集玩家输入，委托 Player 更新，并处理 Bomb 对战场的影响。
     /// @param deltaTime 本帧经过的秒数。
     void UpdatePlayer(float deltaTime);
+    /// @brief 每显示帧采集一次键鼠状态；固定战斗步消费缓存，鼠标和 Bomb 边沿不会重复或丢失。
+    [[nodiscard]] PlayerInput ReadPlayerInput() const;
+    /// @brief 使用调用方提供的输入快照推进一个战斗步；鼠标增量和 Bomb 首次按下只允许消费一次。
+    void UpdatePlayer(float deltaTime,const PlayerInput& input);
+    /// @brief 按 1/120 秒推进关卡、对话、演员、弹池、Bomb 与碰撞；先行为后碰撞，再即时交接阶段。
+    void UpdateBattleStep(float deltaTime,const PlayerInput& input,bool dialogueConfirm,bool fastForward);
     /// @brief 推进全部活动敌人的航线及技能计时器。
     /// @param deltaTime 本帧经过的秒数。
     void UpdateActors(float deltaTime);
@@ -161,7 +167,7 @@ private:
     /// @brief 增减玩家 Power，首次升满时显示提示并将当前敌弹转成自动吸取的星点。
     /// @param delta Power 点数，可为负；下降后再次升满可重新触发。
     void AdjustPlayerPower(int delta);
-    /// @brief 合并敌弹与敌人/Boss 本体对玩家的同帧命中，再处理擦弹及敌方受伤；对话不判定本体接触。
+    /// @brief 合并敌弹与敌人/Boss 本体对玩家的同一战斗步命中，再处理擦弹及敌方受伤；对话不判定本体接触。
     void ResolveCollisions();
     /// @brief 将关卡事件转换为出怪、对话或 Boss 战操作。
     /// @param event 已到触发时刻的关卡事件。
@@ -272,6 +278,9 @@ private:
     int playerBombResolvedFrame_=-1; // 只属于当前 Bomb，Start/Clear 重置，杜绝重复碰撞入口再次扣血。
     std::array<bool,4> playerBombSoundPaused_{}; // 与四种音效名字对应，记录本次暂停实际停止的缓冲。
     DropSystem drops_{};
+    double battleTicks_=0; // 未消费的 120 Hz 战斗步；暂停不累积，重开清零。
+    PlayerInput pendingPlayerInput_{}; // 持续键采用最新快照，鼠标增量累加，Bomb 边沿保留至下个战斗步。
+    bool pendingDialogueConfirm_=false;
     StageDirector stage_{};
     std::unique_ptr<StageContent> stageContent_{};
     StageId stageId_ = StageId::Stage1;

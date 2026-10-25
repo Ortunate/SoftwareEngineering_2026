@@ -20,14 +20,14 @@ void Actor::Attach(Routine::Handle handle) {
     catch(...) { handle.destroy();throw; }
 }
 void Actor::Reset(Vector3 initialPosition,float hp,std::uint32_t seed,bool mirrored) {
-    ClearRoutines();motion={};skills={};motion.position=initialPosition;motion.mirrored=mirrored;
+    ClearRoutines();motion={};skills={};motion.position=initialPosition;motion.mirrored=mirrored;liftedMotion.reset();spatialIndex=seed ? seed : 1;
     health=maxHealth=hp;lifeThreshold=-1;damageable=true;finished=false;
     pendingCallback=lifeCallback=deathCallback=timeoutCallback=nullptr;
     phaseFrames=0;timeoutFrames=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();
     animationScript=-1;animationAge=0;animationRevision=0;poses={-1,-1,-1,-1,-1};pose_=-1;
     random_=seed ? seed : 1;remainingTicks_=0;bullets_=nullptr;
     active=true;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=0.55F;
-    scoreValue=0;sourceItem=-2;presentation.Reset();animation={};entered_=false;retireOutside_=false;defeatBase_=kInvalidVisualId;
+    scoreValue=0;sourceItem=-2;presentation.Reset();animation={};entered_=false;retireOutside_=false;retirementHeights_.reset();defeatBase_=kInvalidVisualId;
 }
 void Actor::Activate(const Spawn& spawn) {
     if(!Valid(spawn))throw std::invalid_argument("Invalid behavior actor spawn");
@@ -39,9 +39,10 @@ void Actor::Activate(const Spawn& spawn) {
     }
     position=origin=Position();visual=spawn.visual;hitRadius=spawn.hitRadius;
     scoreValue=spawn.sourceScore;sourceItem=spawn.sourceItem;retireOutside_=spawn.retireOutside;defeatBase_=spawn.defeatBase;
-    damageable=spawn.damageable;retirementBounds_=spawn.retirementBounds;
+    damageable=spawn.damageable;retirementBounds_=spawn.retirementBounds;retirementHeights_=spawn.retirementHeights;
     // 场内出生已满足入场条件；否则一次较大的首帧更新越界后会被误认为尚未入场。
-    entered_=retireOutside_&&retirementBounds_.Contains(motion.position);
+    entered_=retireOutside_&&retirementBounds_.Contains(motion.position)&&
+        (!retirementHeights_||(motion.position.y>=retirementHeights_->x&&motion.position.y<=retirementHeights_->y));
     Start(Follow(*this,spawn.pattern));
 }
 void Actor::Start(Routine routine) { ClearRoutines();Attach(routine.Release()); }
@@ -56,7 +57,8 @@ void Actor::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(defeatBase_!=kInvalidVisualId)defeatVisual=static_cast<VisualId>(defeatBase_+std::clamp(deathEffect,0,2));
     // 场外出生缓冲带不能在第一帧回收；入场后才按同一世界边界判断退场。
     if(retireOutside_) {
-        const bool inside=retirementBounds_.Contains(motion.position);
+        const bool inside=retirementBounds_.Contains(motion.position)&&
+            (!retirementHeights_||(motion.position.y>=retirementHeights_->x&&motion.position.y<=retirementHeights_->y));
         if(inside)entered_=true;
         if(entered_&&!inside)active=false;
     }
@@ -74,20 +76,21 @@ float Actor::Random(float range) {
     return static_cast<float>(random_>>8)/16777216.0F*range;
 }
 void Actor::RandomDirection(float minimum,float maximum,bool reflect) {
+    auto& path=liftedMotion ? liftedMotion->planar : motion;
     constexpr float pi=std::numbers::pi_v<float>;
     float angle=Random(maximum-minimum)+minimum;
     if(reflect) {
-        if(motion.position.x<motion.bounds.lower.x+motion.reflectionMargin.x&&std::abs(angle)>pi/2)angle=std::copysign(pi,angle)-angle;
-        if(motion.position.x>motion.bounds.upper.x-motion.reflectionMargin.x&&std::abs(angle)<pi/2)angle=std::copysign(pi,angle)-angle;
-        if(motion.position.z>motion.bounds.upper.y-motion.reflectionMargin.y&&angle<0)angle=-angle;
-        if(motion.position.z<motion.bounds.lower.y+motion.reflectionMargin.y&&angle>0)angle=-angle;
+        if(path.position.x<path.bounds.lower.x+path.reflectionMargin.x&&std::abs(angle)>pi/2)angle=std::copysign(pi,angle)-angle;
+        if(path.position.x>path.bounds.upper.x-path.reflectionMargin.x&&std::abs(angle)<pi/2)angle=std::copysign(pi,angle)-angle;
+        if(path.position.z>path.bounds.upper.y-path.reflectionMargin.y&&angle<0)angle=-angle;
+        if(path.position.z<path.bounds.lower.y+path.reflectionMargin.y&&angle>0)angle=-angle;
     }
-    motion.Polar(angle,motion.speed);
+    path.Polar(angle,path.speed);
 }
 void Actor::Animate(int script) { animationScript=script;animationAge=0;++animationRevision; }
 void Actor::ClearBullets() { bullets_->ClearEnemyBullets();skills.rankInfluence=skill::kDefaultRankInfluence; }
 void Actor::Tick() {
-    motion.BeginFrame(updateHz_);
+    if(liftedMotion)liftedMotion->BeginFrame(motion,updateHz_);else motion.BeginFrame(updateHz_);
     if(health<lifeThreshold) { health=lifeThreshold;pendingCallback=lifeCallback;return; }
     if(health<=0&&deathCallback) { pendingCallback=deathCallback;return; }
     if(timeoutFrames>=0&&phaseFrames>=timeoutFrames) {
@@ -108,7 +111,7 @@ void Actor::Tick() {
         current.resume();
     }
     if(budget<=0)throw std::runtime_error("Behavior resume budget exhausted");
-    motion.EndFrame(updateHz_);
+    if(liftedMotion)liftedMotion->EndFrame(motion,updateHz_);else motion.EndFrame(updateHz_);
     if(poses[3]>=0) {
         const float horizontal=motion.velocity.x*(motion.mirrored ? -1 : 1);
         const int next=horizontal<0 ? -2 : horizontal>0 ? 2 : 0;
@@ -124,6 +127,7 @@ void Actor::Tick() {
     phaseFrames+=contentFrames;
 }
 Routine Follow(Actor& actor,Pattern pattern) {
+    actor.skills.spatial=pattern.spatialShots;
     actor.motion.Polar(pattern.movement.angle,pattern.movement.speed);
     actor.Animate(pattern.initialAnimation);actor.deathEffect=pattern.deathEffect;actor.skills.offset=pattern.muzzleOffset;
     int movement=0;
@@ -151,7 +155,9 @@ bool Valid(const Pattern& pattern) {
 }
 bool Valid(const Spawn& spawn) {
     const auto& bounds=spawn.retirementBounds;
-    return Valid(spawn.pattern)&&std::isfinite(spawn.position.x)&&std::isfinite(spawn.position.y)&&std::isfinite(spawn.position.z)&&
+    return (!spawn.retirementHeights||(std::isfinite(spawn.retirementHeights->x)&&std::isfinite(spawn.retirementHeights->y)&&
+        spawn.retirementHeights->x<=spawn.retirementHeights->y))&&
+        Valid(spawn.pattern)&&std::isfinite(spawn.position.x)&&std::isfinite(spawn.position.y)&&std::isfinite(spawn.position.z)&&
         std::isfinite(spawn.sourceHealth)&&spawn.sourceHealth>0&&spawn.sourceScore>=0&&
         spawn.sourceItem>=-2&&spawn.sourceItem<=2&&spawn.visual!=kInvalidVisualId&&
         std::isfinite(spawn.hitRadius)&&spawn.hitRadius>0&&

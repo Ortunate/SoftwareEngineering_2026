@@ -86,7 +86,7 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
         if (bullet.launchBoostSeconds > 0 && motionAge <= bullet.launchBoostSeconds) {
             const float speed = Length(bullet.baseVelocity) + bullet.launchBoost *
                 (1 - motionAge / bullet.launchBoostSeconds);
-            bullet.velocity = Scale(Normalize(bullet.baseVelocity), speed);
+            bullet.velocity = Scale(Normalize(Length(bullet.launchDirection)>0 ? bullet.launchDirection : bullet.baseVelocity), speed);
         } else bullet.velocity = Add(bullet.velocity, Scale(bullet.acceleration, motionDelta));
         if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
             if (motionAge >= bullet.turnDelaySeconds) {

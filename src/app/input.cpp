@@ -243,9 +243,8 @@ void Game::AdjustOption(int offset) {
     SaveSettings();
 }
 
-void Game::UpdatePlayer(float deltaTime) {
-    playerBombStartedThisFrame_=false;
-    const PlayerInput input{
+PlayerInput Game::ReadPlayerInput() const {
+    return PlayerInput{
         .mouseDelta = GetMouseDelta(),
         .mouseSensitivityScale = mouseSensitivity_ / 100.0F,
         .forward = BindingDown(bindings_.forward),
@@ -258,6 +257,12 @@ void Game::UpdatePlayer(float deltaTime) {
         .fire = BindingDown(bindings_.fire),
         .bomb = BindingPressed(bindings_.bomb),
     };
+}
+
+void Game::UpdatePlayer(float deltaTime) { UpdatePlayer(deltaTime,ReadPlayerInput()); }
+
+void Game::UpdatePlayer(float deltaTime,const PlayerInput& input) {
+    playerBombStartedThisFrame_=false;
     shotSoundTimer_ = std::max(0.0F, shotSoundTimer_ - deltaTime);
     if (input.fire && !dialogueActive_ && shotSoundTimer_ <= 0) {
         assets_.PlaySoundEffect("shoot");

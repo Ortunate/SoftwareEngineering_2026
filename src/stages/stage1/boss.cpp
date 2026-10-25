@@ -22,7 +22,7 @@ void RumiaBoss::StartMidboss() {
     encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
     const float initialHealth=native_combat::RequireLiteral(native_combat::Spawn(1,0,1882,9));
-    behavior_.Reset({0.0F,0.0F,11.4285717F},initialHealth,1882);
+    behavior_.Reset({0,0,11.4285717F},initialHealth,1882);
     ConfigureBehavior(behavior_);behavior_.Start(rumia::Midboss(behavior_));
     behavior_.damageable=false;
     position=behavior_.Position(); health=maxHealth=initialHealth;
@@ -30,7 +30,7 @@ void RumiaBoss::StartMidboss() {
 void RumiaBoss::StartFinalBoss() {
     encounter_=Encounter::Final; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
-    behavior_.Reset({0.0F,0.0F,5.71428585F},HealthGroups()[0].total,5093);
+    behavior_.Reset({0,0,5.71428585F},HealthGroups()[0].total,5093);
     ConfigureBehavior(behavior_);behavior_.Start(rumia::FirstNonspell(behavior_));
     behavior_.damageable=false;
     position=behavior_.Position(); health=maxHealth=HealthGroups()[0].total;
@@ -47,7 +47,7 @@ bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     return behavior_.pendingCallback!=nullptr || behavior_.finished;
 }
 bool RumiaBoss::ShouldAdvanceFromDamage() const {
-    // Game 每个渲染帧都检查碰撞，但行为按 120 Hz 执行；准备期不能用上次攻击的残余生命再次推进。
+    // 碰撞与行为共用 120 Hz 战斗步；准备期不能用上次攻击的残余生命再次推进。
     return CanTakeDamage() && (health<=0 || (!IsMidboss() && (phase==1 || phase==3) &&
         health<HealthGroups()[phase==1 ? 0 : 1].spell));
 }

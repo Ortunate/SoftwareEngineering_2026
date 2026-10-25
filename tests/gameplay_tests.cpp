@@ -248,8 +248,8 @@ void RunGameplayTests() {
             bullets.Reset();
         }
     }
-    // 使用新典原始帧节点核对道中首发（16 向×3 速度层）与固定 24 秒上限。
-    // 入场从 +Z 场外缓冲带开始，源纵向贯穿战场深度，高度不参与二维出怪轨迹。
+    // 使用原始帧节点核对道中首发（48 个等面积方向×3 速度层）与固定 24 秒上限。
+    // 入场从 +Z 场外缓冲带开始；普通演员保留原 X/Z 路线与固定编队高度。
     const Vector3 entry=Vector3{0,0,11.4285717F};
     assert(entry.x==0 && entry.y==0 && entry.z>11 && entry.z<11.5F);
     const Vector3 exit=Vector3{0,0,-10};
@@ -257,7 +257,7 @@ void RunGameplayTests() {
     koumakyou::behavior::Actor entryEnemy;
     auto entrySpec=koumakyou::testing::SpawnAt(entry);entrySpec.pattern=koumakyou::stage1::kTurningFairy;entryEnemy.Activate(entrySpec);
     entryEnemy.Update(2.0F/60,{},bullets);
-    assert(entryEnemy.active && entryEnemy.position.z<entry.z && entryEnemy.position.y==0);
+    assert(entryEnemy.active && entryEnemy.position.z<entry.z && std::abs(entryEnemy.position.y)<0.0001F);
     // 出生点直接保存在世界坐标中，高度不经过二维投影或逆映射。
     koumakyou::behavior::Actor elevatedEnemy;entrySpec.position={entry.x,2,entry.z};elevatedEnemy.Activate(entrySpec);
     assert(std::abs(elevatedEnemy.position.y-2)<0.0001F);
@@ -300,7 +300,7 @@ void RunGameplayTests() {
     for (int frame=0;frame<160;++frame) assert(!boss.Update(1.0F/60,{},bullets));
     assert(bullets.Pool().ActiveCount()==0);
     boss.Update(1.0F/60,{},bullets);
-    assert(bullets.Pool().ActiveCount()==48);
+    assert(bullets.Pool().ActiveCount()==144); // 48 个球面方向、3 速度层。
     assert(std::abs(boss.TimeLimit()-24)<0.001F && boss.SpellName()==nullptr);
     bullets.Reset();
     for (int frame=161;frame<1441;++frame) boss.Update(1.0F/60,{},bullets);
@@ -312,7 +312,12 @@ void RunGameplayTests() {
     for (int frame=0;frame<112;++frame) boss.Update(1.0F/60,{0,0,-6.5F},bullets);
     assert(bullets.Pool().ActiveCount()==0);
     boss.Update(1.0F/60,{0,0,-6.5F},bullets);
-    assert(bullets.Pool().ActiveCount()==10); // 首次红弹为十个速度层，而非环/锥。
+    assert(bullets.Pool().ActiveCount()==10); // 首次红弹保持十个速度层和真实玩家中心瞄准。
+    bullets.Pool().ForEachActive([](const koumakyou::Bullet& bullet) {
+        const Vector3 expected=koumakyou::BulletSystem::DirectionTo(bullet.position,{0,0,-6.5F});
+        const Vector3 actual=koumakyou::pattern::Normalize(bullet.velocity);
+        assert(std::abs(expected.x-actual.x)<0.0001F&&std::abs(expected.y-actual.y)<0.0001F&&std::abs(expected.z-actual.z)<0.0001F);
+    });
     assert(std::abs(boss.TimeLimit()-35)<0.001F);
     assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="夜符「Night Bird」");
     bullets.Reset();
@@ -338,21 +343,22 @@ void RunGameplayTests() {
     assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="暗符「Demarcation」");
     bullets.Reset();
     for (int frame=0;frame<121;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
-    assert(bullets.Pool().ActiveCount()==34); // rank=16 时原作 -3…6 的弹数修正增加 1 向。
+    assert(bullets.Pool().ActiveCount()==98); // rank=16 时每层基础 48 方向加 1，双球壳共 98 弹。
     bullets.Pool().ForEachActive([](const koumakyou::Bullet& b){
         assert(std::abs(b.turnDelaySeconds-40.0F/60)<0.0001F);
         assert(std::abs(std::abs(b.turnAngle)-std::numbers::pi_v<float>/2)<0.0001F);
-        assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
+        assert(std::abs(koumakyou::BulletSystem::Length(b.rotationAxis)-1)<0.0001F);
     });
-    // 实际延迟转向必须在 X/Z 内完成 90°，Y 坡度保持不变，避免只修正出生位置。
+    // 实际延迟转向绕各方向自己的切向轴完成 90°，保持球面切向运动。
     bullets.Update(1.1F,{},raisedPlayer);
-    assert(bullets.Pool().ActiveCount()==34);
+    assert(bullets.Pool().ActiveCount()==98);
     bullets.Pool().ForEachActive([](const koumakyou::Bullet& b){
         assert(b.turnApplied && !b.turnAimed);
         const Vector3 before=koumakyou::pattern::Normalize(b.baseVelocity);
         const Vector3 after=koumakyou::pattern::Normalize(b.velocity);
-        assert(std::abs(before.y-after.y)<0.0001F);
-        assert(std::abs(before.x*after.x+before.z*after.z)<0.0001F);
-        assert((before.z*after.x-before.x*after.z)*b.turnAngle>0);
+        assert(std::abs(before.x*after.x+before.y*after.y+before.z*after.z)<0.0001F);
+        const Vector3 cross{before.y*after.z-before.z*after.y,before.z*after.x-before.x*after.z,
+                            before.x*after.y-before.y*after.x};
+        assert((cross.x*b.rotationAxis.x+cross.y*b.rotationAxis.y+cross.z*b.rotationAxis.z)*b.turnAngle>0);
     });
 }

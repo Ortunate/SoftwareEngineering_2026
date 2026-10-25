@@ -180,6 +180,7 @@ void Game::CompleteStartRun() {
     actors_.Clear();
     drops_.Clear();
     stage_.Reset();
+    battleTicks_=0;pendingPlayerInput_={};pendingDialogueConfirm_=false;
     score_ = 0;
     graze_ = pointItems_ = 0;
     referenceRank_=16; referenceSubrank_=0; rankTime_=0;
@@ -331,6 +332,7 @@ void Game::ClearActorsWithEffects() {
 }
 
 void Game::TogglePause() {
+    pendingPlayerInput_={};pendingDialogueConfirm_=false;
     if (state_ == RunState::Playing || state_ == RunState::StageClear || state_ == RunState::Finishing) {
         selectedPauseItem_ = 0;
         assets_.PlaySoundEffect("menu_cancel");
@@ -589,6 +591,25 @@ void Game::UpdateState(float deltaTime) {
     if (IsKeyPressed(KEY_F6)) AdjustPlayerPower(8);
 #endif
 
+    // 发弹、弹池推进和碰撞共享固定步，低 FPS 补发的弹只推进各自实际经过的逻辑步。
+    const PlayerInput latest=ReadPlayerInput();
+    const Vector2 accumulatedMouse{pendingPlayerInput_.mouseDelta.x+latest.mouseDelta.x,
+                                   pendingPlayerInput_.mouseDelta.y+latest.mouseDelta.y};
+    const bool bomb=pendingPlayerInput_.bomb||latest.bomb;
+    pendingPlayerInput_=latest;pendingPlayerInput_.mouseDelta=accumulatedMouse;pendingPlayerInput_.bomb=bomb;
+    pendingDialogueConfirm_=pendingDialogueConfirm_||dialogueInput.confirm||dialogueInput.click;
+    const bool fastForward=IsKeyDown(KEY_LEFT_CONTROL)||IsKeyDown(KEY_RIGHT_CONTROL);
+    battleTicks_+=static_cast<double>(deltaTime)*120;
+    while(battleTicks_+0.00001>=1&&state_==RunState::Playing) {
+        battleTicks_-=1;
+        const PlayerInput stepInput=pendingPlayerInput_;
+        const bool confirm=std::exchange(pendingDialogueConfirm_,false);
+        pendingPlayerInput_.mouseDelta={};pendingPlayerInput_.bomb=false;
+        UpdateBattleStep(1.0F/120,stepInput,confirm,fastForward);
+    }
+}
+
+void Game::UpdateBattleStep(float deltaTime,const PlayerInput& input,bool dialogueConfirm,bool fastForward) {
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
     screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
     spellCutInTimer_ = std::max(0.0F, spellCutInTimer_ - deltaTime);
@@ -603,17 +624,16 @@ void Game::UpdateState(float deltaTime) {
                       return HandleStageEvent(event);
                   });
     if(state_!=RunState::Playing)return; // 事件改变状态时不能再推进本帧战斗。
-    // 本帧由时间轴刚启动的对话从下一帧计时，避免第一句少显示一个 deltaTime。
+    // 本步刚启动的对话从下一逻辑步计时，避免首句少显示一个固定步。
     if (dialogueWasActive && dialogueActive_) {
         dialogueTimer_ += deltaTime;
         float lineStart=0;
         const auto lines=CurrentDialogue();
         const auto& line=lines[DialogueIndex(&lineStart)];
         const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
-        const bool fastForward=IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
         const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
             (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
-        if (inputAllowed && (dialogueInput.confirm || dialogueInput.click || fastForward))
+        if (inputAllowed && (dialogueConfirm || fastForward))
             dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
                 line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
         if (!dialogueAfterBattle_ && DialogueFlagAt(cues,DialogueCueKind::BossMusic,dialogueTimer_) && !dialogueBossMusic_) {
@@ -624,7 +644,7 @@ void Game::UpdateState(float deltaTime) {
             if (dialogueEventId_) { stage_.EndEvent(*dialogueEventId_); dialogueEventId_.reset(); }
             if (dialogueAfterBattle_) { BeginStageClear(); return; }
         }
-        // UpdateUiMotion 在战斗更新之前运行；原生演出需在计时与跳句后重新采样，避免低 FPS 多滞后一帧。
+        // 对话计时或跳句后立即重采样；绘制只读取完成后的状态，不推进逻辑时钟。
         if(dialogueActive_ && !cues.empty())dialogueMotion_.Seek(cues,dialogueTimer_);
     }
     if(!dialogueActive_) {
@@ -632,7 +652,7 @@ void Game::UpdateState(float deltaTime) {
         const float period=std::max(4.0F,40.0F-std::max(0,player_.RemainingLives()-1)*4.0F);
         while(rankTime_>=period) { rankTime_-=period; AdjustReferenceRank(100); }
     }
-    UpdatePlayer(deltaTime);
+    UpdatePlayer(deltaTime,input);
     UpdateActors(deltaTime);
     UpdateBoss(deltaTime);
     if (state_ != RunState::Playing) return;

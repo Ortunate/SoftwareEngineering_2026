@@ -75,6 +75,7 @@ struct Bullet {
     float turnDelaySeconds = 0, turnAngle = 0, turnSpeed = 0;
     bool turnAimed = false, turnApplied = false;
     Vector3 baseVelocity{};
+    Vector3 launchDirection{}; // 三维发射的单位方向；零表示旧模式从 baseVelocity 推导，避免零初速弹丢失发射方向。
     float launchBoost = 0, launchBoostSeconds = 0, spawnVisualSeconds = 0;
     float spawnMoveScale = 1; // 10/16/32 帧显现期按原作 1/2、1/2.5、1/3 的速度移动，不参与接触。
     // turnDelaySeconds 与 launchBoostSeconds 从显现结束起算；age 仍从生成起算。

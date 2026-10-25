@@ -1,9 +1,8 @@
-// 本文件使用重构前 ECL 解释器作为独立基准，逐帧对比组合行为的轨迹、动画、技能和阶段边界。
+// 本文件保留独立旧行为差分，并验证编队轨迹、三维插值及固定内容时钟。
 #include "actor_fixture.hpp"
 #include "reference_script.hpp"
 #include "stages/stage1/behaviors.hpp"
 #include "stages/stage1/content.hpp"
-#include "stages/stage1/behaviors.hpp"
 #include "gameplay/data/native_combat.hpp"
 #include <cassert>
 #include <cmath>
@@ -22,6 +21,11 @@ float maxPositionError=0;
 // 原编号只用于定位差分测试的旧指令；生产代码直接引用这五个具名常量。
 constexpr std::array kPatternsBySub{kTurningFairy,kGentleTurningFairy,kLateTurningFairy,
                                         kShootingDarkFairy,kPassingDarkFairy};
+/// @brief 仅关闭有意新增的空间适配；其余生产配方继续接受独立旧解释器的逐帧检查。
+behavior::Pattern PlanarRecipe(behavior::Pattern pattern) {
+    pattern.spatialShots=false;return pattern;
+}
+
 void Equal(float a,float b,const char* field,float tolerance=0.00001F) {
     if(!std::isfinite(a)||!std::isfinite(b)||std::abs(a-b)>tolerance) {
         std::cerr<<std::setprecision(9)<<"behavior mismatch Sub"<<currentSub<<" step "<<currentStep<<" "<<field<<": "<<a<<" != "<<b<<" (error "<<std::abs(a-b)<<")\n";
@@ -61,7 +65,7 @@ void EqualBullets(const BulletSystem& original,const BulletSystem& replacement) 
         assert(x.turnAimed==y.turnAimed&&x.turnApplied==y.turnApplied&&x.Dangerous()==y.Dangerous());
         assert(x.color.r==y.color.r&&x.color.g==y.color.g&&x.color.b==y.color.b&&x.color.a==y.color.a);
         EqualPosition(x.position,y.position,"bullet.position");Equal(x.velocity,y.velocity,"bullet.velocity");
-        Equal(x.baseVelocity,y.baseVelocity,"bullet.baseVelocity");Equal(x.acceleration,y.acceleration,"bullet.acceleration");
+        Equal(x.baseVelocity,y.baseVelocity,"bullet.baseVelocity");Equal(x.launchDirection,y.launchDirection,"bullet.launchDirection");Equal(x.acceleration,y.acceleration,"bullet.acceleration");
         Equal(x.rotationAxis,y.rotationAxis,"bullet.axis");Equal(x.beamDirection,y.beamDirection,"beam.direction");
         const float xs[]={x.radius,x.age,x.maxAge,x.angularVelocity,x.homingTurnRate,x.damage,x.beamLength,x.warningSeconds,
             x.turnDelaySeconds,x.turnAngle,x.turnSpeed,x.launchBoost,x.launchBoostSeconds,x.spawnVisualSeconds,x.spawnMoveScale,
@@ -80,8 +84,8 @@ struct Pair {
         currentSub=sub;
         const float hp=sub<5 ? 256 : sub==9 ? 6000 : sub==26 ? 900 : sub==29 ? 800 : 7000;
         const Vector3 pos=sub<5||sub==9 ? Vector3{60,-32,0} : Vector3{192,96,0};
-        original.Reset(sub,pos,hp,seed,mirrored);replacement.Reset(ReferencePosition(pos),hp,seed,mirrored);ConfigureBehavior(replacement);
-        if(sub<5)replacement.Start(behavior::Follow(replacement,kPatternsBySub.at(sub)));
+        original.Reset(sub,pos,hp,seed,mirrored);replacement.Reset(ReferencePosition(pos),hp,seed,mirrored);ConfigureBehavior(replacement,false);
+        if(sub<5)replacement.Start(behavior::Follow(replacement,PlanarRecipe(kPatternsBySub.at(sub))));
         else replacement.Start(Entry(sub)(replacement));
         if(sub==26||sub==29) {
             original.SetDeathCallback(sub==26 ? 19 : 20);
@@ -158,18 +162,25 @@ void TestBirths() {
         // 旧实现的种子含已插入的道中 Boss 事件索引；显式表必须保留这些固定值。
         assert(p.seed==static_cast<unsigned>(r.frame*31+eventIndex));
         const Vector3 expectedSource{r.position.x==-999 ? 192 : r.position.x,r.position.y,r.position.z};
-        Equal(ReferencePosition(expectedSource),p.position,"spawn.initialPosition");
+        Equal(ReferencePosition(expectedSource),{p.position.x,0,p.position.z},"spawn.initialFormation");
         assert(behavior::Valid(p.pattern));
-        auto enemy=testing::MakeActor(spawn->actor,behavior::UpdateRate::Hz60);
+        auto planar=spawn->actor;planar.position=ReferencePosition(expectedSource);planar.randomX=(r.position.x==-999);planar.pattern=PlanarRecipe(planar.pattern);planar.retirementHeights.reset();
+        auto enemy=testing::MakeActor(planar,behavior::UpdateRate::Hz60);
+        auto production=testing::MakeActor(p,behavior::UpdateRate::Hz60);
+        auto productionBullets=std::make_unique<BulletSystem>();
         auto original=std::make_unique<ReferenceScript>();
         Vector3 source=expectedSource;
-        if(p.randomX)source.x=static_cast<float>((p.seed*1664525U+1013904223U)>>8)/16777216.0F*384;
+        if(planar.randomX)source.x=static_cast<float>((p.seed*1664525U+1013904223U)>>8)/16777216.0F*384;
         original->Reset(r.targetSub,source,p.sourceHealth,p.seed,p.mirrored);
         auto a=std::make_unique<BulletSystem>(),b=std::make_unique<BulletSystem>();
         bool entered=false;
         for(int step=0;step<260&&enemy->active;++step) {
             original->Update(1.0F/60,{2,3,-6},*a);enemy->Update(1.0F/60,{2,3,-6},*b);
+            production->Update(1.0F/60,{2,3,-6},*productionBullets);
             currentSub=r.targetSub;currentStep=step;
+            EqualPosition({original->Position().x,p.position.y,original->Position().z},production->position,"formation.productionPath");
+            assert(production->active==enemy->active);
+            productionBullets->Reset();
             EqualPosition(original->Position(),enemy->position,"spawn.position");EqualBullets(*a,*b);
             const auto pos=original->sourcePosition;
             if(pos.x>=-16&&pos.x<=400&&pos.y>=-16&&pos.y<=464)entered=true;

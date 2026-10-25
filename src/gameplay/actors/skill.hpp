@@ -16,6 +16,9 @@ struct Shot {
     int type=1, color=2, count=1, layers=1;
     float firstSpeed=2.67857143F, lastSpeed=0, angle=0, spacing=0;
     int flags=0;
+    int spatialCount=0; // 三维模式每速度层的基础方向总数；0 沿用 count，正值直接采样该数量，再加本轮 rank 弹数修正。
+    float coneHalfAngle=0.75F; // 扇形延拓为球冠时的半张角，弧度，范围 (0,π]；环形始终覆盖整球。
+    int sampleIndex=-1; // 单弹扫描的低差异序号；-1 表示中心瞄准，非负时在球冠内取等立体角路点。
 };
 /// @brief 出生局部帧上的一次技能，frame 非负；为空表示该敌人不发弹。
 struct TimedShot { int frame=0; Shot shot; };
@@ -40,8 +43,11 @@ public:
     ProjectileMotion projectile;
     std::array<float,6> rankInfluence=kDefaultRankInfluence; // 弹速、弹数、速度层的 rank=0/32 两端修正。
     int rank=16;
+    bool spatial=false; // false 保留旧高度坡度；true 采用单位方向、真实速率和等面积球面/球冠采样。
     VisualId bulletBase=0, laserBase=0, fallback=0; // 每种弹连续 16 色，光束连续 16 色；编号属于调用关卡素材表。
-    /// @brief 从世界位置加 offset 发射一轮，锁定本轮玩家高度坡度；池满时丢弃对应弹，不改变时序。
+    /// @brief 从世界位置加 offset 发射一轮，锁定本轮瞄准；池满只丢弃对应弹，不改变时序。
+    /// 三维方向直接按面积采样，每轮只计算一次 rank；速度层共享角分布，不旋转复制平面图案。
+    /// 非法 Shot 配置抛 invalid_argument；生成的弹由弹池独占。
     void Fire(const Shot& shot,Vector3 position,Vector3 player,BulletSystem& bullets) const;
     /// @brief 生成时锁定瞄准方向，预警与消退期间沿用原光束碰撞时窗。
     void Fire(const Laser& laser,Vector3 position,Vector3 player,BulletSystem& bullets) const;

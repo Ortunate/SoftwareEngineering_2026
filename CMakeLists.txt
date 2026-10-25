@@ -150,6 +150,7 @@ if(BUILD_TESTING)
     add_executable(koumakyou_tests
         tests/reference_script.cpp
         tests/behavior_tests.cpp
+        tests/spatial_behavior_tests.cpp
         tests/core_tests.cpp
         tests/animation_tests.cpp
         tests/actor_effect_tests.cpp

@@ -20,10 +20,11 @@ struct Pattern {
     int initialAnimation=0, stoppedAnimation=-1, stoppedAnimationFrame=60, deathEffect=1;
     Vector3 muzzleOffset{}; // 世界 XYZ 偏移，与运动位置直接相加。
     int endFrame=10000; // 逻辑寿命终点，必须覆盖路径、技能与动画的全部关键帧。
+    bool spatialShots=false; // 启用真实三维瞄准和等面积方向采样；默认沿用平面高度坡度。
 };
 /// @brief 时间轴直接提交的行为演员配置；position/半径为世界单位，生命与分数为原始点数。
 /// sourceItem=-2 不掉落、-1 全关轮换、0/1/2 小P/分数/大P；randomX 按 seed 在 randomXRange 世界区间取值一次。
-/// visual 及连续弹幕/击破素材基址属于当前关卡；retireOutside 仅在进入 retirementBounds 后允许越界回收。
+/// visual 及素材基址属于当前关卡；retireOutside 须先进入 retirementBounds 及可选 retirementHeights 才允许越界回收。
 struct Spawn {
     Vector3 position{};
     Pattern pattern;
@@ -39,6 +40,7 @@ struct Spawn {
     VisualId bulletBase=kInvalidVisualId,laserBase=kInvalidVisualId,defeatBase=kInvalidVisualId,fallback=kInvalidVisualId;
     bool retireOutside=true;
     bool damageable=true; // 初始受伤开关；阶段行为仍可在运行中修改。
+    std::optional<Vector2> retirementHeights; // 可选世界 Y 回收闭区间，与 X/Z 同时入场后才允许越界回收。
 };
 class Actor;
 /// @brief 一段独占的行为协程；初始挂起，交给 Actor 后由 Actor 持有并销毁，不能复制。
@@ -145,6 +147,8 @@ public:
         return {motion.position.x+skills.offset.x,motion.position.y+skills.offset.y,motion.position.z+skills.offset.z};
     }
     movement::State motion;
+    std::optional<movement::LiftedPath> liftedMotion; // 可选等路程空间延拓；拥有平面编排状态，跨阶段保留，Reset 清空。
+    std::uint32_t spatialIndex=1; // 独立高度采样序号，来自固定出生种子，不消耗攻击/分支随机源。
     skill::State skills;
     float health=1,maxHealth=1,lifeThreshold=-1; // 原始 HP，阈值为负关闭；生命回调优先于击破回调。
     bool damageable=true,finished=false;
@@ -170,13 +174,14 @@ private:
     BulletSystem* bullets_=nullptr;
     bool entered_=false,retireOutside_=false;
     movement::Bounds retirementBounds_;
+    std::optional<Vector2> retirementHeights_;
     VisualId defeatBase_=kInvalidVisualId;
 };
 /// @brief 将通过 Valid 的独立路径、动画与单次技能按局部帧合并；相同时刻先移动变更，再发弹。
 Routine Follow(Actor& actor,Pattern pattern);
 /// @brief 检查路径、技能、动画帧及发弹偏移的可用性，不修改配置。
 [[nodiscard]] bool Valid(const Pattern& pattern);
-/// @brief 检查世界位置/边界、随机范围、生命、分数、掉落、半径及行为配置；素材编号仅检查本体非 invalid。
+/// @brief 检查世界位置、X/Z 与可选 Y 边界、随机范围、战斗及行为配置；素材编号仅检查本体非 invalid。
 [[nodiscard]] bool Valid(const Spawn& spawn);
 
 /// @brief 固定槽位持有 behavior::Actor，不使用继承或关卡工厂；容量耗尽只丢弃该次生成请求。

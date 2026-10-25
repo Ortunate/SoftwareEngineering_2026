@@ -248,6 +248,13 @@ struct EventProbe final : StageEventSink {
 void TestStage1Content() {
     const auto content = CreateStageContent(StageId::Stage1);
     assert(content);
+    int spatialBirths=0;bool upper=false,lower=false;
+    for(const auto& event:content->Events())if(const auto* spawn=std::get_if<SpawnActors>(&event.action)) {
+        ++spatialBirths;upper=upper||spawn->actor.position.y>0;lower=lower||spawn->actor.position.y<0;
+        assert(spawn->actor.pattern.spatialShots);
+        assert(spawn->actor.retirementHeights);
+    }
+    assert(spatialBirths==222&&upper&&lower);
     StageDirector stage(content->Events());
     EventProbe probe(*content);
     const auto execute = [&](const StageEvent& event) {

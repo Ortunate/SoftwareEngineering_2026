@@ -1,6 +1,6 @@
 # 梦之御札侧针的新典数据对照
 
-本项目从本机 Steam 安装的 `th06nc.exe` 读取灵梦 B（梦之御札 / Persuasion Needle）的侧针通道。只导入副弹，主弹不读取新典 Reimu B 的主弹记录。
+本项目通过统一导出器读取本机 Steam 新典灵梦 B（梦之御札 / Persuasion Needle）的主副弹通道。本页说明侧针，主副弹均从 `native_combat` 查询。
 
 ## 输入与结构
 
@@ -14,10 +14,10 @@
 重新导入（只读原游戏，不启动或修改可执行文件）：
 
 ```bash
-python3 tools/import_reimu_needle.py /本机安装目录/th06nc.exe
+python3 tools/export_native_combat_data.py /本机安装目录/th06nc.exe /已解包ECL目录 --output output/native-combat-data --runtime-output src/gameplay/data/native_combat_data.inc
 ```
 
-脚本扫描 PE64 节表并验证唯一候选、左右成对、周期、相位、原始速度和动画编号，写入 `src/gameplay/actors/reimu_needle.hpp`。原游戏及反汇编全文不入库。
+统一导出器扫描并验证四机体火力表，结合七关 ECL 显式导入 `native_combat_data.inc`，保留周期、相位、速度、模块、伤害和动画编号。ECL 解包步骤见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。原游戏及反汇编全文不入库。
 
 ## 60 Hz 发射表
 
@@ -44,4 +44,4 @@ python3 tools/import_reimu_needle.py /本机安装目录/th06nc.exe
 
 测试逐帧核对八档上下边界、30/60/144 FPS、Focus、横移与原始伤害、双侧配对、点射尾窗、升级保留相位、禁火与复活，并使用真实 ANM/DDS 检查针弹的可见像素及不追踪行为。
 
-当前运行时统一读取 `native_combat`，旧专用导入器与 `reimu_needle.hpp` 仅作历史核对，不参与游戏。完整导入步骤见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。
+当前运行时统一读取 `native_combat`，重复的专用导入器与旧头文件已移除。完整导入步骤见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。

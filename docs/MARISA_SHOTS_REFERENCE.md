@@ -11,10 +11,10 @@
 - 普通弹按 `frame % period == phase` 调度，发射窗口仍为 60 Hz 下的 0～29 帧。点射完成当前窗口，切换 Power 和 Focus 保留相位，禁火与复活取消窗口。
 
 ```bash
-python3 tools/import_marisa_shots.py /本机安装目录/th06nc.exe
+python3 tools/export_native_combat_data.py /本机安装目录/th06nc.exe /已解包ECL目录 --output output/native-combat-data --runtime-output src/gameplay/data/native_combat_data.inc
 ```
 
-旧专用脚本只读 PE64，扫描并验证两张唯一候选表，写入 `src/gameplay/actors/marisa_shots.hpp`。导出保留原始像素、速度、伤害、周期和相位，不复制可执行代码、原游戏存档或反汇编全文。
+统一导出器只读 PE64 及已解包的七关 ECL，扫描并验证四机体火力表，显式导入 `native_combat_data.inc`。导出保留原始像素、速度、伤害、周期和相位，不复制可执行代码、原游戏存档或反汇编全文。
 
 ## 魔之御札：主弹与导弹
 
@@ -66,4 +66,4 @@ Power 32～47 还有 `15／15`、48～63 还有 `15／20` 的原始记录；它�
 
 回归覆盖八档上下边界、30/60/144 FPS、Focus、不规范相位、导弹加速度积分、爆破末帧、激光双槽不叠加、转向跟随、穿透及重复结算防护。`koumakyou_lifecycle_tests <截图前缀> --marisa-only` 导出魔／恋常态与 Focus 的真实图形，并隔离主弹验证副弹像素；选择流程由 settings UI 测试回放。
 
-当前运行时读取 `native_combat` 统一目录，`marisa_shots.hpp` 与上述专用导入器保留历史核对用途，不再参与游戏。七关 HP 与四张火力表的统一导入见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。
+当前运行时读取 `native_combat` 统一目录，重复的专用导入器与旧头文件已移除。七关 HP 与四张火力表的统一导入见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。

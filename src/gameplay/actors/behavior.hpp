@@ -16,12 +16,12 @@ struct Pattern {
     movement::Path movement;
     std::optional<skill::TimedShot> skill;
     int initialAnimation=0, stoppedAnimation=-1, stoppedAnimationFrame=60, deathEffect=1;
-    Vector3 muzzleOffset{};
+    Vector3 muzzleOffset{}; // 世界 XYZ 偏移，与运动位置直接相加。
     int endFrame=10000; // 逻辑寿命终点，必须覆盖路径、技能与动画的全部关键帧。
 };
 /// @brief 时间轴直接提交的行为演员配置；position/半径为世界单位，生命与分数为原始点数。
-/// sourceItem=-2 不掉落、-1 全关轮换、0/1/2 小P/分数/大P；randomX 在出生时按 seed 取逻辑横坐标。
-/// visual 及连续弹幕/击破素材基址属于当前关卡；retireOutside 仅在实际进入逻辑场地后允许越界回收。
+/// sourceItem=-2 不掉落、-1 全关轮换、0/1/2 小P/分数/大P；randomX 按 seed 在 randomXRange 世界区间取值一次。
+/// visual 及连续弹幕/击破素材基址属于当前关卡；retireOutside 仅在进入 retirementBounds 后允许越界回收。
 struct Spawn {
     Vector3 position{};
     Pattern pattern;
@@ -32,7 +32,8 @@ struct Spawn {
     int sourceItem=-1;
     VisualId visual=kInvalidVisualId;
     float hitRadius=0.55F;
-    movement::Space space;
+    Vector2 randomXRange{-8.57142857F,8.57142857F};
+    movement::Bounds retirementBounds;
     VisualId bulletBase=kInvalidVisualId,laserBase=kInvalidVisualId,defeatBase=kInvalidVisualId,fallback=kInvalidVisualId;
     bool retireOutside=true;
     bool damageable=true; // 初始受伤开关；阶段行为仍可在运行中修改。
@@ -87,8 +88,8 @@ public:
     Actor(const Actor&)=delete;
     Actor& operator=(const Actor&)=delete;
     ~Actor();
-    /// @brief 重置全部状态，source 为逻辑像素；seed=0 按 1 处理，镜像只反转最终 X 位移。
-    void Reset(Vector3 source,float hp,std::uint32_t seed,bool mirrored=false);
+    /// @brief 重置全部状态，position 为世界坐标；seed=0 按 1 处理，镜像只反转最终 X 位移。
+    void Reset(Vector3 position,float hp,std::uint32_t seed,bool mirrored=false);
     /// @brief 复制通过 Valid 的出生配置，初始化独立运动、战斗和视觉状态，并直接启动 Follow。
     /// 非法配置抛 invalid_argument；不持有配置引用，不加载素材。
     void Activate(const Spawn& spawn);
@@ -103,8 +104,8 @@ public:
     void SetDeathCallback(Entry entry) { deathCallback=entry; }
     /// @brief 设置 10…32 范围的自适应难度；越界值钳制，影响后续发射。
     void SetRank(int rank) { skills.rank=std::clamp(rank,10,32); }
-    /// @brief 当前三维世界位置，坐标投影由技能空间配置决定。
-    [[nodiscard]] Vector3 Position() const { return skills.space.World(motion.position); }
+    /// @brief 当前三维世界位置，直接返回运动状态，不执行坐标转换。
+    [[nodiscard]] Vector3 Position() const { return motion.position; }
     /// @brief 当前最深层行为的局部帧；仅在已启动且尚未返回的行为中查询。
     [[nodiscard]] int Frame() const { return stack_.back().promise().frame; }
     /// @brief 构造非负局部帧的等待点，仅供当前行为 co_await；不会推进阶段总时钟。
@@ -136,7 +137,7 @@ public:
     [[nodiscard]] bool CanContactPlayer() const { return active&&health>0; }
     /// @brief 返回实际技能发射点的世界坐标，供判定调试显示；不改变行为状态。
     [[nodiscard]] Vector3 MuzzlePosition() const {
-        return skills.space.World({motion.position.x+skills.offset.x,motion.position.y+skills.offset.y,motion.position.z+skills.offset.z});
+        return {motion.position.x+skills.offset.x,motion.position.y+skills.offset.y,motion.position.z+skills.offset.z};
     }
     movement::State motion;
     skill::State skills;
@@ -161,13 +162,14 @@ private:
     Vector3 player_{};
     BulletSystem* bullets_=nullptr;
     bool entered_=false,retireOutside_=false;
+    movement::Bounds retirementBounds_;
     VisualId defeatBase_=kInvalidVisualId;
 };
 /// @brief 将通过 Valid 的独立路径、动画与单次技能按局部帧合并；相同时刻先移动变更，再发弹。
 Routine Follow(Actor& actor,Pattern pattern);
 /// @brief 检查路径、技能、动画帧及发弹偏移的可用性，不修改配置。
 [[nodiscard]] bool Valid(const Pattern& pattern);
-/// @brief 检查出生位置、生命、分数、掉落、半径、投影及行为配置；素材编号仅检查本体非 invalid。
+/// @brief 检查世界位置/边界、随机范围、生命、分数、掉落、半径及行为配置；素材编号仅检查本体非 invalid。
 [[nodiscard]] bool Valid(const Spawn& spawn);
 
 /// @brief 固定槽位持有 behavior::Actor，不使用继承或关卡工厂；容量耗尽只丢弃该次生成请求。

@@ -4,7 +4,6 @@
 #include "app/game.hpp"
 #include "rlgl.h"
 #include "stages/stage1/behaviors.hpp"
-#include "stages/stage1/coordinates.hpp"
 #include "ui/typography.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/boss_hud.hpp"
@@ -199,8 +198,8 @@ struct GameLifecycleProbe {
                     while(game.boss_->phase==2 && frames++<30*fps)game.Update(dt);
                 } else hit();
                 assert(game.boss_->phase==3 && game.boss_->SpellName()==nullptr);
-                assert(game.boss_->health==7500/stage1::kReferenceHealthUnit);
-                assert(game.boss_->maxHealth==7500/stage1::kReferenceHealthUnit);
+                assert(game.boss_->health==7500);
+                assert(game.boss_->maxHealth==7500);
                 const auto bar=game.boss_->HealthBar();
                 assert(bar.remainingBars==0 && std::abs(bar.segments[1].remaining-6700.0F/7500)<0.00001F);
                 for(int frame=0;frame<std::max(1,fps/60);++frame) {
@@ -245,7 +244,7 @@ struct GameLifecycleProbe {
                 game.UpdateBoss(1.0F/60);
                 game.bullets_.Reset(); game.drops_.Clear(); // 隔离 Sub19 的散落，截图不能累积上一个展示场景的对象。
                 game.boss_->phaseTimer=5;
-                game.boss_->health=scene.sourceHealth/stage1::kReferenceHealthUnit;
+                game.boss_->health=scene.sourceHealth;
                 const auto health=game.boss_->HealthBar();
                 BeginDrawing(); BeginTextureMode(target); ClearBackground(Color{17,31,47,255});
                 game.DrawHud();
@@ -1218,7 +1217,7 @@ struct GameLifecycleProbe {
 
         game.StartPreview();
         game.stage_ = StageDirector{};
-        auto retreat=testing::SpawnAt(stage1::ReferencePosition({192,460,0}));
+        auto retreat=testing::SpawnAt(Vector3{0,0,-10.5357141F});
         retreat.pattern=stage1::kLateTurningFairy;retreat.retireOutside=true;retreat.sourceScore=0;game.actors_.Spawn(retreat);
         game.UpdateActors(0.1F);
         assert(EnemyCount(game) == 0 && game.score_ == 0 && PickupCount(game) == 0);

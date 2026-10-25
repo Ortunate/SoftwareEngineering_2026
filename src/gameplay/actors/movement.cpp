@@ -1,4 +1,4 @@
-// 本文件实现与出生时间无关的带参移动；所有积分与关键帧均使用 60 Hz 逻辑帧。
+// 本文件在世界坐标中积分带参移动；空间量使用世界单位，固定步长为 1/60 秒。
 #include "gameplay/actors/movement.hpp"
 #include <algorithm>
 #include <cmath>
@@ -9,9 +9,9 @@ Vector3 Add(Vector3 a,Vector3 b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 Vector3 Multiply(Vector3 v,float n) { return {v.x*n,v.y*n,v.z*n}; }
 }
 void State::BeginFrame() {
-    position.x+=velocity.x*(mirrored ? -1 : 1);
-    position.y+=velocity.y; position.z+=velocity.z;
-    if(clamped) { position.x=std::clamp(position.x,lower.x,upper.x); position.y=std::clamp(position.y,lower.y,upper.y); }
+    position.x+=velocity.x/60*(mirrored ? -1 : 1);
+    position.y+=velocity.y/60; position.z+=velocity.z/60;
+    if(clamped) { position.x=std::clamp(position.x,bounds.lower.x,bounds.upper.x); position.z=std::clamp(position.z,bounds.lower.y,bounds.upper.y); }
 }
 void State::EndFrame() {
     if(interpolating_) {
@@ -19,11 +19,11 @@ void State::EndFrame() {
         const float remaining=std::max(0.0F,static_cast<float>(left_)/duration_);
         const float fraction=power_<0 ? std::pow(1-remaining,static_cast<float>(-power_)) : 1-std::pow(remaining,static_cast<float>(power_));
         const Vector3 next=Add(start_,Multiply(delta_,fraction));
-        velocity=Add(next,Multiply(position,-1));
+        velocity=Multiply(Add(next,Multiply(position,-1)),60);
         if(left_<=0) { position=next; velocity={}; interpolating_=false; speed=0; }
     } else {
-        angle+=angularVelocity; speed+=acceleration;
-        velocity={std::cos(angle)*speed,std::sin(angle)*speed,0};
+        angle+=angularVelocity/60; speed+=acceleration/60;
+        velocity={std::cos(angle)*speed,0,-std::sin(angle)*speed};
     }
 }
 void State::Apply(const Keyframe& key) {
@@ -32,15 +32,15 @@ void State::Apply(const Keyframe& key) {
     if(key.acceleration)acceleration=*key.acceleration;
     interpolating_=false;
 }
-void State::Polar(float radians,float pixelsPerFrame) { angle=radians;speed=pixelsPerFrame;interpolating_=false; }
+void State::Polar(float radians,float unitsPerSecond) { angle=radians;speed=unitsPerSecond;interpolating_=false; }
 void State::Interpolate(int duration,Vector3 target,int power) {
     if(duration<=0)throw std::invalid_argument("Movement duration must be positive");
     start_=position; delta_=Add(target,Multiply(position,-1));
     duration_=left_=duration;power_=power;interpolating_=true;velocity={};
 }
 void State::Decelerate(int duration) {
-    // 位移与坐标相加分开求值，保持旧实现的浮点舍入边界，避免融合乘加造成轨迹微漂移。
-    Interpolate(duration,Add(position,{std::cos(angle)*speed*duration/2,std::sin(angle)*speed*duration/2,0}),2);
+    // 匀减速的总位移为初速乘持续秒数的一半；先求位移再相加，保持插值计算顺序稳定。
+    Interpolate(duration,Add(position,{std::cos(angle)*speed*duration/120,0,-std::sin(angle)*speed*duration/120}),2);
 }
 bool Valid(const Path& path) {
     if(!std::isfinite(path.angle)||!std::isfinite(path.speed)||path.count<0||path.count>4)return false;

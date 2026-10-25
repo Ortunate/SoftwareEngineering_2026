@@ -1,7 +1,7 @@
 // 本文件保留重构前的一面 Normal ECL 解释器，仅作为测试差分基准，不链接到生产引擎。
 #pragma once
 #include "reference_program.hpp"
-#include "stages/stage1/coordinates.hpp"
+#include "reference_coordinates.hpp"
 #include "gameplay/bullets/system.hpp"
 #include <array>
 #include <cstdint>

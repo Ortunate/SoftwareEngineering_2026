@@ -16,8 +16,8 @@ void Actor::Attach(Routine::Handle handle) {
     try { stack_.push_back(handle); }
     catch(...) { handle.destroy();throw; }
 }
-void Actor::Reset(Vector3 source,float hp,std::uint32_t seed,bool mirrored) {
-    ClearRoutines();motion={};skills={};motion.position=source;motion.mirrored=mirrored;
+void Actor::Reset(Vector3 initialPosition,float hp,std::uint32_t seed,bool mirrored) {
+    ClearRoutines();motion={};skills={};motion.position=initialPosition;motion.mirrored=mirrored;
     health=maxHealth=hp;lifeThreshold=-1;damageable=true;finished=false;
     pendingCallback=lifeCallback=deathCallback=timeoutCallback=nullptr;
     phaseFrames=0;timeoutFrames=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();
@@ -28,14 +28,17 @@ void Actor::Reset(Vector3 source,float hp,std::uint32_t seed,bool mirrored) {
 }
 void Actor::Activate(const Spawn& spawn) {
     if(!Valid(spawn))throw std::invalid_argument("Invalid behavior actor spawn");
-    Reset(spawn.space.Source(spawn.position),spawn.sourceHealth,spawn.seed,spawn.mirrored);
-    skills.space=spawn.space;skills.bulletBase=spawn.bulletBase;skills.laserBase=spawn.laserBase;skills.fallback=spawn.fallback;
-    if(spawn.randomX)motion.position.x=static_cast<float>((spawn.seed*1664525U+1013904223U)>>8)/16777216.0F*384;
+    Reset(spawn.position,spawn.sourceHealth,spawn.seed,spawn.mirrored);
+    skills.bulletBase=spawn.bulletBase;skills.laserBase=spawn.laserBase;skills.fallback=spawn.fallback;
+    if(spawn.randomX) {
+        const float fraction=static_cast<float>((spawn.seed*1664525U+1013904223U)>>8)/16777216.0F;
+        motion.position.x=spawn.randomXRange.x+fraction*(spawn.randomXRange.y-spawn.randomXRange.x);
+    }
     position=origin=Position();visual=spawn.visual;hitRadius=spawn.hitRadius;
     scoreValue=spawn.sourceScore;sourceItem=spawn.sourceItem;retireOutside_=spawn.retireOutside;defeatBase_=spawn.defeatBase;
-    damageable=spawn.damageable;
+    damageable=spawn.damageable;retirementBounds_=spawn.retirementBounds;
     // 场内出生已满足入场条件；否则一次较大的首帧更新越界后会被误认为尚未入场。
-    entered_=retireOutside_&&motion.position.x>=-16&&motion.position.x<=400&&motion.position.y>=-16&&motion.position.y<=464;
+    entered_=retireOutside_&&retirementBounds_.Contains(motion.position);
     Start(Follow(*this,spawn.pattern));
 }
 void Actor::Start(Routine routine) { ClearRoutines();Attach(routine.Release()); }
@@ -48,11 +51,11 @@ void Actor::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     bullets_=nullptr;
     position=Position();
     if(defeatBase_!=kInvalidVisualId)defeatVisual=static_cast<VisualId>(defeatBase_+std::clamp(deathEffect,0,2));
-    // 场外出生缓冲带不能在第一帧回收；入场后才允许按原逻辑像素边界退场。
-    const auto p=motion.position;
+    // 场外出生缓冲带不能在第一帧回收；入场后才按同一世界边界判断退场。
     if(retireOutside_) {
-        if(p.x>=-16&&p.x<=400&&p.y>=-16&&p.y<=464)entered_=true;
-        if(entered_&&(p.x<-16||p.x>400||p.y<-16||p.y>464))active=false;
+        const bool inside=retirementBounds_.Contains(motion.position);
+        if(inside)entered_=true;
+        if(entered_&&!inside)active=false;
     }
     if(finished)active=false;
 }
@@ -71,15 +74,15 @@ void Actor::RandomDirection(float minimum,float maximum,bool reflect) {
     constexpr float pi=std::numbers::pi_v<float>;
     float angle=Random(maximum-minimum)+minimum;
     if(reflect) {
-        if(motion.position.x<motion.lower.x+96&&std::abs(angle)>pi/2)angle=std::copysign(pi,angle)-angle;
-        if(motion.position.x>motion.upper.x-96&&std::abs(angle)<pi/2)angle=std::copysign(pi,angle)-angle;
-        if(motion.position.y<motion.lower.y+48&&angle<0)angle=-angle;
-        if(motion.position.y>motion.upper.y-48&&angle>0)angle=-angle;
+        if(motion.position.x<motion.bounds.lower.x+motion.reflectionMargin.x&&std::abs(angle)>pi/2)angle=std::copysign(pi,angle)-angle;
+        if(motion.position.x>motion.bounds.upper.x-motion.reflectionMargin.x&&std::abs(angle)<pi/2)angle=std::copysign(pi,angle)-angle;
+        if(motion.position.z>motion.bounds.upper.y-motion.reflectionMargin.y&&angle<0)angle=-angle;
+        if(motion.position.z<motion.bounds.lower.y+motion.reflectionMargin.y&&angle>0)angle=-angle;
     }
     motion.Polar(angle,motion.speed);
 }
 void Actor::Animate(int script) { animationScript=script;animationAge=0;++animationRevision; }
-void Actor::ClearBullets() { bullets_->ClearEnemyBullets();skills.rankInfluence={-0.5F,0.5F,0,0,0,0}; }
+void Actor::ClearBullets() { bullets_->ClearEnemyBullets();skills.rankInfluence=skill::kDefaultRankInfluence; }
 void Actor::Tick() {
     motion.BeginFrame();
     if(health<lifeThreshold) { health=lifeThreshold;pendingCallback=lifeCallback;return; }
@@ -142,9 +145,14 @@ bool Valid(const Pattern& pattern) {
         std::isfinite(pattern.muzzleOffset.x)&&std::isfinite(pattern.muzzleOffset.y)&&std::isfinite(pattern.muzzleOffset.z);
 }
 bool Valid(const Spawn& spawn) {
+    const auto& bounds=spawn.retirementBounds;
     return Valid(spawn.pattern)&&std::isfinite(spawn.position.x)&&std::isfinite(spawn.position.y)&&std::isfinite(spawn.position.z)&&
         std::isfinite(spawn.sourceHealth)&&spawn.sourceHealth>0&&spawn.sourceScore>=0&&
         spawn.sourceItem>=-2&&spawn.sourceItem<=2&&spawn.visual!=kInvalidVisualId&&
-        std::isfinite(spawn.hitRadius)&&spawn.hitRadius>0&&std::isfinite(spawn.space.scale)&&spawn.space.scale>0;
+        std::isfinite(spawn.hitRadius)&&spawn.hitRadius>0&&
+        std::isfinite(spawn.randomXRange.x)&&std::isfinite(spawn.randomXRange.y)&&spawn.randomXRange.x<=spawn.randomXRange.y&&
+        std::isfinite(spawn.randomXRange.y-spawn.randomXRange.x)&&
+        std::isfinite(bounds.lower.x)&&std::isfinite(bounds.lower.y)&&std::isfinite(bounds.upper.x)&&std::isfinite(bounds.upper.y)&&
+        bounds.lower.x<=bounds.upper.x&&bounds.lower.y<=bounds.upper.y;
 }
 } // namespace koumakyou::behavior

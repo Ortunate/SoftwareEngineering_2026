@@ -22,39 +22,39 @@ void RumiaBoss::StartMidboss() {
     encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
     const float initialHealth=native_combat::RequireLiteral(native_combat::Spawn(1,0,1882,9));
-    behavior_.Reset({192,-32,0},initialHealth,1882);
+    behavior_.Reset({0.0F,0.0F,11.4285717F},initialHealth,1882);
     ConfigureBehavior(behavior_);behavior_.Start(rumia::Midboss(behavior_));
     behavior_.damageable=false;
-    position=behavior_.Position(); health=maxHealth=initialHealth/kReferenceHealthUnit;
+    position=behavior_.Position(); health=maxHealth=initialHealth;
 }
 void RumiaBoss::StartFinalBoss() {
     encounter_=Encounter::Final; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
-    behavior_.Reset({192,96,0},HealthGroups()[0].total,5093);
+    behavior_.Reset({0.0F,0.0F,5.71428585F},HealthGroups()[0].total,5093);
     ConfigureBehavior(behavior_);behavior_.Start(rumia::FirstNonspell(behavior_));
     behavior_.damageable=false;
-    position=behavior_.Position(); health=maxHealth=HealthGroups()[0].total/kReferenceHealthUnit;
+    position=behavior_.Position(); health=maxHealth=HealthGroups()[0].total;
 }
 bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     if(!active) return false;
     presentation.Update(dt);
-    behavior_.health=health*kReferenceHealthUnit;
+    behavior_.health=health;
     behavior_.Update(dt,player,bullets);
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(behavior_.deathEffect,0,2));
     animationScript=behavior_.animationScript;animationAge=behavior_.animationAge;animationRevision=behavior_.animationRevision;
-    health=behavior_.health/kReferenceHealthUnit; maxHealth=behavior_.maxHealth/kReferenceHealthUnit;
+    health=behavior_.health; maxHealth=behavior_.maxHealth;
     position=behavior_.Position(); phaseTimer=behavior_.phaseFrames/60.0F;
     return behavior_.pendingCallback!=nullptr || behavior_.finished;
 }
 bool RumiaBoss::ShouldAdvanceFromDamage() const {
     // Game 每个渲染帧都检查碰撞，但行为只在 60 Hz 执行；准备期不能用上次攻击的残余生命再次推进。
     return CanTakeDamage() && (health<=0 || (!IsMidboss() && (phase==1 || phase==3) &&
-        health<HealthGroups()[phase==1 ? 0 : 1].spell/kReferenceHealthUnit));
+        health<HealthGroups()[phase==1 ? 0 : 1].spell));
 }
 bool RumiaBoss::AdvancePhase() {
     if(!active) return false;
     // 玩家碰撞发生在行为 Update 之后；回调必须看到本帧的新生命，而不是上一帧的副本。
-    behavior_.health=health*kReferenceHealthUnit;
+    behavior_.health=health;
     if(behavior_.finished || (retiring_ && behavior_.pendingCallback==rumia::End)) {
         active=false; phase=0; return false;
     }
@@ -73,10 +73,10 @@ bool RumiaBoss::AdvancePhase() {
     behavior_.SetDeathCallback(IsMidboss() ? rumia::MidbossDefeated : phase<=2 ? rumia::SecondNonspell : rumia::Defeated);
     // 小于 1/60 秒的帧可能还未执行回调首条受伤开关；准备期保护必须在交接时立即生效。
     behavior_.damageable=false;
-    behavior_.Transition(); health=behavior_.health/kReferenceHealthUnit;
+    behavior_.Transition(); health=behavior_.health;
     // maxHealth 保留当前攻击的战斗上限；HUD 使用独立的整组快照，不能在符卡回调处将预留段铺满。
     if(phase==2 || phase==4)behavior_.maxHealth=behavior_.health;
-    maxHealth=behavior_.maxHealth/kReferenceHealthUnit; phaseTimer=0;
+    maxHealth=behavior_.maxHealth; phaseTimer=0;
     return true;
 }
 const char* RumiaBoss::SpellName() const {
@@ -89,7 +89,7 @@ BossHealthBar RumiaBoss::HealthBar() const {
     if (IsMidboss()) return Boss::HealthBar();
     const auto group = HealthGroups()[phase <= 2 ? 0 : 1];
     const bool spell = phase == 2 || phase == 4;
-    const float remaining = std::clamp(health * kReferenceHealthUnit, 0.0F,
+    const float remaining = std::clamp(health, 0.0F,
                                        spell ? group.spell : group.total);
     BossHealthBar bar;
     bar.count = 2;

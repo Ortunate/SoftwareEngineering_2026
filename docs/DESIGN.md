@@ -133,7 +133,7 @@ struct Bullet {
 
 ### 4.4 行为演员与 Boss
 
-`behavior::Actor` 是直接运行的具体组件，同一对象保存世界位置、生命、判定半径、分数、掉落、动画游标和 `motion/skills` 状态。`Activate(Spawn)` 校验并复制配置，确定随机出生位置，启动 `Follow(Pattern)`；以 60 Hz 推进移动、技能和动画，实际进入逻辑场地后再越界回收。时间轴显式列出原始帧、位置、镜像、数值及固定种子。`ReferenceScript` 只在测试目录作为独立差分基准。旧敌人基类、子类、出生参数 variant 和小怪工厂已移除。
+`behavior::Actor` 是直接运行的具体组件，同一对象保存世界位置、生命、判定半径、分数、掉落、动画游标和 `motion/skills` 状态。`Activate(Spawn)` 校验并复制配置，确定随机出生位置，启动 `Follow(Pattern)`；以 60 Hz 推进移动、技能和动画，实际进入世界 X/Z 回收边界后再允许越界回收。时间轴显式列出原始帧、世界位置、镜像、数值及固定种子；运动状态、插值、发射偏移与边界均使用世界坐标，速度/加速度使用世界单位每秒/每秒平方，角速度使用弧度/秒。`Position()` 直接返回运动位置，不再经过像素投影；原始坐标换算只留在测试基准。`ReferenceScript` 只在测试目录作为独立差分基准。旧敌人基类、子类、出生参数 variant 和小怪工厂已移除。
 
 `RumiaBoss` 使用同一帧解释器执行道中 Sub9 和关底 Sub14，生命阈值与超时回调决定阶段。受保护准备期不接受射击/Bomb 伤害；退场子程序执行完毕才通知事件结束。Normal 道中无符卡；关底为普通攻击、Night Bird、普通攻击、Demarcation。HP 与阶段阈值使用统一目录中的原始点数，与自机伤害保持相同量纲。详细时序与数据来源见 `STAGE1_REFERENCE.md`。
 
@@ -216,6 +216,6 @@ direction = (r cos(phi), y, r sin(phi))
 - 关卡事件编译在程序中，后续可迁移到 JSON 和可视化编辑器。
 - 尚未加入雷达；当前通过长方体边框、表面网格和近弹警告辅助空间判断。
 
-原始生命与伤害目录位于 `gameplay/data/native_combat.*`，编译时持有七关 3598 条生命记录、四机体 193 条通道。源码记录输入哈希、ECL 偏移、掩码、Normal 指令索引和 PE RVA；运行时不要求安装原作或执行 Python。`Stage(1..7)` 独立于可玩关卡目录：一面为 Playable，其余为 DataOnly，不能据此开放选择。一面时间轴出生表、解释器生命相关指令及 Boss HUD 共用目录原值，`kReferenceHealthUnit=1` 保留兼容接口。未知默认 HP、寄存器生命须由未来关卡提供上下文，`RequireLiteral` 对此拒绝返回假常量。
+原始生命与伤害目录位于 `gameplay/data/native_combat.*`，编译时持有七关 3598 条生命记录、四机体 193 条通道。源码记录输入哈希、ECL 偏移、掩码、Normal 指令索引和 PE RVA；运行时不要求安装原作或执行 Python。`Stage(1..7)` 独立于可玩关卡目录：一面为 Playable，其余为 DataOnly，不能据此开放选择。一面时间轴出生 HP 由测试逐条核对目录原值，Boss 阶段生命与 HUD 直接读取原始点数；已移除恒为 1 的 `kReferenceHealthUnit` 接口。未知默认 HP、寄存器生命须由未来关卡提供上下文，`RequireLiteral` 对此拒绝返回假常量。
 
 `ResolveDamage` 是统一伤害入口，`DamageContext` 提供原始接触伤害、机体、来源 RVA、目标身份、保护/符卡状态、Bomb 使用状态及有效秒数。`StageContent::DamageRules()` 可覆盖规则；未处理返回 nullopt，默认结果区分 BaseOnly、Fallback 与 NativeRule。Bomb 必须传入同一逻辑帧的通道合计，按本机新典每帧 70 上限、符卡整数 ÷3（最低 1）和新符卡旧 Bomb 保护处理，不再使用固定 550/875 伤害。普通弹在 Bomb 期间按原始接触伤害 ÷3（最低 1）；普通弹对 Boss 的 0.8/符卡 ÷7 回退和普通弹/Bomb 联合上限尚未作为完整原引擎结算重构。普通弹仍用三维球形判定，原表矩形尺寸、音效和坐标完整保留。详情见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。

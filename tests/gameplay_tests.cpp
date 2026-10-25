@@ -30,7 +30,6 @@
 namespace {
 /// @brief 非符与符卡共享固定血量区间；击破、超时、下一组和退场均不能把符卡段错误铺满。
 void TestBossHealthGroups() {
-    using koumakyou::stage1::kReferenceHealthUnit;
     using koumakyou::BossHealthKind;
     auto bullets=std::make_unique<koumakyou::BulletSystem>();
     koumakyou::stage1::RumiaBoss boss;
@@ -47,28 +46,28 @@ void TestBossHealthGroups() {
     assert(std::abs(bar.segments[0].capacity-900.0F/7000)<0.00001F);
     assert(std::abs(bar.segments[1].capacity-6100.0F/7000)<0.00001F);
     assert(bar.segments[0].remaining==bar.segments[0].capacity && bar.segments[1].remaining==bar.segments[1].capacity);
-    boss.health=(900+6100.0F/2)/kReferenceHealthUnit;
+    boss.health=(900+6100.0F/2);
     bar=boss.HealthBar();
     assert(bar.segments[0].remaining==bar.segments[0].capacity);
     assert(std::abs(bar.segments[1].remaining-3050.0F/7000)<0.00001F);
-    boss.health=900/kReferenceHealthUnit;
+    boss.health=900;
     const float spellWidth=boss.HealthBar().segments[0].remaining;
     assert(boss.AdvancePhase() && boss.phase==2);
     bar=boss.HealthBar();
     assert(bar.segments[0].remaining==spellWidth && bar.segments[1].remaining==0);
-    boss.health=450/kReferenceHealthUnit;
+    boss.health=450;
     assert(std::abs(boss.HealthBar().segments[0].remaining-450.0F/7000)<0.00001F);
     boss.health=0;
     assert(boss.AdvancePhase() && boss.phase==3);
     // 真实主循环在 UpdateBoss 后还会执行碰撞；下一 60 Hz 帧前必须已交接新生命，且准备期不能再次推进。
-    assert(boss.health==7500/kReferenceHealthUnit && boss.maxHealth==7500/kReferenceHealthUnit);
+    assert(boss.health==7500 && boss.maxHealth==7500);
     assert(!boss.ShouldAdvanceFromDamage());
     boss.Update(1.0F/60,{},*bullets); // Sub19 首帧与交接时保持同一组总生命。
     bar=boss.HealthBar();
     assert(bar.remainingBars==0);
     assert(std::abs(bar.segments[0].capacity-800.0F/7500)<0.00001F);
     assert(std::abs(bar.segments[1].remaining-6700.0F/7500)<0.00001F);
-    boss.health=800/kReferenceHealthUnit;
+    boss.health=800;
     assert(boss.AdvancePhase() && boss.phase==4);
     bar=boss.HealthBar();
     assert(std::abs(bar.segments[0].remaining-800.0F/7500)<0.00001F && bar.segments[1].remaining==0);
@@ -251,15 +250,15 @@ void RunGameplayTests() {
     }
     // 使用新典原始帧节点核对道中首发（16 向×3 速度层）与固定 24 秒上限。
     // 入场从 +Z 场外缓冲带开始，源纵向贯穿战场深度，高度不参与二维出怪轨迹。
-    const Vector3 entry=koumakyou::stage1::ReferencePosition({192,-32,0});
+    const Vector3 entry=Vector3{0,0,11.4285717F};
     assert(entry.x==0 && entry.y==0 && entry.z>11 && entry.z<11.5F);
-    const Vector3 exit=koumakyou::stage1::ReferencePosition({192,448,0});
+    const Vector3 exit=Vector3{0,0,-10};
     assert(exit.y==0 && std::abs(exit.z+10)<0.0001F);
     koumakyou::behavior::Actor entryEnemy;
     auto entrySpec=koumakyou::testing::SpawnAt(entry);entrySpec.pattern=koumakyou::stage1::kTurningFairy;entryEnemy.Activate(entrySpec);
     entryEnemy.Update(2.0F/60,{},bullets);
     assert(entryEnemy.active && entryEnemy.position.z<entry.z && entryEnemy.position.y==0);
-    // 带高度的世界出生点经过演员的逆映射后仍保留该高度，避免构造路径混用旧坐标系。
+    // 出生点直接保存在世界坐标中，高度不经过二维投影或逆映射。
     koumakyou::behavior::Actor elevatedEnemy;entrySpec.position={entry.x,2,entry.z};elevatedEnemy.Activate(entrySpec);
     assert(std::abs(elevatedEnemy.position.y-2)<0.0001F);
     // Normal 妖精镜像只反转 X 位移；直行和转弯后左右轨迹保持对称，Z 与脚本时钟一致。

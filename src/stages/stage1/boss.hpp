@@ -2,9 +2,8 @@
 #pragma once
 #include "gameplay/actors/boss.hpp"
 #include "stages/stage1/behaviors.hpp"
-#include "stages/stage1/coordinates.hpp"
 namespace koumakyou::stage1 {
-/// @brief 露米娅遭遇；原作 HP 与生命阈值统一换算，阶段包含受保护的准备期与编排退场。
+/// @brief 露米娅遭遇；HP 与生命阈值保持原始点数，阶段包含受保护的准备期与编排退场。
 class RumiaBoss final : public Boss {
 public:
     enum class Encounter { Midboss, Final };

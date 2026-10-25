@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <limits>
 #include <tuple>
@@ -17,16 +18,23 @@ using namespace koumakyou;
 using namespace koumakyou::stage1;
 int currentSub=0,currentStep=0;
 std::array<bool,38> covered{};
+float maxPositionError=0;
 // 原编号只用于定位差分测试的旧指令；生产代码直接引用这五个具名常量。
 constexpr std::array kPatternsBySub{kTurningFairy,kGentleTurningFairy,kLateTurningFairy,
                                         kShootingDarkFairy,kPassingDarkFairy};
-void Equal(float a,float b,const char* field) {
-    if(std::abs(a-b)>0.00001F) {
-        std::cerr<<"behavior mismatch Sub"<<currentSub<<" step "<<currentStep<<" "<<field<<": "<<a<<" != "<<b<<'\n';
+void Equal(float a,float b,const char* field,float tolerance=0.00001F) {
+    if(!std::isfinite(a)||!std::isfinite(b)||std::abs(a-b)>tolerance) {
+        std::cerr<<std::setprecision(9)<<"behavior mismatch Sub"<<currentSub<<" step "<<currentStep<<" "<<field<<": "<<a<<" != "<<b<<" (error "<<std::abs(a-b)<<")\n";
         std::abort();
     }
 }
-void Equal(Vector3 a,Vector3 b,const char* field) { Equal(a.x,b.x,field);Equal(a.y,b.y,field);Equal(a.z,b.z,field); }
+// 世界单位积分改变舍入位置，速度/加速度向量允许 1e-4；位置单独约束累积误差。
+void Equal(Vector3 a,Vector3 b,const char* field) { Equal(a.x,b.x,field,0.0001F);Equal(a.y,b.y,field,0.0001F);Equal(a.z,b.z,field,0.0001F); }
+void EqualPosition(Vector3 a,Vector3 b,const char* field) {
+    // 5e-4 世界单位约为 0.0112 原作像素；该上限只覆盖单位迁移的累计舍入，不放宽时序或离散状态。
+    maxPositionError=std::max({maxPositionError,std::abs(a.x-b.x),std::abs(a.y-b.y),std::abs(a.z-b.z)});
+    Equal(a.x,b.x,field,0.0005F);Equal(a.y,b.y,field,0.0005F);Equal(a.z,b.z,field,0.0005F);
+}
 behavior::Entry Entry(int sub) {
     switch(sub) {
     case 7:return rumia::MidbossDefeated;case 8:return rumia::MidbossTimeout;case 9:return rumia::Midboss;
@@ -52,7 +60,7 @@ void EqualBullets(const BulletSystem& original,const BulletSystem& replacement) 
         }
         assert(x.turnAimed==y.turnAimed&&x.turnApplied==y.turnApplied&&x.Dangerous()==y.Dangerous());
         assert(x.color.r==y.color.r&&x.color.g==y.color.g&&x.color.b==y.color.b&&x.color.a==y.color.a);
-        Equal(x.position,y.position,"bullet.position");Equal(x.velocity,y.velocity,"bullet.velocity");
+        EqualPosition(x.position,y.position,"bullet.position");Equal(x.velocity,y.velocity,"bullet.velocity");
         Equal(x.baseVelocity,y.baseVelocity,"bullet.baseVelocity");Equal(x.acceleration,y.acceleration,"bullet.acceleration");
         Equal(x.rotationAxis,y.rotationAxis,"bullet.axis");Equal(x.beamDirection,y.beamDirection,"beam.direction");
         const float xs[]={x.radius,x.age,x.maxAge,x.angularVelocity,x.homingTurnRate,x.damage,x.beamLength,x.warningSeconds,
@@ -72,7 +80,7 @@ struct Pair {
         currentSub=sub;
         const float hp=sub<5 ? 256 : sub==9 ? 6000 : sub==26 ? 900 : sub==29 ? 800 : 7000;
         const Vector3 pos=sub<5||sub==9 ? Vector3{60,-32,0} : Vector3{192,96,0};
-        original.Reset(sub,pos,hp,seed,mirrored);replacement.Reset(pos,hp,seed,mirrored);ConfigureBehavior(replacement);
+        original.Reset(sub,pos,hp,seed,mirrored);replacement.Reset(ReferencePosition(pos),hp,seed,mirrored);ConfigureBehavior(replacement);
         if(sub<5)replacement.Start(behavior::Follow(replacement,kPatternsBySub.at(sub)));
         else replacement.Start(Entry(sub)(replacement));
         if(sub==26||sub==29) {
@@ -87,7 +95,7 @@ struct Pair {
         original.SetRank(rank);replacement.SetRank(rank);
         original.Update(dt,player,originalBullets);replacement.Update(dt,player,replacementBullets);
         for(std::size_t i=0;i<covered.size();++i)covered[i]=covered[i]||original.visited[i];
-        Equal(original.sourcePosition,replacement.motion.position,"actor.position");
+        EqualPosition(original.Position(),replacement.motion.position,"actor.position");
         Equal(original.health,replacement.health,"actor.health");Equal(original.maxHealth,replacement.maxHealth,"actor.maxHealth");
         assert(original.finished==replacement.finished&&original.damageable==replacement.damageable);
         assert(original.pendingCallback==-1 ? !replacement.pendingCallback : Entry(original.pendingCallback)==replacement.pendingCallback);
@@ -134,7 +142,7 @@ void TestTransitions() {
         assert(transitions>=3);
     }
 }
-/// @brief 逐条核对 StageEvent 到配方的映射与工厂实际实例，保留原始出生参数和独立随机横坐标。
+/// @brief 逐条核对 StageEvent 到配方的映射与实际演员实例，旧坐标仅在参考侧转换为世界坐标。
 void TestBirths() {
     Stage1Content content;std::vector<const native_combat::HealthRecord*> births;
     assert(content.Events().size()==226);
@@ -154,7 +162,7 @@ void TestBirths() {
         assert(behavior::Valid(p.pattern));
         auto enemy=testing::MakeActor(spawn->actor);
         auto original=std::make_unique<ReferenceScript>();
-        Vector3 source=ReferenceSourcePosition(ReferencePosition(expectedSource));
+        Vector3 source=expectedSource;
         if(p.randomX)source.x=static_cast<float>((p.seed*1664525U+1013904223U)>>8)/16777216.0F*384;
         original->Reset(r.targetSub,source,p.sourceHealth,p.seed,p.mirrored);
         auto a=std::make_unique<BulletSystem>(),b=std::make_unique<BulletSystem>();
@@ -162,7 +170,7 @@ void TestBirths() {
         for(int step=0;step<260&&enemy->active;++step) {
             original->Update(1.0F/60,{2,3,-6},*a);enemy->Update(1.0F/60,{2,3,-6},*b);
             currentSub=r.targetSub;currentStep=step;
-            Equal(original->Position(),enemy->position,"spawn.position");EqualBullets(*a,*b);
+            EqualPosition(original->Position(),enemy->position,"spawn.position");EqualBullets(*a,*b);
             const auto pos=original->sourcePosition;
             if(pos.x>=-16&&pos.x<=400&&pos.y>=-16&&pos.y<=464)entered=true;
             const bool expired=original->finished||(entered&&(pos.x<-16||pos.x>400||pos.y<-16||pos.y>464));
@@ -176,7 +184,7 @@ void TestBirths() {
 /// @brief 验证配方确实可独立组合，以及挂起的父/子行为在重开和销毁时释放各自资源。
 void TestCompositionAndOwnership() {
     auto params=testing::SpawnAt();
-    params.position=ReferencePosition({192,96,0});
+    params.position={0,0,5.71428585F};
     params.pattern.movement.speed=0;
     params.pattern.movement.keys[0]={.frame=3,.speed=1};params.pattern.movement.count=1;
     params.pattern.skill=skill::TimedShot{5,{skill::Formation::FixedRing,2,6,9,2,2,1}};
@@ -195,7 +203,7 @@ void TestCompositionAndOwnership() {
     invalid=params;invalid.pattern.movement.speed=std::numeric_limits<float>::infinity();assert(!behavior::Valid(invalid));
     invalid=params;invalid.pattern.skill->shot.count=0;assert(!behavior::Valid(invalid));
 
-    auto retreat=testing::SpawnAt(ReferencePosition({192,460,0}));
+    auto retreat=testing::SpawnAt({0,0,-10.5357141F});
     retreat.pattern=kLateTurningFairy;retreat.retireOutside=true;
     auto exiting=testing::MakeActor(retreat);exiting->Update(0.1F,{},*bullets);
     assert(!exiting->active); // 首帧从场内越界也必须回收，不能依赖之前已有更新样本。
@@ -216,12 +224,56 @@ void TestCompositionAndOwnership() {
     }
     assert(live==0);
 }
+/// @brief 独立世界单位契约：秒速率、XYZ 插值、X/Z 边界、发射偏移与自定义随机/回收范围均不依赖原作映射。
+void TestWorldCoordinates() {
+    movement::State motion;
+    motion.position={2,3,4};motion.velocity={60,120,-180};motion.BeginFrame();
+    Equal(motion.position,{3,5,1},"world.integrate");
+    motion.mirrored=true;motion.BeginFrame();Equal(motion.position,{2,7,-2},"world.mirror");
+    motion={};motion.Polar(0,60);
+    for(int frame=0;frame<60;++frame) { motion.EndFrame();motion.BeginFrame(); }
+    Equal(motion.position,{60,0,0},"world.speedPerSecond");
+    motion={};motion.position={2,3,4};motion.Interpolate(60,{-4,9,-8},2);
+    for(int frame=0;frame<60;++frame) { motion.BeginFrame();motion.EndFrame(); }
+    Equal(motion.position,{-4,9,-8},"world.interpolateXYZ");
+    motion={};motion.position={2,7,4};motion.bounds={{-1,-2},{1,2}};motion.clamped=true;
+    motion.BeginFrame();Equal(motion.position,{1,7,2},"world.clampXZ");
+
+    auto bullets=std::make_unique<BulletSystem>();
+    skill::State skill;skill.offset={0.25F,1,-0.5F};
+    skill.Fire(skill::Shot{skill::Formation::FixedFan,2,6,1,1,60}, {13,7,-4},{14,8,-4.5F},*bullets);
+    assert(bullets->Pool().ActiveCount()==1);
+    bullets->Pool().ForEachActive([](const Bullet& bullet) {
+        Equal(bullet.position,{13.25F,8,-4.5F},"world.muzzleOffset");
+        Equal(bullet.velocity,{60,0,0},"world.shotSpeed");
+    });
+    bullets->Reset();
+    skill.Fire(skill::Laser{.length=30,.width=2},{13,7,-4},{14,8,-4.5F},*bullets);
+    bullets->Pool().ForEachActive([](const Bullet& beam) {
+        Equal(beam.position,{13.25F,8,-4.5F},"world.beamOrigin");
+        Equal(beam.beamLength,30,"world.beamLength");Equal(beam.radius,1,"world.beamRadius");
+    });
+
+    auto config=testing::SpawnAt({11,20,1});
+    config.retireOutside=true;config.retirementBounds={{10,-5},{14,5}};
+    config.pattern.movement={.angle=0,.speed=60};
+    auto actor=testing::MakeActor(config);
+    assert(actor->Position().x==11&&actor->Position().y==20&&actor->Position().z==1);
+    actor->Update(4.0F/60,{},*bullets);assert(actor->active);
+    actor->Update(1.0F/60,{},*bullets);assert(!actor->active);
+    config.pattern.movement.speed=0;config.randomX=true;config.randomXRange={20,24};
+    actor->Activate(config);auto duplicate=testing::MakeActor(config);
+    assert(actor->position.x>=20&&actor->position.x<=24&&actor->position.y==20&&actor->position.z==1);
+    assert(actor->position.x==duplicate->position.x);
+    auto invalid=config;invalid.randomXRange={24,20};assert(!behavior::Valid(invalid));
+    invalid=config;invalid.retirementBounds.lower.x=15;assert(!behavior::Valid(invalid));
+}
 } // namespace
 /// @brief 运行无窗口行为差分，失败输出原子程序与首次不一致帧；不读取原游戏安装或解包缓存。
 void RunBehaviorTests() {
-    TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
+    TestWorldCoordinates();TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
     for(int sub:{0,1,2,3,4,5,6,7,8,9,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}) {
         if(!covered[sub]) { std::cerr<<"Uncovered original Sub"<<sub<<'\n';std::abort(); }
     }
-    std::cout<<"Validated 28 reachable Normal subprograms and 222 StageEvent births against the original interpreter\n";
+    std::cout<<"Validated 28 reachable Normal subprograms and 222 StageEvent births against the original interpreter; max world position error "<<maxPositionError<<'\n';
 }

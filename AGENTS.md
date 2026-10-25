@@ -12,7 +12,7 @@
 
 # Stage 编排约定
 
-修改关卡、敌人行为或 Boss 演出时，遵循当前实现的以下分层。详细的一面行为映射和一致性范围见 [docs/STAGE1_BEHAVIORS.md](docs/STAGE1_BEHAVIORS.md)。
+首次移植或修改任何关卡、敌人行为及 Boss 演出时，均遵循 [docs/STAGE_PORTING_METHOD.md](docs/STAGE_PORTING_METHOD.md) 的通用方法与以下分层。Stage 1 的配方、数量和时序仅作为案例，不限制后续关卡；具体案例见 [docs/STAGE1_BEHAVIORS.md](docs/STAGE1_BEHAVIORS.md)。
 
 ## 文件职责与调用链
 
@@ -25,23 +25,23 @@
 
 ## 时间轴事件
 
-1. 时间轴直接列出 `StageEvent`，按预期触发顺序排列；相同帧的表内顺序也是演出的一部分。保留显式编排，不通过初始化 lambda、循环、原始数据目录或子程序编号工厂生成一面事件表。局部辅助函数只封装世界坐标出生参数，不执行原作坐标转换、不推导事件时刻或隐式补充其他事件。
+1. 时间轴直接列出 `StageEvent`，按预期触发顺序排列；相同帧的表内顺序也是演出的一部分。各关均保留显式编排，不通过初始化 lambda、循环、原始数据目录或子程序编号工厂生成生产事件表。局部辅助函数只封装世界坐标出生参数，不执行原作坐标转换、不推导事件时刻或隐式补充其他事件。
 2. `atFrame` 为开局起算的非负整数绝对帧，固定按 60 Hz 换算；设置后忽略 `delay`，不能同时设置 `afterEndOf`。`delay` 的单位为秒，无依赖时相对上一事件的实际开始时间，首个事件相对关卡起点；有 `afterEndOf` 时相对指定事件的实际结束时间。
 3. `id` 仅在本张事件表内唯一，`afterEndOf` 只能引用表中更早的 ID。调度器按表顺序处理，遇到未到期或依赖未完成的事件会停止启动后续事件，不会跳过它扫描后面的行。
 4. `StageAction` 当前包含 `SpawnActors`、`StartBoss`、`StartDialogue`、`ShowMessage`。增加动作类型时，同步更新 `StageDirector` 的参数校验和 `StageContent::HandleEvent` 的执行访问器。
 5. `SpawnActors` 携带 `behavior::Spawn`，`count >= 1`，`interval` 为非负有限秒数；第一只立即生成，零间隔同帧生成全部。批次不阻塞后续事件；调度器跨更新补发到期请求，每次交付的 `count` 规范为 1。最后一次请求发出即完成，不等待敌人死亡，也不因池满丢弃而延后。每只的出生参数或种子不同时，应分别列事件。
 6. `StartBoss` 和 `StartDialogue` 必须带 `id`，处理时返回 `false`；遭遇或对话实际结束后，由游戏调用 `StageDirector::EndEvent(id)`。等待其结束的后续演出使用 `afterEndOf`，不能用预估固定帧代替。同步动作返回 `true`；出怪批次的完成由调度器管理。
-7. `CancelEnemySpawns()` 只取消已开始批次中未发出的请求，不取消未来事件，也不清除存活演员。当前 Boss 入场取消旧批次并保留场上小怪、弹幕、道具和效果；Boss 活动期间新到期的小怪请求直接跳过，关卡时钟继续。对话开始会取消旧批次、清除小怪与敌弹，保持这些生命周期差异。
+7. `CancelEnemySpawns()` 只取消已开始批次中未发出的请求，不取消未来事件，也不清除存活演员。当前 Boss 入场取消旧批次并保留场上小怪、弹幕、道具和效果；Boss 活动期间新到期的小怪请求直接跳过，关卡时钟继续。对话开始会取消旧批次、清除小怪与敌弹。这是已验证的一面策略；后续 Stage 须核对其时钟、出怪和清场语义，差异通过明确参数或最小通用接口表达，不能直接照抄或在 Game 中堆叠关卡编号判断。
 8. `StageDirector` 用 `deltaTime` 秒数累计关卡时间，跨更新触发到期事件；演员行为默认按固定 120 Hz 补算，60 Hz 模式只用于原作差分；内容帧号仍按 60 Hz 解释。显示帧率不能作为逻辑帧计数，暂停时不得继续推进。当前一面在 1882 帧开始道中 Boss、5092 帧开始战前对话，关底 Boss 等待战前对话结束，战后对话等待关底 Boss 结束。
 
 ## 普通演员与可复用行为
 
 1. 普通敌人的生成链为 `StageEvent → SpawnActors → StageContent::HandleEvent → Game::SpawnStageActor → behavior::ActorPool::Spawn → Actor::Activate/Follow`。直接使用行为组件，不恢复已删除的 `Enemy` 继承体系、`EnemySpec`、`StageContent::CreateEnemy` 或按子程序编号选择行为的工厂。
-2. `behavior::Pattern` 是无可变执行状态的配方，包含 `movement::Path`、可选 `skill::TimedShot`、动画、发射偏移、击破效果和逻辑寿命。共享配方在关卡 `behaviors.hpp` 中定义为有语义名称的 `inline constexpr` 常量；一面使用 `kTurningFairy`、`kGentleTurningFairy`、`kLateTurningFairy`、`kShootingDarkFairy`、`kPassingDarkFairy`。
+2. `behavior::Pattern` 是无可变执行状态的配方，包含 `movement::Path`、可选 `skill::TimedShot`、动画、发射偏移、击破效果和逻辑寿命。共享配方在关卡 `behaviors.hpp` 中定义为有语义名称的 `inline constexpr` 常量；各关按真实行为差异拆分，数量不限于一面示例的 `kTurningFairy`、`kGentleTurningFairy`、`kLateTurningFairy`、`kShootingDarkFairy`、`kPassingDarkFairy` 五种。
 3. `behavior::Spawn` 保存每只实例的出生位置、配方、HP、分数、掉落、镜像、随机横坐标标记、固定种子、外观、判定半径与素材基址。路线差异可以由同一配方结合不同出生位置和镜像构成；外观独立选择，不从移动或技能反推。配置按值复制，每个 `Actor` 独占运动、技能、随机数、动画与协程状态。
 4. 通用移动和技能放在 `gameplay/actors`，不得依赖具体关卡或 ECL 操作码。`movement::Path` 当前至多四个按非递减帧号排列的关键帧；`TimedShot` 表达一次定时发射。复杂多轮攻击、循环、随机分支和阶段准备使用命名 `behavior::Routine` 协程，复用参数化辅助行为，不把攻击逻辑塞进时间轴。
 5. 运行时统一使用世界坐标：`Spawn::position`、运动状态、插值目标、发射 XYZ 偏移、判定半径、光束尺寸、随机出生范围和回收/巡航边界均为世界单位；速度为世界单位/秒，加速度为世界单位/秒²，角速度为弧度/秒。行为等待、寿命与技能延迟仍使用 60 Hz 内容帧；120 Hz 每步推进 0.5 内容帧，不能把帧号直接当更新次数。关卡事件的 `delay` / `interval` 使用秒，不能混用。
-6. 世界 +Y 为高度，敌人从 +Z 向 -Z 推进；极坐标方向从 +X 朝 -Z 为正，单位弧度，镜像只反转最终 X 位移。`movement::Bounds` 的二维分量表示世界 X/Z，不限制高度；随机横坐标和回收边界由 `Spawn::randomXRange` / `retirementBounds` 明确配置。原作坐标只在 `tests/reference_coordinates.hpp` 中转换，生产代码不恢复 `movement::Space` 或像素/世界往返映射。
+6. 世界 +Y 为高度，敌人从 +Z 向 -Z 推进；极坐标方向从 +X 朝 -Z 为正，单位弧度，镜像只反转最终 X 位移。`movement::Bounds` 的二维分量表示世界 X/Z，不限制高度；随机横坐标和回收边界由 `Spawn::randomXRange` / `retirementBounds` 明确配置。源坐标换算只保留在 tests 下的独立参考侧，当前一面为 `tests/reference_coordinates.hpp`；生产代码不恢复 `movement::Space` 或像素/世界往返映射。
 7. 每个固定更新步保持“应用上一帧位移 → 执行行为 → 计算下一帧速度”的顺序；`Follow` 在同一时刻先应用移动变更再发弹。子行为局部时钟从零开始，调用期间父时钟冻结，返回后父行为在同一更新步继续；阶段总时钟独立推进。阶段回调保留尚未消费的逻辑时间，不能在切阶段时丢弃。
 8. 出生种子显式固定，不由事件表行号推导；随机横坐标在出生时求值一次。调整行为时保持随机读取顺序、插值的浮点求值边界和跨阶段技能上下文。已发射弹保存自己的运动参数副本；清弹只恢复既有 rank 修正，不顺带清空演员运动或后续发弹配置。
 9. 道中 HP、分数与掉落直接写入事件配置，使用原始点数；`sourceItem=-2/-1/0/1/2` 分别为无掉落、全关轮换、小 P、分数、大 P。生成前保留 `behavior::Valid` 校验。演员池容量耗尽时丢弃该次请求；启用场外回收的演员须先满足入场条件，避免刚在场外缓冲带出生就被回收。
@@ -57,7 +57,7 @@
 ## 参考数据与验证
 
 1. `tests/reference_script.*` 与 `tests/reference_program.hpp` 只作为独立旧行为基准，不能重新链接进生产引擎。原子程序编号映射留在差分测试；新典原始解包、报告、截图及本机安装路径不进入运行时编排。
-2. 重构以项目原有行为为一致性基准，保持既有三维适配；当前一面覆盖 Normal 的 28 个可达子程序与 222 次出生。Hard/Lunatic 和未接入的原生练习入口不因参考数据存在就视为已实现。
+2. 已有实现的重构以可信旧行为为基准；首次移植的关卡须独立建立源语义或实测记录对照，保持明确的三维适配边界。当前一面覆盖 Normal 的 28 个可达子程序与 222 次出生；后续 Stage 独立统计覆盖，不能沿用这些数值或把一面专用解释器当作新关卡的完整基准。未接入的难度、关卡和原生入口不因参考数据存在就视为已实现。
 3. 修改时序、配方、投影或生命周期时，同步维护 `tests/stage_tests.cpp`、`tests/behavior_tests.cpp` 和受影响的集成用例。原作差分须显式使用 `behavior::UpdateRate::Hz60`，生产演员池和 Boss 默认使用 `Hz120`；另测 120 Hz 半帧移动、内容事件/插值/超时不加速，以及不同显示帧率的一致性。参考期望值应独立于新配方；对照出生参数、世界位置、动画、随机分支、实际弹幕、回调、掉落及退场，并覆盖不同显示帧率；离散状态精确比较，世界位置允许不超过 `5e-4` 世界单位的累计舍入误差，不能以放宽误差掩盖时序或分支变化。详细不变量与对照范围见上述行为文档。
 4. 按改动范围运行构建、CTest；涉及完整遭遇或资源生命周期时，运行相应图形集成目标。常用命令：
 

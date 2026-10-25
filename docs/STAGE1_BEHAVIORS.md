@@ -2,6 +2,8 @@
 
 本次重构以项目重构前的 Normal 行为为一致性基准，涵盖实际关卡使用的五种道中敌人、道中露米娅、关底四阶段及退场。出生、HP、镜像、随机种子、掉落、动画和原有三维适配保持原约定。Hard/Lunatic 的道中符卡及新典自己的符卡练习入口不在当前可玩范围内，本次没有扩大难度或入口范围。
 
+从原典数据提取、语义分析到当前实现的完整方法与原则见 [Stage 移植方法](STAGE_PORTING_METHOD.md)；本文保留具体配方、子程序映射和时序不变量。
+
 ## 运行结构
 
 `timeline.cpp` 直接定义固定的 `std::array<StageEvent,226>`，显式列出 222 次杂鱼出生和 4 个 Boss/对话事件；不通过 lambda、循环或原始数值目录构建时间轴。每次出生的帧号、坐标、HP、分数、掉落、镜像、随机横坐标标记、种子和外观均直接写在表中，五种命名行为配方以 `behaviors.hpp` 中的 `inline constexpr` 常量共享复用，生产代码直接按名称引用。`Spawn` 只封装已给定的世界坐标参数，不转换坐标。每个参数对象按值保存 `pattern.movement` 与 `pattern.skill`；`SpawnActors` 直接携带 `behavior::Spawn`，由 `ActorPool::Spawn` 启动独立 `behavior::Actor`；没有小怪工厂或用于运行时选择路径的 `sub` 字段。

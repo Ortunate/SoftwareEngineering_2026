@@ -171,7 +171,7 @@ struct GameLifecycleProbe {
         game.stage_=StageDirector{};
         game.player_.SetInvulnerability(1000);
         for(int fps : {30,60,120,240}) for(bool timeout : {false,true}) {
-            // 击破可能发生在一个 60 Hz 脚本帧中的任意渲染帧；只测整 1/60 秒会漏掉准备期空隙。
+            // 击破可能发生在一个 120 Hz 行为更新步中的任意渲染帧；只测整 1/120 秒会漏掉准备期空隙。
             for(int alignment=0;alignment<std::max(1,fps/60);++alignment) {
                 const float dt=1.0F/fps;
                 game.bullets_.Reset(); game.drops_.Clear();

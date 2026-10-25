@@ -11,8 +11,8 @@ constexpr behavior::Spawn SpawnAt(Vector3 position={},VisualId visual=stage1::kF
         .bulletBase=stage1::kNativeBulletBase,.laserBase=stage1::kNativeLaserBase,
         .defeatBase=stage1::kNativeDefeat,.fallback=stage1::kBlueBullet,.retireOutside=false};
 }
-/// @brief 独占一个按配置启动的测试演员；调用方控制其池外生命周期。
-inline std::unique_ptr<behavior::Actor> MakeActor(const behavior::Spawn& spawn) {
-    auto actor=std::make_unique<behavior::Actor>();actor->Activate(spawn);return actor;
+/// @brief 独占一个按配置启动的测试演员；默认生产 120 Hz，原作差分显式选择 Hz60，调用方控制生命周期。
+inline std::unique_ptr<behavior::Actor> MakeActor(const behavior::Spawn& spawn,behavior::UpdateRate rate=behavior::UpdateRate::Hz120) {
+    auto actor=std::make_unique<behavior::Actor>(rate);actor->Activate(spawn);return actor;
 }
 } // namespace koumakyou::testing

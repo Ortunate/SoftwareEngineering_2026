@@ -47,7 +47,7 @@ bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     return behavior_.pendingCallback!=nullptr || behavior_.finished;
 }
 bool RumiaBoss::ShouldAdvanceFromDamage() const {
-    // Game 每个渲染帧都检查碰撞，但行为只在 60 Hz 执行；准备期不能用上次攻击的残余生命再次推进。
+    // Game 每个渲染帧都检查碰撞，但行为按 120 Hz 执行；准备期不能用上次攻击的残余生命再次推进。
     return CanTakeDamage() && (health<=0 || (!IsMidboss() && (phase==1 || phase==3) &&
         health<HealthGroups()[phase==1 ? 0 : 1].spell));
 }
@@ -67,11 +67,11 @@ bool RumiaBoss::AdvancePhase() {
     }
     if(IsMidboss() || phase==4) { defeated_=health<=0; retiring_=true; }
     else ++phase;
-    // SecondNonspell 的生命初始化要等下一次 60 Hz Tick 才执行。先原子交接下一组生命，避免击破后的 1 HP
+    // SecondNonspell 的生命初始化要等下一次 120 Hz Tick 才执行。先原子交接下一组生命，避免击破后的 1 HP
     // 占位在高帧率下跳过非符，也让同一帧的 HUD 立即显示第二组完整白段与粉段。
     if(!retiring_ && phase==3)behavior_.health=behavior_.maxHealth=HealthGroups()[1].total;
     behavior_.SetDeathCallback(IsMidboss() ? rumia::MidbossDefeated : phase<=2 ? rumia::SecondNonspell : rumia::Defeated);
-    // 小于 1/60 秒的帧可能还未执行回调首条受伤开关；准备期保护必须在交接时立即生效。
+    // 小于 1/120 秒的帧可能还未执行回调首条受伤开关；准备期保护必须在交接时立即生效。
     behavior_.damageable=false;
     behavior_.Transition(); health=behavior_.health;
     // maxHealth 保留当前攻击的战斗上限；HUD 使用独立的整组快照，不能在符卡回调处将预留段铺满。

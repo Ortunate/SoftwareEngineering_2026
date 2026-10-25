@@ -1,4 +1,4 @@
-// 本文件定义带参移动/技能编排器；协程保存局部阶段状态，演员统一以 60 Hz 更新。
+// 本文件定义带参行为编排器；生产以 120 Hz 更新，内容帧号保持 60 Hz，测试可选 60 Hz 对照原作。
 #pragma once
 #include "gameplay/actors/skill.hpp"
 #include "gameplay/effects/actor_effects.hpp"
@@ -11,6 +11,8 @@
 #include <utility>
 #include <stdexcept>
 namespace koumakyou::behavior {
+/// @brief 行为积分频率；生产默认 Hz120，Hz60 供独立原作差分，均不改变内容帧号的 60 Hz 单位。
+enum class UpdateRate { Hz60=60, Hz120=120 };
 /// @brief 可共享的行为配方；时间为出生起算的 60 Hz 帧，配置按值复制，执行状态由 Actor 独占。
 struct Pattern {
     movement::Path movement;
@@ -40,12 +42,13 @@ struct Spawn {
 };
 class Actor;
 /// @brief 一段独占的行为协程；初始挂起，交给 Actor 后由 Actor 持有并销毁，不能复制。
-/// 子行为的局部时钟从零开始，调用期间父行为时钟冻结，返回同帧继续执行父行为。
+/// 子行为的 60 Hz 内容时钟从零开始，调用期间父时钟冻结，返回后在同一更新步继续执行父行为。
 class Routine {
 public:
     struct promise_type {
         Actor* owner=nullptr;
-        int frame=0, due=0;
+        double frame=0; // 60 Hz 局部内容帧；120 Hz 每次更新前进 0.5 帧。
+        int due=0;
         std::exception_ptr failure;
         Routine get_return_object() { return Routine{std::coroutine_handle<promise_type>::from_promise(*this)}; }
         std::suspend_always initial_suspend() noexcept { return {}; }
@@ -72,7 +75,7 @@ private:
 };
 /// @brief 无捕获的阶段入口；返回引用传入 Actor 的初始挂起行为，不能保存其他演员的引用。
 using Entry=Routine(*)(Actor&);
-/// @brief 等待当前行为达到指定局部帧；已到期时同帧继续，不累加渲染帧误差。
+/// @brief 等待当前行为达到指定 60 Hz 局部内容帧；已到期时同一更新步继续，不累加显示帧误差。
 struct AtFrame {
     Actor& owner;
     int frame;
@@ -84,7 +87,9 @@ struct AtFrame {
 /// 每个演员至多持有 32 层独占行为；Reset/Start/Transition 和销毁须发生在 Update 之外，不支持重入。
 class Actor {
 public:
-    Actor()=default;
+    /// @brief 固定该实例的更新频率；仅接受 Hz60/Hz120，其他枚举值抛 invalid_argument。
+    /// Reset/Activate 保留频率，避免池复用或阶段交接时悄然改变积分步长。
+    explicit Actor(UpdateRate rate=UpdateRate::Hz120);
     Actor(const Actor&)=delete;
     Actor& operator=(const Actor&)=delete;
     ~Actor();
@@ -96,7 +101,7 @@ public:
     /// @brief 接管非空根行为并销毁先前行为；传入协程须引用当前 Actor。
     /// 调用前应 Reset，或由 Transition 保留阶段状态；失败抛 invalid_argument/bad_alloc。
     void Start(Routine routine);
-    /// @brief 推进非负有限秒数；回调触发后停止，剩余逻辑时间保留到 Transition。
+    /// @brief 累计非负有限秒数，以实例固定频率补算；回调触发后停止，剩余更新步保留到 Transition。
     void Update(float seconds,Vector3 player,BulletSystem& bullets);
     /// @brief 进入 pendingCallback，清空调用链、阈值和阶段时钟，保留运动与技能上下文。
     void Transition();
@@ -106,8 +111,8 @@ public:
     void SetRank(int rank) { skills.rank=std::clamp(rank,10,32); }
     /// @brief 当前三维世界位置，直接返回运动状态，不执行坐标转换。
     [[nodiscard]] Vector3 Position() const { return motion.position; }
-    /// @brief 当前最深层行为的局部帧；仅在已启动且尚未返回的行为中查询。
-    [[nodiscard]] int Frame() const { return stack_.back().promise().frame; }
+    /// @brief 当前最深层行为的 60 Hz 局部内容帧，120 Hz 时可含半帧；仅在已启动且尚未返回的行为中查询。
+    [[nodiscard]] double Frame() const { return stack_.back().promise().frame; }
     /// @brief 构造非负局部帧的等待点，仅供当前行为 co_await；不会推进阶段总时钟。
     [[nodiscard]] AtFrame At(int frame) { return {*this,frame}; }
     /// @brief 循环回到局部 frame，在本帧继续执行；不能改成等待剩余时长，否则循环周期会偏移。
@@ -144,7 +149,8 @@ public:
     float health=1,maxHealth=1,lifeThreshold=-1; // 原始 HP，阈值为负关闭；生命回调优先于击破回调。
     bool damageable=true,finished=false;
     Entry pendingCallback=nullptr,lifeCallback=nullptr,deathCallback=nullptr,timeoutCallback=nullptr;
-    int phaseFrames=0,timeoutFrames=-1,deathEffect=0; // 60 Hz 阶段总帧；timeoutFrames<0 关闭超时。
+    double phaseFrames=0; // 60 Hz 阶段内容帧；120 Hz 更新时每步增加 0.5。
+    int timeoutFrames=-1,deathEffect=0; // timeoutFrames 为 60 Hz 内容帧，负值关闭超时。
     std::vector<int> soundEvents,dropEvents; // 本次 Update 的音效编号/散落数量，下次 Update 清空，调用方只即时借用。
     int animationScript=-1;
     double animationAge=0;
@@ -157,7 +163,8 @@ private:
     void Tick();
     std::vector<Routine::Handle> stack_;
     std::uint32_t random_=1;
-    double remainingFrames_=0;
+    const int updateHz_;
+    double remainingTicks_=0; // 未消费的更新步数，按 updateHz_ 累计，阶段交接时保留。
     int pose_=-1;
     Vector3 player_{};
     BulletSystem* bullets_=nullptr;

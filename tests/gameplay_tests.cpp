@@ -59,7 +59,7 @@ void TestBossHealthGroups() {
     assert(std::abs(boss.HealthBar().segments[0].remaining-450.0F/7000)<0.00001F);
     boss.health=0;
     assert(boss.AdvancePhase() && boss.phase==3);
-    // 真实主循环在 UpdateBoss 后还会执行碰撞；下一 60 Hz 帧前必须已交接新生命，且准备期不能再次推进。
+    // 真实主循环在 UpdateBoss 后还会执行碰撞；下一 120 Hz 更新步前必须已交接新生命，且准备期不能再次推进。
     assert(boss.health==7500 && boss.maxHealth==7500);
     assert(!boss.ShouldAdvanceFromDamage());
     boss.Update(1.0F/60,{},*bullets); // Sub19 首帧与交接时保持同一组总生命。

@@ -1,4 +1,4 @@
-// 本文件直接管理行为演员的出生、协程、战斗/视觉状态与回收，保持 60 Hz 的移动/行为/速度更新顺序。
+// 本文件按实例频率管理演员与协程；默认 120 Hz，保持移动/行为/速度顺序及 60 Hz 内容时钟。
 #include "gameplay/actors/behavior.hpp"
 #include <cmath>
 #include <numbers>
@@ -7,6 +7,9 @@
 namespace koumakyou::behavior {
 void Routine::Awaiter::await_suspend(Handle parent) { parent.promise().owner->Attach(child); }
 bool AtFrame::await_ready() const { return owner.Frame()>=frame; }
+Actor::Actor(UpdateRate rate):updateHz_(static_cast<int>(rate)) {
+    if(rate!=UpdateRate::Hz60&&rate!=UpdateRate::Hz120)throw std::invalid_argument("Unsupported behavior update rate");
+}
 Actor::~Actor() { ClearRoutines(); }
 void Actor::ClearRoutines() { for(auto i=stack_.rbegin();i!=stack_.rend();++i)i->destroy();stack_.clear(); }
 void Actor::Attach(Routine::Handle handle) {
@@ -22,7 +25,7 @@ void Actor::Reset(Vector3 initialPosition,float hp,std::uint32_t seed,bool mirro
     pendingCallback=lifeCallback=deathCallback=timeoutCallback=nullptr;
     phaseFrames=0;timeoutFrames=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();
     animationScript=-1;animationAge=0;animationRevision=0;poses={-1,-1,-1,-1,-1};pose_=-1;
-    random_=seed ? seed : 1;remainingFrames_=0;bullets_=nullptr;
+    random_=seed ? seed : 1;remainingTicks_=0;bullets_=nullptr;
     active=true;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=0.55F;
     scoreValue=0;sourceItem=-2;presentation.Reset();animation={};entered_=false;retireOutside_=false;defeatBase_=kInvalidVisualId;
 }
@@ -46,8 +49,8 @@ void Actor::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!std::isfinite(seconds)||seconds<0)throw std::invalid_argument("Invalid behavior delta time");
     soundEvents.clear();dropEvents.clear();player_=player;bullets_=&bullets;
     age+=seconds;presentation.Update(seconds);
-    remainingFrames_+=static_cast<double>(seconds)*60;
-    while(remainingFrames_+0.00001>=1&&!finished&&!pendingCallback) { remainingFrames_-=1;Tick(); }
+    remainingTicks_+=static_cast<double>(seconds)*updateHz_;
+    while(remainingTicks_+0.00001>=1&&!finished&&!pendingCallback) { remainingTicks_-=1;Tick(); }
     bullets_=nullptr;
     position=Position();
     if(defeatBase_!=kInvalidVisualId)defeatVisual=static_cast<VisualId>(defeatBase_+std::clamp(deathEffect,0,2));
@@ -84,7 +87,7 @@ void Actor::RandomDirection(float minimum,float maximum,bool reflect) {
 void Actor::Animate(int script) { animationScript=script;animationAge=0;++animationRevision; }
 void Actor::ClearBullets() { bullets_->ClearEnemyBullets();skills.rankInfluence=skill::kDefaultRankInfluence; }
 void Actor::Tick() {
-    motion.BeginFrame();
+    motion.BeginFrame(updateHz_);
     if(health<lifeThreshold) { health=lifeThreshold;pendingCallback=lifeCallback;return; }
     if(health<=0&&deathCallback) { pendingCallback=deathCallback;return; }
     if(timeoutFrames>=0&&phaseFrames>=timeoutFrames) {
@@ -105,7 +108,7 @@ void Actor::Tick() {
         current.resume();
     }
     if(budget<=0)throw std::runtime_error("Behavior resume budget exhausted");
-    motion.EndFrame();
+    motion.EndFrame(updateHz_);
     if(poses[3]>=0) {
         const float horizontal=motion.velocity.x*(motion.mirrored ? -1 : 1);
         const int next=horizontal<0 ? -2 : horizontal>0 ? 2 : 0;
@@ -114,9 +117,11 @@ void Actor::Tick() {
             pose_=next;
         }
     }
-    animationAge+=1.0/60;
-    if(!stack_.empty())++stack_.back().promise().frame;
-    ++phaseFrames;
+    // 内容仍以 60 Hz 帧编号；提高更新频率只细分时间，不使技能、子行为或阶段超时加速。
+    const double contentFrames=60.0/updateHz_;
+    animationAge+=1.0/updateHz_;
+    if(!stack_.empty())stack_.back().promise().frame+=contentFrames;
+    phaseFrames+=contentFrames;
 }
 Routine Follow(Actor& actor,Pattern pattern) {
     actor.motion.Polar(pattern.movement.angle,pattern.movement.speed);

@@ -74,7 +74,7 @@ void EqualBullets(const BulletSystem& original,const BulletSystem& replacement) 
 }
 struct Pair {
     ReferenceScript original;
-    behavior::Actor replacement;
+    behavior::Actor replacement{behavior::UpdateRate::Hz60};
     BulletSystem originalBullets,replacementBullets;
     Pair(int sub,unsigned seed=1,bool mirrored=false) {
         currentSub=sub;
@@ -160,7 +160,7 @@ void TestBirths() {
         const Vector3 expectedSource{r.position.x==-999 ? 192 : r.position.x,r.position.y,r.position.z};
         Equal(ReferencePosition(expectedSource),p.position,"spawn.initialPosition");
         assert(behavior::Valid(p.pattern));
-        auto enemy=testing::MakeActor(spawn->actor);
+        auto enemy=testing::MakeActor(spawn->actor,behavior::UpdateRate::Hz60);
         auto original=std::make_unique<ReferenceScript>();
         Vector3 source=expectedSource;
         if(p.randomX)source.x=static_cast<float>((p.seed*1664525U+1013904223U)>>8)/16777216.0F*384;
@@ -227,17 +227,17 @@ void TestCompositionAndOwnership() {
 /// @brief 独立世界单位契约：秒速率、XYZ 插值、X/Z 边界、发射偏移与自定义随机/回收范围均不依赖原作映射。
 void TestWorldCoordinates() {
     movement::State motion;
-    motion.position={2,3,4};motion.velocity={60,120,-180};motion.BeginFrame();
+    motion.position={2,3,4};motion.velocity={60,120,-180};motion.BeginFrame(60);
     Equal(motion.position,{3,5,1},"world.integrate");
-    motion.mirrored=true;motion.BeginFrame();Equal(motion.position,{2,7,-2},"world.mirror");
+    motion.mirrored=true;motion.BeginFrame(60);Equal(motion.position,{2,7,-2},"world.mirror");
     motion={};motion.Polar(0,60);
-    for(int frame=0;frame<60;++frame) { motion.EndFrame();motion.BeginFrame(); }
+    for(int frame=0;frame<60;++frame) { motion.EndFrame(60);motion.BeginFrame(60); }
     Equal(motion.position,{60,0,0},"world.speedPerSecond");
     motion={};motion.position={2,3,4};motion.Interpolate(60,{-4,9,-8},2);
-    for(int frame=0;frame<60;++frame) { motion.BeginFrame();motion.EndFrame(); }
+    for(int frame=0;frame<60;++frame) { motion.BeginFrame(60);motion.EndFrame(60); }
     Equal(motion.position,{-4,9,-8},"world.interpolateXYZ");
     motion={};motion.position={2,7,4};motion.bounds={{-1,-2},{1,2}};motion.clamped=true;
-    motion.BeginFrame();Equal(motion.position,{1,7,2},"world.clampXZ");
+    motion.BeginFrame(60);Equal(motion.position,{1,7,2},"world.clampXZ");
 
     auto bullets=std::make_unique<BulletSystem>();
     skill::State skill;skill.offset={0.25F,1,-0.5F};
@@ -259,8 +259,8 @@ void TestWorldCoordinates() {
     config.pattern.movement={.angle=0,.speed=60};
     auto actor=testing::MakeActor(config);
     assert(actor->Position().x==11&&actor->Position().y==20&&actor->Position().z==1);
-    actor->Update(4.0F/60,{},*bullets);assert(actor->active);
-    actor->Update(1.0F/60,{},*bullets);assert(!actor->active);
+    actor->Update(7.0F/120,{},*bullets);assert(actor->active);
+    actor->Update(1.0F/120,{},*bullets);assert(!actor->active);
     config.pattern.movement.speed=0;config.randomX=true;config.randomXRange={20,24};
     actor->Activate(config);auto duplicate=testing::MakeActor(config);
     assert(actor->position.x>=20&&actor->position.x<=24&&actor->position.y==20&&actor->position.z==1);
@@ -268,10 +268,79 @@ void TestWorldCoordinates() {
     auto invalid=config;invalid.randomXRange={24,20};assert(!behavior::Valid(invalid));
     invalid=config;invalid.retirementBounds.lower.x=15;assert(!behavior::Valid(invalid));
 }
+/// @brief 生产默认 120 Hz：半个内容帧就更新位置，技能、子行为与超时仍按原有 60 Hz 帧号等待。
+void TestRuntime120Hz() {
+    auto bullets=std::make_unique<BulletSystem>();
+    behavior::Pattern pattern{.movement={.angle=0,.speed=120},
+        .skill=skill::TimedShot{2,{skill::Formation::FixedRing,2,6,4,1,3}}};
+    behavior::Actor actor;
+    actor.Reset({10,5,0},1,1);actor.Start(behavior::Follow(actor,pattern));
+    actor.Update(1.0F/240,{},*bullets);assert(actor.phaseFrames==0);
+    actor.Update(1.0F/240,{},*bullets);assert(actor.phaseFrames==0.5);
+    Equal(actor.Position(),{10,5,0},"120.initialStep");
+    actor.Update(1.0F/120,{},*bullets);Equal(actor.Position(),{11,5,0},"120.halfFrameMovement");
+    assert(actor.phaseFrames==1&&bullets->Pool().ActiveCount()==0);
+    actor.Update(2.0F/120,{},*bullets);assert(actor.phaseFrames==2&&bullets->Pool().ActiveCount()==0);
+    actor.Update(1.0F/120,{},*bullets);assert(bullets->Pool().ActiveCount()==4);
+    Equal(static_cast<float>(actor.animationAge),5.0F/120,"120.animationSeconds");
+
+    // 父内容时钟在子行为期间冻结；半帧更新不能把等待 1 帧误解为等待 1 次更新。
+    const auto child=[](behavior::Actor& a)->behavior::Routine {
+        co_await a.At(1);a.soundEvents.push_back(2);
+    };
+    const auto parent=[&child](behavior::Actor& a)->behavior::Routine {
+        co_await a.At(1);a.soundEvents.push_back(1);co_await child(a);
+        co_await a.At(2);a.soundEvents.push_back(3);a.finished=true;
+    };
+    actor.Reset({},1,1);actor.Start(parent(actor));
+    for(int tick=1;tick<=7;++tick) {
+        actor.Update(1.0F/120,{},*bullets);
+        if(tick==3||tick==5||tick==7)assert(actor.soundEvents==std::vector{(tick-1)/2});
+        else assert(actor.soundEvents.empty());
+    }
+    assert(actor.finished);
+
+    const behavior::Entry end=[](behavior::Actor& a)->behavior::Routine { a.finished=true;co_return; };
+    actor.Reset({},1,1);actor.Start(behavior::Follow(actor,{}));actor.timeoutFrames=2;actor.timeoutCallback=end;
+    actor.Update(4.0F/120,{},*bullets);assert(actor.phaseFrames==2&&!actor.pendingCallback);
+    actor.Update(5.0F/120,{},*bullets);assert(actor.pendingCallback==end);
+    actor.Transition();actor.Update(0,{},*bullets);assert(actor.finished); // 回调之后剩余的更新步须保留。
+
+    behavior::ActorPool<1> pool;auto config=testing::SpawnAt();
+    auto* pooled=pool.Spawn(config);pooled->Update(1.0F/120,{},*bullets);assert(pooled->phaseFrames==0.5);
+    pooled->active=false;pooled=pool.Spawn(config);
+    pooled->Update(1.0F/120,{},*bullets);assert(pooled->phaseFrames==0.5); // 复用仍为 120 Hz，时钟从零开始。
+
+    // 不同显示帧率必须执行相同的 120 Hz 步序列，不能由显示帧长改变曲线或技能次数。
+    for(const auto& recipe:kPatternsBySub) {
+        Vector3 expectedPosition{},expectedVelocity{};
+        int expectedBullets=0;
+        for(int fps:{120,30,60,144,240}) {
+            bullets->Reset();actor.Reset({2,3,4},32,123);ConfigureBehavior(actor);
+            actor.Start(behavior::Follow(actor,recipe));
+            for(int frame=0;frame<4*fps;++frame)actor.Update(1.0F/fps,{0,1,-6},*bullets);
+            assert(actor.phaseFrames==240);
+            if(fps==120) {
+                expectedPosition=actor.Position();expectedVelocity=actor.motion.velocity;
+                expectedBullets=static_cast<int>(bullets->Pool().ActiveCount());
+            } else {
+                Equal(actor.Position(),expectedPosition,"120.renderFpsPosition");
+                Equal(actor.motion.velocity,expectedVelocity,"120.renderFpsVelocity");
+                assert(static_cast<int>(bullets->Pool().ActiveCount())==expectedBullets);
+            }
+        }
+    }
+    movement::State interpolated;interpolated.Interpolate(60,{12,6,-3},1);
+    for(int tick=0;tick<60;++tick) { interpolated.BeginFrame();interpolated.EndFrame(); }
+    assert(interpolated.position.x>5&&interpolated.position.x<7); // 60 次 120 Hz 更新只经过半秒。
+    for(int tick=0;tick<60;++tick) { interpolated.BeginFrame();interpolated.EndFrame(); }
+    Equal(interpolated.position,{12,6,-3},"120.interpolationDuration");
+    std::cout<<"Validated default 120 Hz behavior at 30/60/120/144/240 FPS; content timing remains 60 Hz\n";
+}
 } // namespace
 /// @brief 运行无窗口行为差分，失败输出原子程序与首次不一致帧；不读取原游戏安装或解包缓存。
 void RunBehaviorTests() {
-    TestWorldCoordinates();TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
+    TestWorldCoordinates();TestRuntime120Hz();TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
     for(int sub:{0,1,2,3,4,5,6,7,8,9,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}) {
         if(!covered[sub]) { std::cerr<<"Uncovered original Sub"<<sub<<'\n';std::abort(); }
     }

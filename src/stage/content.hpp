@@ -1,9 +1,9 @@
-// 本文件负责定义关卡素材、事件、敌人工厂和演出请求的抽象接口。
+// 本文件定义关卡素材、事件、Boss 工厂及向行为组件提交演出/生成请求的接口。
 
 #pragma once
 
 #include "gameplay/actors/boss.hpp"
-#include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/behavior.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/combat/damage_rules.hpp"
 #include "stage/system.hpp"
@@ -23,7 +23,7 @@ class StageEventSink {
 public:
     virtual ~StageEventSink() = default;
     /// @brief 请求立即创建一个敌人；spec 为借用的出生配置，接收方须复制需保留的数据。
-    virtual void SpawnStageEnemy(const EnemySpec& spec) = 0;
+    virtual void SpawnStageActor(const behavior::Spawn& spec) = 0;
     /// @brief 请求开始道中或关底 Boss，并登记等待战斗结束的异步事件编号。
     virtual void BeginStageBoss(bool final, StageEventId id) = 0;
     /// @brief 请求对话并登记异步事件编号；afterBattle 的全部台词结束后再展示关卡结算。
@@ -81,9 +81,6 @@ public:
     [[nodiscard]] virtual const StageAssetManifest& Assets() const = 0;
     /// @brief 返回按触发顺序排列的时间轴事件；底层存储须覆盖 StageDirector 的生命周期。
     [[nodiscard]] virtual std::span<const StageEvent> Events() const = 0;
-    /// @brief 根据显式出生配置立即构造敌人；实例自行持有运动状态和技能计时。
-    /// @return 所有权交给调用方；无效或非本关卡的参数类型返回 nullptr。
-    [[nodiscard]] virtual std::unique_ptr<Enemy> CreateEnemy(const EnemySpec& spec) const = 0;
     /// @brief 构造道中或关底 Boss 并初始化遭遇状态，所有权交给调用方。
     [[nodiscard]] virtual std::unique_ptr<Boss> CreateBoss(bool final) const = 0;
     /// @brief 执行调度器交付的一次动作；出怪请求必须已规范为 count=1。

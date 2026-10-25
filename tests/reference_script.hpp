@@ -1,30 +1,17 @@
-// 本文件负责新典一面 Normal 的帧脚本上下文、坐标映射与原作移动/发弹状态。
+// 本文件保留重构前的一面 Normal ECL 解释器，仅作为测试差分基准，不链接到生产引擎。
 #pragma once
-#include "stages/stage1/reference_program.hpp"
+#include "reference_program.hpp"
+#include "stages/stage1/coordinates.hpp"
 #include "gameplay/bullets/system.hpp"
 #include <array>
 #include <cstdint>
 #include <vector>
 namespace koumakyou::stage1 {
-// 384×448 像素场地映射到 X/Z 平面；原作深度映射到高度 Y，统一比例保持投影角度与轨迹。
-inline constexpr float kReferenceScale = 20.0F / 448.0F;
-// HP、阈值及玩家弹伤害统一采用原始点数；保留单位常量供现有演员适配器和独立 HUD 查询使用。
-inline constexpr float kReferenceHealthUnit = 1.0F;
-/// @brief 将原作像素坐标转换为世界坐标；X 居中，原作 Y=0…448 对应世界 Z=+10…-10，向玩家推进。
-/// 原作 Z=0 对应世界 Y=0，与玩家初始高度一致；原作 Z 正方向对应世界 -Y。
-inline Vector3 ReferencePosition(Vector3 source) {
-    return {(source.x - 192.0F) * kReferenceScale, -source.z*kReferenceScale,
-            10-source.y*kReferenceScale};
-}
-/// @brief 将世界坐标还原为原作像素坐标；供演员初始化使用，与 ReferencePosition 互为逆映射。
-inline Vector3 ReferenceSourcePosition(Vector3 world) {
-    return {world.x/kReferenceScale+192, (10-world.z)/kReferenceScale,
-            -world.y/kReferenceScale};
-}
 /// @brief 单个演员的 Normal ECL 上下文；固定 60 Hz，调用栈最多 32 层，寄存器属于各层而非演员共享。
 /// 移动在原作像素坐标求解，发弹保留 X/Z 投影，并沿 Y 增加朝玩家的高度速度；不增加弹数或改变投影角间距。
 class ReferenceScript {
 public:
+    std::array<bool,38> visited{}; // 仅测试覆盖率观测，不影响解释器执行、时钟或随机序列。
     /// @brief 初始化 Normal 子程序、像素出生点、原作 HP 与独立随机种子；mirrored 仅反转移动的 X 分量。
     /// 越界编号抛 invalid_argument；表中未用于 Normal 的特殊指令在执行时抛 runtime_error。
     void Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored = false);

@@ -371,7 +371,11 @@ void RunActorEffectTests();
 /// @brief 运行真实 DDS/ANM、固定帧序及全目录的兼容性验证。
 void RunAnimationTests();
 
+/// @brief 对比重构前解释器与带参行为的完整轨迹和技能。
+void RunBehaviorTests();
+
 int main() {
+    RunBehaviorTests();
     assert(koumakyou::ui::BossSeconds(35,0)==35 && koumakyou::ui::BossSeconds(35,0.01F)==34);
     assert(koumakyou::ui::BossSeconds(25,5)==20 && koumakyou::ui::BossSeconds(25,25)==0);
     assert(koumakyou::ui::BossSeconds(25,26)==0 && koumakyou::ui::BossSeconds(-1,0)==-1);

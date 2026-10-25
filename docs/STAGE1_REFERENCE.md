@@ -1,6 +1,6 @@
 # Stage 1 新典数据对照
 
-本分支按用户确认的“保留 3D 操作，严格保留新典波次、轨迹和弹幕结构”实现 Normal 灵梦一面。此前依靠录像概括的波次与三维锥面技能已退出实际关卡；旧 FairyEnemy、DarkFairyEnemy、OrbEnemy 仅保留为独立测试/调试演员。
+本分支按用户确认的“保留 3D 操作，严格保留新典波次、轨迹和弹幕结构”实现 Normal 灵梦一面。此前依靠录像概括的波次与三维锥面技能已退出实际关卡；旧敌人继承体系及调试演员已移除，当前直接运行行为组件。
 
 ## 数据来源与复现
 
@@ -19,7 +19,7 @@ ecldata1.ecl be9e49fe6f1c9fcbca858d335773bc16b1a89ae25083b60d1cb5ab33814dd2f3
 msg1.dat     968f8bff0c386e4f9d18f116a52b25b0a3137d098bced43280a8e52a84037ec9
 ```
 
-解包使用 [thdat-nc](https://github.com/Renko6626/thdat-nc)，反编译使用 [thtk](https://github.com/thpatch/thtk) 的 `thecl -d 6` 与 `thmsg -d 6`。像素/帧指令的语义对照 [th06 引擎还原](https://github.com/GensokyoClub/th06)。临时工具、游戏原始包与解包缓存不入库。已转换的只读指令与出生表是运行时源码数据；重新导入：
+解包使用 [thdat-nc](https://github.com/Renko6626/thdat-nc)，反编译使用 [thtk](https://github.com/thpatch/thtk) 的 `thecl -d 6` 与 `thmsg -d 6`。像素/帧指令的语义对照 [th06 引擎还原](https://github.com/GensokyoClub/th06)。临时工具、游戏原始包与解包缓存不入库。已转换的只读指令保留为测试基准；生产运行使用 [带参移动/技能配方](STAGE1_BEHAVIORS.md)，出生事件及其数值直接写在 `timeline.cpp`，并在测试中与统一原始目录逐条核对。更新 `tests/reference_program.hpp` 参考指令表：
 
 ```bash
 thecl -d 6 ecldata1.ecl stage1.ecl.txt

@@ -1,4 +1,5 @@
 // 本文件用确定性 Alpha 合成检查掉落物、演员、弹幕、激光与特效的实际 GPU 遮挡，无需音频或游戏配置。
+#include "actor_fixture.hpp"
 #include "render/sprite_renderer.hpp"
 #include "resources/asset_manager.hpp"
 #include "stages/stage1/content.hpp"
@@ -13,12 +14,10 @@
 namespace {
 using namespace koumakyou;
 constexpr Color kRed{255,0,0,255};
-/// @brief 仅作为渲染输入的静止演员；不运行关卡、攻击或掉落逻辑。
-struct TestEnemy final:Enemy {
-    TestEnemy(VisualId visual,Vector3 position):Enemy(visual,position,{}){presentation.Update(1);}
-    void Move(float) override {}
-    void UpdateSkills(float,Vector3,BulletSystem&) override {}
-};
+/// @brief 直接初始化行为演员作为渲染输入；不运行关卡、攻击或掉落逻辑。
+void InitializeActor(behavior::Actor& actor,VisualId visual,Vector3 position) {
+    actor.Activate(testing::SpawnAt(position,visual));actor.presentation.Update(1);
+}
 /// @brief 测试纹理/档案所有者；颜色刻意简单，期望值从标准 Alpha 公式计算，不依赖绘制实现。
 struct Fixture {
     std::vector<VisualResource> visuals;
@@ -47,7 +46,7 @@ struct Fixture {
         visuals.push_back(visual);
     }
     /// @brief 通过正式 SpriteRenderer 画到 256×256；probe 检查返回后的深度/剔除/混合，blocker 放置前景墙。
-    Image Render(const char* name,std::span<const Enemy*> enemies={},std::span<const PickupSprite> pickups={},bool probe=false,bool blocker=false) {
+    Image Render(const char* name,std::span<const behavior::Actor*> enemies={},std::span<const PickupSprite> pickups={},bool probe=false,bool blocker=false) {
         auto target=LoadRenderTexture(256,256);
         BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(camera);
         if(blocker)DrawCube({0,0,-2},1,1,0.2F,WHITE);
@@ -71,7 +70,7 @@ void Expect(const Image& image,int x,int y,Color expected,const char* reason) {
                                  " got "+std::to_string(actual.r)+","+std::to_string(actual.g)+","+std::to_string(actual.b));
 }
 void CheckOverlaps(Fixture& f) {
-    TestEnemy enemy(0,{0,0,1});std::array<const Enemy*,1> actors{&enemy};
+    behavior::Actor enemy;InitializeActor(enemy,0,{0,0,1});std::array<const behavior::Actor*,1> actors{&enemy};
     std::array<PickupSprite,1> pickups{{{{0,0,-1},1,1}}};
     Image image=f.Render("pickup-front",actors,pickups);
     Expect(image,173,128,kRed,"transparent pickup border hid enemy");
@@ -91,7 +90,7 @@ void CheckOverlaps(Fixture& f) {
 
     auto wide=std::make_shared<anm::Archive>(*f.archive);wide->sprites[0].source.width=32;
     f.visuals[3].archive=wide;
-    TestEnemy side(3,{5,0,0});std::array<const Enemy*,2> slanted{&side,&enemy};
+    behavior::Actor side;InitializeActor(side,3,{5,0,0});std::array<const behavior::Actor*,2> slanted{&side,&enemy};
     image=f.Render("camera-depth",slanted);
     Expect(image,128,128,{127,128,0,255},"radial distance reversed view-depth order");UnloadImage(image);
     f.visuals[3].archive=f.archive;
@@ -100,8 +99,8 @@ void CheckOverlaps(Fixture& f) {
     shifted->scripts[0].instructions.insert(shifted->scripts[0].instructions.begin()+1,
                                            {.opcode=17,.args={0,0,std::bit_cast<std::uint32_t>(-4.0F)}});
     f.visuals[3].archive=shifted;
-    TestEnemy movedByAnm(3,{0,0,1}),wall(0,{0,0,0});
-    std::array<const Enemy*,2> displaced{&movedByAnm,&wall};
+    behavior::Actor movedByAnm,wall;InitializeActor(movedByAnm,3,{0,0,1});InitializeActor(wall,0,{0,0,0});
+    std::array<const behavior::Actor*,2> displaced{&movedByAnm,&wall};
     image=f.Render("anm-local-depth",displaced);
     Expect(image,128,128,{127,128,0,255},"ANM local displacement was omitted from sorting");UnloadImage(image);
     f.visuals[3].archive=f.archive;
@@ -115,7 +114,7 @@ void CheckOverlaps(Fixture& f) {
     image=f.Render("enemy-bullet",actors);
     Expect(image,128,128,{127,0,128,255},"enemy bullet overlap changed");UnloadImage(image);bullet->active=false;
 
-    TestEnemy legacy(4,{0,0,1});actors[0]=&legacy;pickups[0].position.z=-1;
+    behavior::Actor legacy;InitializeActor(legacy,4,{0,0,1});actors[0]=&legacy;pickups[0].position.z=-1;
     image=f.Render("legacy-actor",actors,pickups);
     Expect(image,173,128,kRed,"PNG actor border regression");UnloadImage(image);
     actors[0]=&enemy;
@@ -139,7 +138,7 @@ void CheckOverlaps(Fixture& f) {
     SetTextureFilter(gradientTexture,TEXTURE_FILTER_BILINEAR);SetTextureWrap(gradientTexture,TEXTURE_WRAP_REPEAT);
     const auto previous=f.visuals[3].texture;f.visuals[3].texture=gradientTexture;beam->active=true;
     Image continuous=f.Render("beam-uv-continuous");
-    TestEnemy ghost(0,{0,0,1});ghost.presentation.Reset();std::array<const Enemy*,1> ghosts{&ghost};
+    behavior::Actor ghost;InitializeActor(ghost,0,{0,0,1});ghost.presentation.Reset();std::array<const behavior::Actor*,1> ghosts{&ghost};
     image=f.Render("beam-uv-split",ghosts);
     for(int y=0;y<256;++y)for(int x=0;x<256;++x)
         Expect(image,x,y,GetImageColor(continuous,x,y),"splitting beam changed its UV/coverage");
@@ -147,7 +146,7 @@ void CheckOverlaps(Fixture& f) {
     f.visuals[3].texture=previous;UnloadTexture(gradientTexture);
 
     f.visuals[3].archive.reset();f.visuals[3].glow=true;
-    TestEnemy near(0,{0,0,-4});std::array<const Enemy*,1> nearActors{&near};
+    behavior::Actor near;InitializeActor(near,0,{0,0,-4});std::array<const behavior::Actor*,1> nearActors{&near};
     bullet=f.bullets.Spawn(BulletOwner::Enemy,{0,0,-3},{},1,WHITE,3);
     image=f.Render("glow-behind-actor",nearActors);
     Expect(image,128,128,kRed,"rear glow painted over opaque foreground actor");UnloadImage(image);bullet->active=false;
@@ -186,7 +185,7 @@ void ReviewRealAssets(const std::filesystem::path& root,const std::filesystem::p
     AssetManager assets(root);stage1::Stage1Content content;assets.LoadStage(content.Assets());
     const auto& visuals=assets.Stage().visuals;
     SpriteRenderer renderer;BulletSystem bullets;ActorEffectSystem effects;
-    TestEnemy enemy(stage1::kFairy,{0,0,0.5F});std::array<const Enemy*,1> actors{&enemy};
+    behavior::Actor enemy;InitializeActor(enemy,stage1::kFairy,{0,0,0.5F});std::array<const behavior::Actor*,1> actors{&enemy};
     const Camera3D camera{{0,0,-5},{0,0,0},{0,1,0},45,CAMERA_PERSPECTIVE};
     std::array<PickupSprite,2> pickups{{{{-0.05F,-0.15F,0},stage1::kPowerPoint,1},{{0.3F,0,0.1F},stage1::kScorePoint,1}}};
     auto target=LoadRenderTexture(768,768);

@@ -1,4 +1,4 @@
-// 本文件将新典原始脚本的 HP/超时回调接入公共 Boss 生命周期；不重新编写弹幕或移动路径。
+// 本文件将带参移动/技能的阶段回调接入露米娅公共生命周期，HP 与计时保持原始单位。
 #include "stages/stage1/boss.hpp"
 #include "stages/stage1/ids.hpp"
 #include "gameplay/data/native_combat.hpp"
@@ -22,59 +22,61 @@ void RumiaBoss::StartMidboss() {
     encounter_=Encounter::Midboss; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
     const float initialHealth=native_combat::RequireLiteral(native_combat::Spawn(1,0,1882,9));
-    script_.Reset(9,{192,-32,0},initialHealth,1882);
-    script_.damageable=false;
-    position=script_.Position(); health=maxHealth=initialHealth/kReferenceHealthUnit;
+    behavior_.Reset({192,-32,0},initialHealth,1882);
+    ConfigureBehavior(behavior_);behavior_.Start(rumia::Midboss(behavior_));
+    behavior_.damageable=false;
+    position=behavior_.Position(); health=maxHealth=initialHealth/kReferenceHealthUnit;
 }
 void RumiaBoss::StartFinalBoss() {
     encounter_=Encounter::Final; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
-    script_.Reset(14,{192,96,0},HealthGroups()[0].total,5093);
-    script_.damageable=false;
-    position=script_.Position(); health=maxHealth=HealthGroups()[0].total/kReferenceHealthUnit;
+    behavior_.Reset({192,96,0},HealthGroups()[0].total,5093);
+    ConfigureBehavior(behavior_);behavior_.Start(rumia::FirstNonspell(behavior_));
+    behavior_.damageable=false;
+    position=behavior_.Position(); health=maxHealth=HealthGroups()[0].total/kReferenceHealthUnit;
 }
 bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     if(!active) return false;
     presentation.Update(dt);
-    script_.health=health*kReferenceHealthUnit;
-    script_.Update(dt,player,bullets);
-    defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(script_.deathEffect,0,2));
-    animationScript=script_.animationScript;animationAge=script_.animationAge;animationRevision=script_.animationRevision;
-    health=script_.health/kReferenceHealthUnit; maxHealth=script_.maxHealth/kReferenceHealthUnit;
-    position=script_.Position(); phaseTimer=script_.phaseFrames/60.0F;
-    return script_.pendingCallback>=0 || script_.finished;
+    behavior_.health=health*kReferenceHealthUnit;
+    behavior_.Update(dt,player,bullets);
+    defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(behavior_.deathEffect,0,2));
+    animationScript=behavior_.animationScript;animationAge=behavior_.animationAge;animationRevision=behavior_.animationRevision;
+    health=behavior_.health/kReferenceHealthUnit; maxHealth=behavior_.maxHealth/kReferenceHealthUnit;
+    position=behavior_.Position(); phaseTimer=behavior_.phaseFrames/60.0F;
+    return behavior_.pendingCallback!=nullptr || behavior_.finished;
 }
 bool RumiaBoss::ShouldAdvanceFromDamage() const {
-    // Game 每个渲染帧都检查碰撞，但脚本只在 60 Hz 执行；准备期不能用上次攻击的残余生命再次推进。
+    // Game 每个渲染帧都检查碰撞，但行为只在 60 Hz 执行；准备期不能用上次攻击的残余生命再次推进。
     return CanTakeDamage() && (health<=0 || (!IsMidboss() && (phase==1 || phase==3) &&
         health<HealthGroups()[phase==1 ? 0 : 1].spell/kReferenceHealthUnit));
 }
 bool RumiaBoss::AdvancePhase() {
     if(!active) return false;
-    // 玩家碰撞发生在脚本 Update 之后；回调必须看到本帧的新生命，而不是上一帧的副本。
-    script_.health=health*kReferenceHealthUnit;
-    if(script_.finished || (retiring_ && script_.pendingCallback==21)) {
+    // 玩家碰撞发生在行为 Update 之后；回调必须看到本帧的新生命，而不是上一帧的副本。
+    behavior_.health=health*kReferenceHealthUnit;
+    if(behavior_.finished || (retiring_ && behavior_.pendingCallback==rumia::End)) {
         active=false; phase=0; return false;
     }
-    if(script_.pendingCallback<0) {
-        if(IsMidboss())script_.pendingCallback=7;
-        else if(phase==1) { script_.pendingCallback=26; script_.health=HealthGroups()[0].spell; }
-        else if(phase==2)script_.pendingCallback=19;
-        else if(phase==3) { script_.pendingCallback=29; script_.health=HealthGroups()[1].spell; }
-        else script_.pendingCallback=20;
+    if(!behavior_.pendingCallback) {
+        if(IsMidboss())behavior_.pendingCallback=rumia::MidbossDefeated;
+        else if(phase==1) { behavior_.pendingCallback=rumia::NightBird; behavior_.health=HealthGroups()[0].spell; }
+        else if(phase==2)behavior_.pendingCallback=rumia::SecondNonspell;
+        else if(phase==3) { behavior_.pendingCallback=rumia::Demarcation; behavior_.health=HealthGroups()[1].spell; }
+        else behavior_.pendingCallback=rumia::Defeated;
     }
     if(IsMidboss() || phase==4) { defeated_=health<=0; retiring_=true; }
     else ++phase;
-    // Sub19 的 ins_111 要等下一次 60 Hz Tick 才执行。先原子交接下一组生命，避免击破后的 1 HP
+    // SecondNonspell 的生命初始化要等下一次 60 Hz Tick 才执行。先原子交接下一组生命，避免击破后的 1 HP
     // 占位在高帧率下跳过非符，也让同一帧的 HUD 立即显示第二组完整白段与粉段。
-    if(!retiring_ && phase==3)script_.health=script_.maxHealth=HealthGroups()[1].total;
-    script_.SetDeathCallback(IsMidboss() ? 7 : phase<=2 ? 19 : 20);
-    // 小于 1/60 秒的帧可能还未执行回调首条 ins_105；准备期保护必须在交接时立即生效。
-    script_.damageable=false;
-    script_.Transition(); health=script_.health/kReferenceHealthUnit;
+    if(!retiring_ && phase==3)behavior_.health=behavior_.maxHealth=HealthGroups()[1].total;
+    behavior_.SetDeathCallback(IsMidboss() ? rumia::MidbossDefeated : phase<=2 ? rumia::SecondNonspell : rumia::Defeated);
+    // 小于 1/60 秒的帧可能还未执行回调首条受伤开关；准备期保护必须在交接时立即生效。
+    behavior_.damageable=false;
+    behavior_.Transition(); health=behavior_.health/kReferenceHealthUnit;
     // maxHealth 保留当前攻击的战斗上限；HUD 使用独立的整组快照，不能在符卡回调处将预留段铺满。
-    if(phase==2 || phase==4)script_.maxHealth=script_.health;
-    maxHealth=script_.maxHealth/kReferenceHealthUnit; phaseTimer=0;
+    if(phase==2 || phase==4)behavior_.maxHealth=behavior_.health;
+    maxHealth=behavior_.maxHealth/kReferenceHealthUnit; phaseTimer=0;
     return true;
 }
 const char* RumiaBoss::SpellName() const {

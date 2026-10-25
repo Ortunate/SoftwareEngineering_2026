@@ -196,7 +196,7 @@ void DrawBeamShell(Vector3 start,Vector3 end,float radius,Color color,bool capSt
 }  // namespace
 
 void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
-                          std::span<const Enemy*> enemies, const Boss* boss,
+                          std::span<const behavior::Actor*> enemies, const Boss* boss,
                           std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
                           const SpriteShaders& shaders,
@@ -411,7 +411,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
 
 #ifdef KOUMAKYOU_DEBUG_FEATURES
 void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
-                                       std::span<const Enemy*> enemies,
+                                       std::span<const behavior::Actor*> enemies,
                                        const Boss* boss,
                                        Vector3 playerPosition) const {
     rlDisableDepthTest();
@@ -427,10 +427,10 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
         DrawSphereWires(bullet.position, bullet.radius, 7, 10,
                         Color{255, 230, 90, 230});
     });
-    for (const Enemy* enemy : enemies) {
+    for (const behavior::Actor* enemy : enemies) {
         DrawSphereWires(enemy->position, enemy->hitRadius, 9, 12,
                         Color{65, 240, 250, 240});
-        const Vector3 muzzle = enemy->MuzzlePosition(playerPosition);
+        const Vector3 muzzle = enemy->MuzzlePosition();
         DrawLine3D(enemy->position, muzzle, YELLOW);
         DrawSphere(muzzle, 0.065F, MAGENTA);
     }

@@ -5,7 +5,7 @@
 #include "resources/asset_manager.hpp"
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/bullets/system.hpp"
-#include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/behavior.hpp"
 #include "app/run_state.hpp"
 #include "app/start_setup.hpp"
 #include "app/stage_clear.hpp"
@@ -80,7 +80,7 @@ private:
     // 独立离屏集成测试通过此探针检查生命周期，正式程序不暴露可修改的战斗状态。
     friend struct GameLifecycleProbe;
     /// @brief 同时可保有的最多敌人数。
-    static constexpr std::size_t kEnemyCapacity = 128;
+    static constexpr std::size_t kActorCapacity = 128;
     /// @brief 设置界面的普通设置页与按键设置页。
     enum class OptionsPage {
         General,
@@ -110,7 +110,7 @@ private:
     /// @brief 在 Playing/StageClear/Finishing 与 Paused 间切换，并同步音乐和鼠标状态。
     void TogglePause();
     /// @brief 立即取消全部小怪并生成清场快照，不给予击破奖励。
-    void ClearEnemiesWithEffects();
+    void ClearActorsWithEffects();
     /// @brief 从本地文件读取全部设置并应用音量、灵敏度。
     void LoadSettings();
     /// @brief 将当前设置、成绩及独立的开局选择记录写入本地文件。
@@ -152,7 +152,7 @@ private:
     void UpdatePlayer(float deltaTime);
     /// @brief 推进全部活动敌人的航线及技能计时器。
     /// @param deltaTime 本帧经过的秒数。
-    void UpdateEnemies(float deltaTime);
+    void UpdateActors(float deltaTime);
     /// @brief 推进 Boss 当前阶段，超时则请求阶段切换。
     /// @param deltaTime 本帧经过的秒数。
     void UpdateBoss(float deltaTime);
@@ -168,9 +168,9 @@ private:
     /// @return 同步完成的事件返回 true；Boss 战和对话返回 false。
     bool HandleStageEvent(const StageEvent& event);
 
-    /// @brief 委托当前 Stage 工厂构造敌人并加入敌人池。
-    /// @param spec 携带具体敌人类型、出生位置和显式轨迹的配置。
-    void SpawnStageEnemy(const EnemySpec& spec) override;
+    /// @brief 将出生配置直接交给行为演员池；Boss 活动期间跳过该次生成请求。
+    /// @param spec 按值复制的出生位置、行为配方及战斗和视觉配置。
+    void SpawnStageActor(const behavior::Spawn& spec) override;
     /// @brief 开始 Boss 战并停止旧批次后续出怪，保留现存小怪、弹幕、道具及效果。
     void BeginStageBoss(bool final, StageEventId id) override;
     /// @brief 开始原文对话；战后独白结束才固定 Bonus 并进入奖励明细，关闭后进入胜利收尾。
@@ -265,7 +265,7 @@ private:
     std::array<battle::Cursor, 2> playerOptionAnimations_{};
     std::unique_ptr<Boss> boss_{};
     BulletSystem bullets_{};
-    EnemyPool<kEnemyCapacity> enemies_{};
+    behavior::ActorPool<kActorCapacity> actors_{};
     ActorEffectSystem actorEffects_{};
     PlayerBombEffect playerBomb_{}; // 仅借用关卡 ANM；退出、重开、结算及卸载资源前清空。
     bool playerBombStartedThisFrame_=false;

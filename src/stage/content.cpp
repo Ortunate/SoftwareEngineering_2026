@@ -29,12 +29,12 @@ struct EventExecutor {
     const StageEvent& event;
     StageEventSink& sink;
 
-    bool operator()(const SpawnEnemies& action) const {
+    bool operator()(const SpawnActors& action) const {
         if (action.count != 1 || !std::isfinite(action.interval) ||
-            action.interval < 0.0F || !IsValidEnemySpec(action.enemy)) {
+            action.interval < 0.0F || !behavior::Valid(action.actor)) {
             throw std::invalid_argument("Expected one valid enemy spawn request");
         }
-        sink.SpawnStageEnemy(action.enemy);
+        sink.SpawnStageActor(action.actor);
         return true;
     }
 

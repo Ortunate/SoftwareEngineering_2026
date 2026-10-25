@@ -16,18 +16,18 @@ namespace {
 constexpr std::array<std::string_view,4> kBombSounds{"reference_6","bomb","reference_7","bomb_master"};
 }
 
-void Game::UpdateEnemies(float deltaTime) {
-    enemies_.ForEachActive([this, deltaTime](Enemy& enemy) {
-        enemy.SetChallengeRank(referenceRank_);
+void Game::UpdateActors(float deltaTime) {
+    actors_.ForEachActive([this, deltaTime](behavior::Actor& enemy) {
+        enemy.SetRank(referenceRank_);
         enemy.Update(deltaTime, player_.Position(), bullets_);
-        for(int id:enemy.SoundEvents())assets_.PlaySoundEffect("reference_"+std::to_string(id));
+        for(int id:enemy.soundEvents)assets_.PlaySoundEffect("reference_"+std::to_string(id));
         const auto& visual=assets_.GetVisual(enemy.visual);
         if(visual.archive) {
             auto selected=visual.animation;
             if(enemy.animationScript>=0)selected.script=enemy.animationScript;
             enemy.animation.Sync(*visual.archive,selected,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,enemy.animationRevision);
         }
-        // 只处理本帧仍活动到失活的跃迁，快照不延长 Enemy 的槽位寿命。
+        // 只处理本帧仍活动到失活的跃迁，快照不延长 Actor 的槽位寿命。
         if (!enemy.active)
             actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
                                 enemy.presentation, ActorExitReason::Retreat, &enemy.animation.player.Sample());
@@ -66,7 +66,7 @@ void Game::ResolveCollisions() {
     });
     if(state_==RunState::Playing && !dialogueActive_) {
         // 对话人物及退场快照不在本体判定中；本体只让玩家受击，不给敌人扣血、生成掉落或产生擦弹。
-        enemies_.ForEachActive([&](const Enemy& enemy) {
+        actors_.ForEachActive([&](const behavior::Actor& enemy) {
             if(enemy.CanContactPlayer() && player_.ContactEnemyBody(enemy.position,enemy.hitRadius))playerWasHit=true;
         });
         if(boss_ && boss_->CanContactPlayer() && player_.ContactEnemyBody(boss_->position,boss_->hitRadius))playerWasHit=true;
@@ -91,7 +91,7 @@ void Game::ResolveCollisions() {
             // 原作爆破每个持续接触的逻辑帧继续减半速度；按经过秒数换算，避免低 FPS 减速变弱。
             bullet.velocity=Scale(bullet.velocity,std::pow(0.5F,bullet.damageSeconds*60));
     };
-    enemies_.ForEachActive([this,&applyShotImpact,&shotDamage](Enemy& enemy) {
+    actors_.ForEachActive([this,&applyShotImpact,&shotDamage](behavior::Actor& enemy) {
         bullets_.Pool().ForEachActive([&enemy,&applyShotImpact,&shotDamage](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + enemy.hitRadius;
@@ -113,8 +113,7 @@ void Game::ResolveCollisions() {
             actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
                                 enemy.presentation, ActorExitReason::Defeated, &enemy.animation.player.Sample(), enemy.defeatVisual!=kInvalidVisualId ? enemy.defeatVisual : assets_.GetVisual(enemy.visual).defeatVisual);
             score_ += enemy.scoreValue;
-            if(enemy.ReferenceDropKind()==-3) drops_.SpawnEnemyDrops(enemy.position,enemy.DropDistribution());
-            else drops_.SpawnReferenceDrop(enemy.position,enemy.ReferenceDropKind(),player_.Power()==Player::kMaxPower);
+            drops_.SpawnReferenceDrop(enemy.position,enemy.sourceItem,player_.Power()==Player::kMaxPower);
         }
     });
 
@@ -179,8 +178,8 @@ void Game::UpdatePlayerBomb(float deltaTime) {
     // 初始清弹也放在敌弹推进之后，覆盖释放本帧由敌人新生成的弹；frame=0 没有伤害通道。
     if(playerBomb_.Frame()==0)ResolvePlayerBombFrame();
     if(playerBombStartedThisFrame_)return;
-    std::array<Vector3,kEnemyCapacity+1> targets{};std::size_t count=0;
-    enemies_.ForEachActive([&](const Enemy& enemy) {
+    std::array<Vector3,kActorCapacity+1> targets{};std::size_t count=0;
+    actors_.ForEachActive([&](const behavior::Actor& enemy) {
         if(enemy.health>0 && enemy.CanTakeDamage())targets[count++]=enemy.position;
     });
     if(boss_ && boss_->active && boss_->health>0 && boss_->CanTakeDamage())targets[count++]=boss_->position;
@@ -210,7 +209,7 @@ void Game::ResolvePlayerBombFrame() {
                               identity,0,stage_.Elapsed(),1.0F/60,true,!spell || bombCount_>spellStartBombs_},
                              stageContent_->DamageRules()).amount;
     };
-    enemies_.ForEachActive([&](Enemy& enemy) {
+    actors_.ForEachActive([&](behavior::Actor& enemy) {
         if(enemy.health>0 && enemy.CanTakeDamage())enemy.health-=damage(enemy.position,enemy.hitRadius,DamageTarget::Enemy,&enemy,false);
     });
     if(boss_ && boss_->active && boss_->health>0 && boss_->CanTakeDamage())

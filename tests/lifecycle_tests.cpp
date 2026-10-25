@@ -1,8 +1,10 @@
 // 本文件负责在隐藏图形窗口中验证自机射击、本体碰撞、Game 战斗演出、结算及资源生命周期。
 
+#include "actor_fixture.hpp"
 #include "app/game.hpp"
 #include "rlgl.h"
-#include "stages/stage1/enemies.hpp"
+#include "stages/stage1/behaviors.hpp"
+#include "stages/stage1/coordinates.hpp"
 #include "ui/typography.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/boss_hud.hpp"
@@ -37,7 +39,7 @@ struct GameLifecycleProbe {
     }
     static std::size_t EnemyCount(const Game& game) {
         std::size_t count = 0;
-        game.enemies_.ForEachActive([&](const Enemy&) { ++count; });
+        game.actors_.ForEachActive([&](const behavior::Actor&) { ++count; });
         return count;
     }
     static std::size_t PickupCount(const Game& game) {
@@ -68,11 +70,8 @@ struct GameLifecycleProbe {
 
     /// @brief 经过正式碰撞总控，检查本体/弹幕同帧只扣一次、无敌和对话门禁、敌方不受碰撞伤害。
     static void TestActorContacts(Game& game) {
-        struct Target final:Enemy {
-            explicit Target(Vector3 p):Enemy(stage1::kFairy,p,{}){health=maxHealth=100;hitRadius=0.5F;}
-            bool CanTakeDamage() const override {return false;}
-            void Move(float) override {}
-            void UpdateSkills(float,Vector3,BulletSystem&) override {}
+        const auto MakeTarget=[](Vector3 p) {
+            auto spawn=testing::SpawnAt(p,stage1::kFairy,100,0.5F);spawn.damageable=false;return spawn;
         };
         struct TargetBoss final:Boss {
             explicit TargetBoss(Vector3 p){active=true;position=p;health=maxHealth=100;visual=stage1::kRumia;}
@@ -85,7 +84,7 @@ struct GameLifecycleProbe {
         };
         game.StartPreview();game.stage_=StageDirector{};
         const auto reset=[&] {
-            game.ClearPlayerBomb();game.enemies_.Clear();game.boss_.reset();game.bullets_.Reset();
+            game.ClearPlayerBomb();game.actors_.Clear();game.boss_.reset();game.bullets_.Reset();
             game.actorEffects_.Clear();game.drops_.Clear();game.dialogueActive_=false;game.state_=RunState::Playing;
             game.player_.Reset();game.player_.ConfigureRun(3,3,false,ShotType::HomingAmulet);
             game.player_.SetInvulnerability(0);game.player_.AdjustPower(72);game.player_.SyncCamera(game.camera_);
@@ -95,25 +94,25 @@ struct GameLifecycleProbe {
 #endif
         };
         reset();const auto position=game.player_.Position();
-        assert(game.enemies_.Add(std::make_unique<Target>(position)));
-        assert(game.enemies_.Add(std::make_unique<Target>(position)));
+        assert(game.actors_.Spawn(MakeTarget(position)));
+        assert(game.actors_.Spawn(MakeTarget(position)));
         game.boss_=std::make_unique<TargetBoss>(position);
         auto* bullet=game.bullets_.Spawn(BulletOwner::Enemy,position,{},0.1F,RED,stage1::kBlueBullet);assert(bullet);
         game.ResolveCollisions();
         assert(game.missCount_==1 && game.player_.RemainingLives()==3 && game.player_.Power()==64);
         assert(game.score_==0 && game.graze_==0 && PickupCount(game)==0 && game.actorEffects_.Pool().ActiveCount()==0);
-        game.enemies_.ForEachActive([](const Enemy& enemy){assert(enemy.health==100);});
+        game.actors_.ForEachActive([](const behavior::Actor& enemy){assert(enemy.health==100);});
         assert(EnemyCount(game)==2 && game.boss_->health==100 && !bullet->active);
         game.ResolveCollisions();assert(game.missCount_==1); // 重叠不绕过复活无敌。
         game.player_.SetInvulnerability(0);game.ResolveCollisions();assert(game.missCount_==2);
 
         reset();game.boss_=std::make_unique<TargetBoss>(position);game.ResolveCollisions();
         assert(game.missCount_==1); // Boss 单独接触也必须生效。
-        reset();assert(game.enemies_.Add(std::make_unique<Target>(position)));
+        reset();assert(game.actors_.Spawn(MakeTarget(position)));
         game.dialogueActive_=true;game.ResolveCollisions();assert(game.missCount_==0);
         game.dialogueActive_=false;game.state_=RunState::Paused;game.ResolveCollisions();assert(game.missCount_==0);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
-        reset();assert(game.enemies_.Add(std::make_unique<Target>(position)));
+        reset();assert(game.actors_.Spawn(MakeTarget(position)));
         game.debugInvincible_=true;game.ResolveCollisions();assert(game.missCount_==0 && game.player_.Power()==80);
 #endif
         reset();game.BeginStageBoss(false,3);game.boss_->position=position;
@@ -364,7 +363,7 @@ struct GameLifecycleProbe {
         const int width=GetScreenWidth(),height=GetScreenHeight();
         for(int character=0;character<2;++character) {
             game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
-            game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();game.drops_.Clear();
+            game.stage_=StageDirector{};game.actors_.Clear();game.boss_.reset();game.drops_.Clear();
             for(bool after:{false,true}) {
                 game.BeginStageDialogue(1,after);
                 const auto lines=game.CurrentDialogue();
@@ -402,13 +401,8 @@ struct GameLifecycleProbe {
     /// @brief 在真实伤害、清弹、死亡掉落和 Boss 保护入口验证 Bomb，避免仅凭画面通过。
     static void TestPlayerBombCombat(Game& game) {
         // 固定靶借用本关外观；不移动或发弹，允许单独控制无敌和原始生命。
-        struct Target final:Enemy {
-            bool damageable=true;
-            Target(Vector3 p,float hp):Enemy(stage1::kFairy,p,{}) {health=maxHealth=hp;hitRadius=0.4F;}
-            bool CanTakeDamage() const override {return damageable;}
-            int ReferenceDropKind() const override {return 0;}
-            void Move(float) override {}
-            void UpdateSkills(float,Vector3,BulletSystem&) override {}
+        const auto MakeTarget=[](Vector3 p,float hp) {
+            return testing::SpawnAt(p,stage1::kFairy,hp,0.4F);
         };
         struct SpellTarget final:Boss {
             bool damageable=true;
@@ -421,14 +415,13 @@ struct GameLifecycleProbe {
             bool CanTakeDamage() const override {return damageable;}
         };
         const auto reset=[&](ShotType shot) {
-            game.ClearPlayerBomb();game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();
+            game.ClearPlayerBomb();game.stage_=StageDirector{};game.actors_.Clear();game.boss_.reset();
             game.bullets_.Reset();game.drops_.Clear();game.actorEffects_.Clear();
             game.player_.Reset();game.player_.ConfigureRun(3,3,false,shot);game.player_.SyncCamera(game.camera_);
         };
         reset(ShotType::Needle);
-        auto center=std::make_unique<Target>(Vector3{9,4,4},1000);auto* untouched=center.get();
-        auto edge=std::make_unique<Target>(Vector3{0,0,-6.2F},1000);auto* touched=edge.get();
-        assert(game.enemies_.Add(std::move(center)) && game.enemies_.Add(std::move(edge)));
+        auto* untouched=game.actors_.Spawn(MakeTarget({9,4,4},1000));
+        auto* touched=game.actors_.Spawn(MakeTarget({0,0,-6.2F},1000));assert(untouched&&touched);
         game.ApplyBombEffect();
         assert(game.screenFlashTimer_==0 && untouched->health==1000 && touched->health==1000);
         game.UpdatePlayerBomb(1);
@@ -440,12 +433,11 @@ struct GameLifecycleProbe {
         game.UpdatePlayerBomb(77.0F/60);assert(untouched->health<1000);
 
         reset(ShotType::IllusionLaser);
-        auto front=std::make_unique<Target>(Vector3{0,0,4},24);auto* hit=front.get();assert(game.enemies_.Add(std::move(front)));
-        auto outside=std::make_unique<Target>(Vector3{0,8,-9},1000);auto* miss=outside.get();assert(game.enemies_.Add(std::move(outside)));
-        auto corner=std::make_unique<Target>(Vector3{9,9,-6.25F},1000);auto* covered=corner.get();
-        assert(game.enemies_.Add(std::move(corner)));
-        auto invincible=std::make_unique<Target>(Vector3{0,0,4},1000);auto* safe=invincible.get();safe->damageable=false;
-        assert(game.enemies_.Add(std::move(invincible)));
+        auto* hit=game.actors_.Spawn(MakeTarget({0,0,4},24));
+        auto* miss=game.actors_.Spawn(MakeTarget({0,8,-9},1000));
+        auto* covered=game.actors_.Spawn(MakeTarget({9,9,-6.25F},1000));
+        auto* safe=game.actors_.Spawn(MakeTarget({0,0,4},1000));
+        assert(hit&&miss&&covered&&safe);safe->damageable=false;
         auto* enemy=game.bullets_.Spawn(BulletOwner::Enemy,{0,0,4},{},0.1F,RED,stage1::kBlueBullet);
         auto* back=game.bullets_.Spawn(BulletOwner::Enemy,{0,0,-9},{},0.1F,RED,stage1::kBlueBullet);
         auto* friendly=game.bullets_.Spawn(BulletOwner::Player,{0,0,4},{},0.1F,WHITE,stage1::kPlayerGoldCard);
@@ -464,8 +456,8 @@ struct GameLifecycleProbe {
         game.ResolveCollisions();assert(PickupCount(game)==2);
 
         reset(ShotType::HomingAmulet);
-        auto huge=std::make_unique<Target>(Vector3{0,0,4},3000);auto* orbTarget=huge.get();huge->hitRadius=20;
-        assert(game.enemies_.Add(std::move(huge)));game.ApplyBombEffect();
+        auto* orbTarget=game.actors_.Spawn(MakeTarget({0,0,4},3000));assert(orbTarget);orbTarget->hitRadius=20;
+        game.ApplyBombEffect();
         game.UpdatePlayerBomb(93.0F/60);
         assert(game.playerBomb_.Frame()==93 && orbTarget->health==2826); // 13×8 接触，随后一帧 200 截到 70。
         assert(game.playerBomb_.Attacks().size()==1 && game.playerBomb_.Attacks()[0].damage==200);
@@ -514,7 +506,7 @@ struct GameLifecycleProbe {
         TestPlayerBombCombat(game);
         for(int type=0;type<4;++type) {
             SetWindowSize(width,height);
-            game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();game.bullets_.Reset();
+            game.stage_=StageDirector{};game.actors_.Clear();game.boss_.reset();game.bullets_.Reset();
             game.player_.Reset();game.player_.ConfigureRun(3,3,false,static_cast<ShotType>(type));
             game.player_.SyncCamera(game.camera_);
             const bool consumed=game.player_.Update(0,{.bomb=true},game.bullets_,game.stageContent_->PlayerVisuals(game.player_.Shot()),true);
@@ -711,8 +703,8 @@ struct GameLifecycleProbe {
         for (const bool final : {false, true}) {
             game.StartPreview();
             game.stage_ = StageDirector{};
-            game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(
-                stage1::FairyParams{{4, 0, 5}}));
+            auto moving=testing::SpawnAt({4,0,5});moving.pattern.movement.speed=1;
+            game.actors_.Spawn(moving);
             Bullet* enemyShot = game.bullets_.Spawn(
                 BulletOwner::Enemy, {-4, 0, 0}, {1, 0, 0}, 0.1F, WHITE, kInvalidVisualId);
             Bullet* playerShot = game.bullets_.Spawn(
@@ -732,7 +724,7 @@ struct GameLifecycleProbe {
 
             game.Update(0.1F);
             assert(EnemyCount(game) == 1);
-            game.enemies_.ForEachActive([](const Enemy& enemy) {
+            game.actors_.ForEachActive([](const behavior::Actor& enemy) {
                 assert(enemy.age == 0.1F && enemy.position.z < 5.0F);
             });
             assert(enemyShot->active && enemyShot->position.x > -4.0F);
@@ -899,7 +891,7 @@ struct GameLifecycleProbe {
     static void TestPlayerOptions(Game& game, const std::string& prefix) {
         game.StartPreview();
         game.stage_=StageDirector{};
-        game.enemies_.Clear();game.boss_.reset();game.bullets_.Reset();game.drops_.Clear();
+        game.actors_.Clear();game.boss_.reset();game.bullets_.Reset();game.drops_.Clear();
         const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
         const auto render=[&](bool hideOptions=false) {
             BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);
@@ -962,7 +954,7 @@ struct GameLifecycleProbe {
         TestUiFont(game);
         const int previousCharacter=game.selectedCharacter_,previousShot=game.selectedShot_;
         game.selectedCharacter_=1;game.selectedShot_=0;game.StartPreview();
-        game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();game.drops_.Clear();
+        game.stage_=StageDirector{};game.actors_.Clear();game.boss_.reset();game.drops_.Clear();
         const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
         for(auto shot:{ShotType::MagicMissile,ShotType::IllusionLaser})for(bool focus:{false,true}) {
             game.player_.Reset();game.player_.ConfigureRun(3,3,false,shot);game.player_.AdjustPower(128);
@@ -1048,7 +1040,7 @@ struct GameLifecycleProbe {
         }
 
         for(int fps:{30,60,144}) {
-            game.bullets_.Reset();game.enemies_.Clear();
+            game.bullets_.Reset();game.actors_.Clear();
             game.player_.Reset();game.player_.ConfigureRun(3,3,false,ShotType::IllusionLaser);
             game.player_.Update(0,{.fire=true},game.bullets_,game.stageContent_->PlayerVisuals(game.player_.Shot()),true);
             Vector3 origin{},direction{};
@@ -1057,27 +1049,25 @@ struct GameLifecycleProbe {
                 else if(bullet.playerSlot==0){origin=bullet.position;direction=bullet.beamDirection;}
             });
             for(float depth:{4.0F,7.0F}) {
-                auto enemy=std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{origin.x+direction.x*depth,origin.y+direction.y*depth,origin.z+direction.z*depth}});
-                enemy->health=enemy->maxHealth=1000;enemy->hitRadius=0.1F;game.enemies_.Add(std::move(enemy));
+                auto* enemy=game.actors_.Spawn(testing::SpawnAt({origin.x+direction.x*depth,origin.y+direction.y*depth,origin.z+direction.z*depth},stage1::kFairy,1000,0.1F));assert(enemy);
             }
             game.boss_=game.stageContent_->CreateBoss(true);game.boss_->hitRadius=0.1F;
             game.boss_->position={origin.x+direction.x*7,origin.y+direction.y*7,origin.z+direction.z*7};
             game.score_=0;
             for(int frame=0;frame<fps;++frame) {game.bullets_.Update(1.0F/fps);game.ResolveCollisions();game.ResolveCollisions();}
             int enemies=0;
-            game.enemies_.ForEachActive([&](const Enemy& enemy){++enemies;assert(std::abs(enemy.health-820)<0.002F);});
+            game.actors_.ForEachActive([&](const behavior::Actor& enemy){++enemies;assert(std::abs(enemy.health-820)<0.002F);});
             assert(enemies==2); // 一束激光同时穿透两个目标，伤害不随 FPS 或重复结算次数增加。
             if(game.score_!=600)std::cerr<<"Marisa laser score at "<<fps<<" FPS: "<<game.score_<<"\n";
             assert(game.score_==600); // 同一束持续命中的原始 60 个逻辑帧，不能按显示帧重复加分。
             game.boss_.reset();
-            game.bullets_.Reset();game.enemies_.Clear();
-            auto enemy=std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{0,0,0}});
-            enemy->health=enemy->maxHealth=100;enemy->hitRadius=0.1F;game.enemies_.Add(std::move(enemy));
+            game.bullets_.Reset();game.actors_.Clear();
+            auto* enemy=game.actors_.Spawn(testing::SpawnAt({},stage1::kFairy,100,0.1F));assert(enemy);
             auto* burst=game.bullets_.Spawn(BulletOwner::Player,{}, {1,0,0},0.5F,WHITE,stage1::kMarisaExplosion);
             assert(burst);burst->playerShotKind=PlayerShotKind::Explosion;burst->damage=0;burst->damagePerSecond=20;
             for(int frame=0;frame<fps/6;++frame){game.bullets_.Update(1.0F/fps);game.ResolveCollisions();}
             assert(std::abs(burst->velocity.x-1.0F/1024)<0.00001F); // 1/6 秒恰为十个原始减速帧。
-            game.enemies_.ForEachActive([](const Enemy& enemy){assert(std::abs(enemy.health-(100-20.0F/6))<0.002F);});
+            game.actors_.ForEachActive([](const behavior::Actor& enemy){assert(std::abs(enemy.health-(100-20.0F/6))<0.002F);});
         }
 
         // 以实际遭遇入口记录魔/恋组合，不能误写到灵梦的两栏。
@@ -1108,33 +1098,30 @@ struct GameLifecycleProbe {
         TestNativeDialogue(game,prefix);
         TestWholeStage(game, prefix);
         TestBossEntryPreservesField(game);
-        // 经过真实 Game 更新验证高帧率入场，不能把轨道首帧偏移锁定为退场。
-        game.StartPreview();
-        game.stage_ = StageDirector{};
-        game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{
-            {0, -0.5F, 8.8F}, stage1::FairyParams::Movement::Helix}));
-        game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{
-            {9, 3.15F, 7.8F}, stage1::FairyParams::Movement::CrossFromRight}));
+        // 经过真实 Game 更新验证高帧率下直接行为演员的入场与独立视觉时钟。
+        game.StartPreview();game.stage_=StageDirector{};
+        game.actors_.Spawn(testing::SpawnAt({0,-0.5F,8.8F}));
+        game.actors_.Spawn(testing::SpawnAt({9,3.15F,7.8F}));
         for (int frame = 0; frame < 90; ++frame) game.Update(1.0F / 240.0F);
         assert(EnemyCount(game) == 2);
-        game.enemies_.ForEachActive([](const Enemy& enemy) {
+        game.actors_.ForEachActive([](const behavior::Actor& enemy) {
             assert(enemy.presentation.Sample().alpha == 1.0F);
         });
         Capture(game, prefix, "fairy-visible");
 
         game.StartPreview();
         game.stage_ = StageDirector{};
-        game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{0, 0, 4}}));
-        game.UpdateEnemies(0.125F);
+        game.actors_.Spawn(testing::SpawnAt({0,0,4}));
+        game.UpdateActors(0.125F);
         Capture(game, prefix, "enemy-entry");
         game.TogglePause();
         const Vector3 pausedPosition = [&] {
             Vector3 position{};
-            game.enemies_.ForEachActive([&](const Enemy& enemy) { position = enemy.position; });
+            game.actors_.ForEachActive([&](const behavior::Actor& enemy) { position = enemy.position; });
             return position;
         }();
         game.Update(2.0F);
-        game.enemies_.ForEachActive([&](const Enemy& enemy) {
+        game.actors_.ForEachActive([&](const behavior::Actor& enemy) {
             assert(enemy.position.z == pausedPosition.z);
             assert(enemy.age == 0.125F);
         });
@@ -1164,7 +1151,7 @@ struct GameLifecycleProbe {
         assert(game.actorEffects_.Pool().ActiveCount() == 1);
 
         // 槽位可立即复用；新敌人活动，旧快照仍停在旧位置，且不能再被玩家弹命中。
-        game.enemies_.Add(std::make_unique<stage1::OrbEnemy>(stage1::OrbParams{{4, 0, 5}}));
+        game.actors_.Spawn(testing::SpawnAt({4,0,5},stage1::kOrb));
         assert(EnemyCount(game) == 1);
         game.actorEffects_.Pool().ForEachActive([&](const ActorExitEffect& effect) {
             assert(effect.position.x == pausedPosition.x && effect.position.z == pausedPosition.z);
@@ -1231,11 +1218,12 @@ struct GameLifecycleProbe {
 
         game.StartPreview();
         game.stage_ = StageDirector{};
-        game.enemies_.Add(std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{0, 0, -13.4F}}));
-        game.UpdateEnemies(0.1F);
+        auto retreat=testing::SpawnAt(stage1::ReferencePosition({192,460,0}));
+        retreat.pattern=stage1::kLateTurningFairy;retreat.retireOutside=true;retreat.sourceScore=0;game.actors_.Spawn(retreat);
+        game.UpdateActors(0.1F);
         assert(EnemyCount(game) == 0 && game.score_ == 0 && PickupCount(game) == 0);
         assert(game.actorEffects_.Pool().ActiveCount() == 1);
-        game.UpdateEnemies(0.1F);
+        game.UpdateActors(0.1F);
         assert(game.actorEffects_.Pool().ActiveCount() == 1);
         game.actorEffects_.Clear();
 

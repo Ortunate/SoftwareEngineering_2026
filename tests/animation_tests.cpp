@@ -1,7 +1,7 @@
 // 本文件检查真实 ANM 的固定帧序、循环、中断、全部目录和原始 DDS 解码，无需图形窗口。
 #include "resources/battle_catalog.hpp"
 #include "resources/dds_image.hpp"
-#include "stages/stage1/reference_script.hpp"
+#include "reference_script.hpp"
 #include <algorithm>
 #include <cassert>
 #include <chrono>

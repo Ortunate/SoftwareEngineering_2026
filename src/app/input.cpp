@@ -263,9 +263,9 @@ void Game::UpdatePlayer(float deltaTime) {
         assets_.PlaySoundEffect("shoot");
         shotSoundTimer_ = 0.10F;
     }
-    std::array<PlayerAimTarget, kEnemyCapacity + 1> aimTargets{};
+    std::array<PlayerAimTarget, kActorCapacity + 1> aimTargets{};
     std::size_t aimTargetCount = 0;
-    enemies_.ForEachActive([&](const Enemy& enemy) {
+    actors_.ForEachActive([&](const behavior::Actor& enemy) {
         aimTargets[aimTargetCount++] = {enemy.position, enemy.hitRadius};
     });
     if (boss_ && boss_->active) aimTargets[aimTargetCount++] = {boss_->position, boss_->hitRadius};

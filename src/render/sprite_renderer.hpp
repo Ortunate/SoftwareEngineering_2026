@@ -4,7 +4,7 @@
 
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/bullets/system.hpp"
-#include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/behavior.hpp"
 #include "resources/loaded_assets.hpp"
 #include "gameplay/effects/player_bomb.hpp"
 
@@ -45,7 +45,7 @@ public:
     /// @param effects 本关卡退场快照；调用期间须保留对应外观资源。
     /// @param bombVolumes 借用战斗模拟的世界实体；光束按轴向和精灵深度切分，其余实体按中心排序。
     void Draw(const Camera3D& camera, const BulletSystem& bullets,
-              std::span<const Enemy*> enemies, const Boss* boss,
+              std::span<const behavior::Actor*> enemies, const Boss* boss,
               std::span<const PickupSprite> pickups,
               std::span<const VisualResource> visuals,
               const SpriteShaders& shaders,
@@ -58,7 +58,7 @@ public:
     /// @param boss 当前 Boss 状态。
     /// @param playerPosition 计算发弹点所需的玩家位置。
     void DrawDebugGeometry(const BulletSystem& bullets,
-                           std::span<const Enemy*> enemies,
+                           std::span<const behavior::Actor*> enemies,
                            const Boss* boss, Vector3 playerPosition) const;
 #endif
 private:

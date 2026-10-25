@@ -1,5 +1,5 @@
-// 本文件实现新典一面使用的 ECL 指令，包括调用/循环、镜像移动、速度层、瞄准和延迟转向。
-#include "stages/stage1/reference_script.hpp"
+// 本文件保留重构前 ECL 行为作为测试基准，覆盖调用/循环、镜像、瞄准和延迟转向，不进入生产引擎。
+#include "reference_script.hpp"
 #include "stages/stage1/ids.hpp"
 #include "gameplay/bullets/patterns.hpp"
 #include "gameplay/data/native_combat.hpp"
@@ -21,6 +21,7 @@ void ReferenceScript::Reset(int sub, Vector3 source, float sourceHealth, std::ui
     *this = ReferenceScript{};
     if (sub < 0 || sub >= 38) throw std::invalid_argument("Invalid Stage 1 subprogram");
     context_.sub = sub; sourcePosition = source; health = maxHealth = sourceHealth;
+    visited[sub]=true;
     random_ = seed ? seed : 1; mirrored_ = mirrored;
 }
 float ReferenceScript::Random(float range) {
@@ -33,6 +34,7 @@ float ReferenceScript::Value(float v) const {
 }
 float& ReferenceScript::Variable(float id) { return context_.variables.at(static_cast<int>(-id)-10001); }
 void ReferenceScript::Call(int sub, float integer, float floating) {
+    visited.at(sub)=true;
     if (stack_.size() >= 32) throw std::runtime_error("Stage 1 call stack exhausted");
     stack_.push_back(context_); context_ = {}; context_.sub = sub;
     context_.variables[0] = integer; context_.variables[4] = floating;
@@ -54,6 +56,7 @@ void ReferenceScript::Update(float seconds, Vector3 player, BulletSystem& bullet
 void ReferenceScript::Transition() {
     if (pendingCallback < 0) return;
     context_ = {}; context_.sub = pendingCallback; pendingCallback = -1; stack_.clear();
+    visited.at(context_.sub)=true;
     if (health <= 0) health = 1; // 击破回调的退场演员保持 1 HP，避免再次触发旧死亡回调。
     timerCallback_ = deathCallback_;
     lifeThreshold_ = -1; timeoutFrames = -1; phaseFrames = 0;

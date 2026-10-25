@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "stage/enemy_spec.hpp"
+#include "gameplay/actors/behavior.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -18,11 +18,11 @@ namespace koumakyou {
 /// @brief 关卡事件的稳定标识；编号只在单张事件表内有效，仅需要被引用或报告结束的事件必须设置。
 using StageEventId = std::uint32_t;
 
-/// @brief 连续请求生成相同配置的小怪；第一只在事件开始时立即生成。
+/// @brief 连续请求生成相同配置的行为演员；第一只在事件开始时立即生成。
 /// count 至少为 1；interval 为非负有限秒数，零表示同帧生成全部；总间隔时长须有限。
 /// 最后一次生成请求发出后事件结束，与敌人存活时间和池满丢弃无关。
-struct SpawnEnemies {
-    EnemySpec enemy;
+struct SpawnActors {
+    behavior::Spawn actor;
     int count = 1;
     float interval = 0.5F;
 };
@@ -45,7 +45,7 @@ struct ShowMessage {
 };
 
 /// @brief 带参事件动作；新增分支须同步扩展校验与执行访问器。
-using StageAction = std::variant<SpawnEnemies, StartBoss, StartDialogue, ShowMessage>;
+using StageAction = std::variant<SpawnActors, StartBoss, StartDialogue, ShowMessage>;
 
 /// @brief 一条时间轴事件：调度信息独立于带参动作，事件表本身不保存执行进度。
 struct StageEvent {

@@ -120,11 +120,11 @@ struct GameLifecycleProbe {
         game.captureCursor_ = false;
         Finish(game);
         int targets = 0;
-        game.enemies_.ForEachActive([&](const Enemy&) { ++targets; });
+        game.actors_.ForEachActive([&](const behavior::Actor&) { ++targets; });
         Check(game.shotTestActive_ && targets == 1, "Shot test target lost during loading");
         for (int frame = 0; frame < 20 * 60; ++frame) game.Update(1.0F / 60.0F);
         targets = 0;
-        game.enemies_.ForEachActive([&](const Enemy&) { ++targets; });
+        game.actors_.ForEachActive([&](const behavior::Actor&) { ++targets; });
         Check(targets == 1 && !game.boss_ && !game.dialogueActive_,
               "Shot test started the normal stage events");
         game.Reset();

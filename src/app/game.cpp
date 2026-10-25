@@ -18,24 +18,6 @@
 #include <utility>
 
 namespace koumakyou {
-#ifdef KOUMAKYOU_DEBUG_FEATURES
-namespace {
-/// @brief 射击调试场地中的固定靶怪；不移动、不攻击，由 Game 在血量耗尽时复原。
-class ShotTestEnemy final : public Enemy {
-public:
-    ShotTestEnemy() : Enemy(stage1::kDarkFairy, {0.0F, 0.0F, 4.0F}, {}) {
-        health = maxHealth = 240.0F;
-        hitRadius = 1.0F;
-        scoreValue = 0;
-    }
-
-private:
-    void Move(float) override {}
-    void UpdateSkills(float, Vector3, BulletSystem&) override {}
-};
-}  // namespace
-#endif
-
 Game::Game()
     : assets_(std::filesystem::path(GetApplicationDirectory()) / "assets") {
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -137,7 +119,7 @@ void Game::StartRun(bool captureCursor, bool synchronous) {
     // 先移除所有借用旧关卡资源的对象，再取消旧任务并释放纹理及清单。
     actorEffects_.Clear();
     bullets_.Reset();
-    enemies_.Clear();
+    actors_.Clear();
     drops_.Clear();
     boss_.reset();
     playerOptionAnimations_ = {};
@@ -195,7 +177,7 @@ void Game::CompleteStartRun() {
     shotSoundTimer_ = 0.0F;
     boss_.reset();
     bullets_.Reset();
-    enemies_.Clear();
+    actors_.Clear();
     drops_.Clear();
     stage_.Reset();
     score_ = 0;
@@ -229,7 +211,11 @@ void Game::CompleteStartRun() {
     if (loadingShotTest_) {
         // 调试场景也等待同一加载流程完成，避免将固定靶清除或触发普通关卡事件。
         stage_ = StageDirector{};
-        enemies_.Add(std::make_unique<ShotTestEnemy>());
+        behavior::Spawn target;
+        target.position={0,0,4};target.pattern.movement.speed=0;target.pattern.initialAnimation=3;target.pattern.endFrame=2147483647;
+        target.sourceHealth=240;target.sourceScore=0;target.sourceItem=-2;
+        target.visual=stage1::kDarkFairy;target.hitRadius=1;target.retireOutside=false;
+        actors_.Spawn(target);
         shotTestActive_ = true;
         loadingShotTest_ = false;
         SetMessage("SHOT TEST  F5: POWER -8  F6: POWER +8", 3.0F);
@@ -242,7 +228,7 @@ void Game::EnterMainMenu() {
     dialogueMotion_.Clear();
     actorEffects_.Clear();
     bullets_.Reset();
-    enemies_.Clear();
+    actors_.Clear();
     drops_.Clear();
     boss_.reset();
     playerOptionAnimations_ = {};
@@ -319,7 +305,7 @@ void Game::EndStage(RunState result) {
         }
     }
     bullets_.Reset();
-    ClearEnemiesWithEffects();
+    ClearActorsWithEffects();
     drops_.Clear();
     if (boss_ && boss_->active) {
         actorEffects_.Spawn(boss_->visual, boss_->position, boss_->hitRadius,
@@ -335,13 +321,13 @@ void Game::EndStage(RunState result) {
     state_ = RunState::Finishing;
 }
 
-void Game::ClearEnemiesWithEffects() {
-    enemies_.ForEachActive([this](Enemy& enemy) {
+void Game::ClearActorsWithEffects() {
+    actors_.ForEachActive([this](behavior::Actor& enemy) {
         actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
                             enemy.presentation, ActorExitReason::StageClear, &enemy.animation.player.Sample());
         enemy.active = false;
     });
-    enemies_.Clear();
+    actors_.Clear();
 }
 
 void Game::TogglePause() {
@@ -388,7 +374,7 @@ void Game::UpdateBattleAnimations() {
             if (visual != kInvalidVisualId) sync(playerOptionAnimations_[side], visual, player_.VisualAge());
         }
     }
-    enemies_.ForEachActive([&](Enemy& enemy) {
+    actors_.ForEachActive([&](behavior::Actor& enemy) {
         sync(enemy.animation,enemy.visual,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,
              enemy.animationScript,enemy.animationRevision);
     });
@@ -647,12 +633,12 @@ void Game::UpdateState(float deltaTime) {
         while(rankTime_>=period) { rankTime_-=period; AdjustReferenceRank(100); }
     }
     UpdatePlayer(deltaTime);
-    UpdateEnemies(deltaTime);
+    UpdateActors(deltaTime);
     UpdateBoss(deltaTime);
     if (state_ != RunState::Playing) return;
-    std::array<Vector3, kEnemyCapacity + 1> targets{};
+    std::array<Vector3, kActorCapacity + 1> targets{};
     std::size_t targetCount = 0;
-    enemies_.ForEachActive([&](const Enemy& enemy) {
+    actors_.ForEachActive([&](const behavior::Actor& enemy) {
         targets[targetCount++] = enemy.position;
     });
     if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
@@ -675,11 +661,10 @@ bool Game::HandleStageEvent(const StageEvent& event) {
     return stageContent_->HandleEvent(event, *this);
 }
 
-void Game::SpawnStageEnemy(const EnemySpec& spec) {
+void Game::SpawnStageActor(const behavior::Spawn& spec) {
     // 新典道中 Boss 存在时，出生请求被跳过，但时间轴仍继续计时。
     if (boss_ && boss_->active) return;
-    if (auto enemy = stageContent_->CreateEnemy(spec))
-        enemies_.Add(std::move(enemy));
+    actors_.Spawn(spec);
 }
 
 void Game::BeginStageBoss(bool final, StageEventId id) {
@@ -696,7 +681,7 @@ void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
     dialogueAfterBattle_=afterBattle;
     dialogueBossMusic_=false;
     stage_.CancelEnemySpawns();
-    ClearEnemiesWithEffects();
+    ClearActorsWithEffects();
     bullets_.ClearEnemyBullets();
     dialogueActive_ = true;
     dialogueTimer_ = 0.0F;

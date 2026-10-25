@@ -1,4 +1,4 @@
-// 本文件负责声明第一面关卡内容和敌人、Boss 工厂。
+// 本文件声明第一面事件、资源、对话及 Boss 工厂，普通演员直接通过行为组件生成。
 
 #pragma once
 
@@ -14,7 +14,6 @@ public:
     [[nodiscard]] std::array<VisualId,4> PlayerBombVisuals(ShotType shot) const override;
     [[nodiscard]] const StageAssetManifest& Assets() const override;
     [[nodiscard]] std::span<const StageEvent> Events() const override;
-    [[nodiscard]] std::unique_ptr<Enemy> CreateEnemy(const EnemySpec& spec) const override;
     [[nodiscard]] std::unique_ptr<Boss> CreateBoss(bool final) const override;
     [[nodiscard]] std::span<const DialogueLine> Dialogue(bool afterBattle = false, ShotType shot=ShotType::HomingAmulet) const override;
     [[nodiscard]] std::span<const DialogueCue> DialogueCues(bool afterBattle, ShotType shot) const override;

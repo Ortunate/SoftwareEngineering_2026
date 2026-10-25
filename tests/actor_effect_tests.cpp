@@ -1,8 +1,9 @@
 // 本文件负责验证角色表现不干扰战斗、预退场曲线和脱离对象的效果池生命周期。
 
+#include "actor_fixture.hpp"
 #include "gameplay/effects/actor_effects.hpp"
 #include "gameplay/arena.hpp"
-#include "stages/stage1/enemies.hpp"
+#include "stages/stage1/behaviors.hpp"
 #include "stages/stage1/boss.hpp"
 
 #include <cassert>
@@ -10,52 +11,25 @@
 #include <memory>
 
 namespace {
-/// @brief Fairy 及带出生轨道偏移的 Orb 在各帧率下完成入场后都应完全显示。
-void TestEnemyEntryOpacity() {
+/// @brief 直接行为演员在各帧率下完成入场后完全可见，表现不改变五种配方的战斗状态。
+void TestActorEntryOpacity() {
     using namespace koumakyou;
-    using Movement = stage1::FairyParams::Movement;
-    auto bullets = std::make_unique<BulletSystem>();
-    for (const int fps : {30, 60, 120, 240}) {
-        const float dt = 1.0F / static_cast<float>(fps);
-        for (const stage1::FairyParams params : {
-                 stage1::FairyParams{{0, -0.5F, 8.8F}, Movement::Helix},
-                 stage1::FairyParams{{9, 3.15F, 7.8F}, Movement::CrossFromRight},
-                 stage1::FairyParams{{-9, -4.5F, 7.8F}, Movement::CrossFromLeft},
-                 stage1::FairyParams{{0, 1.2F, 8.8F}, Movement::Straight}}) {
-            stage1::FairyEnemy fairy(params);
-            for (int frame = 0; frame < fps; ++frame) {
-                fairy.Update(dt, {}, *bullets);
-                if (fairy.age >= 0.3F)
-                    assert(fairy.presentation.Sample().alpha == 1.0F);
-                assert(fairy.active);
-            }
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int fps:{30,60,120,240})for(const auto& pattern:std::array{stage1::kTurningFairy,stage1::kGentleTurningFairy,
+            stage1::kLateTurningFairy,stage1::kShootingDarkFairy,stage1::kPassingDarkFairy}) {
+        auto spawn=testing::SpawnAt({0,0,5});spawn.pattern=pattern;
+        behavior::Actor actor;actor.Activate(spawn);
+        for(int frame=0;frame<fps;++frame) {
+            actor.Update(1.0F/fps,{},*bullets);
+            if(actor.age>=0.3F)assert(actor.presentation.Sample().alpha==1);
+            assert(actor.active);
         }
-        stage1::OrbEnemy orb({{0, 0, 8.8F}, stage1::OrbParams::Movement::OrbitForward});
-        for (int frame = 0; frame < fps; ++frame) {
-            orb.Update(dt, {}, *bullets);
-            if (orb.age >= 0.3F)
-                assert(orb.presentation.Sample().alpha == 1.0F);
-            assert(orb.active);
-        }
+        bullets->Reset();
     }
 }
-
-/// @brief 贴近边界但始终在场内的螺旋轨道，转向后不能保留外推产生的淡出。
+/// @brief 边界预测在下一帧恢复；明确退场淡出单独保留，不绑定已删除的旧路径类。
 void TestBoundaryPredictionRecovers() {
     using namespace koumakyou;
-    auto bullets = std::make_unique<BulletSystem>();
-    stage1::FairyEnemy fairy({{8.7F, 0, 8.8F}, stage1::FairyParams::Movement::Helix});
-    bool sawPreview = false;
-    for (int frame = 0; frame < 180; ++frame) {
-        fairy.Update(1.0F / 60.0F, {}, *bullets);
-        assert(fairy.active);
-        assert(std::abs(fairy.position.x) < kArenaHalfExtents.x);
-        if (fairy.age > 0.3F && fairy.presentation.Sample().alpha < 0.99F)
-            sawPreview = true;
-    }
-    assert(sawPreview);
-    assert(fairy.presentation.Sample().alpha == 1.0F);
-
     ActorPresentation presentation;
     presentation.Update(1.0F);
     presentation.PreviewBoundaryExit(0.125F);
@@ -73,7 +47,7 @@ void TestBoundaryPredictionRecovers() {
 /// @brief 验证公共角色视觉状态、自然退场、Boss 阶段和效果池，不需要窗口或资源。
 void RunActorEffectTests() {
     using namespace koumakyou;
-    TestEnemyEntryOpacity();
+    TestActorEntryOpacity();
     TestBoundaryPredictionRecovers();
     ActorPresentation presentation;
     assert(presentation.Sample().alpha == 0.0F);
@@ -112,29 +86,10 @@ void RunActorEffectTests() {
     effects.Update(0.15F);
     assert(effects.Pool().ActiveCount() == 0);
 
-    auto bullets = std::make_unique<BulletSystem>();
-    stage1::FairyEnemy fairy({{0, 0, -11.2F}});
-    fairy.Update(0.1F, {}, *bullets);
-    assert(fairy.active);
-    assert(fairy.presentation.Sample().alpha < 0.5F);
-    fairy.Update(0.1F, {}, *bullets);
-    assert(fairy.active);  // 到达场地表面，保留原有 +2 单位的回收容差。
-    assert(fairy.presentation.Sample().alpha < 0.0001F);
-    fairy.Update(1.4F, {}, *bullets);
-    assert(!fairy.active);
-    assert(bullets->Pool().ActiveCount() == 0);
-
-    constexpr Vector3 start{0, 0, 8.5F};
-    const float approach = 2.0F * kArenaHalfExtents.z / 5.0F / 1.7F;
-    stage1::DarkFairyEnemy dark({start, 1.0F});
-    dark.Update(2.0F * approach + 1.0F - 0.125F, {}, *bullets);
-    assert(dark.active);
-    assert(std::abs(dark.presentation.Sample().alpha - 0.5F) < 0.0001F);
-    assert(bullets->Pool().ActiveCount() == 18);
-    dark.Update(0.125F, {}, *bullets);
-    assert(!dark.active);
-    assert(dark.position.z == start.z);
-    assert(dark.presentation.Sample().alpha == 0.0F);
+    auto bullets=std::make_unique<BulletSystem>();
+    auto spawn=testing::SpawnAt({0,0,5});spawn.pattern.endFrame=5;
+    behavior::Actor actor;actor.Activate(spawn);actor.Update(6.0F/60,{},*bullets);
+    assert(!actor.active&&actor.finished&&bullets->Pool().ActiveCount()==0);
 
     stage1::RumiaBoss boss;
     boss.StartFinalBoss();
@@ -151,15 +106,14 @@ void RunActorEffectTests() {
     assert(effects.Pool().ActiveCount() == 0);
 
     // 快照持有值，角色被销毁及原槽位复用后不能变成下一只角色的外观或位置。
-    EnemyPool<1> pool;
-    auto old = std::make_unique<stage1::FairyEnemy>(stage1::FairyParams{{1, 2, 3}});
-    effects.Spawn(old->visual, old->position, old->hitRadius,
-                  old->presentation, ActorExitReason::Defeated);
-    old->active = false;
-    assert(pool.Add(std::move(old)));
-    assert(pool.Add(std::make_unique<stage1::OrbEnemy>(stage1::OrbParams{{4, 5, 6}})));
-    effects.Pool().ForEachActive([](const ActorExitEffect& effect) {
-        assert(effect.position.x == 1 && effect.position.y == 2 && effect.position.z == 3);
+    behavior::ActorPool<1> pool;
+    auto* old=pool.Spawn(testing::SpawnAt({1,2,3}));assert(old);
+    const auto originalPosition=old->position;
+    effects.Spawn(old->visual,old->position,old->hitRadius,old->presentation,ActorExitReason::Defeated);
+    old->active=false;
+    assert(pool.Spawn(testing::SpawnAt({4,5,6},stage1::kOrb)));
+    effects.Pool().ForEachActive([originalPosition](const ActorExitEffect& effect) {
+        assert(effect.position.x==originalPosition.x&&effect.position.y==originalPosition.y&&effect.position.z==originalPosition.z);
     });
     effects.Clear();
     for (int i = 0; i < 512; ++i)

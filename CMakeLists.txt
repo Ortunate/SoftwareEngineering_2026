@@ -41,7 +41,6 @@ add_library(koumakyou_engine STATIC
     src/render/spell_practice_render.cpp
     src/config/settings.cpp
     src/gameplay/actors/boss.cpp
-    src/gameplay/actors/enemy.cpp
     src/gameplay/actors/player.cpp
     src/gameplay/data/native_combat.cpp
     src/gameplay/bullets/system.cpp
@@ -67,13 +66,14 @@ add_library(koumakyou_engine STATIC
     src/resources/dds_image.cpp
     src/stage/catalog.cpp
     src/stage/content.cpp
-    src/stage/enemy_spec.cpp
     src/stage/system.cpp
-    src/stages/stage1/reference_script.cpp
+    src/gameplay/actors/movement.cpp
+    src/gameplay/actors/skill.cpp
+    src/gameplay/actors/behavior.cpp
+    src/stages/stage1/behaviors.cpp
     src/stages/stage1/boss.cpp
     src/stages/stage1/content.cpp
     src/stages/stage1/dialogue.cpp
-    src/stages/stage1/enemies.cpp
     src/stages/stage1/scenery.cpp
     src/stages/stage1/manifest.cpp
     src/stages/stage1/timeline.cpp
@@ -146,7 +146,10 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_ui_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME koumakyou_ui_tests COMMAND koumakyou_ui_tests)
+    # 旧 ECL 解释器只作为独立差分基准，不能重新加入生产引擎。
     add_executable(koumakyou_tests
+        tests/reference_script.cpp
+        tests/behavior_tests.cpp
         tests/core_tests.cpp
         tests/animation_tests.cpp
         tests/actor_effect_tests.cpp

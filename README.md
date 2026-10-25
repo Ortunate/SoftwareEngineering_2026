@@ -216,7 +216,7 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 
 ## 扩展关卡
 
-每个关卡实现 `StageContent`，自行提供素材清单、事件表、敌人工厂、Boss 工厂和对话。第一面的实现集中在 `src/stages/stage1/`；通用 `Enemy` 负责出生后的年龄、边界检查和调用子类，各具体敌人类持有自己的运动状态，有攻击能力的敌人自行管理技能计时器。同一类固定一种外观，普通妖精与光球的轨迹由 `FairyParams`、`OrbParams` 显式指定，`DarkFairyParams` 只提供出生位置与发弹后等待时间。`EnemySpec` 使用 `std::variant` 保存对应类型的参数，不再通过原型编号、编队或槽位选择敌人行为。新增关卡时在 `src/stage/catalog.cpp` 注册内容，并在 `src/stage/enemy_spec.hpp` 登记其参数类型、扩展配置校验；`Game`、`AssetManager` 和 `SpriteRenderer` 无需添加新的敌人或素材分支。公共事件由 `StageContent::HandleEvent` 统一执行。
+每个关卡实现 `StageContent`，提供素材清单、事件表、Boss 工厂和对话。时间轴中的 `SpawnActors` 直接携带 `behavior::Spawn`，由 `Game::SpawnStageActor` 提交给 `behavior::ActorPool`，按配方启动 `behavior::Actor`。同一实例直接持有运动、技能、HP、判定、动画及回收状态，碰撞和渲染也读取该实例。旧敌人继承体系、参数 variant 和小怪工厂已移除；新增行为通过 `movement`、`skill`、`Pattern` 或协程组合，并用 `behavior::Valid` 校验，无需修改关卡参数类型注册表。公共事件仍由 `StageContent::HandleEvent` 分派。
 
 弹幕、敌人与 Boss 记录 `VisualId`。关卡清单将该 ID 映射到图片路径、绘制方式、世界尺寸、锚点及光晕参数。`AssetManager` 在关卡开始时按清单加载，在结束时卸载；相同路径的 PNG 共享纹理；原始 DDS/ANM 通过图集缓存共享，战斗角色与立绘独立绑定。`SpriteRenderer` 每帧遍历弹池一次，将掉落物、角色、弹幕、激光和特效按相机前向深度统一排序；透明贴图不写深度，避免透明外框遮住后方物体。
 
@@ -224,7 +224,7 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 
 战斗素材包含 25 套高分辨率原始 DDS／ANM（贴图宽高为标准版两倍，游戏内大小保持不变）、1084 个精灵定义与 347 个有效动画脚本，覆盖尚未出场的角色、自机、道具和特效。加载、播放、绘制接口与图形预览命令见 [原始战斗素材接口](docs/NATIVE_BATTLE_ASSETS.md)。
 
-一面 Normal 的 222 次逐只出生与 570 条帧指令来自本机《东方红魔乡：新典》数据。`ReferenceScript` 在原像素坐标与 60 Hz 时基执行调用、循环、镜像移动、插值、瞄准、速度层、延迟转向和光束；`ReferenceEnemy`、`RumiaBoss` 将状态接入原生演员生命周期。旧的球面/锥面演员仍可用于调试，实际一面不再使用概括式技能。
+一面 Normal 的 222 次逐只出生与 570 条参考帧指令来自本机《东方红魔乡：新典》数据。生产运行使用可复用的 `movement`、`skill` 和 `behavior` 组件：`timeline.cpp` 显式定义全部 226 个 `StageEvent`，出生事件携带独立移动/技能配方与固定参数，`behavior::Actor` 与 `RumiaBoss` 按 60 Hz 执行路径、弹幕和命名阶段。旧 `ReferenceScript` 及参考指令存放于 `tests/reference_script.*`、`tests/reference_program.hpp`，只编译进测试，用于逐帧核对重构前后的轨迹、动画、技能及生命周期。完整子程序映射与扩展方法见 [一面行为配方](docs/STAGE1_BEHAVIORS.md)。固定射击靶和测试场景也通过行为配置生成，不保留旧球面/锥面演员子类。
 
 `StageEvent::atFrame` 是开局起算的绝对帧，不能同时设置 `afterEndOf`；普通关卡仍可用 `delay` 相对上一事件或指定事件结束调度。道中 Boss 在 1882 帧入场，战斗期间时间轴继续运行并跳过到期杂鱼；5092 帧开始战前对话，之后依次为普通攻击一、夜符「Night Bird」、普通攻击二、暗符「Demarcation」、退场、战后独白和关卡奖励明细。
 

@@ -1,10 +1,11 @@
 // 本文件负责验证带参事件、连续出怪时序、异步依赖与第一面内容工厂。
 
-#include "gameplay/actors/enemy.hpp"
+#include "actor_fixture.hpp"
+#include "gameplay/actors/behavior.hpp"
 #include "stage/catalog.hpp"
 #include "stage/system.hpp"
 #include "stages/stage1/content.hpp"
-#include "stages/stage1/enemies.hpp"
+#include "stages/stage1/behaviors.hpp"
 
 #include <array>
 #include <cassert>
@@ -70,12 +71,12 @@ void TestRelativeEvents() {
 
 /// @brief 验证默认参数、跨帧补发、并行批次和最后一次生成的结束依赖。
 void TestContinuousSpawns() {
-    constexpr SpawnEnemies defaults{stage1::FairyParams{}};
+    constexpr SpawnActors defaults{testing::SpawnAt()};
     static_assert(defaults.count == 1 && defaults.interval == 0.5F);
     const std::array<StageEvent, 4> events{{
-        {.action = SpawnEnemies{stage1::FairyParams{{1.0F, 2.0F, 8.0F}}, 4}, .id = 1},
+        {.action = SpawnActors{testing::SpawnAt({1.0F,2.0F,8.0F}), 4}, .id = 1},
         {.delay = 0.25F, .action = ShowMessage{"overlap"}},
-        {.action = SpawnEnemies{stage1::OrbParams{}, 2, 0.25F}},
+        {.action = SpawnActors{testing::SpawnAt({},stage1::kOrb), 2, 0.25F}},
         {.delay = 0.25F, .action = ShowMessage{"done"}, .afterEndOf = 1},
     }};
     StageDirector stage(events);
@@ -83,9 +84,10 @@ void TestContinuousSpawns() {
     int orbs = 0;
     int messages = 0;
     const auto record = [&](const StageEvent& event) {
-        if (const auto* spawn = std::get_if<SpawnEnemies>(&event.action)) {
+        if (const auto* spawn = std::get_if<SpawnActors>(&event.action)) {
             assert(spawn->count == 1);
-            if (const auto* fairy = std::get_if<stage1::FairyParams>(&spawn->enemy)) {
+            if (spawn->actor.visual==stage1::kFairy) {
+                const auto* fairy=&spawn->actor;
                 assert(fairy->position.x == 1.0F && fairy->position.y == 2.0F);
                 fairyTimes.push_back(stage.Elapsed());
             } else {
@@ -117,14 +119,14 @@ void TestContinuousSpawns() {
     // 默认单只和零间隔批次都在启动帧完成；数量不是编队数量，不得截断奇数。
     const std::array<StageEvent, 3> immediate{{
         {.action = defaults},
-        {.action = SpawnEnemies{stage1::DarkFairyParams{}, 3, 0.0F}, .id = 2},
+        {.action = SpawnActors{testing::SpawnAt({},stage1::kDarkFairy), 3, 0.0F}, .id = 2},
         {.action = ShowMessage{"all"}, .afterEndOf = 2},
     }};
     StageDirector instant(immediate);
     int spawned = 0;
     int completed = 0;
     instant.Update(0.0F, [&](const StageEvent& event) {
-        if (std::holds_alternative<SpawnEnemies>(event.action)) ++spawned;
+        if (std::holds_alternative<SpawnActors>(event.action)) ++spawned;
         else ++completed;
         return true;
     });
@@ -146,14 +148,14 @@ void TestContinuousSpawns() {
 /// @brief 验证清场取消进行中的出怪，未启动的后续波次仍可执行。
 void TestSpawnCancellation() {
     const std::array<StageEvent, 3> events{{
-        {.action = SpawnEnemies{stage1::FairyParams{}, 8}, .id = 1},
+        {.action = SpawnActors{testing::SpawnAt(), 8}, .id = 1},
         {.delay = 0.25F, .action = StartBoss{}, .id = 2},
-        {.action = SpawnEnemies{stage1::DarkFairyParams{}}, .afterEndOf = 2},
+        {.action = SpawnActors{testing::SpawnAt({},stage1::kDarkFairy)}, .afterEndOf = 2},
     }};
     StageDirector stage(events);
     int spawned = 0;
     const auto record = [&](const StageEvent& event) {
-        if (std::holds_alternative<SpawnEnemies>(event.action)) {
+        if (std::holds_alternative<SpawnActors>(event.action)) {
             ++spawned;
             return true;
         }
@@ -186,19 +188,19 @@ void TestInvalidEvents() {
     const float nan = std::numeric_limits<float>::quiet_NaN();
     for (float value : {-1.0F, infinity, nan}) {
         assert(rejects({.delay = value}));
-        assert(rejects({.action = SpawnEnemies{stage1::FairyParams{}, 2, value}}));
-        assert(rejects({.action = SpawnEnemies{stage1::DarkFairyParams{{}, value}}}));
+        assert(rejects({.action = SpawnActors{testing::SpawnAt(), 2, value}}));
+        assert(rejects({.action = SpawnActors{testing::SpawnAt({},stage1::kDarkFairy, value)}}));
         assert(rejects({.action = ShowMessage{"bad", value}}));
         if (value != -1.0F) {
-            assert(rejects({.action = SpawnEnemies{stage1::FairyParams{{value, 0.0F, 0.0F}}}}));
+            assert(rejects({.action = SpawnActors{testing::SpawnAt({value,0,0})}}));
         }
     }
-    assert(rejects({.action = SpawnEnemies{stage1::FairyParams{}, 0}}));
-    assert(rejects({.action = SpawnEnemies{stage1::FairyParams{}, -1}}));
-    assert(rejects({.action = SpawnEnemies{stage1::FairyParams{}, 3,
+    assert(rejects({.action = SpawnActors{testing::SpawnAt(), 0}}));
+    assert(rejects({.action = SpawnActors{testing::SpawnAt(), -1}}));
+    assert(rejects({.action = SpawnActors{testing::SpawnAt(), 3,
                                          std::numeric_limits<float>::max()}}));
-    assert(rejects({.action = SpawnEnemies{stage1::FairyParams{
-        {}, static_cast<stage1::FairyParams::Movement>(999)}}}));
+    auto invalid=testing::SpawnAt();invalid.pattern.movement.count=5;
+    assert(rejects({.action=SpawnActors{invalid}}));
     assert(rejects({.action = StartBoss{}}));
     assert(rejects({.action = StartDialogue{}}));
     assert(rejects({.action = StartBoss{static_cast<BossEncounter>(999)}, .id = 1}));
@@ -214,10 +216,10 @@ void TestInvalidEvents() {
     }
 }
 
-/// @brief 通过真实 StageContent 执行入口收集实例与演出请求，验证时间轴到工厂的完整链路。
+/// @brief 通过真实 StageContent 执行入口收集实例与演出请求，验证时间轴到行为组件的完整链路。
 struct EventProbe final : StageEventSink {
     const StageContent& content;
-    std::vector<std::unique_ptr<Enemy>> enemies;
+    std::vector<std::unique_ptr<behavior::Actor>> enemies;
     int midbosses = 0;
     int finalBosses = 0;
     int dialogues = 0;
@@ -226,8 +228,8 @@ struct EventProbe final : StageEventSink {
     StageEventId dialogueId = 0;
 
     explicit EventProbe(const StageContent& stage) : content(stage) {}
-    void SpawnStageEnemy(const EnemySpec& spec) override {
-        auto enemy = content.CreateEnemy(spec);
+    void SpawnStageActor(const behavior::Spawn& spec) override {
+        auto enemy = testing::MakeActor(spec);
         assert(enemy && enemy->active && enemy->age == 0.0F);
         enemies.push_back(std::move(enemy));
     }
@@ -242,7 +244,7 @@ struct EventProbe final : StageEventSink {
     }
 };
 
-/// @brief 验证 Stage1 波次人数、Boss/对话依赖、各带参敌人工厂与素材契约。
+/// @brief 验证 Stage1 波次人数、Boss/对话依赖、行为演员池与素材契约。
 void TestStage1Content() {
     const auto content = CreateStageContent(StageId::Stage1);
     assert(content);
@@ -269,20 +271,13 @@ void TestStage1Content() {
     stage.Update(100,execute);
     assert(probe.enemies.size()==222 && probe.midbosses==2);
 
-    const auto fairy = content->CreateEnemy(stage1::FairyParams{
-        {1.0F, 2.0F, 5.0F}, stage1::FairyParams::Movement::Helix});
-    assert(fairy && fairy->visual == stage1::kFairy && fairy->DropDistribution().size() == 2);
-    assert(fairy->position.x == 1.0F && fairy->position.y == 2.0F && fairy->position.z == 5.0F);
-    const auto dark = content->CreateEnemy(stage1::DarkFairyParams{});
-    const auto orb = content->CreateEnemy(stage1::OrbParams{});
-    assert(dark && dark->visual == stage1::kDarkFairy);
-    assert(orb && orb->visual == stage1::kOrb);
-    assert(!content->CreateEnemy(stage1::FairyParams{
-        {}, static_cast<stage1::FairyParams::Movement>(999)}));
-    assert(!content->CreateEnemy(stage1::OrbParams{
-        {}, static_cast<stage1::OrbParams::Movement>(-1)}));
-    assert(!content->CreateEnemy(stage1::DarkFairyParams{
-        {0.0F, std::numeric_limits<float>::infinity(), 0.0F}}));
+    behavior::ActorPool<1> pool;
+    auto* actor=pool.Spawn(testing::SpawnAt({1,2,5}));
+    assert(actor&&actor->active&&std::abs(actor->position.x-1)<0.0001F&&
+           std::abs(actor->position.y-2)<0.0001F&&std::abs(actor->position.z-5)<0.0001F);
+    assert(!pool.Spawn(testing::SpawnAt())&&pool.DroppedSpawns()==1);
+    actor->active=false;assert(pool.Spawn(testing::SpawnAt({},stage1::kDarkFairy)));
+    pool.Clear();assert(pool.DroppedSpawns()==0);
     const auto finalBoss = content->CreateBoss(true);
     assert(finalBoss && finalBoss->active && !finalBoss->IsMidboss());
 

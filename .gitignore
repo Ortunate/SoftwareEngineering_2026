@@ -7,6 +7,8 @@
 build/
 build-*/
 cmake-build-*/
+__pycache__/
+*.py[cod]
 
 # Runtime-local settings
 koumakyou_settings.cfg
@@ -20,3 +22,6 @@ koumakyou_settings.cfg
 
 # 本机原作血量与弹伤害的只读解析结果
 /output/native-combat-data/
+
+# 本机一面时间轴的原始解包与审阅结果
+/output/stage1-timeline-review/

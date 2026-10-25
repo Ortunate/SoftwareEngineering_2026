@@ -118,12 +118,12 @@ void Game::DrawWorld() const {
     }
     if (stageId_ == StageId::Stage1) stage1::DrawScenery(stage_.Elapsed());
     DrawArena();
-    std::array<const Enemy*, kEnemyCapacity> visibleEnemies{};
+    std::array<const behavior::Actor*, kActorCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
-    enemies_.ForEachActive([&](const Enemy& enemy) {
+    actors_.ForEachActive([&](const behavior::Actor& enemy) {
         visibleEnemies[visibleCount++] = &enemy;
     });
-    const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
+    const std::span<const behavior::Actor*> visible(visibleEnemies.data(), visibleCount);
     pickupSprites_.clear();
     playerBombVolumes_.clear();
     if (stageContent_) {

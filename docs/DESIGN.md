@@ -39,7 +39,7 @@
 └── tests/                      # 设置、玩法、关卡测试
 ```
 
-依赖方向为 `main -> Game -> StageContent/StageDirector/Enemy/Boss/BulletSystem/DropSystem/AssetManager`。`Stage1Content` 负责第一面敌人工厂和事件解释，时间轴、素材清单及对话分别定义在独立文件中；`StageDirector` 仅处理时序。敌人和 Boss 子类控制技能释放，`src/gameplay/bullets/patterns.hpp` 只计算弹幕方向，`BulletSystem` 管理单颗弹体及其定长对象池。通用演员提供掉落结果表；新典演员提供原始 item 字段和脚本散落事件，`DropSystem` 负责整关轮换及生成。`AssetManager` 独占图片、天空盒、着色器、流式 BGM 和音效句柄；`SpriteRenderer` 只借用句柄绘制。raylib 提供窗口、输入、音频与基础绘制。
+依赖方向为 `main -> Game -> StageContent/StageDirector/behavior::Actor/Boss/BulletSystem/DropSystem/AssetManager`。`Stage1Content` 提供事件、资源、对话与 Boss 工厂；普通演员由 `SpawnActors` 携带 `behavior::Spawn` 直接接入 `ActorPool`，不经过敌人类型注册或工厂。`behavior::Actor` 组合移动、技能和生命周期状态；`BulletSystem` 管理生成后弹体的运动和回收。`DropSystem` 按原始 item 字段执行整关轮换与掉落。`AssetManager` 独占 GPU/音频资源，`SpriteRenderer` 借用行为演员、Boss 与资源绘制。
 
 素材按生命周期分组：程序启动时加载通用天空盒和标题 BGM；Stage 1 开始时加载角色、弹幕、对话立绘、战斗着色器以及道中和 Boss BGM。胜利或失败先进入 `Finishing`，停止战斗并播放剩余退场，效果池清空后停止关卡 BGM、释放专属素材并显示结算。返回菜单或重开立即丢弃效果，再卸载或替换关卡资源；菜单素材在程序退出时释放。露米娅的世界精灵使用 stg1enm2，立绘仍使用现代重绘 PNG，两者独立。原始战斗图集按需缓存，未使用素材也可通过目录编号加载；接口约定见 `NATIVE_BATTLE_ASSETS.md`。通用音效清单包含菜单、战斗和原始帧脚本音效，按同一生命周期加载和释放。截图模式不初始化音频设备，因此只加载图形素材。
 
@@ -119,7 +119,7 @@ struct Bullet {
 
 ### 4.2 FixedPool
 
-`FixedPool<Bullet, 8192>` 使用连续定长数组，`BulletSystem` 构造时将整池一次性分配到堆，避免每弹 ANM 状态导致默认线程栈溢出；生成和更新不额外分配槽位内存。敌人以多态对象放入 128 槽的 `EnemyPool`，生成敌人时发生一次堆分配。`DropSystem` 另用 1024 槽固定池持有 P 点与分数点。各池都记录容量耗尽时的丢弃数量。
+`FixedPool<Bullet, 8192>` 使用连续定长数组，`BulletSystem` 构造时将整池一次性分配到堆，避免每弹 ANM 状态导致默认线程栈溢出；生成和更新不额外分配槽位内存。行为演员放入 128 槽的 `behavior::ActorPool`；槽位首次使用分配 `Actor`，复用时重置状态并释放旧协程，启动新行为会分配协程帧。`DropSystem` 另用 1024 槽固定池持有 P 点与分数点。各池都记录容量耗尽时的丢弃数量。
 
 ### 4.3 Player
 
@@ -131,9 +131,9 @@ struct Bullet {
 
 四御札 Bomb 由 `PlayerBombEffect` 统一持有攻击、清弹与世界几何，`BombDefinition` 映射原始脚本、时长、保护和回调来源。`UpdatePlayerBomb` 在敌弹运动后、玩家碰撞前逐个 60 Hz 帧调用 `ResolvePlayerBombFrame`，按 region 合并命中，再经 `ResolveDamage` 处理 70 上限及符卡整数 ÷3，并将原始命中量反馈给封印光球。新符卡排除旧 Bomb 伤害，击破与掉落使用已有正式入口。`BombVolume` 为球、轴对齐符阵薄盒和有限圆台，伤害、清弹和 `DrawBombGeometry` 读取同一份几何。64 颗星飞向 4×4×4 网格格心，保留八个伤害通道，体积覆盖保守下界超过 81.4%；封魔阵前 60 帧无伤蓄力，随后六面从施放点向外扩展，横向尺寸和厚度同步增长；单根巨束从角色位置出射，通过八角投影确定束宽和长度以覆盖正向半场，身后保留盲区；外部具有 16 边圆截面、淡外缘、张开的内芯和发光密度，主视角仅绘制一组沿束轴流动的内部光线，保留中央视野；其轴向/演员深度切片加入 `SpriteRenderer` 统一透明队列。实例可在无 ANM 时运行攻击，不占普通弹池；十五个原生脚本仍由关卡持有。释放吸取所有现有道具，恋札期间三轴移速 0.3 倍；暂停不推进，退出、重开、受击和结算清空攻击、资源借用及声音。详情见 [四 Bomb 对照](PLAYER_BOMBS_REFERENCE.md)。
 
-### 4.4 Enemy 与 Boss
+### 4.4 行为演员与 Boss
 
-`Enemy` 是抽象基类，普通演员按出生年龄运行。实际一面使用 `ReferenceEnemyParams` 与 `ReferenceEnemy`：出生坐标、子程序、镜像、原生命/分数/item 字段由只读出生表提供，工厂拒绝非有限坐标和非法参数。`ReferenceScript` 在原像素坐标按 60 Hz 执行移动、插值、调用与发弹，转换为 3D 世界位置。旧 `FairyEnemy`、`DarkFairyEnemy`、`OrbEnemy` 保留为调试和通用算法测试，不参与新典时间轴。
+`behavior::Actor` 是直接运行的具体组件，同一对象保存世界位置、生命、判定半径、分数、掉落、动画游标和 `motion/skills` 状态。`Activate(Spawn)` 校验并复制配置，确定随机出生位置，启动 `Follow(Pattern)`；以 60 Hz 推进移动、技能和动画，实际进入逻辑场地后再越界回收。时间轴显式列出原始帧、位置、镜像、数值及固定种子。`ReferenceScript` 只在测试目录作为独立差分基准。旧敌人基类、子类、出生参数 variant 和小怪工厂已移除。
 
 `RumiaBoss` 使用同一帧解释器执行道中 Sub9 和关底 Sub14，生命阈值与超时回调决定阶段。受保护准备期不接受射击/Bomb 伤害；退场子程序执行完毕才通知事件结束。Normal 道中无符卡；关底为普通攻击、Night Bird、普通攻击、Demarcation。HP 与阶段阈值使用统一目录中的原始点数，与自机伤害保持相同量纲。详细时序与数据来源见 `STAGE1_REFERENCE.md`。
 
@@ -145,11 +145,11 @@ struct Bullet {
 
 ### 4.5 StageEvent
 
-关卡由只读事件表驱动。`StageEvent` 将 `delay`、可选 `atFrame`、`id` 和 `afterEndOf` 与带参 `StageAction` 分开保存，动作是 `SpawnEnemies`、`StartBoss`、`StartDialogue`、`ShowMessage` 的 `std::variant`。`StageContent::HandleEvent` 使用访问器将一次动作分派给游戏总控；新增动作须同步扩展校验与执行访问器。
+关卡由只读事件表驱动。`StageEvent` 将 `delay`、可选 `atFrame`、`id` 和 `afterEndOf` 与带参 `StageAction` 分开保存，动作是 `SpawnActors`、`StartBoss`、`StartDialogue`、`ShowMessage` 的 `std::variant`。`StageContent::HandleEvent` 使用访问器将一次动作分派给游戏总控；新增动作须同步扩展校验与执行访问器。
 
 `atFrame` 使用开局起算的非负 60 Hz 帧，不能与 `afterEndOf` 同用。未设置时，`delay` 无依赖时相对上一事件的实际开始时刻；首个事件相对开局；有 `afterEndOf` 时相对指定事件的实际结束时刻。依赖必须指向事件表内更早的唯一 ID。Boss 与对话必须带 ID，结束时通过 `EndEvent` 通知调度器；提示即时结束。所有延迟和持续时间使用非负有限秒数。
 
-`SpawnEnemies` 直接持有敌人配置，连续出怪数量默认 1，间隔默认 0.5 秒。数量至少为 1，间隔可为零；首只立即生成，后续第 i 只相对本批实际开始时刻延迟 i × interval。各次生成复用配置但创建独立实例，同一批次不隐式改变位置或轨迹。`StageDirector` 在运行时保存已生成数量，将每次回调规范为 count=1，事件表不被修改；跨帧时补发全部到期请求，时间以批次开始计算而不逐次累积误差。最后一次请求实际发出时记录批次结束，与敌人死亡或池满丢弃无关；整批结束不能用 `EndEvent` 提前报告。多个批次可并行，后续事件默认仍相对上一事件开始，等待整批结束需使用 `afterEndOf`。Reset 清除批次进度；Boss 入场与对话开始用 `CancelEnemySpawns` 取消已启动批次的剩余请求并记录取消时刻，尚未启动的事件仍由时间轴控制。道中及关底 Boss 入场保留现存小怪、敌我弹幕、道具和退场效果，各对象继续正常更新；对话开始仍清除小怪与敌弹。
+`SpawnActors` 直接持有敌人配置，连续出怪数量默认 1，间隔默认 0.5 秒。数量至少为 1，间隔可为零；首只立即生成，后续第 i 只相对本批实际开始时刻延迟 i × interval。各次生成复用配置但创建独立实例，同一批次不隐式改变位置或轨迹。`StageDirector` 在运行时保存已生成数量，将每次回调规范为 count=1，事件表不被修改；跨帧时补发全部到期请求，时间以批次开始计算而不逐次累积误差。最后一次请求实际发出时记录批次结束，与敌人死亡或池满丢弃无关；整批结束不能用 `EndEvent` 提前报告。多个批次可并行，后续事件默认仍相对上一事件开始，等待整批结束需使用 `afterEndOf`。Reset 清除批次进度；Boss 入场与对话开始用 `CancelEnemySpawns` 取消已启动批次的剩余请求并记录取消时刻，尚未启动的事件仍由时间轴控制。道中及关底 Boss 入场保留现存小怪、敌我弹幕、道具和退场效果，各对象继续正常更新；对话开始仍清除小怪与敌弹。
 
 Stage1 使用 222 次独立出生请求，逐只保留原横坐标和镜像航线。道中 Boss 存在时跳过到期请求，但时钟继续走；不是退场后再计算后半段延迟。战前对话结束触发关底，关底退场后进入战后独白，独白结束触发 `StageClear` 奖励明细；普通开局关闭后收尾并显示通关菜单，整关练习关闭奖励明细后直接返回 Stage 页。
 
@@ -185,7 +185,7 @@ direction = (r cos(phi), y, r sin(phi))
 
 玩家只有一个判定球，因此敌弹检测为 O(B)。玩家弹和敌人数量较少，首版采用 O(Bp * E) 检测。
 
-本体接触由 `Player::ContactEnemyBody` 比较玩家半径 0.18 与敌方 `hitRadius`，查询不改变敌方状态或自行扣残机。`Enemy::CanContactPlayer` / `Boss::CanContactPlayer` 排除失活和零生命对象，与 `CanTakeDamage` 独立；露米娅覆盖该接口关闭退场脚本期间的本体伤害。视觉入退场不修改判定球，对话阶段不检查本体。`ResolveCollisions` 将敌弹、普通敌人和 Boss 本体的接触合并后调用一次 `HandlePlayerHit`，沿用复活/Bomb/Debug 无敌、清弹、Miss 计数及资源扣除；本体不产生擦弹、撞击伤害或击破掉落。退场效果快照不参与查询。
+本体接触由 `Player::ContactEnemyBody` 比较玩家半径 0.18 与敌方 `hitRadius`，查询不改变敌方状态或自行扣残机。`behavior::Actor::CanContactPlayer` / `Boss::CanContactPlayer` 排除失活和零生命对象，与 `CanTakeDamage` 独立；露米娅覆盖该接口关闭退场脚本期间的本体伤害。视觉入退场不修改判定球，对话阶段不检查本体。`ResolveCollisions` 将敌弹、普通敌人和 Boss 本体的接触合并后调用一次 `HandlePlayerHit`，沿用复活/Bomb/Debug 无敌、清弹、Miss 计数及资源扣除；本体不产生擦弹、撞击伤害或击破掉落。退场效果快照不参与查询。
 
 ## 6 游戏流程
 

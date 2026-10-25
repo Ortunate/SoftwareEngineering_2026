@@ -1,9 +1,10 @@
 // 本文件验证全部导入目录、原始 HP 解释器映射、四机体实际伤害及未实现结算的扩展边界。
+#include "actor_fixture.hpp"
 #include "gameplay/data/native_combat.hpp"
 #include "gameplay/combat/damage_rules.hpp"
 #include "gameplay/actors/player.hpp"
 #include "stages/stage1/content.hpp"
-#include "stages/stage1/reference_program.hpp"
+#include "reference_program.hpp"
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -61,10 +62,10 @@ void TestCatalogAndHealth() {
     stage1::Stage1Content content;
     assert(content.CombatData()==nc::Stage(1) && !content.DamageRules());
     int births=0;
-    for(const auto& event:content.Events())if(const auto* spawn=std::get_if<SpawnEnemies>(&event.action)) {
-        const auto* params=std::get_if<stage1::ReferenceEnemyParams>(&spawn->enemy);
+    for(const auto& event:content.Events())if(const auto* spawn=std::get_if<SpawnActors>(&event.action)) {
+        const auto* params=&spawn->actor;
         assert(params);
-        auto enemy=content.CreateEnemy(spawn->enemy);
+        auto enemy=testing::MakeActor(spawn->actor);
         assert(enemy && enemy->health==params->sourceHealth && enemy->maxHealth==params->sourceHealth);
         ++births;
     }

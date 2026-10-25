@@ -188,7 +188,7 @@ void Player::Tick() {
         float t=std::min(1.0F,static_cast<float>(positionTime_++)/positionDuration_);
         if(positionMode_==19)t=1-(1-t)*(1-t);
         if(positionMode_==20)t=1-std::pow(1-t,4);
-        (positionOffset_ ? frame_.positionOffset : frame_.position)={Lerp(positionStart_.x,positionTarget_.x,t),Lerp(positionStart_.y,positionTarget_.y,t),Lerp(positionStart_.z,positionTarget_.z,t)};
+        (positionOffset_ ? frame_.positionOffset : frame_.position)=Vector3{Lerp(positionStart_.x,positionTarget_.x,t),Lerp(positionStart_.y,positionTarget_.y,t),Lerp(positionStart_.z,positionTarget_.z,t)};
         if(t==1)positionDuration_=0;
     }
     if(!halted_)++clock_;

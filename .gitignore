@@ -12,6 +12,8 @@ __pycache__/
 
 # Runtime-local settings
 koumakyou_settings.cfg
+koumakyou_scores.dat
+koumakyou_scores.dat.tmp
 
 # 本机 CrossOver 包装产物，包含借用的运行时与机器路径
 /output/th06nc-reference.app/

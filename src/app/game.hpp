@@ -11,6 +11,8 @@
 #include "app/stage_clear.hpp"
 #include "app/spell_practice.hpp"
 #include "config/settings.hpp"
+#include "config/high_scores.hpp"
+#include "narrative/ending.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/items/drop_system.hpp"
 #include "gameplay/effects/player_bomb.hpp"
@@ -103,11 +105,25 @@ private:
     void ReturnToPracticeStage();
     /// @brief 战后对话结束后固定奖励快照、计分并显示明细；每局只生效一次。
     void BeginStageClear();
-    /// @brief 关闭奖励明细并进入资源收尾；整关练习随后返回关卡选择，普通开局显示通关菜单。
+    /// @brief 关闭奖励明细；普通前五关继续下一关、完整六关接结局，整关练习安全收尾后返回选关。
     void ContinueStageClear();
+    /// @brief 末关退场及旧资源释放后加载所选结局；内容和音乐沿用异步加载通道。
+    void BeginEnding();
+    /// @brief 只推进结局时钟；播放完毕或合法跳过后进入选存，不经过制作人员或旧胜利菜单。
+    void UpdateEnding(float deltaTime);
+    /// @brief 固定本轮成绩快照、保存观看标记并打开选存页，不立即插入排行榜。
+    void FinishEnding();
+    /// @brief 处理选存、ASCII 命名与成绩页筛选；输入、存盘与绘制互相独立。
+    void UpdateScoreSave();
+    void UpdateScoreName();
+    void UpdateScorePage();
+    /// @brief 确认名字后尝试原子保存；失败保留成绩及名字并提示重试，成功后转到对应排行榜。
+    void SaveNamedScore();
+    /// @brief 追加一个可打印 ASCII 字符，首次输入替换上次名字，最多八字符。
+    void AppendScoreName(char value);
     /// @brief 把有效整关成绩写入对应模式的历史最高分；仅在关卡通关或失败结算时调用。
     void RecordStageScore();
-    /// @brief 保存有效整关的分模式最高分并播放退场效果；池空后才显示通关/失败菜单并卸载专属素材。
+    /// @brief 保存有效整关的分模式最高分并播放退场效果；池空并卸载素材后才进入结局或结算出口。
     /// @param result 胜利或失败后的游戏状态。
     void EndStage(RunState result);
     /// @brief 在 Playing/StageClear/Finishing 与 Paused 间切换，并同步音乐和鼠标状态。
@@ -234,6 +250,11 @@ private:
     void DrawOverlay() const;
     /// @brief 在战斗/对话画面上绘制固定结算快照，不推进计时或再次加分。
     void DrawStageClear() const;
+    /// @brief 仅借用已加载的结局资源与播放快照，保持原始画幅和中文换行。
+    void DrawEnding() const;
+    /// @brief 绘制选存/命名或浏览页；布局与命中区域共用，函数不推进输入或写入存档。
+    void DrawScoreEntry() const;
+    void DrawScorePage() const;
     /// @brief 在窗口右侧等比滑入完整符卡立绘，独立横幅显示名称。
     void DrawSpellCutIn() const;
     /// @brief Bomb 背景压暗在透明战斗对象之前绘制，保持原生加色光效；须在 BeginMode3D 内调用。
@@ -273,6 +294,11 @@ private:
     bool loadingStarted_ = false;
     bool loadingFailed_ = false;
     bool continuingStage_=false; // 仅属于当前加载任务；进入主菜单或重新开局时清除，不借用旧关卡对象。
+    // 只有本局依次完成一至六面才形成 0x3f；直接启动末关、练习、预览不能伪造完整主线通关。
+    unsigned clearedMainlineStages_=0;
+    int runContinues_=0; // 当前尚无续关入口；以后接入续关时须递增，不能把挑战模式直接当作续关。
+    std::optional<ending::Id> pendingEnding_;
+    ending::Player endingPlayer_;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     bool loadingShotTest_ = false; // 射击测试需在异步素材完成后再创建固定靶。
 #endif
@@ -357,6 +383,12 @@ private:
     int initialBombs_ = 3;
     int bestScore_ = 0;
     StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。
+    score::Profile scoreProfile_{};
+    score::Entry pendingScore_{}; // 结局结束时固定，命名/选存期间不得再次加分或改变统计。
+    int scoreShot_=0,scoreMode_=0,selectedScoreSave_=0;
+    int scoreHighlight_=-1; // 最近一次成功保存的排名，浏览其他分组后清除。
+    std::string scoreName_,scoreSaveError_;
+    bool replaceScoreName_=true,scorePageFromRun_=false;
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
     StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 两位角色四种御札、Normal 与目录中已开放的关卡。
     int selectedCharacter_ = 0; // 实际角色候选，0 灵梦/1 魔理沙；普通开局和符卡练习均沿用该编号。

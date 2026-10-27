@@ -330,7 +330,8 @@ bool AssetManager::AdvanceStageLoad() {
     load.pending = std::async(std::launch::async, [root, item, manifest] {
         auto decoded = std::make_unique<StageLoad::Decoded>();
         if (item.atlas == battle::Atlas::None) {
-            decoded->image = LoadImage((root / item.path).string().c_str());
+            const auto path=root/item.path;
+            decoded->image = path.extension()==".dds" ? LoadOriginalDds(path) : LoadImage(path.string().c_str());
             decoded->dialogueCrops = DialogueCrops(decoded->image, item.path, manifest);
         } else {
             const auto& entry = battle::Describe(item.atlas);
@@ -359,7 +360,9 @@ void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
             // 多个外观可以共用一张贴图，实际所有权由路径缓存统一管理。
             auto [it, inserted] = stageTextures_.try_emplace(path);
             if (inserted) {
-                Image image = LoadImage((root_ / path).string().c_str());
+                const auto source=root_/path;
+                // 结局背景也直接保留原生高清 DDS；DX10/BC7 必须走与战斗图集一致的解码器。
+                Image image = source.extension()==".dds" ? LoadOriginalDds(source) : LoadImage(source.string().c_str());
                 it->second = LoadTextureFromImage(image);
                 const auto crops = DialogueCrops(image, path, manifest);
                 stageDialogueCrops_.insert(crops.begin(), crops.end());
@@ -503,8 +506,13 @@ void AssetManager::ResumeMusic() {
 void AssetManager::SetMusicVolumePercent(int percent) {
     musicVolumePercent_ = std::clamp(percent, 0, 100);
     for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_}) {
-        if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F);
+        if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F*musicGain_);
     }
+}
+
+void AssetManager::SetMusicGain(float gain) {
+    musicGain_=std::clamp(gain,0.0F,1.0F);
+    SetMusicVolumePercent(musicVolumePercent_);
 }
 
 void AssetManager::UpdateAudio() {

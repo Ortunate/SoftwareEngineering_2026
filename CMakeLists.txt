@@ -34,12 +34,15 @@ target_link_libraries(koumakyou_ui PUBLIC raylib)
 # 游戏实现只编译一次，所有目标共用同一份实现。
 add_library(koumakyou_engine STATIC
     src/app/game.cpp
+    src/app/postgame.cpp
     src/app/input.cpp
     src/app/start_setup.cpp
     src/app/spell_practice.cpp
     src/app/spell_practice_menu.cpp
     src/render/spell_practice_render.cpp
     src/config/settings.cpp
+    src/config/high_scores.cpp
+    src/narrative/ending.cpp
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/player.cpp
     src/gameplay/data/native_combat.cpp
@@ -54,6 +57,7 @@ add_library(koumakyou_engine STATIC
     src/render/menu_render.cpp
     src/render/start_setup_render.cpp
     src/render/game_render.cpp
+    src/render/postgame_render.cpp
     src/render/command_bar.cpp
     src/render/gameplay_hud.cpp
     src/render/player_bomb_render.cpp
@@ -176,6 +180,25 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(koumakyou_postgame_tests tests/ending_tests.cpp)
+    target_link_libraries(koumakyou_postgame_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_compile_options(koumakyou_postgame_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_postgame_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME koumakyou_postgame_tests COMMAND koumakyou_postgame_tests)
+    # 真实结局贴图及键鼠命名回归需桌面图形会话，按需执行，不加入无窗口 CTest。
+    add_executable(koumakyou_postgame_lifecycle_tests EXCLUDE_FROM_ALL tests/postgame_lifecycle_tests.cpp)
+    target_link_libraries(koumakyou_postgame_lifecycle_tests PRIVATE koumakyou_engine)
+    target_include_directories(koumakyou_postgame_lifecycle_tests PRIVATE "${raylib_SOURCE_DIR}/external/glfw/include")
+    add_dependencies(koumakyou_postgame_lifecycle_tests copy_assets)
+    if(MSVC)
+        target_compile_options(koumakyou_postgame_lifecycle_tests PRIVATE /UNDEBUG /utf-8)
+        target_sources(koumakyou_postgame_lifecycle_tests PRIVATE src/windows_utf8.manifest)
+    else()
+        target_compile_options(koumakyou_postgame_lifecycle_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
     # 模块测试仅链接 UI 与 raylib，不加载游戏、素材、音频或图形窗口。
     add_executable(koumakyou_ui_tests tests/ui_tests.cpp)
     target_link_libraries(koumakyou_ui_tests PRIVATE koumakyou_ui)

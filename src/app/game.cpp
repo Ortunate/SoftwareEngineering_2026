@@ -84,6 +84,7 @@ void Game::LoadSettings() {
     initialBombs_ = settings.initialBombs;
     bestScore_ = settings.bestScore;
     stageHighScores_ = settings.stageHighScores;
+    scoreProfile_=score::Load(score::kFilename);
     lastSelection_ = settings.lastSelection;
     spellSelection_=settings.spellSelection;
     spellRecords_=settings.spellRecords;
@@ -117,6 +118,8 @@ void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
     spellCaptured_=false;
     previewMode_ = false;
     continuingStage_=continuingStage;
+    if(!continuingStage){clearedMainlineStages_=0;runContinues_=0;}
+    pendingEnding_.reset();endingPlayer_=ending::Player{};assets_.SetMusicGain(1);
     // 先移除所有借用旧关卡资源的对象，再取消旧任务并释放纹理及清单。
     actorEffects_.Clear();
     bullets_.Reset();
@@ -154,10 +157,16 @@ void Game::UpdateLoading(float deltaTime) {
     }
     try {
         if (!loadingStarted_) {
-            assets_.BeginStageLoad(stageContent_->Assets());
+            assets_.BeginStageLoad(pendingEnding_?ending::Assets(*pendingEnding_):stageContent_->Assets());
             loadingStarted_ = true;
         }
-        if (assets_.AdvanceStageLoad()) CompleteStartRun();
+        if (assets_.AdvanceStageLoad()) {
+            if(pendingEnding_) {
+                const auto id=*pendingEnding_;
+                endingPlayer_.Start(id,scoreProfile_.endingsSeen[static_cast<std::size_t>(id)]);
+                assets_.PlayStageMusic();state_=RunState::Ending;
+            } else CompleteStartRun();
+        }
     } catch (const std::exception& error) {
         TraceLog(LOG_WARNING, "STAGE: %s", error.what());
         playerOptionAnimations_ = {};
@@ -234,6 +243,8 @@ void Game::CompleteStartRun() {
 
 void Game::EnterMainMenu() {
     continuingStage_=false;
+    pendingEnding_.reset();endingPlayer_=ending::Player{};clearedMainlineStages_=0;runContinues_=0;
+    scorePageFromRun_=false;scoreHighlight_=-1;
     FinishSpellRecord(false);
     dialogueMotion_.Clear();
     actorEffects_.Clear();
@@ -246,6 +257,7 @@ void Game::EnterMainMenu() {
     assets_.UnloadStage();
     stage_ = StageDirector{};
     stageContent_.reset();
+    assets_.SetMusicGain(1);
     assets_.PlayMenuMusic();
     state_ = RunState::MainMenu;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -293,10 +305,16 @@ void Game::BeginStageClear() {
 void Game::ContinueStageClear() {
     if(state_!=RunState::StageClear)return;
     if(!practiceMode_&&!spellPractice_&&!previewMode_) {
+        const int number=StageNumber(stageId_);
+        // 只接纳当前完整前缀的下一关；从末关直接启动不能冒充整轮通关，重入也不会累计次数。
+        if(number>=1 && number<=6 && clearedMainlineStages_==((1U<<(number-1))-1))
+            clearedMainlineStages_|=1U<<(number-1);
         if(const auto next=NextStage(stageId_)) {
             stageId_=*next;StartRun(captureCursor_,false,true);return;
         }
     }
+    pendingEnding_=ending::Select({static_cast<int>(player_.Shot()),1,runContinues_,missCount_,challengeMode_,
+        !practiceMode_&&!spellPractice_&&!previewMode_ && clearedMainlineStages_==0x3f});
     EndStage(RunState::Won);
 }
 
@@ -315,7 +333,7 @@ void Game::EndStage(RunState result) {
     RecordStageScore();
     if (result == RunState::Won) {
         assets_.PlaySoundEffect("clear");
-        if (!practiceMode_ && !challengeMode_ && !previewMode_ && score_ > bestScore_) {
+        if (!pendingEnding_ && !practiceMode_ && !challengeMode_ && !previewMode_ && score_ > bestScore_) {
             bestScore_ = static_cast<int>(std::min(score_, 2000000000LL));
             SaveSettings();
         }
@@ -483,6 +501,9 @@ void Game::UpdateUiMotion(float deltaTime) {
 }
 
 void Game::UpdateState(float deltaTime) {
+    if(state_==RunState::Ending){UpdateEnding(deltaTime);return;}
+    if(state_==RunState::ScoreSave){UpdateScoreSave();return;}
+    if(state_==RunState::ScoreName){UpdateScoreName();return;}
     if (state_ == RunState::Loading) {
         UpdateLoading(deltaTime);
         return; // 完成加载的这一帧也不更新战斗，下一帧从关卡时间零开始。
@@ -600,6 +621,7 @@ void Game::UpdateState(float deltaTime) {
             ClearPlayerBomb();
             assets_.UnloadStage();
             if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
+            else if(finishResult_==RunState::Won && pendingEnding_)BeginEnding();
             else { state_ = finishResult_; EnableCursor(); }
         }
         return;

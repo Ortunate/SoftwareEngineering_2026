@@ -128,7 +128,9 @@ void Game::DrawHud() const {
     if (!l.compact)
         Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
     row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
-    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practicePhase_==2?3:7).bestScore:bestScore_;
+    const auto& namedScores=scoreProfile_.Get(challengeMode_,static_cast<int>(player_.Shot()));
+    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practicePhase_==2?3:7).bestScore:
+        namedScores[0]?namedScores[0]->value:challengeMode_?0:bestScore_;
     row("最高得分", TextFormat("%09lld", displayedBest), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
         DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,

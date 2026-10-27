@@ -28,9 +28,9 @@
 1. 时间轴直接列出 `StageEvent`，按预期触发顺序排列；相同帧的表内顺序也是演出的一部分。各关均保留显式编排，不通过初始化 lambda、循环、原始数据目录或子程序编号工厂生成生产事件表。局部辅助函数只封装世界坐标出生参数，不执行原作坐标转换、不推导事件时刻或隐式补充其他事件。
 2. `atFrame` 为开局起算的非负整数绝对帧，固定按 60 Hz 换算；设置后忽略 `delay`，不能同时设置 `afterEndOf`。`delay` 的单位为秒，无依赖时相对上一事件的实际开始时间，首个事件相对关卡起点；有 `afterEndOf` 时相对指定事件的实际结束时间。
 3. `id` 仅在本张事件表内唯一，`afterEndOf` 只能引用表中更早的 ID。调度器按表顺序处理，遇到未到期或依赖未完成的事件会停止启动后续事件，不会跳过它扫描后面的行。
-4. `StageAction` 当前包含 `SpawnActors`、`StartBoss`、`StartDialogue`、`ShowMessage`。增加动作类型时，同步更新 `StageDirector` 的参数校验和 `StageContent::HandleEvent` 的执行访问器。
+4. `StageAction` 当前包含 `SpawnActors`、`StartBoss`、`StartDialogue`、`ShowMessage`、`ResumeBoss` 和 `WaitDialogueSignal`。增加动作类型时，同步更新 `StageDirector` 的参数校验和 `StageContent::HandleEvent` 的执行访问器。
 5. `SpawnActors` 携带 `behavior::Spawn`，`count >= 1`，`interval` 为非负有限秒数；第一只立即生成，零间隔同帧生成全部。批次不阻塞后续事件；调度器跨更新补发到期请求，每次交付的 `count` 规范为 1。最后一次请求发出即完成，不等待敌人死亡，也不因池满丢弃而延后。每只的出生参数或种子不同时，应分别列事件。
-6. `StartBoss` 和 `StartDialogue` 必须带 `id`，处理时返回 `false`；遭遇或对话实际结束后，由游戏调用 `StageDirector::EndEvent(id)`。等待其结束的后续演出使用 `afterEndOf`，不能用预估固定帧代替。同步动作返回 `true`；出怪批次的完成由调度器管理。
+6. `StartBoss` 和 `StartDialogue` 必须带 `id`，处理时返回 `false`；遭遇或对话实际结束后，由游戏调用 `StageDirector::EndEvent(id)`。等待其结束的后续演出使用 `afterEndOf`，不能用预估固定帧代替。`WaitDialogueSignal` 同样必须带 `id`，按当前对白的放行序号或实际结束完成，不能用预估台词时长代替。同步动作返回 `true`；出怪批次的完成由调度器管理。
 7. `CancelEnemySpawns()` 只取消已开始批次中未发出的请求，不取消未来事件，也不清除存活演员。当前 Boss 入场取消旧批次并保留场上小怪、弹幕、道具和效果；Boss 活动期间新到期的小怪请求直接跳过，关卡时钟继续。对话开始会取消旧批次、清除小怪与敌弹。这是已验证的一面策略；后续 Stage 须核对其时钟、出怪和清场语义，差异通过明确参数或最小通用接口表达，不能直接照抄或在 Game 中堆叠关卡编号判断。
 8. `StageDirector` 用 `deltaTime` 秒数累计关卡时间，跨更新触发到期事件；演员行为默认按固定 120 Hz 补算，60 Hz 模式只用于原作差分；内容帧号仍按 60 Hz 解释。显示帧率不能作为逻辑帧计数，暂停时不得继续推进。当前一面在 1882 帧开始道中 Boss、5092 帧开始战前对话，关底 Boss 等待战前对话结束，战后对话等待关底 Boss 结束。
 

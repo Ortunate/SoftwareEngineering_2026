@@ -112,6 +112,8 @@ public:
     [[nodiscard]] int RemainingLives() const;
     /// @brief 返回当前可用 Bomb 数量。
     [[nodiscard]] int Bombs() const { return bombs_; }
+    /// @brief 应用非负的残机/Bomb 拾取奖励，库存各钳制到项目上限 8；负数抛 invalid_argument。
+    void CollectResources(int extraLives,int bombs);
     /// @brief 返回当前 Power 点数，范围为 8 到 128。
     [[nodiscard]] int Power() const { return power_; }
     /// @brief 返回本局实际机体；关卡据此绑定玩家弹和副机外观，不能使用菜单浏览状态代替。

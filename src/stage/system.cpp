@@ -33,7 +33,13 @@ StageDirector::StageDirector(std::span<const StageEvent> events)
                     throw std::invalid_argument("StartBoss requires an id and valid encounter");
                 }
             } else if constexpr (std::is_same_v<Action, StartDialogue>) {
-                if (!event.id) throw std::invalid_argument("StartDialogue requires an id");
+                if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss)||
+                    (action.clearPolicy!=DialogueClearPolicy::ClearEnemiesAndBullets&&action.clearPolicy!=DialogueClearPolicy::PreserveWorld))
+                    throw std::invalid_argument("StartDialogue requires an id and valid scene");
+            } else if constexpr (std::is_same_v<Action, ResumeBoss>) {
+                // 此动作是否拥有可恢复的 Boss，由接收方按当前遭遇生命周期校验。
+            } else if constexpr (std::is_same_v<Action, WaitDialogueSignal>) {
+                if(!event.id||action.signal<0)throw std::invalid_argument("Dialogue signal wait requires id and nonnegative signal");
             } else if constexpr (std::is_same_v<Action, ShowMessage>) {
                 if (!std::isfinite(action.duration) || action.duration < 0.0F) {
                     throw std::invalid_argument("Invalid ShowMessage duration");
@@ -87,7 +93,7 @@ void StageDirector::Update(float deltaTime, const EventHandler& handler) {
     }
     while (nextEvent_ < events_.size()) {
         const StageEvent& event = events_[nextEvent_];
-        float anchor = 0.0F;
+        double anchor = 0;
         if (states_[nextEvent_].dependencyIndex) {
             const auto& dependency = states_[*states_[nextEvent_].dependencyIndex];
             if (!dependency.endedAt) break;
@@ -95,7 +101,7 @@ void StageDirector::Update(float deltaTime, const EventHandler& handler) {
         } else if (nextEvent_ > 0) {
             anchor = *states_[nextEvent_ - 1].startedAt;
         }
-        const float due = event.atFrame ? *event.atFrame / 60.0F : anchor + event.delay;
+        const double due = event.atFrame ? *event.atFrame / 60.0 : anchor + event.delay;
         if (elapsed_ + 0.00001F < due) break;
 
         // 先推进索引再执行回调；回调可以同步报告结束，也可能触发依赖后续事件。

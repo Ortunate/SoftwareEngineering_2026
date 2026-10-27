@@ -127,8 +127,8 @@ void Game::BeginSpellRecord() {
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if(shotTestActive_)return;
 #endif
-    const int number=boss_->phase==2?3:boss_->phase==4?7:0;
-    if(StageNumber(stageId_)!=1 || number==0)return;
+    const int number=boss_->SpellCardNumber();
+    if(number<1||number>spell::kSpellCount)return;
     spellAttemptNumber_=number;spellAttemptCharacter_=static_cast<int>(player_.Shot());
     spellAttemptOpen_=true;spellAttemptPractice_=spellPractice_;
     spellRecords_.Begin(spellAttemptCharacter_,number,spellPractice_);

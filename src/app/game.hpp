@@ -79,6 +79,8 @@ public:
 private:
     // 独立离屏集成测试通过此探针检查生命周期，正式程序不暴露可修改的战斗状态。
     friend struct GameLifecycleProbe;
+    /// @brief 返回当前关卡中该道具的外观，值区分大/小 P；不加载资源或推进动画。
+    [[nodiscard]] VisualId PickupVisual(const Pickup& pickup) const;
     /// @brief 同时可保有的最多敌人数。
     static constexpr std::size_t kActorCapacity = 128;
     /// @brief 设置界面的普通设置页与按键设置页。
@@ -87,9 +89,10 @@ private:
         KeyBindings,
     };
 
-    /// @brief 进入关卡加载页；素材完成后重置战斗。同步入口只供预览和测试使用。
+    /// @brief 进入关卡加载页；素材完成后重置本关战斗。同步入口只供预览和测试使用。
     /// @param captureCursor 是否捕获鼠标用于交互游玩。
-    void StartRun(bool captureCursor = true, bool synchronous = false);
+    /// @param continuingStage 连续闯关保留分数、机体、库存和累计统计；普通开局/重开为 false。
+    void StartRun(bool captureCursor = true, bool synchronous = false,bool continuingStage=false);
     /// @brief 非阻塞推进加载；失败后留在加载页，按确认或取消返回首页。
     void UpdateLoading(float deltaTime);
     /// @brief 素材就绪后初始化本局状态，避免加载耗时进入战斗计时或提前捕获鼠标。
@@ -180,7 +183,14 @@ private:
     /// @brief 开始 Boss 战并停止旧批次后续出怪，保留现存小怪、弹幕、道具及效果。
     void BeginStageBoss(bool final, StageEventId id) override;
     /// @brief 开始原文对话；战后独白结束才固定 Bonus 并进入奖励明细，关闭后进入胜利收尾。
-    void BeginStageDialogue(StageEventId id, bool afterBattle = false) override;
+    void BeginStageDialogue(StageEventId id, bool afterBattle = false,DialogueScene scene=DialogueScene::FinalBoss,
+        DialogueClearPolicy clearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets) override;
+    void ResumeStageBoss() override;
+    bool AwaitStageDialogueSignal(StageEventId id,int signal) override;
+    /// @brief 更新单个演员及其音画/道具输出；调用方负责在池遍历结束后消费子演员请求。
+    void UpdateActor(behavior::Actor& actor,float deltaTime);
+    /// @brief 复制并生成行为请求，立即执行出生内容帧；仅在 ActorPool 遍历之外调用，池满仍丢弃本次请求。
+    void SpawnBehaviorActors(std::span<const behavior::Spawn> requests,float deltaTime);
     void StageMessage(std::string_view message, float duration) override;
     /// @brief 消耗 Bomb 后启动独立攻击和全道具吸取，仅按初始保护实体清弹，不立即全场扣血。
     void ApplyBombEffect();
@@ -188,6 +198,10 @@ private:
     void UpdatePlayerBomb(float deltaTime);
     /// @brief 结算当前 Bomb 逻辑帧；只将真实接触交给伤害提供方，并反馈光球原始累计，同一帧重复调用无效。
     void ResolvePlayerBombFrame();
+    /// @brief 仅结算当前冻结/活动 Bomb 区域的伤害，不推进效果、不清弹；调用方按 60 Hz 接触时钟交付。
+    void ResolvePlayerBombDamage();
+    /// @brief 只读取当前活动遭遇的世界时停，不包含暂停菜单或加载状态。
+    bool WorldTimeStopped() const {return boss_&&boss_->active&&boss_->WorldTimeStopped();}
     /// @brief 玩家命中后更新场景反馈，并按剩余残机处理游戏失败。
     void HandlePlayerHit();
     /// @brief 结算当前 Boss 阶段并进入下一阶段或一面结算。
@@ -258,6 +272,7 @@ private:
     float loadingSeconds_ = 0; // 秒；独立 UI 时钟，不能参与关卡/弹幕/符卡计时。
     bool loadingStarted_ = false;
     bool loadingFailed_ = false;
+    bool continuingStage_=false; // 仅属于当前加载任务；进入主菜单或重新开局时清除，不借用旧关卡对象。
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     bool loadingShotTest_ = false; // 射击测试需在异步素材完成后再创建固定靶。
 #endif
@@ -276,12 +291,14 @@ private:
     PlayerBombEffect playerBomb_{}; // 仅借用关卡 ANM；退出、重开、结算及卸载资源前清空。
     bool playerBombStartedThisFrame_=false;
     int playerBombResolvedFrame_=-1; // 只属于当前 Bomb，Start/Clear 重置，杜绝重复碰撞入口再次扣血。
+    double frozenBombFrames_=0; // 时停中的 Bomb 区域接触仍按 60 Hz 结算，效果本身的帧号不前进。
     std::array<bool,4> playerBombSoundPaused_{}; // 与四种音效名字对应，记录本次暂停实际停止的缓冲。
     DropSystem drops_{};
     double battleTicks_=0; // 未消费的 120 Hz 战斗步；暂停不累积，重开清零。
     PlayerInput pendingPlayerInput_{}; // 持续键采用最新快照，鼠标增量累加，Bomb 边沿保留至下个战斗步。
     bool pendingDialogueConfirm_=false;
     StageDirector stage_{};
+    double scenerySeconds_=0; // 背景世界秒数；时停时冻结，独立于仍前进的关卡事件时钟。
     std::unique_ptr<StageContent> stageContent_{};
     StageId stageId_ = StageId::Stage1;
     KeyBindings bindings_{};
@@ -292,8 +309,9 @@ private:
     void AdjustReferenceRank(int subrank);
     int referenceRank_ = 16, referenceSubrank_ = 0;
     float rankTime_ = 0;
-    int graze_ = 0;
+    int graze_ = 0; // 本局累计擦弹，跨关保留，用于 HUD 与统计。
     int pointItems_ = 0; // 本局普通蓝色道具累计数量，供原作点数栏显示。
+    int stageGraze_=0,stagePointItems_=0; // 本关奖励计数，每关加载完成时归零，不能用累计值重复计算奖励。
     float messageTimer_ = 0.0F;
     float screenFlashTimer_ = 0.0F;
     float spellCutInTimer_ = 0.0F;
@@ -301,16 +319,19 @@ private:
     long long spellBonus_ = 0, stageBonus_ = 0;
     StageClearSummary stageClearSummary_{}; // 关卡结束时固定的 Normal 奖励明细，整个展示期间不变。
     float stageClearSeconds_ = 0;
-    bool stageClearShown_ = false; // 每局至多计算并展示一次；重开时重置，防止事件重入重复加分。
+    bool stageClearShown_ = false; // 每关至多计算并展示一次；进入下一关或重开时重置，防止事件重入重复加分。
     /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
     [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
     /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，确认不越过原生退场或结算保护。
     [[nodiscard]] int DialogueIndex(float* lineStart = nullptr) const;
     [[nodiscard]] float DialogueDuration() const;
     bool dialogueAfterBattle_ = false;
+    DialogueScene dialogueScene_=DialogueScene::FinalBoss;
     bool dialogueBossMusic_ = false;
     double dialogueTimer_ = 0.0; // 整段对话的游戏秒数；双精度累积，避免长对白在高 FPS 下偏离原生指令帧。
     bool dialogueActive_ = false;
+    int dialogueSignalsSeen_=0; // 当前整段对白累计放行序号；跳句只前进，BeginStageDialogue 时归零。
+    std::optional<std::pair<StageEventId,int>> dialogueSignalWait_; // 时间轴按序只登记一个未完成等待，不拥有对白。
     ui::DialogueMotion dialogueMotion_{}; // 只在 Playing 的对话期间推进；暂停保持当前透明度、缩放与位移。
     std::optional<StageEventId> bossEventId_;
     std::optional<StageEventId> dialogueEventId_;
@@ -337,7 +358,7 @@ private:
     int bestScore_ = 0;
     StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
-    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 当前支持两位角色的四种御札、Normal 与第一面。
+    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 两位角色四种御札、Normal 与目录中已开放的关卡。
     int selectedCharacter_ = 0; // 实际角色候选，0 灵梦/1 魔理沙；普通开局和符卡练习均沿用该编号。
     ui::MenuMotion startCharacterMotion_{}; // 角色切换时前景、背景及人物摘要共用的渐变权重。
     int selectedPracticeStage_ = 0; // kPracticeStages 的局部索引，始终指向已注册关卡。

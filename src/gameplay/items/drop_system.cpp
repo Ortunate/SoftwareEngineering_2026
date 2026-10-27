@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <numbers>
+#include <stdexcept>
 
 namespace koumakyou {
 namespace {
@@ -125,6 +126,14 @@ void DropSystem::SpawnReferenceBurst(Vector3 position, int count, bool fullPower
               fullPower ? kScorePointValue : index==0 ? 8 : 1);
     }
 }
+void DropSystem::SpawnNativeItem(Vector3 position,int item,bool fullPower) {
+    if(item<0||item>6)throw std::invalid_argument("Invalid native item id");
+    if(item<=2) { SpawnReferenceDrop(position,item,fullPower);return; }
+    if(item==3)Spawn(PickupKind::Bomb,position,1);
+    else if(item==4)Spawn(PickupKind::FullPower,position,128);
+    else if(item==5)Spawn(PickupKind::Life,position,1);
+    else Spawn(PickupKind::Star,position,kStarPointValue);
+}
 
 void DropSystem::ConvertEnemyBulletsToStars(BulletSystem& bullets) {
     // 先预留空间，再停用敌弹，避免生成中途扩容；连续升满时保留上一批尚未吸收的星点。
@@ -185,8 +194,10 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
         const float dy = playerPosition.y - pickup.position.y;
         const float dz = playerPosition.z - pickup.position.z;
         if (dx * dx + dy * dy + dz * dz < kCollectDistance * kCollectDistance) {
-            if (pickup.kind == PickupKind::Power)
+            if (pickup.kind == PickupKind::Power || pickup.kind == PickupKind::FullPower)
                 reward.power += pickup.value;
+            else if(pickup.kind==PickupKind::Bomb)reward.bombs+=pickup.value;
+            else if(pickup.kind==PickupKind::Life)reward.lives+=pickup.value;
             else
                 reward.score += pickup.value;
             if (pickup.kind == PickupKind::Score) ++reward.pointItems;

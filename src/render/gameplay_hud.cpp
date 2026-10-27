@@ -163,7 +163,7 @@ void Game::DrawHud() const {
         const Rectangle panel = l.BossPanel();
         const ui::BossHudLayout row(panel, s);
         Panel(panel, s);
-        Label(font, TextFormat("Enemy %d", bossHealth.remainingBars),
+        Label(font, WorldTimeStopped() ? "TIME STOP" : TextFormat("Enemy %d", bossHealth.remainingBars),
                {row.enemy.x, row.enemy.y + (row.enemy.height - 21 * s) / 2}, 21 * s, row.enemy.width, kGold);
         DrawRectangleRec(row.bar, Color{64, 35, 50, 160});
         float offset = 0;
@@ -212,11 +212,14 @@ void Game::DrawDialogue() const {
     if (!dialogueActive_ || !stageContent_) return;
     const GameplayLayout l(GetScreenWidth(), GetScreenHeight());
     const auto lines = CurrentDialogue();
+    if(lines.empty())return;
     float start = 0;
     const int lineIndex = DialogueIndex(&start);
     const DialogueLine& line = lines[lineIndex];
     const float elapsed = dialogueTimer_ - start;
-    const auto expressions = DialogueExpressionsAt(lines, lineIndex, elapsed);
+    const auto expressions = DialogueCueExpressionsAt(
+        stageContent_->SceneDialogueCues(dialogueScene_,dialogueAfterBattle_,player_.Shot()),dialogueTimer_,
+        DialogueExpressionsAt(lines,lineIndex,elapsed));
     const auto portrait = [&](VisualId id, bool right) {
         const auto& visual = assets_.GetVisual(id);
         const Texture2D texture = visual.texture;
@@ -233,7 +236,7 @@ void Game::DrawDialogue() const {
     };
     // 先画未发言者，避免灵梦展开的手臂覆盖正在说话的角色；裁剪仍取自各差分的元数据。
     const auto hero = stageContent_->HeroPortraitVisual(expressions[0],player_.Shot());
-    const auto boss = stageContent_->BossPortraitVisual(expressions[1]);
+    const auto boss = stageContent_->SceneBossPortraitVisual(dialogueScene_,expressions[1]);
     if (line.bossSpeaking) {
         portrait(hero, false);
         if (line.showBoss) portrait(boss, true);
@@ -256,7 +259,7 @@ void Game::DrawDialogue() const {
         if (secondVisible && !line.secondLineReplacesFirst)
             Label(font, line.secondLine, {x, panel.y + 89 * l.scale}, size, w, kInk);
     }
-    if (line.introduce) {
+    if (line.introduce&&elapsed>=line.introduceDelay) {
         const float w = std::min(l.width * 0.42F, 250 * l.scale);
         float y = panel.y - 120 * l.scale;
         // 竖屏角色靠近底角后，名牌需放在头部上方；跟随同一强调采样移动，不能盖住淡出的脸。
@@ -274,8 +277,9 @@ void Game::DrawDialogue() const {
         const Rectangle nameplate{l.width - l.margin - w, std::max(l.margin, y), w, 100 * l.scale};
         Panel(nameplate, l.scale);
         const float x = nameplate.x + 14 * l.scale, textWidth = w - 28 * l.scale;
-        Label(font, "宵暗的妖怪", {x, nameplate.y + 12 * l.scale}, 19 * l.scale, textWidth, kMuted);
-        Label(font, "露米娅", {x, nameplate.y + 46 * l.scale}, 32 * l.scale, textWidth, kInk);
+        const auto introduction=stageContent_->BossIntroduction();
+        Label(font,introduction[0],{x,nameplate.y+12*l.scale},19*l.scale,textWidth,kMuted);
+        Label(font,introduction[1],{x,nameplate.y+46*l.scale},32*l.scale,textWidth,kInk);
     }
 
 }

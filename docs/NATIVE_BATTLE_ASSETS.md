@@ -25,7 +25,7 @@
 | stg7enm / stg7enm2 | ExtraEnemies / Flandre |
 | eff01…eff07 | Stage1Effects…ExtraEffects：各关卡背景/符卡演出 |
 
-目录包含 1084 个精灵定义和 347 个有效脚本。`stg7enm.anm` 的编号 71 有重复项，按原加载规则由后一项覆盖前一项。图集中的未使用角色、自机、道具与特效均已登记并可加载、播放、绘制；这不意味着当前已经实现二面以后的关卡或魔理沙玩法。
+目录包含 1084 个精灵定义和 347 个有效脚本。`stg7enm.anm` 的编号 71 有重复项，按原加载规则由后一项覆盖前一项。图集中的未使用角色、自机、道具与特效均已登记并可加载、播放、绘制；素材登记本身不等于玩法接入；当前一至六面 Normal 和魔理沙两种御札均已接入，Extra 仍仅有数据。逐关覆盖见 [二至六面接入记录](STAGES_2_6_REFERENCE.md)。
 
 解包工具为 [thdat-nc](https://github.com/Renko6626/thdat-nc)。ANM 指令与特效编号参照 [th06 动画管理器](https://github.com/GensokyoClub/th06/blob/master/src/AnmManager.cpp)、[特效管理器](https://github.com/GensokyoClub/th06/blob/master/src/EffectManager.cpp)核对；项目自行实现解析、播放和绘制。BC7 解码使用 MIT 许可的 [bcdec](https://github.com/iOrange/bcdec)，许可说明见 `third_party/bcdec/README.md`。游戏素材沿用原作品素材，bcdec 许可不适用于游戏素材。
 

@@ -23,6 +23,13 @@ bool DialogueFlagAt(std::span<const DialogueCue> cues, DialogueCueKind kind, flo
     }
     return initial;
 }
+std::array<int,2> DialogueCueExpressionsAt(std::span<const DialogueCue> cues,float seconds,std::array<int,2> fallback) {
+    for(const auto& cue:cues) {
+        if(cue.frame>seconds*60+0.001F)break;
+        if(cue.kind==DialogueCueKind::Expression&&cue.slot>=0&&cue.slot<2)fallback[cue.slot]=cue.value;
+    }
+    return fallback;
+}
 namespace {
 // 各重载明确列出动作类型；新增 variant 分支而未补充执行器时必须编译失败。
 struct EventExecutor {
@@ -47,10 +54,17 @@ struct EventExecutor {
         return false;
     }
 
-    bool operator()(const StartDialogue&) const {
-        if (!event.id) throw std::invalid_argument("StartDialogue requires an id");
-        sink.BeginStageDialogue(*event.id, std::get<StartDialogue>(event.action).afterBattle);
+    bool operator()(const StartDialogue& action) const {
+        if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss)||
+            (action.clearPolicy!=DialogueClearPolicy::ClearEnemiesAndBullets&&action.clearPolicy!=DialogueClearPolicy::PreserveWorld))
+            throw std::invalid_argument("StartDialogue requires an id and valid scene");
+        sink.BeginStageDialogue(*event.id,action.afterBattle,action.scene,action.clearPolicy);
         return false;
+    }
+    bool operator()(const ResumeBoss&) const { sink.ResumeStageBoss();return true; }
+    bool operator()(const WaitDialogueSignal& action) const {
+        if(!event.id||action.signal<0)throw std::invalid_argument("Invalid dialogue signal wait");
+        return sink.AwaitStageDialogueSignal(*event.id,action.signal);
     }
 
     bool operator()(const ShowMessage& action) const {

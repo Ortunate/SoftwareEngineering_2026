@@ -70,6 +70,45 @@ add_library(koumakyou_engine STATIC
     src/gameplay/actors/movement.cpp
     src/gameplay/actors/skill.cpp
     src/gameplay/actors/behavior.cpp
+    src/stages/common/assets.cpp
+    src/stages/common/content.cpp
+    src/stages/stage2/behaviors.cpp
+    src/stages/stage2/boss.cpp
+    src/stages/stage2/content.cpp
+    src/stages/stage2/dialogue.cpp
+    src/stages/stage2/manifest.cpp
+    src/stages/stage2/scenery.cpp
+    src/stages/stage2/timeline.cpp
+    src/stages/stage3/behaviors.cpp
+    src/stages/stage3/boss.cpp
+    src/stages/stage3/content.cpp
+    src/stages/stage3/dialogue.cpp
+    src/stages/stage3/manifest.cpp
+    src/stages/stage3/scenery.cpp
+    src/stages/stage3/timeline.cpp
+    src/stages/stage4/behaviors.cpp
+    src/stages/stage4/boss.cpp
+    src/stages/stage4/content.cpp
+    src/stages/stage4/dialogue.cpp
+    src/stages/stage4/manifest.cpp
+    src/stages/stage4/scenery.cpp
+    src/stages/stage4/timeline.cpp
+    src/stages/stage5/behaviors.cpp
+    src/stages/stage5/boss_behaviors.cpp
+    src/stages/stage5/boss.cpp
+    src/stages/stage5/content.cpp
+    src/stages/stage5/scenery.cpp
+    src/stages/stage5/dialogue.cpp
+    src/stages/stage5/manifest.cpp
+    src/stages/stage5/timeline.cpp
+    src/stages/stage6/behaviors.cpp
+    src/stages/stage6/boss_behaviors.cpp
+    src/stages/stage6/boss.cpp
+    src/stages/stage6/content.cpp
+    src/stages/stage6/scenery.cpp
+    src/stages/stage6/timeline.cpp
+    src/stages/stage6/dialogue.cpp
+    src/stages/stage6/manifest.cpp
     src/stages/stage1/behaviors.cpp
     src/stages/stage1/boss.cpp
     src/stages/stage1/content.cpp
@@ -125,6 +164,10 @@ add_executable(native_asset_preview EXCLUDE_FROM_ALL tools/native_asset_preview.
 target_link_libraries(native_asset_preview PRIVATE koumakyou_engine)
 add_dependencies(native_asset_preview copy_assets)
 
+# 立绘导入仅在变更素材时运行；使用生产 DDS/ANM 解码器，不依赖窗口或原作安装路径。
+add_executable(export_portrait_sprites EXCLUDE_FROM_ALL tools/export_portrait_sprites.cpp)
+target_link_libraries(export_portrait_sprites PRIVATE koumakyou_engine)
+
 if(MSVC)
     target_compile_options(koumakyou_ui PRIVATE /W4 /permissive- /utf-8)
     target_compile_options(koumakyou_engine PRIVATE /W4 /permissive- /utf-8)
@@ -162,6 +205,7 @@ if(BUILD_TESTING)
         tests/player_bomb_tests.cpp
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
+    target_sources(koumakyou_tests PRIVATE tests/stage2_tests.cpp tests/stage3_tests.cpp tests/stage4_tests.cpp tests/stage5_tests.cpp tests/stage6_tests.cpp)
     target_link_libraries(koumakyou_tests PRIVATE koumakyou_engine)
     target_compile_definitions(koumakyou_tests PRIVATE KOUMAKYOU_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime")
     # 离屏生命周期测试仍需要图形会话，手动运行，避免普通无窗口测试依赖桌面服务。

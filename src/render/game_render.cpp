@@ -4,7 +4,6 @@
 #include "app/constants.hpp"
 #include "app/math.hpp"
 #include "config/settings.hpp"
-#include "stages/stage1/scenery.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/menu_layout.hpp"
 #include "ui/page.hpp"
@@ -116,23 +115,19 @@ void Game::DrawWorld() const {
         rlEnableDepthMask();
         rlEnableBackfaceCulling();
     }
-    if (stageId_ == StageId::Stage1) stage1::DrawScenery(stage_.Elapsed());
+    stageContent_->DrawScenery(static_cast<float>(scenerySeconds_));
     DrawArena();
     std::array<const behavior::Actor*, kActorCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
     actors_.ForEachActive([&](const behavior::Actor& enemy) {
-        visibleEnemies[visibleCount++] = &enemy;
+        if(enemy.visible)visibleEnemies[visibleCount++] = &enemy;
     });
     const std::span<const behavior::Actor*> visible(visibleEnemies.data(), visibleCount);
     pickupSprites_.clear();
     playerBombVolumes_.clear();
     if (stageContent_) {
         drops_.ForEachActive([&](const Pickup& pickup) {
-            VisualId visual = stageContent_->ScorePickupVisual();
-            if (pickup.kind == PickupKind::Power)
-                visual = pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
-            else if (pickup.kind == PickupKind::Star)
-                visual = stageContent_->StarPickupVisual();
+            const VisualId visual=PickupVisual(pickup);
             const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
             pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample()});

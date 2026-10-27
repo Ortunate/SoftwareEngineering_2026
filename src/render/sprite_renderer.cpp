@@ -253,7 +253,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     rlDrawRenderBatchActive();rlEnableDepthMask();rlEnableBackfaceCulling();
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         const auto& visual=FindVisual(visuals,bullet.visual);
-        if(bullet.beamLength>0) {
+        if(bullet.IsBeam()) {
             beams_.push_back(&bullet);
             if(!visual.archive && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
                 const auto end=bullet.BeamEnd();
@@ -419,7 +419,7 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
     int shownBullets = 0;
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         if (shownBullets++ >= 256) return;
-        if (bullet.beamLength > 0) {
+        if (bullet.IsBeam()) {
             DrawCylinderWiresEx(bullet.position, bullet.BeamEnd(), bullet.radius, bullet.radius,
                                 10, Color{255, 230, 90, 230});
             return;

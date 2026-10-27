@@ -63,12 +63,19 @@ void LiftedPath::Aim(const State& world,float height) {
     const float horizontal=std::sqrt(1-vertical*vertical);
     direction_={planarDirection_.x*horizontal,vertical,planarDirection_.z*horizontal};
 }
+void LiftedPath::Rebase(const State& world) {
+    planar.position={world.position.x,0,world.position.z};
+    stepPlanar_=planar.position;stepWorld_=world.position;
+}
 void LiftedPath::Move(State& world,Vector3 delta) const {
     const float length=std::sqrt(spatial::Dot(delta,delta));
     if(spatial::Dot(direction_,direction_)<0.5F) {world.position=Add(world.position,delta);return;}
     // 原边界夹取可能造成回退；保留其方向符号和实际距离，不把夹取位移再次变成向前冲刺。
     const float sign=spatial::Dot(delta,planarDirection_)<0 ? -1.0F : 1.0F;
-    world.position=Add(world.position,Multiply(direction_,length*sign));
+    // 边界夹取后的实际 X/Z 位移可能不再平行于目标方向，必须沿实际位移分配高度。
+    // 否则被挡住的横向分量仍会推进世界对象，高速巡航会逐段漂出战斗边界。
+    const float vertical=direction_.y*sign,horizontal=std::sqrt(std::max(0.0F,1-vertical*vertical));
+    world.position=Add(world.position,{delta.x*horizontal,length*vertical,delta.z*horizontal});
 }
 void LiftedPath::BeginFrame(State& world,int updateHz) {
     stepPlanar_=planar.position;stepWorld_=world.position;

@@ -255,7 +255,7 @@ def write_runtime(path, stages, shots):
         lines.append('}};')
     lines.append('constexpr std::array<StageData,7> kStages{{')
     for number, stage in enumerate(stages, 1):
-        state = 'Playable' if number == 1 else 'DataOnly'
+        state = 'Playable' if number in (1, 2, 3, 4, 5, 6) else 'DataOnly'
         lines.append(f'    {{{number},Integration::{state},"{stage["sha256"]}",kHealth{number}}},')
     lines.append('}};')
     for table in shots['tables']:

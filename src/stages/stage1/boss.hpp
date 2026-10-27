@@ -18,6 +18,7 @@ public:
     [[nodiscard]] std::span<const int> DropEvents() const override { return behavior_.dropEvents; }
     [[nodiscard]] bool Defeated() const override { return defeated_; }
     [[nodiscard]] const char* SpellName() const override;
+    [[nodiscard]] int SpellCardNumber() const override { return SpellName() ? (phase==2 ? 3 : 7) : 0; }
     [[nodiscard]] bool IsMidboss() const override { return encounter_==Encounter::Midboss; }
     [[nodiscard]] const char* DisplayName() const override { return "Rumia"; }
     [[nodiscard]] bool CanTakeDamage() const override { return !retiring_ && behavior_.damageable; }

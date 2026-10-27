@@ -22,7 +22,7 @@ void TestCatalogAndHealth() {
     std::size_t total=0;
     for(const auto& stage:nc::Stages()) {
         assert(stage.health.size()==counts[stage.stage-1] && stage.sha256.size()==64);
-        assert(stage.integration==(stage.stage==1 ? nc::Integration::Playable : nc::Integration::DataOnly));
+        assert(stage.integration==(stage.stage<=6 ? nc::Integration::Playable : nc::Integration::DataOnly));
         total+=stage.health.size();
     }
     assert(total==3598 && nc::ExecutableHash().size()==64);

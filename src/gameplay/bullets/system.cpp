@@ -56,13 +56,73 @@ Vector3 Normalize(Vector3 vector) {
     return Scale(vector, 1.0F / length);
 }
 
+/// @brief 以显现结束的零时刻更新新弹道；运动参数的有效期包含启动加速及取消该选项的等待帧。
+/// 延迟转向独立于启动加速执行，重复转向以最初时钟的整数倍触发，不能每次累加浮点截止时刻。
+void UpdateStartSampledMotion(Bullet& bullet,float delta,float age,Vector3 target) {
+    constexpr float epsilon=1.0e-6F;
+    const bool boosted=bullet.launchBoostSeconds>0&&age<=bullet.launchBoostSeconds+epsilon;
+    const bool removingBoost=bullet.launchBoostSeconds>0&&age<bullet.launchBoostSeconds+2.0F/60-epsilon;
+    if(boosted) {
+        const float speed=BulletSystem::Length(bullet.baseVelocity)+bullet.launchBoost*
+            std::max(0.0F,1-age/bullet.launchBoostSeconds);
+        bullet.velocity=Scale(Normalize(BulletSystem::Length(bullet.launchDirection)>0 ? bullet.launchDirection : bullet.baseVelocity),speed);
+    } else if(!removingBoost) {
+        if(bullet.polarMotion) {
+            const float elapsed=std::min(delta,std::max(0.0F,bullet.angularSeconds));
+            const float speed=BulletSystem::Length(bullet.baseVelocity)+bullet.speedAcceleration*elapsed;
+            const auto direction=BulletSystem::RotateAroundAxis(Normalize(bullet.baseVelocity),bullet.rotationAxis,bullet.angularVelocity*elapsed);
+            bullet.baseVelocity=Scale(direction,speed);bullet.velocity=bullet.baseVelocity;
+        } else {
+            const float elapsed=std::min(delta,std::max(0.0F,bullet.accelerationSeconds));
+            bullet.velocity=Add(bullet.velocity,Scale(bullet.acceleration,elapsed));
+        }
+    }
+    bullet.angularSeconds=std::max(0.0F,bullet.angularSeconds-delta);
+    bullet.accelerationSeconds=std::max(0.0F,bullet.accelerationSeconds-delta);
+    if(bullet.turnDelaySeconds>0&&!bullet.turnApplied) {
+        bool turned=false;
+        while(bullet.turnCompleted<bullet.turnCount&&age+epsilon>=bullet.turnDelaySeconds*(bullet.turnCompleted+1)) {
+            const auto direction=bullet.turnAbsolute ? bullet.turnFixedDirection :
+                BulletSystem::RotateAroundAxis(bullet.turnAimed ? BulletSystem::DirectionTo(bullet.position,target) : Normalize(bullet.baseVelocity),
+                    bullet.rotationAxis,bullet.turnAngle);
+            bullet.baseVelocity=Scale(direction,bullet.turnSpeed);++bullet.turnCompleted;turned=true;
+        }
+        bullet.turnApplied=bullet.turnCompleted==bullet.turnCount;
+        const float progress=age-bullet.turnDelaySeconds*bullet.turnCompleted;
+        bullet.velocity=Scale(bullet.baseVelocity,turned||bullet.turnApplied ? 1 : std::max(0.0F,1-progress/bullet.turnDelaySeconds));
+    }
+}
+/// @brief 完全越出可见边界后才反弹；同一角落反射多轴仍只消费一次次数，末端离场也消费次数。
+void Bounce(Bullet& bullet) {
+    const auto p=bullet.position,lo=bullet.bounceLower,hi=bullet.bounceUpper,h=bullet.bounceHalfExtents;
+    if(p.x>=lo.x-h.x&&p.x<=hi.x+h.x&&p.y>=lo.y-h.y&&p.y<=hi.y+h.y&&p.z>=lo.z-h.z&&p.z<=hi.z+h.z)return;
+    auto direction=Normalize(BulletSystem::Length(bullet.velocity)>0 ? bullet.velocity : bullet.launchDirection);
+    if(p.x<lo.x||p.x>=hi.x)direction.x=-direction.x;
+    if(p.y<lo.y||p.y>=hi.y)direction.y=-direction.y;
+    if(p.z>hi.z||(bullet.reflectLowerZ&&p.z<=lo.z))direction.z=-direction.z;
+    bullet.velocity=Scale(direction,bullet.bounceSpeed);bullet.baseVelocity=bullet.velocity;bullet.launchDirection=direction;
+    --bullet.bouncesRemaining;
+}
+
 }  // namespace
 
 void BulletSystem::Reset() { bullets_->Clear(); }
+BulletSystem::Handle BulletSystem::MakeHandle(Bullet* bullet) const {
+    Handle handle;
+    if(bullet) {handle.owner_=this;handle.slot_=bullet;handle.generation_=bullet->generation;}
+    return handle;
+}
+Bullet* BulletSystem::Resolve(Handle handle) {
+    return handle.owner_==this&&handle.slot_&&handle.slot_->active&&handle.slot_->generation==handle.generation_ ? handle.slot_ : nullptr;
+}
 
-void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget) {
-    bullets_->ForEachActive([deltaTime, targets, enemyAimTarget](Bullet& bullet) {
+void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget,bool timeStopped) {
+    bullets_->ForEachActive([deltaTime, targets, enemyAimTarget,timeStopped](Bullet& bullet) {
         if(bullet.pendingExpiration) {bullet.active=false;return;}
+        if(timeStopped) {
+            bullet.damageSeconds=bullet.owner==BulletOwner::Player&&bullet.damagePerSecond>0&&bullet.Dangerous() ? deltaTime : 0;
+            return;
+        }
         const float oldAge=bullet.age;
         bullet.age += deltaTime;
         // 在本帧内裁剪有效区间，避免两个累计年龄相减产生精度损失，进而漏算伤害及整数得分。
@@ -82,26 +142,40 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
         bullet.position=Add(bullet.position,Scale(bullet.baseVelocity,spawnDelta*bullet.spawnMoveScale));
         const float motionDelta=deltaTime-spawnDelta;
         const float motionAge=std::max(0.0F,bullet.age-bullet.spawnVisualSeconds);
+        const float startAge=static_cast<float>(bullet.motionClock);bullet.motionClock+=motionDelta;
+        const bool turning=bullet.turnDelaySeconds>0&&!bullet.turnApplied;
         // 先更新速度，再按新速度推进位置；角速度使弹道在三维空间转弯。
-        if (bullet.launchBoostSeconds > 0 && motionAge <= bullet.launchBoostSeconds) {
-            const float speed = Length(bullet.baseVelocity) + bullet.launchBoost *
-                (1 - motionAge / bullet.launchBoostSeconds);
-            bullet.velocity = Scale(Normalize(Length(bullet.launchDirection)>0 ? bullet.launchDirection : bullet.baseVelocity), speed);
-        } else bullet.velocity = Add(bullet.velocity, Scale(bullet.acceleration, motionDelta));
-        if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
-            if (motionAge >= bullet.turnDelaySeconds) {
-                const Vector3 direction = bullet.turnAimed
-                    ? DirectionTo(bullet.position, enemyAimTarget) : Normalize(bullet.baseVelocity);
-                bullet.velocity = Scale(RotateAroundAxis(direction, bullet.rotationAxis,
-                    bullet.turnAngle), bullet.turnSpeed);
-                bullet.turnApplied = true;
-            } else bullet.velocity = Scale(bullet.baseVelocity, 1 - motionAge / bullet.turnDelaySeconds);
+        const bool extendedMotion=bullet.sampleMotionAtStart||bullet.turnCount>1||bullet.turnAbsolute||bullet.speedAcceleration!=0;
+        if(extendedMotion&&motionDelta>0)UpdateStartSampledMotion(bullet,motionDelta,bullet.sampleMotionAtStart ? startAge : motionAge,enemyAimTarget);
+        else if (!extendedMotion) {
+        // 旧关卡保留已验证的步末采样和一次转向路径。
+            if (bullet.launchBoostSeconds > 0 && motionAge <= bullet.launchBoostSeconds) {
+                const float speed = Length(bullet.baseVelocity) + bullet.launchBoost *
+                    (1 - motionAge / bullet.launchBoostSeconds);
+                bullet.velocity = Scale(Normalize(Length(bullet.launchDirection)>0 ? bullet.launchDirection : bullet.baseVelocity), speed);
+            } else {
+                const float accelerationDelta=std::min(motionDelta,std::max(0.0F,bullet.accelerationSeconds));
+                bullet.velocity=Add(bullet.velocity,Scale(bullet.acceleration,accelerationDelta));
+                bullet.accelerationSeconds=std::max(0.0F,bullet.accelerationSeconds-accelerationDelta);
+            }
+            if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
+                if (motionAge >= bullet.turnDelaySeconds) {
+                    const Vector3 direction = bullet.turnAimed
+                        ? DirectionTo(bullet.position, enemyAimTarget) : Normalize(bullet.baseVelocity);
+                    bullet.velocity = Scale(RotateAroundAxis(direction, bullet.rotationAxis,
+                        bullet.turnAngle), bullet.turnSpeed);
+                    bullet.turnApplied = true;
+                } else bullet.velocity = Scale(bullet.baseVelocity, 1 - motionAge / bullet.turnDelaySeconds);
+            }
+            if (bullet.angularVelocity != 0.0F) {
+                const float angularDelta=std::min(motionDelta,std::max(0.0F,bullet.angularSeconds));
+                bullet.velocity = RotateAroundAxis(
+                    bullet.velocity, bullet.rotationAxis,
+                    bullet.angularVelocity * angularDelta);
+                bullet.angularSeconds=std::max(0.0F,bullet.angularSeconds-angularDelta);
+            }
         }
-        if (bullet.angularVelocity != 0.0F) {
-            bullet.velocity = RotateAroundAxis(
-                bullet.velocity, bullet.rotationAxis,
-                bullet.angularVelocity * motionDelta);
-        }
+        if(bullet.bouncesRemaining>0&&!turning&&motionDelta>0)Bounce(bullet);
         if (bullet.homingTurnRate > 0.0F && !targets.empty()) {
             const Vector3* nearest = nullptr;
             float nearestDistanceSquared = 0.0F;
@@ -139,6 +213,14 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
             }
         }
         bullet.position = Add(bullet.position, Scale(bullet.velocity, motionDelta));
+        if(bullet.IsBeam())bullet.beamAnchor=Add(bullet.beamAnchor,Scale(bullet.velocity,motionDelta));
+        if(bullet.beamLengthLimit>0) {
+            // 原作先推进末端，超出长度上限后才推进起点；基点不随光束移动。
+            bullet.beamEndDistance+=bullet.beamTravelSpeed*motionDelta;
+            bullet.beamStartOffset=std::max(bullet.beamStartOffset,bullet.beamEndDistance-bullet.beamLengthLimit);
+            bullet.beamLength=bullet.beamEndDistance-bullet.beamStartOffset;
+            bullet.position=Add(bullet.beamAnchor,Scale(bullet.beamDirection,bullet.beamStartOffset));
+        }
 
         constexpr float margin = 3.0F;
         if (bullet.age > bullet.maxAge && bullet.damagePerSecond>0 && bullet.damageSeconds>0) {
@@ -173,6 +255,7 @@ Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
     if (bullet == nullptr) {
         return nullptr;
     }
+    bullet->generation=nextGeneration_++;
     bullet->owner = owner;
     bullet->visual = visual;
     bullet->position = position;
@@ -194,6 +277,7 @@ Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
     Bullet* beam = Spawn(BulletOwner::Enemy, origin, {}, radius, color, kInvalidVisualId);
     if (!beam) return nullptr;
     beam->beamDirection = Normalize(direction);
+    beam->beamAnchor=origin;
     beam->beamLength = length;
     beam->warningSeconds = warning;
     beam->maxAge = warning + duration;

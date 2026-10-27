@@ -185,7 +185,7 @@ PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
     const float hitDistance = bullet.radius + kHitRadius;
     if (distanceSquared <= hitDistance * hitDistance) {
         // 光束持续到其寿命结束，不能因无敌玩家站在轴线上而吞掉整束光；普通弹仍消失。
-        if (bullet.beamLength == 0) bullet.active = false;
+        if (!bullet.IsBeam()) bullet.active = false;
         return invulnerableTimer_ <= 0.0F ? PlayerContact::Hit
                                           : PlayerContact::None;
     }
@@ -219,6 +219,10 @@ void Player::SyncCamera(Camera3D& camera) const {
 }
 
 int Player::RemainingLives() const { return std::max(0, lives_ + 1); }
+void Player::CollectResources(int extraLives,int bombs) {
+    if(extraLives<0||bombs<0)throw std::invalid_argument("Negative resource pickup");
+    lives_=std::min(8,lives_+std::min(extraLives,8));bombs_=std::min(8,bombs_+std::min(bombs,8));
+}
 
 Vector3 Player::Forward() const {
     return BulletSystem::DirectionFromYawPitch(yaw_, pitch_);

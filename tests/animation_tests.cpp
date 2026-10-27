@@ -35,6 +35,38 @@ void TestRealTiming() {
     cursor.Sync(rumia,{battle::Atlas::Rumia,129},0,1);assert(cursor.player.Sample().sprite==135);
     bool rejected=false;try {player.Advance(-1);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);
 }
+/// @brief 四/五面本体中断有 30/120 帧两种淡出，命令按真实年龄交付且不能每次同步重启淡出。
+void TestActorInterruptTiming() {
+    const auto archive=anm::LoadArchive(kAssets/battle::Describe(battle::Atlas::Stage4Enemies).anm);
+    for(int script:{13,16})for(int fps:{30,60,120,144,240}) {
+        const int duration=script==13 ? 30 : 120;
+        battle::Cursor cursor;const battle::AnimationInterrupt interrupt{2,1,7,1};
+        for(int frame=0;frame<=fps*4;++frame) {
+            const double age=static_cast<double>(frame)/fps;
+            cursor.Sync(archive,{battle::Atlas::Stage4Enemies,script},age,7,age>=2 ? &interrupt : nullptr);
+            if(age>=2&&age<2.1)assert(cursor.player.Sample().color.a<255&&cursor.player.Sample().color.a>180);
+            if(age>=2+static_cast<double>(duration)/60)assert(cursor.player.Finished()&&!cursor.player.Sample().visible);
+        }
+        // 延后交付仍按事件年龄重新构建，不把已经过去的淡出再延长一段。
+        battle::Cursor delayed;delayed.Sync(archive,{battle::Atlas::Stage4Enemies,script},4,7);
+        delayed.Sync(archive,{battle::Atlas::Stage4Enemies,script},4,7,&interrupt);assert(delayed.player.Finished());
+        delayed.Sync(archive,{battle::Atlas::Stage4Enemies,script},0,8,&interrupt);assert(!delayed.player.Finished());
+    }
+}
+
+/// @brief 独立按原生加载器 RVA 0x2a30～0x2a8e 的尺寸推导，禁止以高清裁图大小驱动行为几何。
+void TestNativeBulletLogicalSize() {
+    for(int type=0;type<10;++type) {
+        const auto selection=battle::EnemyBullet(type,0);const auto archive=anm::LoadArchive(kAssets/battle::Describe(selection.atlas).anm);
+        anm::Player player;player.Start(archive,selection.script);const auto source=player.Sample().source;
+        const Vector2 actual=battle::EnemyBulletLogicalSize(type);
+        const float worldPerPixel=20.0F/448;
+        assert(std::abs(actual.x-source.width*480/1080*worldPerPixel)<1e-6F);
+        assert(std::abs(actual.y-source.height*480/1080*worldPerPixel)<1e-6F);
+        assert((actual.y>=30*worldPerPixel)==(type>=6));
+    }
+    bool rejected=false;try {battle::EnemyBulletLogicalSize(10);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);
+}
 /// @brief 读取所有未来关卡、自机和特效；每个真实脚本运行 120 帧，执行停止标签或中断后再推进。
 void TestAllNativeAssets() {
     std::size_t sprites=0,scripts=0;
@@ -160,4 +192,4 @@ void TestCorruptFiles() {
 }
 }
 /// @brief 由核心测试入口调用；任何原始资源损坏或动画契约回归都会使测试失败。
-void RunAnimationTests() { TestRealTiming();TestAllNativeAssets();TestBulletAndActorBindings();TestEffectSemantics();TestCorruptFiles(); }
+void RunAnimationTests() { TestRealTiming();TestActorInterruptTiming();TestNativeBulletLogicalSize();TestAllNativeAssets();TestBulletAndActorBindings();TestEffectSemantics();TestCorruptFiles(); }

@@ -15,11 +15,11 @@ struct BossHealthSegment {
     BossHealthKind kind = BossHealthKind::NonSpell;
 };
 
-/// @brief 当前组的值快照，最多容纳“非符＋对应符卡”两段；不持有 Boss 或资源引用。
-/// segments 按屏幕从左到右排列，count≤2；有效段 capacity 总和为 1，从最右侧攻击开始消耗。
+/// @brief 当前组的值快照，最多容纳“非符＋两张连续符卡”三段；不持有 Boss 或资源引用。
+/// segments 按屏幕从左到右排列，count≤3；有效段 capacity 总和为 1，从最右侧攻击开始消耗。
 /// remainingBars 是当前组之后剩余的血条组数；count=0 表示隐藏，包括未入场及退场。
 struct BossHealthBar {
-    std::array<BossHealthSegment, 2> segments{};
+    std::array<BossHealthSegment, 3> segments{};
     std::size_t count = 0;
     int remainingBars = 0;
 };

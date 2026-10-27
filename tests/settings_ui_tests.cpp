@@ -79,7 +79,7 @@ struct GameLifecycleProbe {
                 // 该截图不继承前一页的极限分数，避免把压力测试值与新增奖励相加造成溢出。
                 game.stageClearShown_=false; game.player_.AdjustPower(84-game.player_.Power());
                 game.score_=4965020; game.missCount_=game.bombCount_=0;
-                game.graze_=75; game.pointItems_=25; game.BeginStageClear(); break;
+                game.graze_=game.stageGraze_=75; game.pointItems_=game.stagePointItems_=25; game.BeginStageClear(); break;
             case 26:
                 game.state_=RunState::Paused; game.pausedState_=RunState::Playing; game.practiceMode_=true; break;
             case 9: game.state_=RunState::MusicRoom; break;
@@ -101,7 +101,7 @@ struct GameLifecycleProbe {
             case 19: case 20:
                 game.state_=RunState::Playing;
                 game.score_=9223372036854775807LL; game.bestScore_=2000000000;
-                game.graze_=game.pointItems_=999999;
+                game.graze_=game.pointItems_=game.stageGraze_=game.stagePointItems_=999999;
                 game.challengeMode_=page==20; game.missCount_=999999;
                 game.player_.ConfigureRun(5,3,game.challengeMode_,ShotType::Needle);
                 game.player_.AdjustPower(Player::kMaxPower);
@@ -188,16 +188,19 @@ struct GameLifecycleProbe {
     }
     static long long StageBest(const Game& game,bool challenge,int stage) { return game.stageHighScores_.Best(challenge,stage); }
     static int SelectedStage(const Game& game) { return game.selectedPracticeStage_; }
-    /// @brief 使用截图示例计数触发正式战后入口；预览只用于预加载，按目标模式恢复真实计分资格。
+    /// @brief 每次结算回归从一面预加载，避免前次连续切关改变下一用例的起点。
+    static void StartSettlementPreview(Game& game) {game.stageId_=StageId::Stage1;game.StartPreview();}
+    static bool CampaignContinuing(const Game& game) {return game.stageId_==StageId::Stage2&&(game.state_==RunState::Loading||game.state_==RunState::Playing);}
+    /// @brief 使用截图示例计数触发正式战后入口，按目标模式恢复真实计分资格。
     static void BeginClear(Game& game,bool practice) {
         game.previewMode_=false; game.practiceMode_=practice; game.spellPractice_=false;
         game.challengeMode_=true; game.selectedShot_=1;
         game.player_.AdjustPower(84-game.player_.Power());
-        game.graze_=75; game.pointItems_=25; game.score_=10000;
+        game.graze_=game.stageGraze_=75; game.pointItems_=game.stagePointItems_=25; game.score_=10000;
         game.BeginStageDialogue(4,true);
     }
-    /// @brief 按真实 Update 路径结束战后对话，不直接跳转结算状态。
-    static void FinishPostDialogue(Game& game) { game.dialogueTimer_=game.DialogueDuration(); game.Update(0); }
+    /// @brief 定位对白末尾后推进一个真实 120 Hz 固定步；零秒更新只重采样表现，不执行战斗交接。
+    static void FinishPostDialogue(Game& game) { game.dialogueTimer_=game.DialogueDuration(); game.Update(1.0F/120); }
     /// @brief 将战后独白定位到最后一句仍未结束的位置，供真实按键验证层间确认不穿透。
     static void LastPostLine(Game& game) { game.dialogueTimer_=game.DialogueDuration()-2; }
     static void ReenterClear(Game& game) { game.BeginStageClear(); }
@@ -680,7 +683,7 @@ void TestPracticeStages(const std::filesystem::path& screenshots) {
     using Probe=GameLifecycleProbe;
     const int width=GetScreenWidth(),height=GetScreenHeight();
     auto settings=LoadOrCreateSettings(kSettingsFilename);
-    settings.lastSelection={0,false,2,6}; // 未开放的记忆槽必须回退到已开放的第一面。
+    settings.lastSelection={0,false,2,1}; // 从已登记的一面开始回放六个关卡槽与全部方向别名。
     settings.stageHighScores={};
     settings.stageHighScores.Record(false,1,5176180);
     settings.stageHighScores.Record(true,1,8754321);
@@ -702,16 +705,28 @@ void TestPracticeStages(const std::filesystem::path& screenshots) {
     expect(StartSetupStep::Stage);
     Check(!game.IsLoading(),"held mode confirmation skipped stage selection");
     Event(1,KEY_SPACE); Frame(game);
-    Check(Probe::SelectedStage(game)==0,"unavailable saved stage was selected");
-    for(const int key : {KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT}) {
+    Check(Probe::SelectedStage(game)==0,"saved stage was not restored");
+    std::array<bool,kStageScoreCount> visited{};
+    for(const int key : {KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_W,KEY_UP,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT,KEY_S,KEY_DOWN}) {
         Key(game,key); expect(StartSetupStep::Stage);
-        Check(Probe::SelectedStage(game)==0,"keyboard selected an unavailable stage");
+        const int selected=Probe::SelectedStage(game);
+        Check(selected>=0&&selected<kStageScoreCount&&kPracticeStages[selected].has_value(),"keyboard selected an unavailable stage");
+        visited[selected]=true;
     }
+    for(int index=0;index<kStageScoreCount;++index)if(kPracticeStages[index])Check(visited[index],"keyboard skipped an available stage");
     for(int index=1;index<kStageScoreCount;++index) {
         const auto row=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).StageRow(index);
-        Click(game,row.x+row.width/2,row.y+row.height/2); expect(StartSetupStep::Stage);
-        Check(Probe::SelectedStage(game)==0,"mouse selected an unavailable stage");
+        const int previous=Probe::SelectedStage(game);Click(game,row.x+row.width/2,row.y+row.height/2);
+        if(kPracticeStages[index]) {
+            expect(StartSetupStep::Ready);Check(Probe::SelectedStage(game)==index,"mouse did not select an available stage");
+            Key(game,KEY_X);expect(StartSetupStep::Stage);
+        } else {
+            expect(StartSetupStep::Stage);Check(Probe::SelectedStage(game)==previous,"mouse selected an unavailable stage");
+        }
     }
+    const auto firstRow=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).StageRow(0);
+    Click(game,firstRow.x+firstRow.width/2,firstRow.y+firstRow.height/2);expect(StartSetupStep::Ready);
+    Key(game,KEY_X);expect(StartSetupStep::Stage);
     Probe::Motion(game,1);
     Image before=ReadFrame(game);
     Probe::MotionStep(game,StartSetupStep::Ready,0);
@@ -802,7 +817,7 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
     Game game;
     SetTargetFPS(0);
     const auto start=[&](bool practice) {
-        game.StartPreview(); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
+        Probe::StartSettlementPreview(game); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
         Check(Probe::Playing(game) && Probe::DialogueTime(game)==0 && Probe::Score(game)==10000,
               "clear report interrupted the start of post-battle dialogue");
         game.Update(0.1F);
@@ -819,7 +834,7 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
         Check(Probe::StageReleased(game) && !IsCursorHidden(),"returning to Stage retained resources or captured cursor");
     };
     for(const bool practice : {false,true}) {
-        game.StartPreview(); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
+        Probe::StartSettlementPreview(game); Event(7,0,0); Frame(game); Probe::BeginClear(game,practice);
         Probe::LastPostLine(game); Key(game,KEY_Z);
         Check(Probe::Playing(game),"confirming the final line skipped the native settlement delay");
         for(int frame=0;frame<61 && Probe::Playing(game);++frame)Frame(game);
@@ -832,14 +847,14 @@ void TestStageSettlement(const std::filesystem::path& screenshots) {
     Check(Probe::State(game)==RunState::StageClear && Probe::DialogueTime(game)==dialogueEnd && Probe::StageTime(game)==time,
           "clear report did not freeze later events for ten seconds");
     game.Update(0.002F);
-    Check(Probe::State(game)==RunState::Finishing,"clear timeout did not continue to stage finishing");
+    Check(Probe::CampaignContinuing(game),"clear timeout did not load the next stage");
     Check(Probe::Score(game)==263750,"clear timeout awarded bonus twice");
     for(const int key : {KEY_Z,KEY_SPACE,KEY_ENTER}) {
         start(false); Key(game,key);
-        Check(Probe::State(game)==RunState::Finishing || Probe::State(game)==RunState::Won,"clear confirmation bypassed stage finishing");
+        Check(Probe::CampaignContinuing(game),"clear confirmation did not load the next stage");
     }
     start(false); Click(game,1,1);
-    Check(Probe::State(game)==RunState::Finishing || Probe::State(game)==RunState::Won,"left click did not close just the report");
+    Check(Probe::CampaignContinuing(game),"left click did not close just the report");
     start(false); game.Update(3);
     Key(game,KEY_ESCAPE); const float frozen=Probe::ClearSeconds(game);
     game.Update(12);
@@ -1154,6 +1169,8 @@ int main(int argc, char** argv) {
             // 组件绘制可单独回归，不初始化 Game 或加载生产素材。
         } else if(argc>2 && std::string(argv[2])=="--start-characters-only") {
             TestStartCharacters(screenshots);
+        } else if(argc>2 && std::string(argv[2])=="--practice-only") {
+            TestPracticeStages(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--spell-only") {
             TestSpellPractice(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--dialogue-only") {

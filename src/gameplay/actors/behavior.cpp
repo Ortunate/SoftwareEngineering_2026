@@ -20,13 +20,16 @@ void Actor::Attach(Routine::Handle handle) {
     catch(...) { handle.destroy();throw; }
 }
 void Actor::Reset(Vector3 initialPosition,float hp,std::uint32_t seed,bool mirrored) {
-    ClearRoutines();motion={};skills={};motion.position=initialPosition;motion.mirrored=mirrored;liftedMotion.reset();spatialIndex=seed ? seed : 1;
-    health=maxHealth=hp;lifeThreshold=-1;damageable=true;finished=false;
+    ClearRoutines();ClearBeamSlots();motion={};skills={};motion.position=initialPosition;motion.mirrored=mirrored;liftedMotion.reset();spatialIndex=spawnIndex=seed ? seed : 1;
+    health=maxHealth=hp;lifeThreshold=-1;damageable=interactable=visible=contactEnabled=true;finished=retiring=false;
+    rotateAnimation=false;
+    emitterShot_={};emitterSkills_={};emitterPeriod_=0;emitterElapsed_=0;emitterConfigured_=false;emitterSound_=-1;
     pendingCallback=lifeCallback=deathCallback=timeoutCallback=nullptr;
-    phaseFrames=0;timeoutFrames=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();
-    animationScript=-1;animationAge=0;animationRevision=0;poses={-1,-1,-1,-1,-1};pose_=-1;
+    callbackCause=CallbackCause::None;
+    phaseFrames=0;timeoutFrames=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();defeatActors=false;
+    animationScript=-1;animationAge=0;animationRevision=0;animationInterrupt.reset();animationInterruptSequence_=0;poses={-1,-1,-1,-1,-1};pose_=-1;
     random_=seed ? seed : 1;remainingTicks_=0;bullets_=nullptr;
-    active=true;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=0.55F;
+    active=true;phaseClockPaused=false;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=0.55F;
     scoreValue=0;sourceItem=-2;presentation.Reset();animation={};entered_=false;retireOutside_=false;retirementHeights_.reset();defeatBase_=kInvalidVisualId;
 }
 void Actor::Activate(const Spawn& spawn) {
@@ -43,12 +46,15 @@ void Actor::Activate(const Spawn& spawn) {
     // 场内出生已满足入场条件；否则一次较大的首帧更新越界后会被误认为尚未入场。
     entered_=retireOutside_&&retirementBounds_.Contains(motion.position)&&
         (!retirementHeights_||(motion.position.y>=retirementHeights_->x&&motion.position.y<=retirementHeights_->y));
-    Start(Follow(*this,spawn.pattern));
+    deathCallback=spawn.pattern.onDefeated;
+    rotateAnimation=spawn.pattern.rotateAnimation;
+    auto pattern=spawn.pattern;if(spawn.initialAnimation>=0)pattern.initialAnimation=spawn.initialAnimation;
+    Start(Follow(*this,pattern));
 }
 void Actor::Start(Routine routine) { ClearRoutines();Attach(routine.Release()); }
 void Actor::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!std::isfinite(seconds)||seconds<0)throw std::invalid_argument("Invalid behavior delta time");
-    soundEvents.clear();dropEvents.clear();player_=player;bullets_=&bullets;
+    soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();defeatActors=false;player_=player;bullets_=&bullets;
     age+=seconds;presentation.Update(seconds);
     remainingTicks_+=static_cast<double>(seconds)*updateHz_;
     while(remainingTicks_+0.00001>=1&&!finished&&!pendingCallback) { remainingTicks_-=1;Tick(); }
@@ -67,13 +73,65 @@ void Actor::Update(float seconds,Vector3 player,BulletSystem& bullets) {
 void Actor::Transition() {
     if(!pendingCallback)return;
     const auto next=std::exchange(pendingCallback,nullptr);
+    callbackCause=CallbackCause::None;
     if(health<=0)health=1;
     timeoutCallback=deathCallback;lifeThreshold=-1;timeoutFrames=-1;phaseFrames=0;
     Start(next(*this));
 }
+bool Actor::Defeat() {
+    if(retiring||!active)return false;
+    retiring=true;damageable=false;
+    if(deathCallback) { pendingCallback=deathCallback;Transition(); }
+    else active=false;
+    return true;
+}
+void Actor::FireAt(const skill::Shot& shot,Vector3 position,const skill::State* configuration) {
+    if(!bullets_)throw std::logic_error("Fire requires a running behavior update");
+    (configuration ? *configuration : skills).Fire(shot,position,player_,*bullets_,[this](float range){return Random(range);});
+    if((shot.flags&skill::PlaySound)&&emitterSound_>=0)soundEvents.push_back(emitterSound_);
+}
+void Actor::FireBeam(int slot,const skill::Laser& laser) {
+    if(!bullets_)throw std::logic_error("Beam creation requires a running behavior update");
+    if(slot<0||slot>=static_cast<int>(beams_.size()))throw std::invalid_argument("Beam slot outside actor capacity");
+    beams_[slot]=bullets_->MakeHandle(skills.Fire(laser,motion.position,player_,*bullets_));
+}
+Bullet* Actor::Beam(int slot) {
+    if(!bullets_)throw std::logic_error("Beam access requires a running behavior update");
+    if(slot<0||slot>=static_cast<int>(beams_.size()))throw std::invalid_argument("Beam slot outside actor capacity");
+    return bullets_->Resolve(beams_[slot]);
+}
+void Actor::ConfigureEmitter(const skill::Shot& shot) {
+    if(!skill::Valid({0,shot}))throw std::invalid_argument("Invalid emitter shot");
+    emitterShot_=shot;emitterSkills_=skills;emitterConfigured_=true;
+}
+void Actor::SetEmitterPeriod(int period,int initial) {
+    if(period<0||initial<0||(period>0&&(!emitterConfigured_||initial>=period))||(period==0&&initial!=0))
+        throw std::invalid_argument("Invalid emitter period or initial counter");
+    emitterPeriod_=period;emitterElapsed_=initial;
+}
+void Actor::FireEmitterAt(Vector3 worldMuzzle) {
+    if(!emitterConfigured_)throw std::logic_error("Emitter has no shot configuration");
+    auto configuration=emitterSkills_;configuration.offset={};FireAt(emitterShot_,worldMuzzle,&configuration);
+}
+void Actor::SetEmitterSound(int sound) {
+    // 原生关闭操作保留音效身份；下一轮显式带 PlaySound 的发射仍可再次使用它。
+    if(sound>=0) {emitterSound_=sound;emitterShot_.flags|=skill::PlaySound;}
+    else emitterShot_.flags&=~skill::PlaySound;
+}
+void Actor::ModifyEnemyProjectiles(const std::function<void(Bullet&)>& visitor) {
+    if(!bullets_)throw std::logic_error("Projectile mutation requires a running behavior update");
+    bullets_->Pool().ForEachActive([&](Bullet& bullet) {
+        if(bullet.owner==BulletOwner::Enemy&&!bullet.IsBeam())visitor(bullet);
+    });
+}
 float Actor::Random(float range) {
     random_^=random_<<13;random_^=random_>>17;random_^=random_<<5;
     return static_cast<float>(random_>>8)/16777216.0F*range;
+}
+std::uint32_t Actor::RandomIndex(std::uint32_t bound) {
+    if(!bound)throw std::invalid_argument("Random index bound must be positive");
+    random_^=random_<<13;random_^=random_>>17;random_^=random_<<5;
+    return random_%bound;
 }
 void Actor::RandomDirection(float minimum,float maximum,bool reflect) {
     auto& path=liftedMotion ? liftedMotion->planar : motion;
@@ -87,15 +145,19 @@ void Actor::RandomDirection(float minimum,float maximum,bool reflect) {
     }
     path.Polar(angle,path.speed);
 }
-void Actor::Animate(int script) { animationScript=script;animationAge=0;++animationRevision; }
+void Actor::Animate(int script) { animationScript=script;animationAge=0;++animationRevision;animationInterrupt.reset(); }
+void Actor::InterruptAnimation(int label) {
+    if(animationScript<0)throw std::logic_error("Animation interrupt requires an active script");
+    animationInterrupt=battle::AnimationInterrupt{animationAge,label,animationRevision,++animationInterruptSequence_};
+}
 void Actor::ClearBullets() { bullets_->ClearEnemyBullets();skills.rankInfluence=skill::kDefaultRankInfluence; }
 void Actor::Tick() {
     if(liftedMotion)liftedMotion->BeginFrame(motion,updateHz_);else motion.BeginFrame(updateHz_);
-    if(health<lifeThreshold) { health=lifeThreshold;pendingCallback=lifeCallback;return; }
-    if(health<=0&&deathCallback) { pendingCallback=deathCallback;return; }
+    if(health<lifeThreshold) { health=lifeThreshold;pendingCallback=lifeCallback;callbackCause=CallbackCause::HealthThreshold;return; }
+    if(health<=0&&deathCallback) { pendingCallback=deathCallback;callbackCause=CallbackCause::Defeat;return; }
     if(timeoutFrames>=0&&phaseFrames>=timeoutFrames) {
         if(lifeThreshold>0)health=lifeThreshold;
-        pendingCallback=timeoutCallback;return;
+        pendingCallback=timeoutCallback;callbackCause=CallbackCause::Timeout;return;
     }
     // 子行为返回后父行为必须同帧恢复；仅当前最深层行为在帧末增加局部时间。
     int budget=2048;
@@ -111,6 +173,15 @@ void Actor::Tick() {
         current.resume();
     }
     if(budget<=0)throw std::runtime_error("Behavior resume budget exhausted");
+    // 周期计数独立于最深协程时钟：子调用和回拨不能停止或重置自动发射。
+    // 本步行为先更新配方/开关，再递增内容计数并发弹，保留源周期的首发边界与 120 Hz 半帧。
+    if(emitterPeriod_>0&&!finished&&!pendingCallback) {
+        emitterElapsed_+=60.0/updateHz_;
+        while(emitterElapsed_>=emitterPeriod_) {
+            emitterElapsed_-=emitterPeriod_;
+            FireEmitterAt({motion.position.x+emitterSkills_.offset.x,motion.position.y+emitterSkills_.offset.y,motion.position.z+emitterSkills_.offset.z});
+        }
+    }
     if(liftedMotion)liftedMotion->EndFrame(motion,updateHz_);else motion.EndFrame(updateHz_);
     if(poses[3]>=0) {
         const float horizontal=motion.velocity.x*(motion.mirrored ? -1 : 1);
@@ -124,12 +195,13 @@ void Actor::Tick() {
     const double contentFrames=60.0/updateHz_;
     animationAge+=1.0/updateHz_;
     if(!stack_.empty())stack_.back().promise().frame+=contentFrames;
-    phaseFrames+=contentFrames;
+    if(!phaseClockPaused)phaseFrames+=contentFrames;
 }
 Routine Follow(Actor& actor,Pattern pattern) {
     actor.skills.spatial=pattern.spatialShots;
     actor.motion.Polar(pattern.movement.angle,pattern.movement.speed);
     actor.Animate(pattern.initialAnimation);actor.deathEffect=pattern.deathEffect;actor.skills.offset=pattern.muzzleOffset;
+    if(pattern.routine) { co_await pattern.routine(actor);co_return; }
     int movement=0;
     bool fired=!pattern.skill,animated=pattern.stoppedAnimation<0;
     while(movement<pattern.movement.count||!fired||!animated) {
@@ -145,6 +217,7 @@ Routine Follow(Actor& actor,Pattern pattern) {
     co_await actor.At(pattern.endFrame);actor.finished=true;
 }
 bool Valid(const Pattern& pattern) {
+    if(pattern.routine&&(pattern.movement.count!=0||pattern.skill||pattern.stoppedAnimation>=0))return false;
     if(!movement::Valid(pattern.movement)||pattern.endFrame<0||
        (pattern.movement.count>0&&pattern.movement.keys[pattern.movement.count-1].frame>pattern.endFrame))return false;
     return (!pattern.skill||(skill::Valid(*pattern.skill)&&pattern.skill->frame<=pattern.endFrame))&&
@@ -157,7 +230,7 @@ bool Valid(const Spawn& spawn) {
     const auto& bounds=spawn.retirementBounds;
     return (!spawn.retirementHeights||(std::isfinite(spawn.retirementHeights->x)&&std::isfinite(spawn.retirementHeights->y)&&
         spawn.retirementHeights->x<=spawn.retirementHeights->y))&&
-        Valid(spawn.pattern)&&std::isfinite(spawn.position.x)&&std::isfinite(spawn.position.y)&&std::isfinite(spawn.position.z)&&
+        Valid(spawn.pattern)&&spawn.initialAnimation>=-1&&std::isfinite(spawn.position.x)&&std::isfinite(spawn.position.y)&&std::isfinite(spawn.position.z)&&
         std::isfinite(spawn.sourceHealth)&&spawn.sourceHealth>0&&spawn.sourceScore>=0&&
         spawn.sourceItem>=-2&&spawn.sourceItem<=2&&spawn.visual!=kInvalidVisualId&&
         std::isfinite(spawn.hitRadius)&&spawn.hitRadius>0&&

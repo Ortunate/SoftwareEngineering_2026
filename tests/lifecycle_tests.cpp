@@ -116,6 +116,17 @@ struct GameLifecycleProbe {
 #endif
         reset();game.BeginStageBoss(false,3);game.boss_->position=position;
         assert(game.boss_->AdvancePhase());game.ResolveCollisions();assert(game.missCount_==0);
+        // 四面关闭本体接触的晶体仍吸收自机弹；隐藏/非交互发射体则同时退出接触、伤害和弹接触。
+        for(int mode=0;mode<3;++mode) {
+            reset();auto* actor=game.actors_.Spawn(MakeTarget(position));assert(actor);
+            actor->contactEnabled=false;
+            if(mode==1)actor->visible=false;
+            if(mode==2)actor->interactable=false;
+            auto* shot=game.bullets_.Spawn(BulletOwner::Player,position,{},0.1F,WHITE,stage1::kPlayerGoldCard);assert(shot);
+            game.ResolveCollisions();assert(game.missCount_==0&&actor->health==100);
+            assert(shot->active==(mode!=0));
+            if(mode==1) {game.ClearActorsWithEffects();assert(game.actorEffects_.Pool().ActiveCount()==0);}
+        }
         game.Reset();std::cout<<"Player/enemy/Boss body contacts and protection gates passed\n";
     }
 
@@ -806,14 +817,14 @@ struct GameLifecycleProbe {
         std::cout<<"Spatial Game trajectories identical at 30/60/120/144/240 FPS; sampled peak "<<peak<<" bullets\n";
     }
 
-    /// @brief 不跳过事件，按 60 Hz 从开场推进到结算，并渲染对话、每个 Boss 阶段和光束。
+    /// @brief 不跳过事件，按 60 Hz 推进一面到结算并验证正式切关；随后独立回归一面符卡练习和光束。
     static void TestWholeStage(Game& game, const std::string& prefix) {
         game.StartPreview();
         game.previewMode_ = false; // 本用例在临时目录验证标准模式成绩保存。
         bool midbossSeen = false, dialogueSeen = false;
         std::array<bool, 4> phases{};
         int frame = 0;std::size_t peakBullets=0;
-        for (; frame < 400 * 60 && game.state_ != RunState::Won; ++frame) {
+        for (; frame < 400 * 60 && game.state_ != RunState::StageClear; ++frame) {
             game.Update(1.0F / 60.0F);
             assert(game.bullets_.Pool().DroppedSpawns()==0);
             peakBullets=std::max(peakBullets,game.bullets_.Pool().ActiveCount());
@@ -855,11 +866,14 @@ struct GameLifecycleProbe {
             << " hp " << (game.boss_ ? game.boss_->health : -1) << " timer " << (game.boss_ ? game.boss_->phaseTimer : -1) << "\n";
         assert(frame < 400 * 60 && midbossSeen && dialogueSeen);
         for (bool seen : phases) assert(seen);
-        assert(game.state_ == RunState::Won && game.bullets_.Pool().ActiveCount() == 0);
-        assert(game.assets_.Stage().visuals.empty());
-        assert(game.bestScore_ >= 120000);
+        assert(game.state_ == RunState::StageClear && game.bullets_.Pool().ActiveCount() == 0);
+        assert(game.stageHighScores_.Best(false,1) >= 120000);
         Capture(game, prefix, "whole-stage-clear");
         std::cout << "Whole Stage 1 cleared at " << frame / 60.0F << " seconds; peak "<<peakBullets<<" / "<<BulletSystem::kCapacity<<" bullets\n";
+        game.ContinueStageClear();
+        assert(game.state_==RunState::Loading && game.stageId_==StageId::Stage2 && game.assets_.Stage().visuals.empty());
+        // 单关回归在二面加载入口结束；连续六关另有 TestCampaignTransitions，符卡用例仍须显式回到一面。
+        game.stageId_=StageId::Stage1;
 
         for (int phase : {2, 4}) {
             game.practiceMode_ = game.spellPractice_ = true;
@@ -897,6 +911,455 @@ struct GameLifecycleProbe {
         assert(game.bullets_.Pool().ActiveCount() == 0);
         game.StartPreview(); // 恢复整关模式，不能把练习设置泄漏给后续调用方。
         assert(!game.spellPractice_ && !game.practiceMode_ && !game.challengeMode_);
+    }
+
+    /// @brief 从二面实际开场运行两位自机的无攻击超时路线，覆盖五阶段、暂停、原始对白及资源卸载。
+    static void TestStage2(Game& game,const std::string& prefix) {
+        for(int character=0;character<2;++character) {
+            game.stageId_=StageId::Stage2;game.selectedCharacter_=character;game.selectedShot_=0;
+            game.StartPreview();
+            bool midboss=false,before=false,after=false,pauseChecked=false,opening=false,nameplate=false;
+            std::array<bool,5> phases{};std::size_t peak=0;int frame=0;
+            for(;frame<420*60&&game.state_!=RunState::Won;++frame) {
+                game.Update(1.0F/60);assert(game.state_!=RunState::GameOver);
+                assert(game.bullets_.Pool().DroppedSpawns()==0&&game.actors_.DroppedSpawns()==0);
+                peak=std::max(peak,game.bullets_.Pool().ActiveCount());
+                if(!opening&&frame>=12*60) {opening=true;Capture(game,prefix,"stage2-opening");}
+                if(game.dialogueActive_&&game.dialogueTimer_>1) {
+                    bool& seen=game.dialogueAfterBattle_ ? after : before;
+                    if(!seen) {
+                        seen=true;const auto name="stage2-dialogue-"+std::to_string(character)+(game.dialogueAfterBattle_?"-after":"-before");
+                        Capture(game,prefix,name.c_str());
+                    }
+                    float lineStart=0;const int line=game.DialogueIndex(&lineStart);
+                    if(!game.dialogueAfterBattle_&&!nameplate&&game.CurrentDialogue()[line].introduce&&
+                       game.dialogueTimer_-lineStart>0.75F&&GetScreenWidth()>500) {
+                        nameplate=true;
+                        Capture(game,prefix,"stage2-nameplate");
+                        const int width=GetScreenWidth(),height=GetScreenHeight();SetWindowSize(390,844);
+                        Capture(game,prefix,"stage2-dialogue-portrait");SetWindowSize(width,height);
+                    }
+                }
+                if(game.boss_&&game.boss_->active) {
+                    if(game.boss_->IsMidboss())midboss=true;
+                    else if(game.boss_->phase>=1&&game.boss_->phase<=5&&game.boss_->phaseTimer>5.1F) {
+                        const int phase=game.boss_->phase;
+                        if(!phases[phase-1]) {
+                            phases[phase-1]=true;const auto name="stage2-phase-"+std::to_string(phase);
+                            Capture(game,prefix,name.c_str());
+                        }
+                        if(phase==4&&!pauseChecked) {
+                            pauseChecked=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
+                            game.TogglePause();game.Update(0.5F);
+                            assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);
+                            game.TogglePause();
+                        }
+                    }
+                }
+            }
+            if(frame>=420*60)std::cerr<<"Stage 2 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            assert(frame<420*60&&midboss&&before&&after&&pauseChecked);
+            for(bool seen:phases)assert(seen);
+            assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty());
+            assert(game.bullets_.Pool().ActiveCount()==0&&EnemyCount(game)==0&&game.actorEffects_.Pool().ActiveCount()==0);
+            std::cout<<"Whole Stage 2 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
+        }
+        // 击破路线独立于超时：真实总控必须只生成一枚 Bomb，并将正 HP 符卡阈值视为取得。
+        game.stageId_=StageId::Stage2;game.selectedCharacter_=game.selectedShot_=0;
+        game.StartPreview();game.previewMode_=false;game.stage_=StageDirector{};
+        game.BeginStageBoss(false,100);
+        for(int tick=0;tick<130;++tick)game.Update(1.0F/120);
+        assert(game.boss_->CanTakeDamage());game.boss_->health=0;game.ResolveCollisions();
+        for(int tick=0;tick<5&&game.boss_->active;++tick)game.Update(1.0F/120);
+        assert(!game.boss_->active&&game.boss_->Defeated());
+        int bombItems=0;game.drops_.ForEachActive([&](const Pickup& pickup){bombItems+=pickup.kind==PickupKind::Bomb;});
+        assert(bombItems==1);Capture(game,prefix,"stage2-bomb-drop");
+        game.drops_.MagnetAllItems();
+        for(int tick=0;tick<240;++tick)game.UpdatePickups(1.0F/120);
+        assert(game.player_.Bombs()==4);
+        game.BeginStageBoss(true,101);
+        for(int phase=1;phase<=5;++phase) {
+            int ticks=0;
+            while(!game.boss_->CanTakeDamage()&&ticks++<600)game.Update(1.0F/120);
+            assert(ticks<600&&game.boss_->phase==phase);
+            const auto scoreBefore=game.score_;
+            game.boss_->health=phase==4 ? 1399 : 0;game.ResolveCollisions();
+            if(phase==4)assert(game.score_>scoreBefore&&game.spellBonus_>0&&game.boss_->phase==5);
+        }
+        for(int tick=0;tick<180&&game.boss_->active;++tick)game.Update(1.0F/120);
+        assert(!game.boss_->active&&game.boss_->Defeated());
+        for(int number:{11,15,18})assert(game.spellRecords_.Seen(0,number));
+        // 跨关切换必须清掉所有借用二面档案的对象，再重新加载一面。
+        game.stageId_=StageId::Stage1;game.selectedCharacter_=game.selectedShot_=0;
+        game.StartPreview();game.EnterMainMenu();assert(game.assets_.Stage().visuals.empty());
+    }
+
+    /// @brief 三面真实整关覆盖道中等待/对白、入场后开战、六阶段和子演员；击破路线另覆盖道中符卡。
+    static void TestStage3(Game& game,const std::string& prefix) {
+        for(int character=0;character<2;++character) {
+            game.stageId_=StageId::Stage3;game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
+            bool mid=false,midDialogue=false,before=false,after=false,nameplate=false,children=false,paused=false;
+            std::array<bool,6> phases{};std::size_t peak=0;int frame=0;
+            for(;frame<550*60&&game.state_!=RunState::Won;++frame) {
+                game.Update(1.0F/60);assert(game.state_!=RunState::GameOver);
+                assert(game.bullets_.Pool().DroppedSpawns()==0&&game.actors_.DroppedSpawns()==0);
+                peak=std::max(peak,game.bullets_.Pool().ActiveCount());
+                if(game.dialogueActive_&&game.dialogueTimer_>1) {
+                    const bool middle=game.dialogueScene_==DialogueScene::Midboss;
+                    bool& seen=middle ? midDialogue : game.dialogueAfterBattle_ ? after : before;
+                    if(!seen) {
+                        seen=true;const auto name="stage3-dialogue-"+std::to_string(character)+(middle ? "-mid" : game.dialogueAfterBattle_ ? "-after" : "-before");
+                        Capture(game,prefix,name.c_str());
+                    }
+                    if(middle)assert(!game.boss_->active&&game.state_==RunState::Playing);
+                    else if(!game.dialogueAfterBattle_)assert(game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                    float start=0;const int line=game.DialogueIndex(&start);
+                    if(!middle&&!game.dialogueAfterBattle_&&!nameplate&&game.CurrentDialogue()[line].introduce&&game.dialogueTimer_-start>0.75F) {
+                        nameplate=true;Capture(game,prefix,"stage3-nameplate");
+                        const int w=GetScreenWidth(),h=GetScreenHeight();SetWindowSize(390,844);Capture(game,prefix,"stage3-portrait");SetWindowSize(w,h);
+                    }
+                }
+                if(game.boss_&&game.boss_->active) {
+                    if(game.boss_->IsMidboss())mid=true;
+                    else if(game.boss_->phase>0&&game.boss_->phase<=6&&game.boss_->phaseTimer>5.1F) {
+                        const int phase=game.boss_->phase;
+                        if(!phases[phase-1]) {phases[phase-1]=true;const auto name="stage3-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());}
+                        if(phase==3&&EnemyCount(game)>0)children=true;
+                        if(phase==5&&!paused) {
+                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
+                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                        }
+                    }
+                }
+            }
+            if(frame>=550*60)std::cerr<<"Stage 3 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            assert(frame<550*60&&mid&&midDialogue&&before&&after&&nameplate&&children&&paused);for(bool seen:phases)assert(seen);
+            assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
+            std::cout<<"Whole Stage 3 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
+        }
+        game.stageId_=StageId::Stage3;game.selectedCharacter_=game.selectedShot_=0;game.StartPreview();
+        game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(false,100);
+        for(int tick=0;tick<210;++tick)game.Update(1.0F/120);assert(game.boss_->CanTakeDamage());
+        game.boss_->health=1299;game.ResolveCollisions();assert(game.boss_->phase==2&&!game.boss_->CanTakeDamage());
+        for(int tick=0;tick<245;++tick)game.Update(1.0F/120);assert(game.boss_->CanTakeDamage());
+        Capture(game,prefix,"stage3-midboss-spell");game.boss_->health=0;game.ResolveCollisions();
+        for(int tick=0;tick<370&&game.boss_->active;++tick)game.Update(1.0F/120);
+        assert(!game.boss_->active&&game.boss_->Defeated()&&game.spellRecords_.Seen(0,22));
+        game.BeginStageBoss(true,101);game.ResumeStageBoss();
+        for(int phase=1;phase<=6;++phase) {
+            int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
+            assert(ticks<700&&game.boss_->phase==phase);
+            if(phase==3) {
+                for(int tick=0;tick<450;++tick)game.Update(1.0F/120);
+                assert(EnemyCount(game)>=6);Capture(game,prefix,"stage3-summons");
+            }
+            const auto score=game.score_;game.boss_->health=phase==5 ? 1999 : 0;game.ResolveCollisions();
+            if(phase==5)assert(game.score_>score&&game.spellBonus_>0&&game.boss_->phase==6);
+        }
+        for(int tick=0;tick<180&&game.boss_->active;++tick)game.Update(1.0F/120);
+        assert(!game.boss_->active&&game.boss_->Defeated());for(int card:{26,32,35})assert(game.spellRecords_.Seen(0,card));
+        game.stageId_=StageId::Stage2;game.StartPreview();game.EnterMainMenu();assert(game.assets_.Stage().visuals.empty());
+    }
+
+    /// @brief 新关卡可保留对白开始前的场上对象；默认一面策略仍清除演员/敌弹并保留自机弹。
+    static void TestDialogueClearPolicy(Game& game) {
+        game.stageId_=StageId::Stage1;game.StartPreview();game.stage_=StageDirector{};
+        auto spawn=testing::SpawnAt({1,2,5},stage1::kFairy,100,0.4F);auto* actor=game.actors_.Spawn(spawn);
+        auto* enemy=game.bullets_.Spawn(BulletOwner::Enemy,{1,2,3},{},0.1F,WHITE,stage1::kBlueBullet);
+        auto* player=game.bullets_.Spawn(BulletOwner::Player,{1,2,3},{},0.1F,WHITE,stage1::kPlayerGoldCard);
+        assert(actor&&enemy&&player);game.BeginStageDialogue(1,false,DialogueScene::FinalBoss,DialogueClearPolicy::PreserveWorld);
+        assert(actor->active&&enemy->active&&player->active);
+        game.BeginStageDialogue(2);assert(!actor->active&&!enemy->active&&player->active);game.EnterMainMenu();
+    }
+
+    /// @brief 时停冻结玩家、弹幕、道具和背景，敌人脚本/移动继续；既有持续伤害和 Bomb 区域仍可接触敌人。
+    static void TestWorldTimeClock(Game& game,const std::string& prefix) {
+        struct ClockBoss final:Boss {
+            bool stopped=true;
+            ClockBoss() {active=true;phase=1;health=maxHealth=1000;visual=stage1::kRumia;position={0,0,4};}
+            bool Update(float seconds,Vector3,BulletSystem&) override {phaseTimer+=seconds;return false;}
+            bool AdvancePhase() override {return true;}
+            const char* SpellName() const override {return nullptr;}
+            bool IsMidboss() const override {return false;}
+            const char* DisplayName() const override {return "Clock probe";}
+            bool ControlsWorldTime() const override {return true;}
+            bool WorldTimeStopped() const override {return stopped;}
+            bool CanContactPlayer() const override {return false;}
+        };
+        game.stageId_=StageId::Stage1;game.selectedCharacter_=game.selectedShot_=0;game.StartPreview();game.stage_=StageDirector{};
+        game.boss_=std::make_unique<ClockBoss>();auto* clock=static_cast<ClockBoss*>(game.boss_.get());
+        game.player_.SetInvulnerability(0);game.debugInvincible_=false;
+        const auto playerPosition=game.player_.Position();const auto visualAge=game.player_.VisualAge();
+        auto* contact=game.bullets_.Spawn(BulletOwner::Enemy,playerPosition,{},0.1F,WHITE,stage1::kBlueBullet);
+        auto* enemy=game.bullets_.Spawn(BulletOwner::Enemy,{1,2,3},{1,0,0},0.1F,WHITE,stage1::kBlueBullet);
+        auto* laser=game.bullets_.Spawn(BulletOwner::Player,clock->position,{},0.1F,WHITE,stage1::kPlayerGoldCard);
+        laser->playerShotKind=PlayerShotKind::Laser;laser->damage=0;laser->damagePerSecond=60;laser->age=0.3F;
+        auto spawn=testing::SpawnAt({3,1,5},stage1::kFairy,1000,0.4F);spawn.pattern.movement={.angle=0,.speed=1};
+        auto* actor=game.actors_.Spawn(spawn);assert(actor);game.drops_.SpawnNativeItem({2,3,5},0,false);
+        PlayerInput input;input.moveRight=true;input.fire=true;input.mouseDelta={4,3};
+        for(int tick=0;tick<60;++tick)game.UpdateBattleStep(1.0F/120,input,false,false);
+        assert(game.player_.Position().x==playerPosition.x&&game.player_.VisualAge()==visualAge&&game.missCount_==0&&game.graze_==0);
+        assert(enemy->position.x==1&&enemy->age==0&&laser->age==0.3F&&contact->active&&!contact->grazed);
+        assert(actor->position.x>3.4F&&actor->phaseFrames==0&&actor->animationAge>0.49);
+        game.drops_.ForEachActive([](const Pickup& item){assert(item.age==0);});
+        if(std::abs(clock->health-976)>=0.01F||game.scenerySeconds_!=0||game.stage_.Elapsed()<=0.49F)
+            std::cerr<<"World clock witness health="<<clock->health<<" scenery="<<game.scenerySeconds_<<" timeline="<<game.stage_.Elapsed()<<'\n';
+        assert(std::abs(clock->health-976)<0.01F&&game.scenerySeconds_==0&&game.stage_.Elapsed()>0.49F);
+        Capture(game,prefix,"world-time-stopped");
+        contact->active=false;clock->stopped=false;game.UpdateBattleStep(1.0F/120,input,false,false);
+        assert(game.player_.Position().x!=playerPosition.x&&enemy->position.x>1&&game.scenerySeconds_>0&&actor->phaseFrames>0);
+        game.bullets_.Reset();game.actors_.Clear();game.drops_.Clear();clock->health=clock->maxHealth=1000000;
+        game.player_.ConfigureRun(3,3,false,ShotType::Needle);game.ApplyBombEffect();
+        for(int tick=0;tick<300&&game.playerBomb_.Attacks().empty();++tick)game.UpdateBattleStep(1.0F/120,{},false,false);
+        assert(!game.playerBomb_.Attacks().empty());clock->position=game.playerBomb_.Attacks().front().volume.origin;
+        int contactDamage=0;for(int damage:game.playerBomb_.ContactDamage(clock->position,clock->hitRadius))contactDamage+=damage;assert(contactDamage>0);
+        clock->stopped=true;const int bombFrame=game.playerBomb_.Frame();const float health=clock->health;
+        auto* frozen=game.bullets_.Spawn(BulletOwner::Enemy,clock->position,{},0.1F,WHITE,stage1::kBlueBullet);
+        for(int tick=0;tick<60;++tick)game.UpdateBattleStep(1.0F/120,{},false,false);
+        assert(game.playerBomb_.Frame()==bombFrame&&clock->health<health&&frozen->active&&frozen->age==0);
+        const auto elapsed=game.stage_.Elapsed();game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==elapsed);game.TogglePause();
+        frozen->active=false;clock->stopped=false;for(int tick=0;tick<2;++tick)game.UpdateBattleStep(1.0F/120,{},false,false);
+        assert(game.playerBomb_.Frame()>bombFrame);game.EnterMainMenu();assert(!game.WorldTimeStopped()&&game.assets_.Stage().visuals.empty());
+    }
+
+    /// @brief 四面两角色整关超时路线及四机体击破路线；覆盖延迟符卡宣告、召唤、激光、暂停与跨关释放。
+    static void TestStage4(Game& game,const std::string& prefix) {
+        for(int character=0;character<2;++character) {
+            game.stageId_=StageId::Stage4;game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
+            bool mid=false,before=false,after=false,nameplate=false,children=false,paused=false,beams=false;
+            std::array<bool,6> phases{};std::size_t peak=0;int frame=0;
+            for(;frame<700*60&&game.state_!=RunState::Won;++frame) {
+                game.Update(1.0F/60);assert(game.state_!=RunState::GameOver);
+                assert(game.bullets_.Pool().DroppedSpawns()==0&&game.actors_.DroppedSpawns()==0);
+                peak=std::max(peak,game.bullets_.Pool().ActiveCount());
+                game.bullets_.Pool().ForEachActive([&](const Bullet& bullet){beams|=bullet.owner==BulletOwner::Enemy&&bullet.IsBeam();});
+                if(game.dialogueActive_&&game.dialogueTimer_>1) {
+                    bool& seen=game.dialogueAfterBattle_ ? after : before;
+                    if(!seen) {seen=true;const auto name="stage4-dialogue-"+std::to_string(character)+(game.dialogueAfterBattle_ ? "-after" : "-before");Capture(game,prefix,name.c_str());}
+                    if(!game.dialogueAfterBattle_)assert(game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                    float start=0;const int line=game.DialogueIndex(&start);
+                    if(!game.dialogueAfterBattle_&&!nameplate&&game.CurrentDialogue()[line].introduce&&game.dialogueTimer_-start>0.75F) {
+                        nameplate=true;Capture(game,prefix,"stage4-nameplate");const int w=GetScreenWidth(),h=GetScreenHeight();
+                        SetWindowSize(390,844);Capture(game,prefix,"stage4-portrait");SetWindowSize(w,h);
+                    }
+                }
+                if(game.boss_&&game.boss_->active) {
+                    if(game.boss_->IsMidboss()) {mid=true;children|=EnemyCount(game)>0;}
+                    else if(game.boss_->phase>0&&game.boss_->phase<=6&&game.boss_->phaseTimer>5.1F) {
+                        const int phase=game.boss_->phase;
+                        if(!phases[phase-1]) {phases[phase-1]=true;const auto name="stage4-character-"+std::to_string(character)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());}
+                        if(phase==5&&!paused) {
+                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
+                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                        }
+                    }
+                }
+            }
+            if(frame>=700*60)std::cerr<<"Stage 4 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            assert(frame<700*60&&mid&&before&&after&&nameplate&&children&&paused&&beams);for(bool seen:phases)assert(seen);
+            assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
+            std::cout<<"Whole Stage 4 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
+        }
+        constexpr std::array<std::array<int,4>,4> cards{{{39,58,67,78},{46,51,75,78},{50,40,71,82},{57,63,82,75}}};
+        for(int shot=0;shot<4;++shot) {
+            game.stageId_=StageId::Stage4;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();
+            game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(false,100);
+            for(int tick=0;tick<65;++tick)game.Update(1.0F/120);assert(game.boss_->CanTakeDamage());
+            game.boss_->health=0;game.ResolveCollisions();
+            for(int tick=0;tick<10&&game.boss_->active;++tick)game.Update(1.0F/120);
+            assert(!game.boss_->active&&game.boss_->Defeated());
+            game.BeginStageBoss(true,101);game.ResumeStageBoss();
+            for(int phase=1;phase<=6;++phase) {
+                int ticks=0;bool announced=false;
+                while(!game.boss_->CanTakeDamage()&&ticks++<700) {
+                    game.Update(1.0F/120);
+                    if(phase>=5&&!announced&&game.boss_->SpellCardNumber()>0) {announced=true;assert(game.spellAttemptOpen_&&game.spellCutInTimer_>1.9F);}
+                }
+                assert(ticks<700&&game.boss_->phase==phase);
+                for(int tick=0;tick<260;++tick)game.Update(1.0F/120);
+                const auto name="stage4-shot-"+std::to_string(shot)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());
+                if(phase==5||phase==6)assert(game.spellAttemptOpen_&&announced);
+                const auto score=game.score_;game.boss_->health=phase==5 ? 1699 : 0;game.ResolveCollisions();
+                if(phase==5)assert(game.score_>score&&game.boss_->phase==6&&!game.boss_->CanTakeDamage());
+            }
+            for(int tick=0;tick<150&&game.boss_->active;++tick)game.Update(1.0F/120);
+            assert(!game.boss_->active&&game.boss_->Defeated());for(int card:cards[shot])assert(game.spellRecords_.Seen(shot,card));
+        }
+        game.stageId_=StageId::Stage3;game.StartPreview();game.EnterMainMenu();assert(game.assets_.Stage().visuals.empty());
+    }
+
+
+    /// @brief 五面两角色整关超时与四机体击破，覆盖道中对白、时停冻结/恢复、召唤体和完整资源释放。
+    static void TestStage5(Game& game,const std::string& prefix) {
+        for(int character=0;character<2;++character) {
+            game.stageId_=StageId::Stage5;game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
+            bool mid=false,midDialogue=false,before=false,after=false,children=false,paused=false;
+            std::array<bool,6> phases{};std::array<bool,3> stops{};std::size_t peak=0;int frame=0;
+            for(;frame<1100*60&&game.state_!=RunState::Won;++frame) {
+                game.Update(1.0F/60);assert(game.state_!=RunState::GameOver);
+                assert(game.bullets_.Pool().DroppedSpawns()==0&&game.actors_.DroppedSpawns()==0);
+                peak=std::max(peak,game.bullets_.Pool().ActiveCount());
+                if(game.dialogueActive_&&game.dialogueTimer_>1) {
+                    bool& seen=game.dialogueScene_==DialogueScene::Midboss ? midDialogue : game.dialogueAfterBattle_ ? after : before;
+                    if(!seen) {seen=true;const auto name="stage5-dialogue-"+std::to_string(character)+(game.dialogueScene_==DialogueScene::Midboss ? "-mid" : game.dialogueAfterBattle_ ? "-after" : "-before");Capture(game,prefix,name.c_str());}
+                    if(!game.dialogueAfterBattle_)assert(game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                }
+                if(game.boss_&&game.boss_->active) {
+                    if(game.boss_->IsMidboss())mid=true;
+                    else if(game.boss_->phase>0&&game.boss_->phase<=6) {
+                        const int phase=game.boss_->phase;children|=EnemyCount(game)>0;
+                        if(game.boss_->phaseTimer>5.1F&&!phases[phase-1]) {
+                            phases[phase-1]=true;const auto name="stage5-character-"+std::to_string(character)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());
+                        }
+                        if(game.WorldTimeStopped()) {
+                            assert(!game.boss_->CanBeTargeted()&&!game.boss_->CanTakeDamage());
+                            const int group=phase/2-1;assert(group>=0&&group<3);
+                            if(!stops[group]) {stops[group]=true;const auto name="stage5-time-stop-"+std::to_string(group);Capture(game,prefix,name.c_str());}
+                            if(!paused) {
+                                paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
+                                game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                            }
+                        }
+                    }
+                }
+            }
+            if(frame>=1100*60)std::cerr<<"Stage 5 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            assert(frame<1100*60&&mid&&midDialogue&&before&&after&&children&&paused);
+            for(bool seen:phases)assert(seen);for(bool stopped:stops)assert(stopped);
+            assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
+            std::cout<<"Whole Stage 5 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
+        }
+        for(int shot=0;shot<4;++shot) {
+            game.stageId_=StageId::Stage5;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();
+            game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(false,100);game.ResumeStageBoss();
+            for(int phase=1;phase<=2;++phase) {
+                int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
+                assert(ticks<700&&game.boss_->phase==phase);game.boss_->health=0;game.ResolveCollisions();
+            }
+            for(int tick=0;tick<400&&game.boss_->active;++tick)game.Update(1.0F/120);
+            assert(!game.boss_->active&&game.boss_->Defeated());game.BeginStageBoss(true,101);game.ResumeStageBoss();
+            for(int phase=1;phase<=6;++phase) {
+                int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
+                assert(ticks<700&&game.boss_->phase==phase);game.boss_->health=0;game.ResolveCollisions();
+            }
+            for(int tick=0;tick<150&&game.boss_->active;++tick)game.Update(1.0F/120);
+            assert(!game.boss_->active&&game.boss_->Defeated());for(int card:{86,90,94,98})assert(game.spellRecords_.Seen(shot,card));
+        }
+        game.stageId_=StageId::Stage4;game.StartPreview();game.EnterMainMenu();assert(game.assets_.Stage().visuals.empty());
+    }
+
+
+    /// @brief 六面两角色整关超时，验证对白中入场/首次恢复/结束后开战、九阶段、静默收尾和资源释放。
+    static void TestStage6(Game& game,const std::string& prefix) {
+        for(int character=0;character<2;++character) {
+            game.stageId_=StageId::Stage6;game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
+            bool mid=false,midDialogue=false,before=false,after=false,signalBirth=false,prelude=false,children=false,beams=false,paused=false;
+            std::array<bool,9> phases{};std::size_t peak=0;int frame=0;
+            for(;frame<1300*60&&game.state_!=RunState::Won;++frame) {
+                game.Update(1.0F/60);assert(game.state_!=RunState::GameOver);
+                if(game.bullets_.Pool().DroppedSpawns()||game.actors_.DroppedSpawns())
+                    std::cerr<<"Stage 6 dropped at "<<frame<<" stage "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)
+                        <<" timer "<<(game.boss_?game.boss_->phaseTimer:-1)<<" actors "<<EnemyCount(game)<<" bullets "<<game.bullets_.Pool().ActiveCount()
+                        <<" actor drops "<<game.actors_.DroppedSpawns()<<" bullet drops "<<game.bullets_.Pool().DroppedSpawns()<<'\n';
+                assert(game.bullets_.Pool().DroppedSpawns()==0&&game.actors_.DroppedSpawns()==0);peak=std::max(peak,game.bullets_.Pool().ActiveCount());
+                game.bullets_.Pool().ForEachActive([&](const Bullet& b){beams|=b.owner==BulletOwner::Enemy&&b.IsBeam();});
+                if(game.dialogueActive_) {
+                    if(game.dialogueScene_==DialogueScene::Midboss)midDialogue=true;
+                    else if(game.dialogueAfterBattle_) {
+                        assert(game.CurrentDialogue().empty());assert(std::abs(game.DialogueDuration()-1)<1e-5F);if(!after)Capture(game,prefix,"stage6-silent-ending");after=true;
+                    } else {
+                        if(!before&&game.dialogueTimer_>1) {before=true;const auto name="stage6-dialogue-"+std::to_string(character);Capture(game,prefix,name.c_str());}
+                        if(game.boss_&&game.boss_->active&&!game.boss_->IsMidboss()) {
+                            signalBirth=true;assert(game.dialogueSignalsSeen_>=1&&game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                            if(game.dialogueSignalsSeen_>=2)prelude=true;
+                        }
+                    }
+                }
+                if(game.boss_&&game.boss_->active) {
+                    if(game.boss_->IsMidboss())mid=true;
+                    else if(game.boss_->phase>0&&game.boss_->phase<=9) {
+                        const int phase=game.boss_->phase;children|=EnemyCount(game)>0;
+                        if(game.boss_->phaseTimer>5.1F&&!phases[phase-1]) {
+                            phases[phase-1]=true;const auto name="stage6-character-"+std::to_string(character)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());
+                        }
+                        if(phase==9&&!paused) {
+                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
+                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                        }
+                    }
+                }
+            }
+            if(frame>=1300*60)std::cerr<<"Stage 6 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            assert(frame<1300*60&&mid&&midDialogue&&before&&after&&signalBirth&&prelude&&children&&beams&&paused);for(bool seen:phases)assert(seen);
+            assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
+            std::cout<<"Whole Stage 6 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
+        }
+        for(int shot=0;shot<4;++shot) {
+            game.stageId_=StageId::Stage6;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();game.previewMode_=false;
+            game.stage_=StageDirector{};game.BeginStageBoss(false,100);game.ResumeStageBoss();
+            for(int phase=1;phase<=2;++phase) {
+                int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
+                assert(ticks<700&&game.boss_->phase==phase);game.boss_->health=0;game.ResolveCollisions();
+            }
+            for(int tick=0;tick<10&&game.boss_->active;++tick)game.Update(1.0F/120);
+            assert(!game.boss_->active&&game.boss_->Defeated());game.BeginStageBoss(true,101);game.ResumeStageBoss();game.Update(1.0F/60);game.ResumeStageBoss();
+            for(int phase=1;phase<=9;++phase) {
+                int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
+                assert(ticks<700&&game.boss_->phase==phase);
+                if(phase==9) {
+                    const float health=game.boss_->health;game.UpdateBattleStep(1.0F/120,PlayerInput{.bomb=true},false,false);
+                    assert(game.playerBomb_.Active()&&!game.boss_->CanBeTargeted()&&!game.boss_->CanTakeDamage()&&game.boss_->health==health);
+                    const auto name="stage6-bomb-bat-"+std::to_string(shot);Capture(game,prefix,name.c_str());
+                    int recovery=0;while(!game.boss_->CanTakeDamage()&&recovery++<2400)game.Update(1.0F/120);
+                    assert(recovery<2400&&!game.playerBomb_.Active()&&game.boss_->health==health);
+                }
+                game.boss_->health=0;game.ResolveCollisions();
+            }
+            for(int tick=0;tick<150&&game.boss_->active;++tick)game.Update(1.0F/120);
+            assert(!game.boss_->active&&game.boss_->Defeated());for(int card:{101,104,107,110,113,116})assert(game.spellRecords_.Seen(shot,card));
+        }
+        game.stageId_=StageId::Stage5;game.StartPreview();game.EnterMainMenu();assert(game.assets_.Stage().visuals.empty());
+    }
+
+
+    /// @brief 逐一通过正式结算/异步加载切换所有已登记关卡，保留本局资源并清除旧关借用者；练习与预览独立结束。
+    static void TestCampaignTransitions(Game& game,const std::string& prefix) {
+        game.stageId_=StageId::Stage1;game.selectedCharacter_=1;game.selectedShot_=1;game.StartPreview();game.previewMode_=false;
+        game.player_.ConfigureRun(4,2,false,ShotType::IllusionLaser);game.player_.AdjustPower(97-game.player_.Power());
+        game.score_=12345;game.graze_=75;game.pointItems_=25;game.missCount_=2;game.bombCount_=1;game.referenceRank_=23;
+        const auto lives=game.player_.RemainingLives(),bombs=game.player_.Bombs(),power=game.player_.Power();
+        int visited=0;
+        for(const auto stage:kPracticeStages) {
+            if(!stage)break;++visited;assert(game.stageId_==*stage&&game.state_==RunState::Playing);
+            game.stage_=StageDirector{};game.referenceSubrank_=59;game.rankTime_=3;game.stageGraze_=11;game.stagePointItems_=7;
+            auto* actor=game.actors_.Spawn(testing::SpawnAt({0,0,4},stage1::kFairy,100,0.4F));assert(actor);
+            game.UpdateActor(*actor,1.0F/120);
+            assert(game.actorEffects_.Spawn(actor->visual,actor->position,actor->hitRadius,actor->presentation,ActorExitReason::Retreat,&actor->animation.player.Sample()));
+            game.player_.SetView(0.8F,0.3F);const auto before=game.score_;game.BeginStageClear();
+            const auto bonus=game.stageClearSummary_.Total();assert(game.score_==before+bonus&&game.stageClearSummary_.graze==11&&game.stageClearSummary_.pointItems==7);
+            const auto next=NextStage(*stage);game.ContinueStageClear();
+            if(!next) {
+                assert(game.state_==RunState::Finishing);for(int tick=0;tick<200&&game.state_==RunState::Finishing;++tick)game.Update(1.0F/60);
+                assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty());break;
+            }
+            assert(game.state_==RunState::Loading&&game.stageId_==*next&&game.assets_.Stage().visuals.empty());
+            assert(EnemyCount(game)==0&&game.actorEffects_.Pool().ActiveCount()==0&&game.bullets_.Pool().ActiveCount()==0&&PickupCount(game)==0);
+            const double deadline=GetTime()+60;
+            while(game.state_==RunState::Loading) {
+                assert(GetTime()<deadline&&!game.loadingFailed_);game.Update(1.0F/60);
+                BeginDrawing();ClearBackground(BLACK);game.Draw();EndDrawing();
+            }
+            assert(game.state_==RunState::Playing&&game.stage_.Elapsed()==0);
+            assert(game.score_==before+bonus&&game.graze_==75&&game.pointItems_==25&&game.missCount_==2&&game.bombCount_==1);
+            assert(game.stageGraze_==0&&game.stagePointItems_==0&&game.referenceRank_==23&&game.referenceSubrank_==0&&game.rankTime_==0);
+            assert(game.player_.RemainingLives()==lives&&game.player_.Bombs()==bombs&&game.player_.Power()==power&&game.player_.Shot()==ShotType::IllusionLaser);
+            assert(game.player_.Position().x==0&&game.player_.Position().y==0&&game.player_.Position().z==-6.5F);
+            const auto name="campaign-stage-"+std::to_string(StageNumber(*next));Capture(game,prefix,name.c_str());
+        }
+        assert(visited==6);game.stageId_=StageId::Stage1;game.StartPreview();game.BeginStageClear();game.ContinueStageClear();
+        assert(game.state_==RunState::Finishing&&game.stageId_==StageId::Stage1);
+        game.StartPreview();game.previewMode_=false;game.practiceMode_=true;game.BeginStageClear();game.ContinueStageClear();
+        assert(game.state_==RunState::Finishing&&game.stageId_==StageId::Stage1);game.EnterMainMenu();
     }
 
     /// @brief 通过正式开局绑定检查两种御札，并渲染真实追踪弹和侧针，防止生成正常而素材/动画不可见。
@@ -1345,7 +1808,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --stage-only、--lifecycle-only、--spatial-only、--actor-contacts-only、--viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --campaign-only、--stage6-only、--stage5-only、--world-clock-only、--stage4-only、--stage3-only、--stage2-only、--stage-only、--lifecycle-only、--spatial-only、--actor-contacts-only、--viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
 /// 仅 --bomb-audio-only 初始化音频且强制静音，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -1365,6 +1828,21 @@ int main(int argc, char** argv) {
         SetTargetFPS(0);
         if(audioTest) {
             koumakyou::GameLifecycleProbe::TestPlayerBombAudio(*game);
+        } else if(argc>=3 && std::string(argv[2])=="--world-clock-only") {
+            koumakyou::GameLifecycleProbe::TestDialogueClearPolicy(*game);
+            koumakyou::GameLifecycleProbe::TestWorldTimeClock(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--campaign-only") {
+            koumakyou::GameLifecycleProbe::TestCampaignTransitions(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--stage6-only") {
+            koumakyou::GameLifecycleProbe::TestStage6(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--stage5-only") {
+            koumakyou::GameLifecycleProbe::TestStage5(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--stage4-only") {
+            koumakyou::GameLifecycleProbe::TestStage4(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--stage3-only") {
+            koumakyou::GameLifecycleProbe::TestStage3(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--stage2-only") {
+            koumakyou::GameLifecycleProbe::TestStage2(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--stage-only") {
             koumakyou::GameLifecycleProbe::TestWholeStage(*game,prefix);
             koumakyou::GameLifecycleProbe::TestActorLifecycle(*game,prefix);

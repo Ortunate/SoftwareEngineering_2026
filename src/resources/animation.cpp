@@ -92,6 +92,10 @@ void Player::SetSprite(int id) {
     if(!sprite)throw std::runtime_error("Animation references unavailable sprite");
     frame_.sprite=id;frame_.source=sprite->source;
 }
+void Player::SetRotationZ(float radians) {
+    if(!std::isfinite(radians))throw std::invalid_argument("Non-finite animation rotation");
+    frame_.rotation.z=radians;
+}
 void Player::Start(const Archive& archive,int id,int offset,int initial,std::uint32_t seed) {
     *this=Player{};archive_=&archive;script_=archive.FindScript(id);
     if(!script_)throw std::runtime_error("Unknown ANM script: "+std::to_string(id));

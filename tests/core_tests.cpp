@@ -375,10 +375,21 @@ void RunAnimationTests();
 void RunBehaviorTests();
 /// @brief 独立验证一面的空间面积采样、三维弹道和等路程移动。
 void RunSpatialBehaviorTests();
+/// @brief 验证二面独立出生、轨迹、Boss 生命/时限、对话及新道具能力。
+void RunStage2Tests();
+void RunStage3Tests();
+void RunStage4Tests();
+void RunStage5Tests();
+void RunStage6Tests();
 
 int main() {
     RunBehaviorTests();
     RunSpatialBehaviorTests();
+    RunStage2Tests();
+    RunStage3Tests();
+    RunStage4Tests();
+    RunStage5Tests();
+    RunStage6Tests();
     assert(koumakyou::ui::BossSeconds(35,0)==35 && koumakyou::ui::BossSeconds(35,0.01F)==34);
     assert(koumakyou::ui::BossSeconds(25,5)==20 && koumakyou::ui::BossSeconds(25,25)==0);
     assert(koumakyou::ui::BossSeconds(25,26)==0 && koumakyou::ui::BossSeconds(-1,0)==-1);

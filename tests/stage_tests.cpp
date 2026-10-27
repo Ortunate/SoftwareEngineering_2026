@@ -1,4 +1,4 @@
-// 本文件负责验证带参事件、连续出怪时序、异步依赖与第一面内容工厂。
+// 本文件负责验证带参事件、连续出怪时序、异步依赖及已注册关卡的内容工厂。
 
 #include "actor_fixture.hpp"
 #include "gameplay/actors/behavior.hpp"
@@ -203,6 +203,9 @@ void TestInvalidEvents() {
     assert(rejects({.action=SpawnActors{invalid}}));
     assert(rejects({.action = StartBoss{}}));
     assert(rejects({.action = StartDialogue{}}));
+    assert(rejects({.action=WaitDialogueSignal{}}));
+    assert(rejects({.action=WaitDialogueSignal{-1},.id=1}));
+    assert(rejects({.action=StartDialogue{false,DialogueScene::FinalBoss,static_cast<DialogueClearPolicy>(99)},.id=20}));
     assert(rejects({.action = StartBoss{static_cast<BossEncounter>(999)}, .id = 1}));
     StageDirector empty;
     for (float value : {-1.0F, infinity, nan}) {
@@ -237,7 +240,10 @@ struct EventProbe final : StageEventSink {
         if (final) ++finalBosses;
         else { ++midbosses; midbossId = id; }
     }
-    void BeginStageDialogue(StageEventId id, bool = false) override { ++dialogues; dialogueId = id; }
+    void BeginStageDialogue(StageEventId id, bool = false,DialogueScene=DialogueScene::FinalBoss,
+        DialogueClearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets) override { ++dialogues; dialogueId = id; }
+    void ResumeStageBoss() override {}
+    bool AwaitStageDialogueSignal(StageEventId,int) override {return false;}
     void StageMessage(std::string_view text, float duration) override {
         assert(!text.empty() && duration > 0.0F);
         ++messages;
@@ -372,6 +378,25 @@ void TestStage1Content() {
     assert(content->ScorePickupVisual() == stage1::kScorePoint);
     assert(content->StarPickupVisual() == stage1::kStarPoint);
 }
+/// @brief 六关必须同时可选、可构造且按闯关顺序衔接；非法编号不得别名到已有内容。
+void TestPlayableCatalog() {
+    constexpr std::array<StageId,6> expected{StageId::Stage1,StageId::Stage2,StageId::Stage3,
+        StageId::Stage4,StageId::Stage5,StageId::Stage6};
+    for(std::size_t index=0;index<expected.size();++index) {
+        const auto id=expected[index];
+        assert(kPracticeStages[index]==id && StageNumber(id)==static_cast<int>(index)+1);
+        assert(NextStage(id)==(index+1<expected.size() ? std::optional{expected[index+1]} : std::nullopt));
+        const auto content=CreateStageContent(id);
+        assert(content && !content->Events().empty() && !content->Assets().visuals.empty());
+        StageDirector director(content->Events()); // 同时验证所有生产事件表的依赖和参数约束。
+        assert(content->CreateBoss(false) && content->CreateBoss(true));
+    }
+    const auto invalid=static_cast<StageId>(255);
+    assert(StageNumber(invalid)==0 && !NextStage(invalid));
+    bool rejected=false;
+    try { (void)CreateStageContent(invalid); } catch(const std::invalid_argument&) {rejected=true;}
+    assert(rejected);
+}
 }  // namespace
 
 /// @brief 执行关卡事件、连续出怪与内容契约测试；断言失败时终止进程。
@@ -381,4 +406,5 @@ void RunStageTests() {
     TestSpawnCancellation();
     TestInvalidEvents();
     TestStage1Content();
+    TestPlayableCatalog();
 }

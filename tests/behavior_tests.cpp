@@ -348,10 +348,28 @@ void TestRuntime120Hz() {
     Equal(interpolated.position,{12,6,-3},"120.interpolationDuration");
     std::cout<<"Validated default 120 Hz behavior at 30/60/120/144/240 FPS; content timing remains 60 Hz\n";
 }
+
+behavior::Routine RewindChild(behavior::Actor& actor) {actor.soundEvents.push_back(7);co_await actor.At(5);}
+behavior::Routine RewindParent(behavior::Actor& actor) {
+    co_await actor.At(10);
+    for(int cycle=0;cycle<3;++cycle) {co_await RewindChild(actor);co_await actor.At(20);actor.Rewind(10);}
+    actor.finished=true;
+}
+/// @brief 回拨后立即调用子行为，旧 due 已消费；第二轮不得被上一轮等待点额外阻塞十帧。
+void TestRewindThenChild() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(auto rate:{behavior::UpdateRate::Hz60,behavior::UpdateRate::Hz120}) {
+        behavior::Actor actor(rate);actor.Reset({},1,7);actor.Start(RewindParent(actor));
+        for(int frame=0;frame<=55;++frame) {
+            actor.Update(1.0F/60,{},*bullets);assert(actor.soundEvents.size()==(frame==10||frame==25||frame==40 ? 1U : 0U));
+        }
+        assert(actor.finished);
+    }
+}
 } // namespace
 /// @brief 运行无窗口行为差分，失败输出原子程序与首次不一致帧；不读取原游戏安装或解包缓存。
 void RunBehaviorTests() {
-    TestWorldCoordinates();TestRuntime120Hz();TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
+    TestWorldCoordinates();TestRuntime120Hz();TestRewindThenChild();TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
     for(int sub:{0,1,2,3,4,5,6,7,8,9,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}) {
         if(!covered[sub]) { std::cerr<<"Uncovered original Sub"<<sub<<'\n';std::abort(); }
     }

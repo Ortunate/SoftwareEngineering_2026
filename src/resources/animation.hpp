@@ -55,6 +55,8 @@ public:
     bool Interrupt(int label);
     /// @brief 替换当前精灵，不重启脚本，供原作激光/特效的外部控制使用。
     void SetSprite(int id);
+    /// @brief 外部演员方向覆盖当前局部 Z 旋转（弧度）；不重启动画或改变旋转速度，非有限值抛异常。
+    void SetRotationZ(float radians);
     [[nodiscard]] const Frame& Sample() const { return frame_; }
     [[nodiscard]] bool Finished() const { return finished_; }
     [[nodiscard]] int ScriptId() const { return script_ ? script_->id : -1; }

@@ -112,10 +112,11 @@ void Game::SaveSettings() const {
     }
 }
 
-void Game::StartRun(bool captureCursor, bool synchronous) {
+void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
     FinishSpellRecord(false);
     spellCaptured_=false;
     previewMode_ = false;
+    continuingStage_=continuingStage;
     // 先移除所有借用旧关卡资源的对象，再取消旧任务并释放纹理及清单。
     actorEffects_.Clear();
     bullets_.Reset();
@@ -129,6 +130,7 @@ void Game::StartRun(bool captureCursor, bool synchronous) {
     stage_ = StageDirector{};
     stageContent_ = CreateStageContent(stageId_);
     stage_ = StageDirector(stageContent_->Events());
+    scenerySeconds_=0;
     loadingSeconds_ = 0;
     loadingStarted_ = loadingFailed_ = false;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -169,10 +171,14 @@ void Game::CompleteStartRun() {
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
     playerOptionAnimations_ = {};
-    player_.Reset();
-    player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,
-                         static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
-    missCount_ = bombCount_ = 0;
+    if(!continuingStage_) {
+        player_.Reset();
+        player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
+        missCount_=bombCount_=0;score_=0;graze_=pointItems_=0;referenceRank_=16;
+    } else {
+        // 自机不借用关卡素材；只重置姿态和射击周期，库存、火力与机体继续沿用这一局。
+        player_.ResetPose();player_.SetInvulnerability(1.5F);
+    }
     spellStartMisses_=spellStartBombs_=0;
     shotSoundTimer_ = 0.0F;
     boss_.reset();
@@ -181,19 +187,21 @@ void Game::CompleteStartRun() {
     drops_.Clear();
     stage_.Reset();
     battleTicks_=0;pendingPlayerInput_={};pendingDialogueConfirm_=false;
-    score_ = 0;
-    graze_ = pointItems_ = 0;
-    referenceRank_=16; referenceSubrank_=0; rankTime_=0;
+    stageGraze_=stagePointItems_=0;
+    referenceSubrank_=0;rankTime_=0;
+    continuingStage_=false;
     screenFlashTimer_ = 0.0F;
     spellCutInTimer_ = 0.0F;
     spellBonusTimer_=0; spellBonus_=stageBonus_=0;
     stageClearSummary_={}; stageClearSeconds_=0; stageClearShown_=false;
     dialogueTimer_ = 0.0F;
     dialogueAfterBattle_ = dialogueBossMusic_ = false;
+    dialogueScene_=DialogueScene::FinalBoss;
     dialogueActive_ = false;
     dialogueMotion_.Clear();
     bossEventId_.reset();
     dialogueEventId_.reset();
+    dialogueSignalWait_.reset();dialogueSignalsSeen_=0;
     shouldQuit_ = false;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     shotTestActive_ = false;
@@ -225,6 +233,7 @@ void Game::CompleteStartRun() {
 }
 
 void Game::EnterMainMenu() {
+    continuingStage_=false;
     FinishSpellRecord(false);
     dialogueMotion_.Clear();
     actorEffects_.Clear();
@@ -246,6 +255,7 @@ void Game::EnterMainMenu() {
     dialogueActive_ = false;
     bossEventId_.reset();
     dialogueEventId_.reset();
+    dialogueSignalWait_.reset();dialogueSignalsSeen_=0;
     player_.ResetPose();
     player_.SyncCamera(camera_);
     // GLFW 后端的 ShowCursor 同时解除捕获，且不会像 EnableCursor 一样强制居中。
@@ -268,7 +278,7 @@ void Game::ReturnToPracticeStage() {
 void Game::BeginStageClear() {
     if(stageClearShown_)return;
     // 对话完整结束后再固定奖励；此入口可重入，但不能重复加分或重新启动倒计时。
-    stageClearSummary_={std::max(1,StageNumber(stageId_)),player_.Power(),graze_,pointItems_};
+    stageClearSummary_={std::max(1,StageNumber(stageId_)),player_.Power(),stageGraze_,stagePointItems_};
     stageBonus_=stageClearSummary_.Total();
     score_+=stageBonus_;
     stageClearShown_=true;
@@ -282,6 +292,11 @@ void Game::BeginStageClear() {
 
 void Game::ContinueStageClear() {
     if(state_!=RunState::StageClear)return;
+    if(!practiceMode_&&!spellPractice_&&!previewMode_) {
+        if(const auto next=NextStage(stageId_)) {
+            stageId_=*next;StartRun(captureCursor_,false,true);return;
+        }
+    }
     EndStage(RunState::Won);
 }
 
@@ -316,6 +331,7 @@ void Game::EndStage(RunState result) {
     boss_.reset();
     dialogueActive_ = false;
     spellCutInTimer_ = messageTimer_ = 0.0F;
+    dialogueSignalWait_.reset();dialogueSignalsSeen_=0;
     selectedResultItem_ = spellPractice_?2:0;
     ClearPlayerBomb();
     finishResult_ = result;
@@ -324,7 +340,7 @@ void Game::EndStage(RunState result) {
 
 void Game::ClearActorsWithEffects() {
     actors_.ForEachActive([this](behavior::Actor& enemy) {
-        actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
+        if(enemy.visible)actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
                             enemy.presentation, ActorExitReason::StageClear, &enemy.animation.player.Sample());
         enemy.active = false;
     });
@@ -357,11 +373,11 @@ void Game::Update(float deltaTime) {
 }
 
 void Game::UpdateBattleAnimations() {
-    const auto sync=[&](battle::Cursor& cursor,VisualId id,double age,int script=-1,std::uint32_t serial=0) {
+    const auto sync=[&](battle::Cursor& cursor,VisualId id,double age,int script=-1,std::uint32_t serial=0,const battle::AnimationInterrupt* interrupt=nullptr) {
         const auto& visual=assets_.GetVisual(id);
         if(!visual.archive)return;
         auto selected=visual.animation;if(script>=0)selected.script=script;
-        cursor.Sync(*visual.archive,selected,std::max(0.0,age),serial);
+        cursor.Sync(*visual.archive,selected,std::max(0.0,age),serial,interrupt);
     };
     actorEffects_.ForEachActive([&](ActorExitEffect& effect) {
         if(!effect.nativeDefeat)return;
@@ -378,14 +394,15 @@ void Game::UpdateBattleAnimations() {
     }
     actors_.ForEachActive([&](behavior::Actor& enemy) {
         sync(enemy.animation,enemy.visual,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,
-             enemy.animationScript,enemy.animationRevision);
+             enemy.animationScript,enemy.animationRevision,enemy.animationInterrupt ? &*enemy.animationInterrupt : nullptr);
     });
     if(boss_ && boss_->active)
-        sync(boss_->animation,boss_->visual,boss_->animationAge,boss_->animationScript,boss_->animationRevision);
+        sync(boss_->animation,boss_->visual,boss_->animationAge,boss_->animationScript,boss_->animationRevision,boss_->AnimationInterrupt());
     bullets_.Pool().ForEachActive([&](Bullet& bullet) {
         const auto& visual=assets_.GetVisual(bullet.visual);
         if(!visual.archive)return;
         auto selected=visual.animation;
+        if(bullet.IsBeam()&&bullet.beamAnimationScript>=0)selected.script=bullet.beamAnimationScript;
         double age=bullet.age;
         if(bullet.nativeType>=0 && bullet.age<bullet.spawnVisualSeconds) {
             selected=battle::BulletSpawn(bullet.nativeType,bullet.nativeColor,static_cast<int>(std::round(bullet.spawnVisualSeconds*60)));
@@ -399,11 +416,19 @@ void Game::UpdateBattleAnimations() {
         bullet.animation.Sync(*atlas.archive,selected,age);
     });
     drops_.ForEachActive([&](Pickup& pickup) {
-        const auto id=pickup.kind==PickupKind::Star ? stageContent_->StarPickupVisual() :
-            pickup.kind==PickupKind::Score ? stageContent_->ScorePickupVisual() :
-            pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
-        sync(pickup.animation,id,pickup.age);
+        sync(pickup.animation,PickupVisual(pickup),pickup.age);
     });
+}
+VisualId Game::PickupVisual(const Pickup& pickup) const {
+    switch(pickup.kind) {
+        case PickupKind::Power:return pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
+        case PickupKind::Score:return stageContent_->ScorePickupVisual();
+        case PickupKind::Star:return stageContent_->StarPickupVisual();
+        case PickupKind::Bomb:return stageContent_->ItemVisual(3);
+        case PickupKind::FullPower:return stageContent_->ItemVisual(4);
+        case PickupKind::Life:return stageContent_->ItemVisual(5);
+    }
+    return kInvalidVisualId;
 }
 
 void Game::UpdateUiMotion(float deltaTime) {
@@ -413,7 +438,7 @@ void Game::UpdateUiMotion(float deltaTime) {
         const auto lines = CurrentDialogue();
         if (!lines.empty()) {
             const auto& line = lines[DialogueIndex()];
-            const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
+            const auto cues=stageContent_->SceneDialogueCues(dialogueScene_,dialogueAfterBattle_,player_.Shot());
             if(cues.empty())dialogueMotion_.Advance(line.bossSpeaking, line.showBoss, deltaTime);
             else dialogueMotion_.Seek(cues,dialogueTimer_);
         }
@@ -629,44 +654,55 @@ void Game::UpdateBattleStep(float deltaTime,const PlayerInput& input,bool dialog
         dialogueTimer_ += deltaTime;
         float lineStart=0;
         const auto lines=CurrentDialogue();
-        const auto& line=lines[DialogueIndex(&lineStart)];
-        const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
-        const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
-            (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
-        if (inputAllowed && (dialogueConfirm || fastForward))
-            dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
-                line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
+        const auto cues=stageContent_->SceneDialogueCues(dialogueScene_,dialogueAfterBattle_,player_.Shot());
+        // 无台词的 MSG 收尾只推进自身时长，不构造占位台词，也不允许确认键越过锁定的演出。
+        if(!lines.empty()) {
+            const auto& line=lines[DialogueIndex(&lineStart)];
+            const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
+                (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
+            if (inputAllowed && (dialogueConfirm || fastForward))
+                dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
+                    line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
+        }
         if (!dialogueAfterBattle_ && DialogueFlagAt(cues,DialogueCueKind::BossMusic,dialogueTimer_) && !dialogueBossMusic_) {
             assets_.PlayBossMusic(); dialogueBossMusic_=true;
         }
         if (dialogueTimer_+0.00001F>=DialogueDuration()) {
             dialogueActive_=false;
             if (dialogueEventId_) { stage_.EndEvent(*dialogueEventId_); dialogueEventId_.reset(); }
-            if (dialogueAfterBattle_) { BeginStageClear(); return; }
         }
+        for(const auto& cue:cues)if(cue.kind==DialogueCueKind::StageSignal&&cue.frame<=dialogueTimer_*60+0.00001F)
+            dialogueSignalsSeen_=std::max(dialogueSignalsSeen_,cue.value);
+        if(dialogueSignalWait_&&(dialogueSignalWait_->second==0 ? !dialogueActive_ : dialogueSignalsSeen_>=dialogueSignalWait_->second)) {
+            stage_.EndEvent(dialogueSignalWait_->first);dialogueSignalWait_.reset();
+        }
+        if(!dialogueActive_&&dialogueAfterBattle_&&dialogueScene_==DialogueScene::FinalBoss) { BeginStageClear(); return; }
         // 对话计时或跳句后立即重采样；绘制只读取完成后的状态，不推进逻辑时钟。
         if(dialogueActive_ && !cues.empty())dialogueMotion_.Seek(cues,dialogueTimer_);
     }
-    if(!dialogueActive_) {
+    if(!dialogueActive_&&!WorldTimeStopped()) {
         rankTime_+=deltaTime;
         const float period=std::max(4.0F,40.0F-std::max(0,player_.RemainingLives()-1)*4.0F);
         while(rankTime_>=period) { rankTime_-=period; AdjustReferenceRank(100); }
     }
-    UpdatePlayer(deltaTime,input);
+    const bool latePlayer=boss_&&boss_->active&&boss_->ControlsWorldTime();
+    if(!latePlayer)UpdatePlayer(deltaTime,input);
     UpdateActors(deltaTime);
     UpdateBoss(deltaTime);
     if (state_ != RunState::Playing) return;
+    if(latePlayer&&!WorldTimeStopped())UpdatePlayer(deltaTime,input);
+    if(!WorldTimeStopped())scenerySeconds_+=deltaTime;
     std::array<Vector3, kActorCapacity + 1> targets{};
     std::size_t targetCount = 0;
     actors_.ForEachActive([&](const behavior::Actor& enemy) {
-        targets[targetCount++] = enemy.position;
+        if(enemy.CanBeTargeted())targets[targetCount++] = enemy.position;
     });
-    if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
-    bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position());
+    if (boss_ && boss_->CanBeTargeted()) targets[targetCount++] = boss_->position;
+    bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position(),WorldTimeStopped());
     UpdateBattleAnimations(); // 本帧击破快照读取已推进的动作，而不是上一帧的动画。
     UpdatePlayerBomb(deltaTime); // 先让 Bomb 清除接触实体的敌弹，再检查玩家命中和普通弹伤害。
     ResolveCollisions();
-    if (state_ == RunState::Playing) UpdatePickups(deltaTime);
+    if (state_ == RunState::Playing&&!WorldTimeStopped()) UpdatePickups(deltaTime);
 }
 
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -692,25 +728,40 @@ void Game::BeginStageBoss(bool final, StageEventId id) {
     stage_.CancelEnemySpawns();
     bossEventId_ = id;
     boss_ = stageContent_->CreateBoss(final);
-    if (final && !dialogueBossMusic_) assets_.PlayBossMusic();
+    boss_->SetPlayerShot(player_.Shot());
+    if (final && boss_->MusicOnEntrance() && !dialogueBossMusic_) assets_.PlayBossMusic();
     messageTimer_=0;
 }
 
-void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
-    if(afterBattle && stageClearShown_)return;
+void Game::BeginStageDialogue(StageEventId id, bool afterBattle,DialogueScene scene,DialogueClearPolicy clearPolicy) {
+    if(afterBattle && scene==DialogueScene::FinalBoss && stageClearShown_)return;
     dialogueAfterBattle_=afterBattle;
+    dialogueSignalsSeen_=0;dialogueSignalWait_.reset();
+    dialogueScene_=scene;
     dialogueBossMusic_=false;
     stage_.CancelEnemySpawns();
-    ClearActorsWithEffects();
-    bullets_.ClearEnemyBullets();
+    if(clearPolicy==DialogueClearPolicy::ClearEnemiesAndBullets) {
+        ClearActorsWithEffects();bullets_.ClearEnemyBullets();
+    }
     dialogueActive_ = true;
     dialogueTimer_ = 0.0F;
     dialogueEventId_ = id;
     const auto lines = CurrentDialogue();
     if (!lines.empty()) dialogueMotion_.Reset(lines.front().bossSpeaking, lines.front().showBoss);
-    const auto cues=stageContent_->DialogueCues(afterBattle,player_.Shot());
+    const auto cues=stageContent_->SceneDialogueCues(scene,afterBattle,player_.Shot());
     if(!cues.empty())dialogueMotion_.Seek(cues,0);
     messageTimer_ = 0.0F;
+}
+
+void Game::ResumeStageBoss() {
+    if(!boss_||!boss_->active)throw std::logic_error("No active boss to resume");
+    boss_->ResumeCombat();
+}
+bool Game::AwaitStageDialogueSignal(StageEventId id,int signal) {
+    if(signal<0)throw std::invalid_argument("Negative dialogue signal");
+    if(signal==0 ? !dialogueActive_ : dialogueSignalsSeen_>=signal)return true;
+    if(dialogueSignalWait_)throw std::logic_error("Another dialogue signal wait is pending");
+    dialogueSignalWait_=std::pair{id,signal};return false;
 }
 
 void Game::AdjustReferenceRank(int subrank) {
@@ -719,7 +770,7 @@ void Game::AdjustReferenceRank(int subrank) {
     while(referenceSubrank_<0) { --referenceRank_; referenceSubrank_+=100; }
     referenceRank_=std::clamp(referenceRank_,10,32);
 }
-std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->Dialogue(dialogueAfterBattle_,player_.Shot()); }
+std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->SceneDialogue(dialogueScene_,dialogueAfterBattle_,player_.Shot()); }
 int Game::DialogueIndex(float* lineStart) const {
     float start=0; const auto lines=CurrentDialogue();
     for (int index=0;index<static_cast<int>(lines.size());++index) {
@@ -733,7 +784,7 @@ int Game::DialogueIndex(float* lineStart) const {
 }
 float Game::DialogueDuration() const {
     float duration=0; for(const auto& line:CurrentDialogue()) duration+=line.duration>0 ? line.duration : stageContent_->DialogueLineDuration();
-    return duration;
+    return std::max(duration,stageContent_->DialogueMinimumDuration(dialogueScene_,dialogueAfterBattle_,player_.Shot()));
 }
 void Game::StageMessage(std::string_view message, float duration) {
     SetMessage(std::string(message), duration);

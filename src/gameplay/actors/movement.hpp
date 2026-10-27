@@ -68,6 +68,9 @@ public:
     /// @brief 为当前插值设置三维行进方向；height 为期望世界高度，竖直分量最多占路程 1/4。
     /// 不因高度差新增路程；原地停留的段保持原地，不修改平面插值状态。
     void Aim(const State& world,float height);
+    /// @brief 新空间航段开始前把规划原点同步到当前世界 X/Z，保留运动参数与边界。
+    /// 仅在随后立即替换插值/极坐标航段时调用；不移动世界对象，清除旧航段累计的投影偏移和步内基点。
+    void Rebase(const State& world);
     /// @brief 与 State 相同频率推进上一更新步位移，并将实际平面路程等长交付给 world。
     void BeginFrame(State& world,int updateHz=120);
     /// @brief 推进平面速度和插值终点，保留终点补偿位移；world 只接收实际发生的移动。

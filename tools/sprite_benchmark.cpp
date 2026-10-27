@@ -1,4 +1,4 @@
-// 本文件负责测量空场景与高弹量场景的精灵渲染帧时间。
+// 本文件负责测量空场景、高弹量及连续深度弹幕与激光混合场景的渲染帧时间。
 
 #include "resources/asset_manager.hpp"
 #include "render/sprite_renderer.hpp"
@@ -33,10 +33,17 @@ double DrawFrames(koumakyou::SpriteRenderer& renderer,
 
 }  // namespace
 
+/// @brief argv[1] 为 runtime 素材根目录；--visible 显示窗口，--stress 追加 64 束激光的极端压力场景。
+/// 默认隐藏窗口且不限帧；混合场景每档暖机 2 帧、测量 5 帧，输出毫秒均值及实际激光片段数。
 int main(int argc, char** argv) {
-    if (argc != 2 && (argc != 3 ||
-                      std::string_view(argv[2]) != "--visible")) return 1;
-    const bool visible = argc == 3;
+    if(argc<2 || argc>4)return 1;
+    bool visible=false,stress=false;
+    for(int i=2;i<argc;++i) {
+        const std::string_view option(argv[i]);
+        if(option=="--visible")visible=true;
+        else if(option=="--stress")stress=true;
+        else return 1;
+    }
     SetTraceLogLevel(LOG_WARNING);
     if (!visible) {
         SetConfigFlags(FLAG_WINDOW_HIDDEN | FLAG_WINDOW_UNFOCUSED |
@@ -86,6 +93,32 @@ int main(int argc, char** argv) {
                       << ", empty=" << emptyMs << " ms/frame, full=" << fullMs
                       << " ms/frame, bullets=" << bullets.Pool().ActiveCount()
                       << '\n';
+            // 每颗弹使用独立深度，覆盖激光切分随弹量放大的场景；先测无激光以区分基础精灵开销。
+            bullets.Reset();
+            for (int i=0;i<2048;++i) {
+                const float x=(static_cast<float>((i*37)%127)-63)*0.10F;
+                const float y=(static_cast<float>((i*53)%97)-48)*0.08F;
+                const float z=-2.0F+i*26.0F/2048;
+                bullets.Spawn(koumakyou::BulletOwner::Enemy,{x,y,z},{},0.10F,WHITE,
+                              koumakyou::stage1::kBlueBullet);
+            }
+            for (int count:{0,8,64}) {
+                if(count==64 && !stress)break;
+                const int additional=count==8 ? 8 : count==64 ? 56 : 0;
+                for (int i=count-additional;i<count;++i) {
+                    auto* beam=bullets.SpawnBeam({(i%8-3.5F)*0.3F,(i/8-3.5F)*0.15F,-3},
+                                                {0.02F,0,1},30,0.12F,0,10,WHITE);
+                    // 原生敌激光和自机加色激光交替，覆盖混合状态切换的真实开销。
+                    beam->visual=i%2==0 ? koumakyou::stage1::kNativeLaserBase+2
+                                        : koumakyou::stage1::kMarisaLaser;
+                    beam->age=1;
+                }
+                // 优化前的混合模式切换可能使每帧耗时达到秒级；少量暖机/测量帧也能稳定复现开销。
+                DrawFrames(renderer,bullets,assets,shaders,camera,2);
+                const double mixedMs=DrawFrames(renderer,bullets,assets,shaders,camera,5);
+                std::cout<<"mixed: sprites=2048, beams="<<count<<", segments="<<renderer.LastBeamSegmentCount()
+                         <<", "<<mixedMs<<" ms/frame"<<std::endl;
+            }
         }
     }
 

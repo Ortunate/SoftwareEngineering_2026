@@ -1,4 +1,4 @@
-// 本文件用确定性 Alpha 合成检查掉落物、演员、弹幕、激光与特效的实际 GPU 遮挡，无需音频或游戏配置。
+// 本文件检查精灵/激光的实际 GPU 遮挡、投影切分开销与 UV 连续性，无需音频或游戏配置。
 #include "render/sprite_renderer.hpp"
 #include "resources/asset_manager.hpp"
 #include "stages/stage1/content.hpp"
@@ -163,7 +163,14 @@ void CheckOverlaps(Fixture& f) {
     beam->visual=3;beam->age=1;
     image=f.Render("additive-crossing-beam",actors);
     Expect(image,150,128,{255,128,0,255},"native additive beam failed to cover actor");
-    Expect(image,90,128,kRed,"native additive rear beam appeared through actor");UnloadImage(image);beam->active=false;
+    Expect(image,90,128,kRed,"native additive rear beam appeared through actor");UnloadImage(image);
+    // 同模式片段合批后仍须累加两束颜色，并在跨越演员时切回正确的混合模式。
+    auto* second=f.bullets.SpawnBeam(beam->position,beam->beamDirection,beam->beamLength,beam->radius,0,10,WHITE);
+    second->visual=3;second->age=1;
+    image=f.Render("adjacent-additive-beams",actors);
+    Expect(image,150,128,{255,255,0,255},"adjacent additive beams stopped accumulating");
+    Expect(image,90,128,kRed,"batched rear beams appeared through actor");UnloadImage(image);
+    second->active=false;beam->active=false;
 
     beam=f.bullets.SpawnBeam({-2,0,0},{1,0,0},4,0.25F,5,10,WHITE);beam->age=1;
     image=f.Render("legacy-warning-front",actors);
@@ -175,11 +182,74 @@ void CheckOverlaps(Fixture& f) {
         if(pixel.r<253)throw std::runtime_error("legacy warning wrote depth instead of blending over red actor");
     }
     if(!warningVisible)throw std::runtime_error("legacy warning disappeared");
-    UnloadImage(image);beam->active=false;
+    // 屏幕外加色激光紧邻普通几何预警命令，预警必须重新选择 Alpha，不能继承激光的批次状态。
+    auto* offscreen=f.bullets.SpawnBeam({40,0,0.5F},{1,0,0},4,0.25F,0,10,WHITE);
+    offscreen->visual=3;offscreen->age=1;
+    Image mixed=f.Render("additive-before-legacy-warning",actors);
+    for(int y=0;y<256;++y)for(int x=0;x<256;++x)
+        Expect(mixed,x,y,GetImageColor(image,x,y),"legacy warning inherited additive beam blending");
+    UnloadImage(mixed);UnloadImage(image);offscreen->active=false;beam->active=false;
 
     // 渲染器返回后必须恢复深度写入；透明对象不能把后绘制的不透明物永久挡住。
     image=f.Render("depth-state",{},pickups,true);
     Expect(image,128,128,{0,188,120,255},"transparent pass leaked depth/culling/blend state");UnloadImage(image);
+}
+/// @brief 无屏幕交集的密集弹幕不得增加激光片段；正交/透视、ANM 位移和自机宽度均使用实际绘制几何。
+void CheckBeamPartitioning(Fixture& f) {
+    f.visuals[3].archive=f.archive;
+    for(const int projection:{CAMERA_PERSPECTIVE,CAMERA_ORTHOGRAPHIC}) {
+        f.camera.projection=projection;f.camera.fovy=projection==CAMERA_PERSPECTIVE ? 45 : 8;
+        f.bullets.Reset();
+        auto* beam=f.bullets.SpawnBeam({-2,0,-2},BulletSystem::DirectionTo({-2,0,-2},{2,0,2}),std::sqrt(32.0F),0.25F,0,10,WHITE);
+        beam->visual=3;beam->age=1;
+        Image alone=f.Render("beam-partition-alone");
+        for(int i=0;i<1024;++i)
+            f.bullets.Spawn(BulletOwner::Enemy,{40,20,-1.9F+i*3.8F/1024},{},0.05F,WHITE,2);
+        Image dense=f.Render("beam-partition-unrelated");
+        if(f.renderer.LastBeamSegmentCount()!=1)throw std::runtime_error("unrelated sprites multiplied beam segments");
+        for(int y=0;y<256;++y)for(int x=0;x<256;++x)
+            Expect(dense,x,y,GetImageColor(alone,x,y),"unrelated sprites changed beam coverage");
+        UnloadImage(dense);UnloadImage(alone);
+
+        anm::Frame frame;frame.sprite=0;frame.source={0,0,8,8};frame.visible=true;
+        // 小精灵落在整束的大投影框内，却不与自身深度处的光带相交，不应产生无效切分。
+        std::array<PickupSprite,1> pickups{{{{1.4F,0,0},0,0.05F,&frame}}};
+        Image separate=f.Render("beam-partition-depth-slab",{},pickups);UnloadImage(separate);
+        if(f.renderer.LastBeamSegmentCount()!=1)throw std::runtime_error("whole-beam bounds created an unrelated depth cut");
+        // 倾斜贴图只在偏离中心深度的位置与光束交叠；中心点测试会漏掉这次遮挡，必须使用四角深度区间。
+        pickups[0].position={2,0,0};pickups[0].heightScale=1;frame.rotation.y=PI/4;
+        Image tilted=f.Render("beam-partition-tilted",{},pickups);UnloadImage(tilted);
+        if(f.renderer.LastBeamSegmentCount()!=2)throw std::runtime_error("tilted sprite depth range was omitted from beam overlap");
+        frame.rotation={};
+        pickups[0].position={};pickups[0].heightScale=1;
+        Image centered=f.Render("beam-partition-overlap",{},pickups);
+        if(f.renderer.LastBeamSegmentCount()!=2)throw std::runtime_error("overlapping pickup failed to split beam");
+        // 世界锚点远离光束，但 ANM 位移把贴图搬回原位置；镜像后实体覆盖及遮挡仍须相同。
+        pickups[0].position.x=-100;frame.positionOffset.x=-200;frame.scale.x=-1;
+        Image shifted=f.Render("beam-partition-transformed",{},pickups);
+        if(f.renderer.LastBeamSegmentCount()!=2)throw std::runtime_error("ANM displacement/mirror was omitted from beam bounds");
+        for(int y=0;y<256;++y)for(int x=0;x<256;++x)
+            Expect(shifted,x,y,GetImageColor(centered,x,y),"transformed pickup changed beam overlap");
+        UnloadImage(shifted);UnloadImage(centered);
+
+        frame.positionOffset={};frame.scale={1,1};pickups[0].position={0,0.8F,0};pickups[0].heightScale=0.05F;
+        Image narrow=f.Render("beam-partition-narrow",{},pickups);UnloadImage(narrow);
+        if(f.renderer.LastBeamSegmentCount()!=1)throw std::runtime_error("separate narrow beam was unnecessarily split");
+        auto wide=std::make_shared<anm::Archive>(*f.archive);
+        wide->scripts[0].instructions.insert(wide->scripts[0].instructions.begin()+1,
+            {.opcode=2,.args={std::bit_cast<std::uint32_t>(-4.0F),std::bit_cast<std::uint32_t>(1.0F)}});
+        beam->playerShotKind=PlayerShotKind::Laser;beam->animation.player.Start(*wide,0);
+        Image expanded=f.Render("beam-partition-wide",{},pickups);UnloadImage(expanded);
+        if(f.renderer.LastBeamSegmentCount()!=2)throw std::runtime_error("native laser width was omitted from beam bounds");
+        beam->animation.player.Start(*f.archive,0);
+
+        // 跨越相机平面时退回保守切分，不能用透视除法误判为屏幕外；也覆盖正交相机的近面退化。
+        beam->position={-2,0,-12};beam->beamDirection=BulletSystem::DirectionTo(beam->position,{2,0,2});
+        beam->beamLength=std::sqrt(212.0F);
+        Image near=f.Render("beam-partition-camera-plane");UnloadImage(near);
+        if(f.renderer.LastBeamSegmentCount()!=1025)throw std::runtime_error("camera-plane crossing lost conservative beam cuts");
+    }
+    f.bullets.Reset();
 }
 /// @brief 用正式一面高清素材输出 P 点、分数点、敌人及激光的近/远重叠审阅图，不改变素材或动画。
 void ReviewRealAssets(const std::filesystem::path& root,const std::filesystem::path& output) {
@@ -216,7 +286,7 @@ int main(int argc,char** argv) {
     try {
         std::filesystem::path output=argc>1 ? std::filesystem::absolute(argv[1]) : std::filesystem::path{};
         if(!output.empty())std::filesystem::create_directories(output);
-        Fixture fixture(output);CheckOverlaps(fixture);
+        Fixture fixture(output);CheckOverlaps(fixture);CheckBeamPartitioning(fixture);
         if(argc>2)ReviewRealAssets(std::filesystem::absolute(argv[2]),output);
         std::cout<<"Sprite overlap regression passed\n";
     } catch(const std::exception& error){std::cerr<<error.what()<<"\n";result=1;}

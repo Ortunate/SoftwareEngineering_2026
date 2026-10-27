@@ -15,7 +15,11 @@ void DrawAnimatedBillboard(const Camera3D& camera,Texture2D texture,const anm::A
 /// @brief 在 2D 模式按原逻辑像素比例及 XYZ 旋转的正交投影绘制，position 是中心或原 ANM 左上锚点；scale 为像素倍率。
 void DrawAnimatedSprite2D(Texture2D texture,const anm::Archive& archive,const anm::Frame& frame,
                           Vector2 position,float scale=1,Color tint=WHITE);
+/// @brief 返回相机朝向激光带的四个世界顶点；顺序与公告板相同，width 为世界全宽，不访问 GPU。
+/// 供绘制和透明排序共用几何，避免宽度、相机侧向或退化方向的处理不一致。
+[[nodiscard]] std::array<Vector3,4> AnimatedBeamVertices(const Camera3D& camera,Vector3 origin,Vector3 end,float width);
 /// @brief 绘制沿 origin/end 的相机朝向激光带；width 为世界全宽，不改变线段胶囊判定；与公告板相同，关闭背面剔除。
+/// 保留 frame 指定的混合模式，使相邻同模式片段可合批；调用方须在绘制其他几何前设置其混合模式，批次结束恢复 Alpha。
 void DrawAnimatedBeam(const Camera3D& camera,Texture2D texture,const anm::Archive& archive,
                       const anm::Frame& frame,Vector3 origin,Vector3 end,float width,Color tint=WHITE);
 }

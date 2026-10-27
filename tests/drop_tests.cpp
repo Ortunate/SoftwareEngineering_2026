@@ -87,12 +87,12 @@ void TestPickupBoundary() {
     using koumakyou::DropSystem;
     // 不推进时间，直接检查三维球形拾取范围；P 点和分数点必须共用新半径。
     constexpr std::array<Vector3, 4> inside{{
-        {1.19F, 0.0F, 0.0F}, {0.0F, -1.19F, 0.0F},
-        {0.0F, 0.0F, -1.19F}, {0.69F, 0.69F, -0.69F},
+        {0.89F, 0.0F, 0.0F}, {0.0F, -0.89F, 0.0F},
+        {0.0F, 0.0F, -0.89F}, {0.51F, 0.51F, -0.51F},
     }};
     constexpr std::array<Vector3, 4> outside{{
-        {1.21F, 0.0F, 0.0F}, {0.0F, -1.21F, 0.0F},
-        {0.0F, 0.0F, -1.21F}, {0.7F, 0.7F, -0.7F},
+        {0.90F, 0.0F, 0.0F}, {0.0F, -0.90F, 0.0F},
+        {0.0F, 0.0F, -0.90F}, {0.52F, 0.52F, -0.52F},
     }};
     DropSystem nearby(1234);
     for (int item : {0, 1}) {

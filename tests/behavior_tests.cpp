@@ -64,13 +64,17 @@ void EqualBullets(const BulletSystem& original,const BulletSystem& replacement) 
         }
         assert(x.turnAimed==y.turnAimed&&x.turnApplied==y.turnApplied&&x.Dangerous()==y.Dangerous());
         assert(x.color.r==y.color.r&&x.color.g==y.color.g&&x.color.b==y.color.b&&x.color.a==y.color.a);
+        // 旧参考保留原项目的两档半径；本次按新典 EXE 独立修正尺寸，轨迹仍逐项对照。
+        constexpr std::array<float,10> nativeDiameters{4,6,4,6,5,4,16,11,9,32};
+        if(y.nativeType>=0)Equal(y.radius,nativeDiameters.at(y.nativeType)*0.5F*(20.0F/448),"bullet.nativeRadius");
+        else Equal(x.radius,y.radius,"beam.radius");
         EqualPosition(x.position,y.position,"bullet.position");Equal(x.velocity,y.velocity,"bullet.velocity");
         Equal(x.baseVelocity,y.baseVelocity,"bullet.baseVelocity");Equal(x.launchDirection,y.launchDirection,"bullet.launchDirection");Equal(x.acceleration,y.acceleration,"bullet.acceleration");
         Equal(x.rotationAxis,y.rotationAxis,"bullet.axis");Equal(x.beamDirection,y.beamDirection,"beam.direction");
-        const float xs[]={x.radius,x.age,x.maxAge,x.angularVelocity,x.homingTurnRate,x.damage,x.beamLength,x.warningSeconds,
+        const float xs[]={x.age,x.maxAge,x.angularVelocity,x.homingTurnRate,x.damage,x.beamLength,x.warningSeconds,
             x.turnDelaySeconds,x.turnAngle,x.turnSpeed,x.launchBoost,x.launchBoostSeconds,x.spawnVisualSeconds,x.spawnMoveScale,
             x.beamGrowSeconds,x.beamFadeSeconds,x.dangerEndSeconds};
-        const float ys[]={y.radius,y.age,y.maxAge,y.angularVelocity,y.homingTurnRate,y.damage,y.beamLength,y.warningSeconds,
+        const float ys[]={y.age,y.maxAge,y.angularVelocity,y.homingTurnRate,y.damage,y.beamLength,y.warningSeconds,
             y.turnDelaySeconds,y.turnAngle,y.turnSpeed,y.launchBoost,y.launchBoostSeconds,y.spawnVisualSeconds,y.spawnMoveScale,
             y.beamGrowSeconds,y.beamFadeSeconds,y.dangerEndSeconds};
         for(std::size_t n=0;n<std::size(xs);++n)Equal(xs[n],ys[n],"bullet.scalar");
@@ -366,10 +370,27 @@ void TestRewindThenChild() {
         assert(actor.finished);
     }
 }
+/// @brief 新典十类半径在空间/平面模式与 60/120 Hz、不同显示帧率下均保持相同世界长度。
+void TestNativeProjectileSizes() {
+    constexpr std::array<float,10> radii{2,3,2,3,2.5F,2,8,5.5F,4.5F,16};
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int type=0;type<10;++type)for(bool spatial:{false,true})
+        for(auto rate:{behavior::UpdateRate::Hz60,behavior::UpdateRate::Hz120})for(int fps:{30,60,120,144,240}) {
+            behavior::Spawn spawn;spawn.visual=kFairy;spawn.retireOutside=false;
+            spawn.pattern.skill=skill::TimedShot{0,{skill::Formation::FixedFan,type,4,1,1,1}};
+            spawn.pattern.spatialShots=spatial;spawn.bulletBase=kNativeBulletBase;
+            behavior::Actor actor(rate);actor.Activate(spawn);bullets->Reset();
+            for(int frame=0;frame<fps/10;++frame)actor.Update(1.0F/fps,{},*bullets);
+            assert(bullets->Pool().ActiveCount()==1);
+            bullets->Pool().ForEachActive([&](const Bullet& bullet) {
+                Equal(bullet.radius,radii[type]*(20.0F/448),"native.radius.fixedRate");
+            });
+        }
+}
 } // namespace
 /// @brief 运行无窗口行为差分，失败输出原子程序与首次不一致帧；不读取原游戏安装或解包缓存。
 void RunBehaviorTests() {
-    TestWorldCoordinates();TestRuntime120Hz();TestRewindThenChild();TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
+    TestNativeProjectileSizes();TestWorldCoordinates();TestRuntime120Hz();TestRewindThenChild();TestRecipes();TestTransitions();TestBirths();TestCompositionAndOwnership();
     for(int sub:{0,1,2,3,4,5,6,7,8,9,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}) {
         if(!covered[sub]) { std::cerr<<"Uncovered original Sub"<<sub<<'\n';std::abort(); }
     }

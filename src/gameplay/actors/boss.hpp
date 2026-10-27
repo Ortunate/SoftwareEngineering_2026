@@ -7,6 +7,7 @@
 #include "gameplay/actors/boss_health.hpp"
 #include "gameplay/actors/behavior.hpp"
 #include "gameplay/data/native_combat.hpp"
+#include "gameplay/data/native_sizes.hpp"
 #include <stdexcept>
 
 namespace koumakyou {
@@ -94,7 +95,7 @@ public:
     Vector3 position{0.0F, 2.0F, 7.2F};
     float health = 0.0F;
     float maxHealth = 0.0F;
-    float hitRadius = 0.95F; // 世界半径，自机弹与本体接触共用，不随视觉入退场缩放。
+    float hitRadius = native_sizes::kDefaultEnemyRadius; // 世界受弹半径；具体遭遇按 ECL 配置，本体接触另乘 2/3。
     /// @brief 当前阶段已运行秒数；换阶段时归零，超时由具体 Boss 决定。
     float phaseTimer = 0.0F;
     float fireTimer = 0.0F;

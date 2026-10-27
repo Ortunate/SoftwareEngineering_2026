@@ -9,10 +9,10 @@ namespace {
 const auto kVisuals=[] {
     auto visuals=stage_assets::CommonBattleVisuals();
     const std::array<VisualDefinition,4> actors{{
-        {.id=kFairy,.worldHeight=1.8F,.animation={battle::Atlas::Stage3Enemies,0},.defeatVisual=kNativeDefeat},
-        {.id=kDarkFairy,.worldHeight=1.8F,.animation={battle::Atlas::Stage3Enemies,3},.defeatVisual=kNativeDefeat},
-        {.id=kOrb,.worldHeight=1.488F,.animation={battle::Atlas::Stage3Enemies,13},.defeatVisual=kNativeDefeat},
-        {.id=kMeiling,.worldHeight=3.2F,.animation={battle::Atlas::Stage3Enemies,64},.defeatVisual=kNativeDefeat}
+        {.id=kFairy,.animation={battle::Atlas::Stage3Enemies,0},.defeatVisual=kNativeDefeat},
+        {.id=kDarkFairy,.animation={battle::Atlas::Stage3Enemies,3},.defeatVisual=kNativeDefeat},
+        {.id=kOrb,.animation={battle::Atlas::Stage3Enemies,13},.defeatVisual=kNativeDefeat},
+        {.id=kMeiling,.animation={battle::Atlas::Stage3Enemies,64},.defeatVisual=kNativeDefeat}
     }};
     visuals.insert(visuals.end(),actors.begin(),actors.end());
     constexpr std::array<std::string_view,4> faces{"stages/stage3/portraits/meiling/face06a_0.png",

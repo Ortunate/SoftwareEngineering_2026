@@ -49,7 +49,7 @@ Stage4Boss::Stage4Boss(bool final,behavior::UpdateRate rate,bool spatial):actor_
     active=true;phase=final ? 0 : 1;visual=final ? kPatchouli : kKoakuma;presentation.Reset(ActorKind::Boss);
     health=maxHealth=final ? 1 : Health().mid;
     actor_.Reset(final ? Vector3{-5.71428585F,0,11.4285717F} : Vector3{0,0,4.28571415F},health,final ? 10511U : 4058U);
-    ConfigureBehavior(actor_,spatial);actor_.damageable= !final;
+    ConfigureBehavior(actor_,spatial);actor_.hitRadius=hitRadius=final ? native_sizes::kBoss48Radius : native_sizes::kBoss40Radius;actor_.damageable= !final;
     actor_.Start(final ? patchouli::Entrance(actor_) : koakuma::Encounter(actor_));position=actor_.Position();
 }
 void Stage4Boss::SetPlayerShot(ShotType shot) {
@@ -81,7 +81,7 @@ void Stage4Boss::StartPhase() {
 bool Stage4Boss::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!active)return false;
     presentation.Update(seconds);phaseElapsed_+=seconds;actor_.health=health;actor_.Update(seconds,player,bullets);
-    health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
+    hitRadius=actor_.hitRadius;health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
     animationScript=actor_.animationScript;animationAge=actor_.animationAge;animationRevision=actor_.animationRevision;
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(actor_.deathEffect,0,2));
     return actor_.pendingCallback||actor_.finished;

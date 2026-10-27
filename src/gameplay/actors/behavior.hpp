@@ -1,6 +1,7 @@
 // 本文件定义带参行为编排器；生产以 120 Hz 更新，内容帧号保持 60 Hz，测试可选 60 Hz 对照原作。
 #pragma once
 #include "gameplay/actors/skill.hpp"
+#include "gameplay/data/native_sizes.hpp"
 #include "gameplay/effects/actor_effects.hpp"
 #include <coroutine>
 #include <exception>
@@ -44,7 +45,7 @@ struct Spawn {
     unsigned seed=1;
     int sourceItem=-1;
     VisualId visual=kInvalidVisualId;
-    float hitRadius=0.55F;
+    float hitRadius=native_sizes::kDefaultEnemyRadius;
     Vector2 randomXRange{-8.57142857F,8.57142857F};
     movement::Bounds retirementBounds;
     VisualId bulletBase=kInvalidVisualId,laserBase=kInvalidVisualId,defeatBase=kInvalidVisualId,fallback=kInvalidVisualId;
@@ -194,7 +195,7 @@ public:
     bool phaseClockPaused=false; // 只冻结阶段超时钟；局部协程、移动、自动发射及动画继续，Reset 才无条件解除。
     VisualId visual=kInvalidVisualId,defeatVisual=kInvalidVisualId;
     Vector3 position{},origin{};
-    float age=0,hitRadius=0.55F;
+    float age=0,hitRadius=native_sizes::kDefaultEnemyRadius;
     int scoreValue=0,sourceItem=-2;
     ActorPresentation presentation;
     battle::Cursor animation; // 借用当前关卡 ANM，清池必须先于关卡资源卸载。

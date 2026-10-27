@@ -79,7 +79,7 @@ void TestShotSpread() {
                         assert(std::abs(std::abs(originSide) - 0.78F) < 0.0001F);
                         assert(originSide * lateral > 0.0F);
                     } else {
-                        assert(std::abs(std::abs(originSide)-8*Player::kOptionWorldHeight/36) < 0.0001F);
+                        assert(std::abs(std::abs(originSide)-8*(0.42F/36)) < 0.0001F);
                     }
                     const float angle = std::abs(std::atan2(dot(point, right), dot(point, forward)));
                     if (cyan) {
@@ -405,12 +405,13 @@ void TestNeedleSchedule() {
                 player.Update(frame==0 ? 0 : 1.0F/fps,{.focus=focus,.fire=true},*bullets,
                               stage1::kPlayerGoldCard,stage1::kPlayerNeedle,true);
                 const auto centers=player.OptionPositions();
-                const float unit=Player::kOptionWorldHeight/36*player.OptionScale();
+                const float unit=(0.42F/36)*player.OptionScale();
                 int leftCount=0,rightCount=0;
                 bullets->Pool().ForEachActive([&](const Bullet& bullet){
                     if(bullet.visual!=stage1::kPlayerNeedle)return;
                     ++count;
                     assert(bullet.homingTurnRate==0 && bullet.color.a==Player::kShotAlpha);
+                    assert(std::abs(bullet.radius-6*(20.0F/448))<1e-6F);
                     assert(std::abs(BulletSystem::Length(bullet.velocity)-20.0F*22/12)<0.0001F);
                     const int side=DistanceSquared(bullet.position,centers[0])<DistanceSquared(bullet.position,centers[1]) ? 0 : 1;
                     assert(std::abs(bullet.position.y-centers[side].y-16*unit)<0.0001F);

@@ -128,9 +128,9 @@ void TestEnemyBodyContacts() {
     Player player;player.Reset();const auto origin=player.Position();
     assert(!player.ContactEnemyBody(origin,0.5F)); // 开局保护覆盖本体。
     player.SetInvulnerability(0);
-    for(const Vector3 offset:{Vector3{0.679F,0,0},{0,-0.679F,0},{0,0,0.679F},{0,0,-0.679F}})
+    for(const Vector3 offset:{Vector3{0.554F,0,0},{0,-0.554F,0},{0,0,0.554F},{0,0,-0.554F}})
         assert(player.ContactEnemyBody({origin.x+offset.x,origin.y+offset.y,origin.z+offset.z},0.5F));
-    assert(!player.ContactEnemyBody({origin.x+0.681F,origin.y,origin.z},0.5F));
+    assert(!player.ContactEnemyBody({origin.x+0.557F,origin.y,origin.z},0.5F));
     assert(!player.ContactEnemyBody({origin.x+0.45F,origin.y+0.45F,origin.z+0.45F},0.5F));
     for(float invalid:{0.0F,-1.0F,std::numeric_limits<float>::infinity(),std::numeric_limits<float>::quiet_NaN()})
         assert(!player.ContactEnemyBody(origin,invalid));

@@ -1,6 +1,7 @@
 // 本文件负责实现通用与关卡素材的加载、音频播放和资源卸载。
 
 #include "resources/asset_manager.hpp"
+#include "gameplay/data/native_sizes.hpp"
 #include "resources/dds_image.hpp"
 #include "resources/dialogue_crop.hpp"
 
@@ -381,6 +382,9 @@ void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
             visual.texture=atlas.texture;visual.archive=atlas.archive;visual.animation=definition.animation;
             if(!visual.archive->FindScript(visual.animation.script))
                 throw std::runtime_error("Visual references missing native animation");
+            anm::Player initial;initial.Start(*visual.archive,visual.animation.script,visual.animation.spriteOffset,visual.animation.initialSprite);
+            visual.worldUnitsPerPixel=native_sizes::kWorldPerPixel;
+            visual.worldHeight=initial.Sample().LogicalSize().y*visual.worldUnitsPerPixel;
         }
     }
     const std::filesystem::path shaders = root_ / "common/shaders";

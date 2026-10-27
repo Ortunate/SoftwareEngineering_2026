@@ -49,8 +49,9 @@ std::array<Vector3,4> AnimatedBillboardVertices(const Camera3D& camera,const anm
     const Vector3 forward=Vector3Normalize(Vector3Subtract(camera.target,camera.position));
     const Vector3 right=Vector3Normalize(Vector3CrossProduct(forward,camera.up));
     const Vector3 up=Vector3Normalize(Vector3CrossProduct(right,forward));
-    const float unit=height/frame.source.height;
-    const float w=unit*frame.source.width*frame.scale.x,h=height*frame.scale.y;
+    const auto logical=frame.LogicalSize();
+    const float unit=height/logical.y;
+    const float w=unit*logical.x*frame.scale.x,h=height*frame.scale.y;
     float angle=frame.rotation.z;
     if(frame.autoRotate && Vector3LengthSqr(motion)>1e-8F)
         angle+=std::atan2(-Vector3DotProduct(motion,up),Vector3DotProduct(motion,right))+PI/2;
@@ -76,7 +77,8 @@ void DrawAnimatedBillboard(const Camera3D& camera,Texture2D texture,const anm::A
 }
 void DrawAnimatedSprite2D(Texture2D texture,const anm::Archive& archive,const anm::Frame& frame,
                           Vector2 position,float scale,Color tint) {
-    const float width=frame.source.width*scale*frame.scale.x,height=frame.source.height*scale*frame.scale.y;
+    const auto logical=frame.LogicalSize();
+    const float width=logical.x*scale*frame.scale.x,height=logical.y*scale*frame.scale.y;
     const float x=frame.topLeft ? 0 : -width/2,y=frame.topLeft ? 0 : -height/2;
     const std::array<Vector2,4> local{{{x,y},{x+width,y},{x+width,y+height},{x,y+height}}};
     std::array<Vector3,4> points{};

@@ -1,6 +1,7 @@
 // 本文件负责敌人掉落和清弹星点生成，并统一处理道具移动和拾取。
 
 #include "gameplay/items/drop_system.hpp"
+#include "gameplay/data/native_sizes.hpp"
 
 #include "gameplay/arena.hpp"
 #include "gameplay/bullets/system.hpp"
@@ -21,7 +22,7 @@ constexpr float kFallAcceleration = 8.0F;
 constexpr float kFallSpeed = 2.5F;
 constexpr float kAutoCollectSpeed = 20.0F;
 // 所有道具共用以自机判定中心为球心的拾取半径，单位为世界单位。
-constexpr float kCollectDistance = 1.2F;
+constexpr float kCollectDistance = native_sizes::kItemCollectRadius;
 // 战场 Z 范围为 [-kArenaHalfExtents.z, +kArenaHalfExtents.z]，前端 2/5 从 +0.2 倍半长开始。
 constexpr float kAutoCollectZ = kArenaHalfExtents.z * 0.2F;
 constexpr float kSpiralAngle = 2.3999632F;

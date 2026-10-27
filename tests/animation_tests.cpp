@@ -1,6 +1,7 @@
 // 本文件检查真实 ANM 的固定帧序、循环、中断、全部目录和原始 DDS 解码，无需图形窗口。
 #include "resources/battle_catalog.hpp"
 #include "resources/dds_image.hpp"
+#include "render/animated_sprite.hpp"
 #include "reference_script.hpp"
 #include <algorithm>
 #include <cassert>
@@ -54,18 +55,57 @@ void TestActorInterruptTiming() {
     }
 }
 
-/// @brief 独立按原生加载器 RVA 0x2a30～0x2a8e 的尺寸推导，禁止以高清裁图大小驱动行为几何。
+/// @brief 按已审阅的 ANM 显式尺寸和 EXE 判定常量验收全部颜色，覆盖大泡 C4 与火球换帧。
 void TestNativeBulletLogicalSize() {
-    for(int type=0;type<10;++type) {
-        const auto selection=battle::EnemyBullet(type,0);const auto archive=anm::LoadArchive(kAssets/battle::Describe(selection.atlas).anm);
-        anm::Player player;player.Start(archive,selection.script);const auto source=player.Sample().source;
-        const Vector2 actual=battle::EnemyBulletLogicalSize(type);
-        const float worldPerPixel=20.0F/448;
-        assert(std::abs(actual.x-source.width*480/1080*worldPerPixel)<1e-6F);
-        assert(std::abs(actual.y-source.height*480/1080*worldPerPixel)<1e-6F);
-        assert((actual.y>=30*worldPerPixel)==(type>=6));
+    constexpr std::array<Vector2,10> sizes{{{8,8},{16,16},{14,16},{16,16},{14,16},{14,16},{32,32},{30,30},{32,32},{64,64}}};
+    constexpr std::array<float,10> radii{2,3,2,3,2.5F,2,8,5.5F,4.5F,16};
+    for(int type=0;type<10;++type)for(int color=0;color<16;++color) {
+        const auto selection=battle::EnemyBullet(type,color);const auto archive=anm::LoadArchive(kAssets/battle::Describe(selection.atlas).anm);
+        anm::Player player;player.Start(archive,selection.script,selection.spriteOffset);
+        const Vector2 expected=type==9&&color%5==4 ? Vector2{30,30} : sizes[type];
+        const Vector2 actual=battle::EnemyBulletLogicalSize(type,color);
+        for(int frame=0;frame<20;++frame) {
+            const auto display=player.Sample().LogicalSize();
+            assert(display.x==expected.x&&display.y==expected.y);
+            player.Advance(1.0/60);
+        }
+        assert(std::abs(actual.x-expected.x*(20.0F/448))<1e-6F);
+        assert(std::abs(actual.y-expected.y*(20.0F/448))<1e-6F);
+        assert(std::abs(battle::EnemyBulletHitRadius(type)-radii[type]*(20.0F/448))<1e-6F);
     }
-    bool rejected=false;try {battle::EnemyBulletLogicalSize(10);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);
+    bool rejected=false;try {(void)battle::EnemyBulletLogicalSize(10);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);
+    rejected=false;try {(void)battle::EnemyBulletLogicalSize(9,-1);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);
+    rejected=false;try {(void)battle::EnemyBulletHitRadius(-1);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);
+}
+/// @brief 独立记录各角色/自机的原包基础尺寸，检查逻辑比例而不是高清裁图比例。
+void TestNativeActorAndPlayerGeometry() {
+    struct Case {battle::Atlas atlas;int script;float width,height;};
+    const std::array<Case,13> cases{{
+        {battle::Atlas::Stage1Enemies,0,30,30},{battle::Atlas::Rumia,128,192*4.0F/9,192*4.0F/9},
+        {battle::Atlas::Stage2Enemies,64,161.5F*4/9,161.5F*4/9},
+        {battle::Atlas::Cirno,128,218*4.0F/9,218*4.0F/9},
+        {battle::Atlas::Stage3Enemies,64,159*4.0F/9,159*4.0F/9},
+        {battle::Atlas::Stage4Enemies,64,154*4.0F/9,154*4.0F/9},
+        {battle::Atlas::Stage4Enemies,65,154*4.0F/9,154*4.0F/9},
+        {battle::Atlas::Sakuya,128,92,92},{battle::Atlas::Remilia,160,230*4.0F/9,230*4.0F/9},
+        {battle::Atlas::Reimu,64,14,14},{battle::Atlas::Reimu,66,14,46},
+        {battle::Atlas::Reimu,128,16,16},{battle::Atlas::Marisa,128,16,16}
+    }};
+    const Camera3D camera{{0,0,-10},{0,0,0},{0,1,0},45,CAMERA_PERSPECTIVE};
+    for(const auto& test:cases) {
+        const auto archive=anm::LoadArchive(kAssets/battle::Describe(test.atlas).anm);
+        anm::Player player;player.Start(archive,test.script);auto frame=player.Sample();
+        const auto logical=frame.LogicalSize();
+        assert(std::abs(logical.x-test.width)<1e-5F&&std::abs(logical.y-test.height)<1e-5F);
+        frame.rotation={};frame.position=frame.positionOffset={};frame.scale={1,1};
+        const auto vertices=AnimatedBillboardVertices(camera,frame,{},test.height*(20.0F/448));
+        assert(std::abs(std::abs(vertices[1].x-vertices[0].x)-test.width*(20.0F/448))<1e-5F);
+        assert(std::abs(vertices[0].y-vertices[3].y-test.height*(20.0F/448))<1e-5F);
+        // 改变贴图裁切尺寸只改变 UV，显式显示尺寸和实际世界边界不能跟着变化。
+        frame.source.width*=2;frame.source.height*=2;
+        const auto hires=AnimatedBillboardVertices(camera,frame,{},test.height*(20.0F/448));
+        for(int i=0;i<4;++i)assert(hires[i].x==vertices[i].x&&hires[i].y==vertices[i].y&&hires[i].z==vertices[i].z);
+    }
 }
 /// @brief 读取所有未来关卡、自机和特效；每个真实脚本运行 120 帧，执行停止标签或中断后再推进。
 void TestAllNativeAssets() {
@@ -179,6 +219,12 @@ void TestCorruptFiles() {
         } catch(const std::runtime_error&) {failed=true;}
         assert(failed);
     };
+    const auto spriteAt=unsigned(original[64])|unsigned(original[65])<<8|unsigned(original[66])<<16|unsigned(original[67])<<24;
+    for(const auto bits:{0xbf800000U,0x7fc00000U}) {
+        auto invalidSize=original;
+        for(int i=0;i<4;++i)invalidSize[spriteAt+20+i]=static_cast<unsigned char>(bits>>(i*8));
+        reject(invalidSize);
+    }
     auto bytes=original;bytes[64]=bytes[65]=bytes[66]=bytes[67]=255;reject(bytes);
     auto archive=anm::LoadArchive(kAssets/definition.anm);
     const auto& instructions=archive.FindScript(0)->instructions;
@@ -192,4 +238,4 @@ void TestCorruptFiles() {
 }
 }
 /// @brief 由核心测试入口调用；任何原始资源损坏或动画契约回归都会使测试失败。
-void RunAnimationTests() { TestRealTiming();TestActorInterruptTiming();TestNativeBulletLogicalSize();TestAllNativeAssets();TestBulletAndActorBindings();TestEffectSemantics();TestCorruptFiles(); }
+void RunAnimationTests() { TestRealTiming();TestActorInterruptTiming();TestNativeBulletLogicalSize();TestNativeActorAndPlayerGeometry();TestAllNativeAssets();TestBulletAndActorBindings();TestEffectSemantics();TestCorruptFiles(); }

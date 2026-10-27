@@ -9,11 +9,11 @@ namespace {
 const auto kVisuals=[] {
     auto visuals=stage_assets::CommonBattleVisuals();
     constexpr std::array<VisualDefinition,5> actors{{
-        {.id=kFairy,.worldHeight=1.8F,.animation={battle::Atlas::Stage6Enemies,0},.defeatVisual=kNativeDefeat},
-        {.id=kDarkFairy,.worldHeight=1.8F,.animation={battle::Atlas::Stage6Enemies,3},.defeatVisual=kNativeDefeat},
-        {.id=kOrb,.worldHeight=1.488F,.animation={battle::Atlas::Stage6Enemies,10},.defeatVisual=kNativeDefeat},
-        {.id=kRemilia,.worldHeight=3.2F,.animation={battle::Atlas::Remilia,160},.defeatVisual=kNativeDefeat},
-        {.id=kSakuya,.worldHeight=3.2F,.animation={battle::Atlas::Sakuya,128},.defeatVisual=kNativeDefeat}
+        {.id=kFairy,.animation={battle::Atlas::Stage6Enemies,0},.defeatVisual=kNativeDefeat},
+        {.id=kDarkFairy,.animation={battle::Atlas::Stage6Enemies,3},.defeatVisual=kNativeDefeat},
+        {.id=kOrb,.animation={battle::Atlas::Stage6Enemies,10},.defeatVisual=kNativeDefeat},
+        {.id=kRemilia,.animation={battle::Atlas::Remilia,160},.defeatVisual=kNativeDefeat},
+        {.id=kSakuya,.animation={battle::Atlas::Sakuya,128},.defeatVisual=kNativeDefeat}
     }};
     visuals.insert(visuals.end(),actors.begin(),actors.end());
     constexpr std::array<std::string_view,4> faces{"stages/stage6/portraits/remilia/face10a_0.png","stages/stage6/portraits/remilia/face10a_0.png",

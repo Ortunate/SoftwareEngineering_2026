@@ -303,7 +303,7 @@ void TestStage1Content() {
         const auto id=content->PlayerOptionVisual(side);
         assert(id==(side==0 ? stage1::kPlayerOptionLeft : stage1::kPlayerOptionRight));
         assert(visuals[id].id==id && visuals[id].animation.atlas==battle::Atlas::Reimu);
-        assert(visuals[id].animation.script==128+side && visuals[id].worldHeight==0.42F);
+        assert(visuals[id].animation.script==128+side && visuals[id].worldHeight==1.0F);
     }
     assert(content->PlayerOptionVisual(-1)==kInvalidVisualId && content->PlayerOptionVisual(2)==kInvalidVisualId);
     assert(content->BossPortraitVisual()!=stage1::kRumia);
@@ -389,7 +389,22 @@ void TestPlayableCatalog() {
         const auto content=CreateStageContent(id);
         assert(content && !content->Events().empty() && !content->Assets().visuals.empty());
         StageDirector director(content->Events()); // 同时验证所有生产事件表的依赖和参数约束。
-        assert(content->CreateBoss(false) && content->CreateBoss(true));
+        const auto mid=content->CreateBoss(false),final=content->CreateBoss(true);
+        // 原 ECL 103 的 X/Y 全宽，受弹球取短边的一半；道中咲夜在对白开战时才从 56 改为 40。
+        constexpr std::array<float,6> midWidths{48,45,56,40,56,56},finalWidths{48,48,56,48,56,56};
+        assert(mid&&final);
+        assert(std::abs(mid->hitRadius-midWidths[index]*0.5F*(20.0F/448))<1e-6F);
+        assert(std::abs(final->hitRadius-finalWidths[index]*0.5F*(20.0F/448))<1e-6F);
+        if(index>=4) {
+            mid->ResumeCombat();
+            assert(std::abs(mid->hitRadius-20*(20.0F/448))<1e-6F);
+        }
+        for(const auto& event:content->Events())if(const auto* spawn=std::get_if<SpawnActors>(&event.action)) {
+            const float radius=spawn->actor.hitRadius;
+            // 二面有全宽 16/22 的小演员，其他当前时间轴演员均为全宽 28。
+            assert(std::abs(radius-14*(20.0F/448))<1e-6F || (index==1&&
+                (std::abs(radius-8*(20.0F/448))<1e-6F||std::abs(radius-11*(20.0F/448))<1e-6F)));
+        }
     }
     const auto invalid=static_cast<StageId>(255);
     assert(StageNumber(invalid)==0 && !NextStage(invalid));

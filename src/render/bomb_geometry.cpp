@@ -91,7 +91,7 @@ void DrawOrbOrStar(Texture2D texture,const anm::Archive& archive,const PlayerBom
         }
     }
     const float h=sprite.height*std::abs(sprite.frame.scale.y);
-    const float w=sprite.height*sprite.frame.source.width/std::max(1.0F,sprite.frame.source.height)*std::abs(sprite.frame.scale.x);
+    const float w=sprite.height*sprite.frame.LogicalSize().x/std::max(1.0F,sprite.frame.LogicalSize().y)*std::abs(sprite.frame.scale.x);
     for(const auto axes:std::array<Axes,3>{{{{1,0,0},{0,1,0}},{{0,0,1},{0,1,0}},{{1,0,0},{0,0,1}}}})
         Plane(texture,archive,sprite.frame,sprite.position,axes.right,axes.up,w,h,Alpha(color,0.65F),sprite.frame.rotation.z);
 }

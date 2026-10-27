@@ -4,6 +4,7 @@
 
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/data/native_combat.hpp"
+#include "gameplay/data/native_sizes.hpp"
 
 #include <span>
 #include <array>
@@ -54,8 +55,8 @@ public:
     static constexpr int kMaxPower = 128;
     /// @brief 自机弹和副机共用的不透明度（0～255），与贴图及原生动画 Alpha 相乘。
     static constexpr unsigned char kShotAlpha = 51;
-    /// @brief 两角色副机未缩放的世界高度；原始直径均为 36 逻辑像素，弹束偏移和外观清单共用该换算。
-    static constexpr float kOptionWorldHeight = 0.42F;
+    /// @brief 两角色副机未缩放的世界高度；原生显示直径均为 16 逻辑像素；第一视角模块的局部布局另行适配，不从显示直径反推。
+    static constexpr float kOptionWorldHeight = native_sizes::kOptionHeight;
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
     void Reset();
     /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。

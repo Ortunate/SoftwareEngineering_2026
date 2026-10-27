@@ -3,6 +3,7 @@
 #include "render/sprite_renderer.hpp"
 #include "render/animated_sprite.hpp"
 #include "render/bomb_geometry.hpp"
+#include "gameplay/data/native_sizes.hpp"
 
 #include "rlgl.h"
 
@@ -13,14 +14,11 @@
 namespace koumakyou {
 namespace {
 
-// 恋之御札激光额外加宽以改善三维视角下的辨识度；只影响显示，不改变原生判定宽度。
-constexpr float kMarisaLaserVisualWidthScale = 1.5F;
-
 /// @brief 计算原生激光带的世界全宽；自机脚本缩放只改变外观，不影响碰撞半径。
 float AnimatedBeamWidth(const Bullet& beam,const anm::Frame& frame) {
-    const float nativeScale=beam.playerShotKind==PlayerShotKind::Laser
-        ? std::abs(frame.scale.x)*kMarisaLaserVisualWidthScale : 1.0F;
-    return beam.radius*beam.BeamVisualScale()*2*nativeScale;
+    if(beam.playerShotKind==PlayerShotKind::Laser)
+        return frame.LogicalSize().x*native_sizes::kWorldPerPixel*std::abs(frame.scale.x)*beam.visualScale*beam.BeamVisualScale();
+    return beam.radius*beam.BeamVisualScale()*2;
 }
 
 /// @brief 负宽度表示保守的无界投影；接触边界也视为重叠，不能漏掉柔边或舍入后的一个像素。
@@ -128,8 +126,18 @@ SpriteSpec Spec(const VisualResource& visual,float height,const anm::Frame* fram
             initial.Start(*visual.archive,visual.animation.script,visual.animation.spriteOffset,visual.animation.initialSprite);
             result.animation=initial.Sample();
         }
+        if(visual.worldUnitsPerPixel>0) {
+            // height/基准高度只携带入退场或副机缩放；换帧后的显示尺寸仍来自当前精灵。
+            const float scale=visual.worldHeight>0 ? height/visual.worldHeight : 1;
+            result.worldHeight=result.animation.LogicalSize().y*visual.worldUnitsPerPixel*scale;
+        }
     }
     return result;
+}
+
+/// @brief 原生弹体的基础显示独立于判定半径；visualScale 仅保留近目标出射模块的等比缩小。
+float BulletHeight(const VisualResource& visual,const Bullet& bullet) {
+    return visual.worldUnitsPerPixel>0 ? visual.worldHeight*bullet.visualScale : bullet.radius*visual.bulletDiameterScale;
 }
 
 const VisualResource& FindVisual(std::span<const VisualResource> visuals,
@@ -249,7 +257,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         const auto spec=Spec(visual,height,animation,motion);
         // 旧 PNG/几何外观保留既有切分；原生公告板使用与绘制完全相同的 ANM 四角，涵盖旋转、镜像和偏移。
         if(!spec.archive)return SpritePlane{depth(position)};
-        const auto points=AnimatedBillboardVertices(camera,spec.animation,position,height,spec.pivotUv,motion);
+        const auto points=AnimatedBillboardVertices(camera,spec.animation,position,spec.worldHeight,spec.pivotUv,motion);
         Vector3 center{};
         float near=INFINITY,far=-INFINITY;
         for(const auto point:points) {
@@ -304,9 +312,9 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             DrawSphere(bullet.position,bullet.radius,bullet.color);return;
         }
         const float distance=DistanceSquared(bullet.position,camera.position);
-        if(bullet.visual>=visuals.size() || distance<0.7F*0.7F)return;
+        if(bullet.visual>=visuals.size() || (!visual.archive&&distance<0.7F*0.7F))return;
         if(!visual.archive && bullet.owner==BulletOwner::Enemy && distance<1.1F*1.1F)return;
-        const auto plane=spritePlane(visual,bullet.radius*visual.bulletDiameterScale,bullet.position,
+        const auto plane=spritePlane(visual,BulletHeight(visual,bullet),bullet.position,
                                   &bullet.animation.player.Sample(),bullet.velocity);
         // 同深度按插入顺序稳定绘制，光晕先于自身弹体，避免光效盖住前方角色或道具。
         if(visual.glow && !visual.archive && distance<=8.0F*8.0F && glowCounts_[bullet.visual]++<2048)
@@ -420,7 +428,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         } else if(command.kind==Kind::Bullet) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
             if(visual.mode==VisualMode::Sphere)DrawSphere(bullet.position,bullet.radius,bullet.color);
-            else DrawSprite(camera,screenUp,Spec(visual,bullet.radius*visual.bulletDiameterScale,
+            else DrawSprite(camera,screenUp,Spec(visual,BulletHeight(visual,bullet),
                             &bullet.animation.player.Sample(),bullet.velocity),bullet.position,{255,255,255,bullet.color.a});
         } else if(command.kind==Kind::Glow) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
@@ -446,7 +454,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                     // 镜头进入球体时保留实际几何和攻击，仅减弱近眼曝光，防止回旋光球把第一人称画面染成整屏白块。
                     const float distance=std::sqrt(DistanceSquared(camera.position,sample.volume.origin));
                     const float visualRadius=sample.height*0.5F*std::max(std::abs(sample.frame.scale.y),
-                        std::abs(sample.frame.scale.x)*sample.frame.source.width/std::max(1.0F,sample.frame.source.height));
+                        std::abs(sample.frame.scale.x)*sample.frame.LogicalSize().x/std::max(1.0F,sample.frame.LogicalSize().y));
                     const float radius=std::max({0.01F,sample.volume.radius,visualRadius});
                     const float near=std::clamp((distance/radius-0.35F)/1.3F,0.0F,1.0F);
                     const float minimum=sample.shape==PlayerBombSprite::Shape::Star ? 0.005F : 0.075F;

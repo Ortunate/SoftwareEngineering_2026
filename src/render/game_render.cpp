@@ -120,7 +120,8 @@ void Game::DrawWorld() const {
         rlEnableDepthMask();
         rlEnableBackfaceCulling();
     }
-    stageContent_->DrawScenery(static_cast<float>(scenerySeconds_));
+    // 离屏尺寸/副机对照允许暂时移出内容接口；此时仍可独立绘制场地与其他已加载图层。
+    if(stageContent_)stageContent_->DrawScenery(static_cast<float>(scenerySeconds_));
     DrawArena();
     std::array<const behavior::Actor*, kActorCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;

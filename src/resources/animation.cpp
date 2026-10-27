@@ -47,6 +47,11 @@ Archive LoadArchive(const std::filesystem::path& path) {
         const auto at=Word(bytes,64+4*i);
         Sprite sprite{static_cast<int>(Word(bytes,at)),{Real(bytes,at+4),Real(bytes,at+8),Real(bytes,at+12),Real(bytes,at+16)}};
         if(sprite.source.width<=0 || sprite.source.height<=0)throw std::runtime_error("Empty ANM sprite");
+        const float width=Real(bytes,at+20),height=Real(bytes,at+24);
+        if(width<0 || height<0)throw std::runtime_error("Invalid ANM display size");
+        // 两个维度独立回退；米弹的 14×16 和火球的 30×30 不能用裁图统一推算。
+        sprite.displaySize={width==0 ? sprite.source.width*480/1080 : width,
+                            height==0 ? sprite.source.height*480/1080 : height};
         archive.sprites.push_back(sprite);
     }
     std::sort(archive.sprites.begin(),archive.sprites.end(),[](auto& a,auto& b){return a.id<b.id;});
@@ -90,7 +95,7 @@ Archive LoadArchive(const std::filesystem::path& path) {
 void Player::SetSprite(int id) {
     const auto* sprite=archive_ ? archive_->FindSprite(id) : nullptr;
     if(!sprite)throw std::runtime_error("Animation references unavailable sprite");
-    frame_.sprite=id;frame_.source=sprite->source;
+    frame_.sprite=id;frame_.source=sprite->source;frame_.displaySize=sprite->displaySize;
 }
 void Player::SetRotationZ(float radians) {
     if(!std::isfinite(radians))throw std::invalid_argument("Non-finite animation rotation");

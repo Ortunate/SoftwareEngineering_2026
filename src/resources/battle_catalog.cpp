@@ -35,15 +35,24 @@ Selection EnemyBullet(int type,int color) {
     const int colors=type<=5 ? 16 : type==7 ? 1 : type==9 ? 5 : 8;
     return {type==9 ? Atlas::BulletEffects : Atlas::Bullets,type==9 ? 0 : type,color%colors};
 }
-Vector2 EnemyBulletLogicalSize(int type) {
+Vector2 EnemyBulletLogicalSize(int type,int color) {
     // 新典加载器为未显式指定逻辑尺寸的精灵应用自身设计分辨率；这里保存换算后的世界结果。
     // 6～9 的逻辑高达到原生“大弹”筛选阈值；1～5 仍属小弹，不能拿裁图的 36/72 像素分类。
     constexpr std::array<Vector2,10> sizes{{{0.357142857F,0.357142857F},{0.714285714F,0.714285714F},
-        {0.634920635F,0.714285714F},{0.714285714F,0.714285714F},{0.634920635F,0.714285714F},
-        {0.634920635F,0.714285714F},{1.42857143F,1.42857143F},{1.34920635F,1.34920635F},
+        {0.625F,0.714285714F},{0.714285714F,0.714285714F},{0.625F,0.714285714F},
+        {0.625F,0.714285714F},{1.42857143F,1.42857143F},{1.33928571F,1.33928571F},
         {1.42857143F,1.42857143F},{2.85714286F,2.85714286F}}};
-    if(type<0||type>=static_cast<int>(sizes.size()))throw std::invalid_argument("Invalid native bullet size");
+    const auto selection=EnemyBullet(type,color);
+    // etama4 的最后一色是 30×30，而前四色为 64×64；判定仍由 9 号模板保持直径 32。
+    if(type==9&&selection.spriteOffset==4)return {1.33928571F,1.33928571F};
     return sizes[type];
+}
+float EnemyBulletHitRadius(int type) {
+    // EXE RVA 0x12979～0x12a3a 的模板全宽 4/6/4/6/5/4/16/11/9/32，先除二再转为世界单位。
+    constexpr std::array<float,10> radii{0.0892857143F,0.133928571F,0.0892857143F,0.133928571F,
+        0.111607143F,0.0892857143F,0.357142857F,0.245535714F,0.200892857F,0.714285714F};
+    if(type<0||type>=static_cast<int>(radii.size()))throw std::invalid_argument("Invalid native bullet radius");
+    return radii[type];
 }
 Selection BulletSpawn(int type,int color,int frames) {
     const auto body=EnemyBullet(type,color);

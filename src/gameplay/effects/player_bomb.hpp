@@ -1,6 +1,7 @@
 // 本文件定义四种新典 Bomb 的固定 60 Hz 攻击、清弹和三维演出实例，不拥有目标或图形资源。
 #pragma once
 #include "gameplay/data/native_combat.hpp"
+#include "gameplay/data/native_sizes.hpp"
 #include "gameplay/effects/bomb_volume.hpp"
 #include "resources/battle_catalog.hpp"
 #include <array>
@@ -16,8 +17,8 @@ struct PlayerBombDefinition {
 };
 /// @brief 返回四种御札各自的 Bomb，编号与 ShotType 相同；非法机体抛 invalid_argument。
 [[nodiscard]] const PlayerBombDefinition& BombDefinition(ShotType shot);
-/// @brief 原作宽度 384 映射战场横向 20 世界单位；伤害、速度、清弹容差共用此比例。
-inline constexpr float kBombWorldPixel=20.0F/384;
+/// @brief Bomb 的原生尺寸、运动与清弹容差沿用全战斗统一的世界/逻辑像素比例。
+inline constexpr float kBombWorldPixel=native_sizes::kWorldPerPixel;
 inline constexpr float kBombCancelMargin=20*kBombWorldPixel;
 /// @brief 魔札将场地按每轴 4 格铺成 64 个等体积区域；180 帧抵达格心并保持至结束。
 /// 每颗星沿真实路径攻击，半径仍为原作 64 像素；体积覆盖率不计清弹容差或目标半径。

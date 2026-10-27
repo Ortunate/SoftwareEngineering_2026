@@ -24,7 +24,7 @@ Stage6Boss::Stage6Boss(bool final,behavior::UpdateRate rate,bool spatial):actor_
     active=true;phase=0;visual=final ? kRemilia : kSakuya;presentation.Reset(ActorKind::Boss);
     health=maxHealth=final ? Health().finalEntrance : Health().mid;
     actor_.Reset(final ? Vector3{2.85714293F,0,12.8571424F} : Vector3{-10,0,4.28571415F},health,final ? 3098U : 2493U);
-    ConfigureBehavior(actor_,spatial);actor_.damageable=false;actor_.contactEnabled=false;
+    ConfigureBehavior(actor_,spatial);actor_.hitRadius=hitRadius=native_sizes::kBoss56Radius;actor_.damageable=false;actor_.contactEnabled=false;
     actor_.Start(final ? remilia::Entrance(actor_) : sakuya::Entrance(actor_));position=actor_.Position();
 }
 void Stage6Boss::SetPlayerShot(ShotType shot) {
@@ -38,6 +38,8 @@ void Stage6Boss::ResumeCombat() {
     waiting_=false;phase=1;StartPhase();
 }
 void Stage6Boss::StartPhase() {
+    // 道中入场全宽 56，开战 ECL 改为 40；符卡继承该尺寸。
+    if(!final_)actor_.hitRadius=hitRadius=native_sizes::kBoss40Radius;
     const auto& h=Health();const bool spell=phase%2==0;const int group=(phase-1)/2;
     actor_.health=actor_.maxHealth=!final_ ? (spell ? h.midSpell[static_cast<int>(shot_)] : h.mid) :
         phase==9 ? h.last : spell ? h.reserve[group] : h.main[group];
@@ -77,7 +79,7 @@ void Stage6Boss::UpdateBatTransformation(float seconds) {
 bool Stage6Boss::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!active)return false;
     presentation.Update(seconds);actor_.health=health;actor_.Update(seconds,player,bullets);health=actor_.health;maxHealth=actor_.maxHealth;
-    UpdateBatTransformation(seconds);position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
+    UpdateBatTransformation(seconds);hitRadius=actor_.hitRadius;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
     animationScript=actor_.animationScript;animationAge=actor_.animationAge;animationRevision=actor_.animationRevision;
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(actor_.deathEffect,0,2));return actor_.pendingCallback||actor_.finished;
 }

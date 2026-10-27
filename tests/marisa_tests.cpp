@@ -28,11 +28,12 @@ void TestNativeSchedules() {
                 player.Update(frame==0?0:1.0F/fps,{.focus=focus,.fire=true},*pool,visuals,true);
                 pool->Pool().ForEachActive([&](const Bullet& bullet) {
                     assert(bullet.color.a==Player::kShotAlpha && bullet.homingTurnRate==0);
+                    if(bullet.playerShotKind!=PlayerShotKind::Laser)assert(std::abs(bullet.radius-6*(20.0F/448))<1e-6F);
                     if(bullet.playerShotKind==PlayerShotKind::Missile) {
                         ++missiles;assert(bullet.impactVisual>=stage1::kMarisaExplosion && bullet.impactVisual<stage1::kMarisaExplosion+4);
                         assert(std::abs(bullet.acceleration.z-30)<0.0001F);
                     } else if(bullet.playerShotKind==PlayerShotKind::Laser) {
-                        ++lasers;assert(bullet.beamLength==32 && bullet.damagePerSecond>0);
+                        ++lasers;assert(std::abs(bullet.beamLength-480*(20.0F/448))<0.00001F && bullet.damagePerSecond>0);
                     } else {
                         ++main;assert(bullet.visual==stage1::kMarisaPrimary);
                         assert(std::abs(BulletSystem::Length(bullet.velocity)-20)<0.0001F);
@@ -64,7 +65,7 @@ void TestMissileMotionAndImpact() {
         else assert(game_math::DistanceSquared(expected,missile->position)<0.000001F);
         pool->ExplodePlayerMissile(*missile);
         assert(missile->active && missile->playerShotKind==PlayerShotKind::Explosion);
-        assert(missile->visual==stage1::kMarisaExplosion && std::abs(missile->radius-32*Player::kOptionWorldHeight/36*0.5F)<0.0001F);
+        assert(missile->visual==stage1::kMarisaExplosion && std::abs(missile->radius-32*Player::kOptionWorldHeight/16*0.5F)<0.0001F);
         assert(missile->age==0 && std::abs(missile->maxAge-20.0F/60)<0.0001F);
         pool->Update(0.1F);
         assert(std::abs(missile->ContactDamage()-24)<0.0001F); // 原始 18 取四分之一为 4，每接触帧 4 点，即每秒 240 原始点。

@@ -9,11 +9,11 @@ namespace {
 const auto kVisuals=[] {
     auto visuals=stage_assets::CommonBattleVisuals();
     const std::array<VisualDefinition,5> actors{{
-        {.id=kFairy,.worldHeight=1.8F,.animation={battle::Atlas::Stage2Enemies,0},.defeatVisual=kNativeDefeat},
-        {.id=kDarkFairy,.worldHeight=1.8F,.animation={battle::Atlas::Stage2Enemies,3},.defeatVisual=kNativeDefeat},
-        {.id=kOrb,.worldHeight=1.488F,.animation={battle::Atlas::Stage2Enemies,12},.defeatVisual=kNativeDefeat},
-        {.id=kCirno,.worldHeight=3.2F,.animation={battle::Atlas::Cirno,128},.defeatVisual=kNativeDefeat},
-        {.id=kDaiyousei,.worldHeight=2.8F,.animation={battle::Atlas::Stage2Enemies,64},.defeatVisual=kNativeDefeat}
+        {.id=kFairy,.animation={battle::Atlas::Stage2Enemies,0},.defeatVisual=kNativeDefeat},
+        {.id=kDarkFairy,.animation={battle::Atlas::Stage2Enemies,3},.defeatVisual=kNativeDefeat},
+        {.id=kOrb,.animation={battle::Atlas::Stage2Enemies,12},.defeatVisual=kNativeDefeat},
+        {.id=kCirno,.animation={battle::Atlas::Cirno,128},.defeatVisual=kNativeDefeat},
+        {.id=kDaiyousei,.animation={battle::Atlas::Stage2Enemies,64},.defeatVisual=kNativeDefeat}
     }};
     visuals.insert(visuals.end(),actors.begin(),actors.end());
     constexpr std::array<std::string_view,2> faces{

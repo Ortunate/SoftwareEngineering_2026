@@ -23,7 +23,7 @@ void RumiaBoss::StartMidboss() {
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
     const float initialHealth=native_combat::RequireLiteral(native_combat::Spawn(1,0,1882,9));
     behavior_.Reset({0,0,11.4285717F},initialHealth,1882);
-    ConfigureBehavior(behavior_);behavior_.Start(rumia::Midboss(behavior_));
+    ConfigureBehavior(behavior_);behavior_.hitRadius=hitRadius=native_sizes::kBoss48Radius;behavior_.Start(rumia::Midboss(behavior_));
     behavior_.damageable=false;
     position=behavior_.Position(); health=maxHealth=initialHealth;
 }
@@ -31,7 +31,7 @@ void RumiaBoss::StartFinalBoss() {
     encounter_=Encounter::Final; active=true; phase=1; retiring_=defeated_=false;
     presentation.Reset(ActorKind::Boss); visual=kRumia; phaseTimer=0;
     behavior_.Reset({0,0,5.71428585F},HealthGroups()[0].total,5093);
-    ConfigureBehavior(behavior_);behavior_.Start(rumia::FirstNonspell(behavior_));
+    ConfigureBehavior(behavior_);behavior_.hitRadius=hitRadius=native_sizes::kBoss48Radius;behavior_.Start(rumia::FirstNonspell(behavior_));
     behavior_.damageable=false;
     position=behavior_.Position(); health=maxHealth=HealthGroups()[0].total;
 }
@@ -42,7 +42,7 @@ bool RumiaBoss::Update(float dt, Vector3 player, BulletSystem& bullets) {
     behavior_.Update(dt,player,bullets);
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(behavior_.deathEffect,0,2));
     animationScript=behavior_.animationScript;animationAge=behavior_.animationAge;animationRevision=behavior_.animationRevision;
-    health=behavior_.health; maxHealth=behavior_.maxHealth;
+    hitRadius=behavior_.hitRadius;health=behavior_.health; maxHealth=behavior_.maxHealth;
     position=behavior_.Position(); phaseTimer=behavior_.phaseFrames/60.0F;
     return behavior_.pendingCallback!=nullptr || behavior_.finished;
 }

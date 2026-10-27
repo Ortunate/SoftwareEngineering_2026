@@ -17,7 +17,7 @@ const HealthGroups& Health() {
 }
 Stage5Boss::Stage5Boss(bool final,behavior::UpdateRate rate,bool spatial):actor_(rate),final_(final) {
     active=true;phase=0;visual=kSakuya;presentation.Reset(ActorKind::Boss);health=maxHealth=final ? 1 : Health().mid;
-    actor_.Reset({-10,0,4.28571415F},health,final ? 7604U : 3272U);ConfigureBehavior(actor_,spatial);
+    actor_.Reset({-10,0,4.28571415F},health,final ? 7604U : 3272U);ConfigureBehavior(actor_,spatial);actor_.hitRadius=hitRadius=native_sizes::kBoss56Radius;
     actor_.Start(sakuya::Entrance(actor_));position=actor_.Position();
 }
 void Stage5Boss::ResumeCombat() {
@@ -25,6 +25,8 @@ void Stage5Boss::ResumeCombat() {
     waiting_=false;phase=1;StartPhase();
 }
 void Stage5Boss::StartPhase() {
+    // 道中入场 ECL 全宽 56，开战子程序改为 40，后续符卡继承。
+    if(!final_)actor_.hitRadius=hitRadius=native_sizes::kBoss40Radius;
     const auto& h=Health();using namespace sakuya;
     constexpr std::array<behavior::Entry,6> entries{FirstNonspell,ClockCorpse,SecondNonspell,LunaClock,ThirdNonspell,Marionette};
     constexpr std::array<int,6> settings{24,47,36,53,43,61};
@@ -40,7 +42,7 @@ void Stage5Boss::StartPhase() {
 bool Stage5Boss::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!active)return false;
     presentation.Update(seconds);actor_.health=health;actor_.Update(seconds,player,bullets);
-    health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
+    hitRadius=actor_.hitRadius;health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
     animationScript=actor_.animationScript;animationAge=actor_.animationAge;animationRevision=actor_.animationRevision;
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(actor_.deathEffect,0,2));
     return actor_.pendingCallback||actor_.finished;

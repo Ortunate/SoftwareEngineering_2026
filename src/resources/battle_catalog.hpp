@@ -30,9 +30,11 @@ struct Selection {
 /// @brief 原作弹幕类型 0–9 及颜色 0–15，取对应脚本和图集色差；无效输入抛 invalid_argument。
 /// 大玉/刀弹使用 8 色，火球仅一色，大泡使用 5 色；超出该类型色数的颜色循环到有效色。
 [[nodiscard]] Selection EnemyBullet(int type, int color);
-/// @brief 返回弹种 0～9 的逻辑宽/高，单位为世界长度；非法编号抛 invalid_argument。
+/// @brief 返回弹种 0～9、颜色 0～15 的逻辑宽/高，单位为世界长度；非法编号抛 invalid_argument。
 /// 这是新典 ANM 加载后的几何尺寸，独立于裁图像素和高清 DDS；反弹使用半尺寸，不能从视觉贴图反推。
-[[nodiscard]] Vector2 EnemyBulletLogicalSize(int type);
+[[nodiscard]] Vector2 EnemyBulletLogicalSize(int type,int color=0);
+/// @brief 返回新典普通敌弹的世界判定半径；模板不随颜色变化，非法弹种抛 invalid_argument。
+[[nodiscard]] float EnemyBulletHitRadius(int type);
 /// @brief 原显现动画：frames 必须为 10/16/32；颜色按原 16/8 色映射到显现光圈色。
 [[nodiscard]] Selection BulletSpawn(int type, int color, int frames);
 /// @brief 原道具编号 0–6，包含未使用的 Bomb、满火力和残机；无效输入抛 invalid_argument。

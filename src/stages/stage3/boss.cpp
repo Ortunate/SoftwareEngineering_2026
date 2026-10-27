@@ -19,7 +19,7 @@ Stage3Boss::Stage3Boss(bool final,behavior::UpdateRate rate,bool spatial):actor_
     active=true;phase=final ? 0 : 1;visual=kMeiling;presentation.Reset(ActorKind::Boss);
     health=maxHealth=final ? 1 : Health().mid;
     actor_.Reset({7.14285707F,0,14.2857141F},health,final ? 6254U : 3474U);
-    ConfigureBehavior(actor_,spatial);actor_.damageable=false;
+    ConfigureBehavior(actor_,spatial);actor_.hitRadius=hitRadius=native_sizes::kBoss56Radius;actor_.damageable=false;
     actor_.Start(final ? meiling::Entrance(actor_) : meiling::Midboss(actor_));position=actor_.Position();
 }
 void Stage3Boss::ResumeCombat() {
@@ -30,7 +30,7 @@ void Stage3Boss::ResumeCombat() {
 bool Stage3Boss::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!active)return false;
     presentation.Update(seconds);actor_.health=health;actor_.Update(seconds,player,bullets);
-    health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
+    hitRadius=actor_.hitRadius;health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
     animationScript=actor_.animationScript;animationAge=actor_.animationAge;animationRevision=actor_.animationRevision;
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(actor_.deathEffect,0,2));
     return actor_.pendingCallback||actor_.finished;

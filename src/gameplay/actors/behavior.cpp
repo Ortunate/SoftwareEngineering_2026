@@ -29,7 +29,7 @@ void Actor::Reset(Vector3 initialPosition,float hp,std::uint32_t seed,bool mirro
     phaseFrames=0;timeoutFrames=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();defeatActors=false;
     animationScript=-1;animationAge=0;animationRevision=0;animationInterrupt.reset();animationInterruptSequence_=0;poses={-1,-1,-1,-1,-1};pose_=-1;
     random_=seed ? seed : 1;remainingTicks_=0;bullets_=nullptr;
-    active=true;phaseClockPaused=false;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=0.55F;
+    active=true;phaseClockPaused=false;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=native_sizes::kDefaultEnemyRadius;
     scoreValue=0;sourceItem=-2;presentation.Reset();animation={};entered_=false;retireOutside_=false;retirementHeights_.reset();defeatBase_=kInvalidVisualId;
 }
 void Actor::Activate(const Spawn& spawn) {

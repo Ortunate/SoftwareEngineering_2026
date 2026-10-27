@@ -108,9 +108,9 @@ void Game::ResolveCollisions() {
     if(state_==RunState::Playing && !dialogueActive_) {
         // 对话人物及退场快照不在本体判定中；本体只让玩家受击，不给敌人扣血、生成掉落或产生擦弹。
         actors_.ForEachActive([&](const behavior::Actor& enemy) {
-            if(enemy.CanContactPlayer() && player_.ContactEnemyBody(enemy.position,enemy.hitRadius))playerWasHit=true;
+            if(enemy.CanContactPlayer() && player_.ContactEnemyBody(enemy.position,enemy.hitRadius*native_sizes::kBodyContactScale))playerWasHit=true;
         });
-        if(boss_ && boss_->CanContactPlayer() && player_.ContactEnemyBody(boss_->position,boss_->hitRadius))playerWasHit=true;
+        if(boss_ && boss_->CanContactPlayer() && player_.ContactEnemyBody(boss_->position,boss_->hitRadius*native_sizes::kBodyContactScale))playerWasHit=true;
     }
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if(debugInvincible_)playerWasHit=false;

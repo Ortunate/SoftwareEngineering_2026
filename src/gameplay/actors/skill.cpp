@@ -89,7 +89,7 @@ void FireSpatial(const State& state,const Shot& shot,Vector3 origin,Vector3 play
             (fan&&!aimed ? 0 : shot.angle)+(fan ? 0 : layer*shot.spacing));
         if(randomSpeed)speed=random(first-last)+last;
         Bullet* bullet=bullets.Spawn(BulletOwner::Enemy,origin,Multiply(direction,speed),
-            shot.type==2 ? 0.223214286F : 0.0892857143F,kColors[color],visual);
+            battle::EnemyBulletHitRadius(shot.type),kColors[color],visual);
         // 各方向独立建立切向转轴，延迟 ±90° 转向沿球面切向展开，而非围绕某个全局轴聚集。
         if(bullet)ConfigureProjectile(*bullet,state,shot,direction,spatial::Frame::FromAxis(direction).right,1);
     }
@@ -144,7 +144,7 @@ void State::Fire(const Shot& shot,Vector3 position,Vector3 player,BulletSystem& 
             ? random(first-last)+last : first-(first-last)*layer/layers;
         const VisualId visual=type>=0 && type<10 ? static_cast<VisualId>(bulletBase+type*16+color) : fallback;
         Bullet* bullet=bullets.Spawn(BulletOwner::Enemy,origin,Multiply(direction,speed),
-                type==2 ? 0.223214286F : 0.0892857143F,kColors[color],visual);
+                battle::EnemyBulletHitRadius(type),kColors[color],visual);
         if(!bullet) continue;
         ConfigureProjectile(*bullet,*this,shot,direction,{0,1,0},heightFactor);
     }

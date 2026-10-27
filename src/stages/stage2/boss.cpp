@@ -19,13 +19,13 @@ Stage2Boss::Stage2Boss(bool final,behavior::UpdateRate rate,bool spatial):actor_
     active=true;phase=1;presentation.Reset(ActorKind::Boss);visual=final ? kCirno : kDaiyousei;
     health=maxHealth=final ? Groups().first : static_cast<float>(native_combat::RequireLiteral(native_combat::Spawn(2,0,2498,20)));
     actor_.Reset(final ? Vector3{0,0,5.71428585F} : Vector3{0,0,11.4285717F},health,final ? 5894U : 2498U);
-    ConfigureBehavior(actor_,spatial);actor_.damageable=false;
+    ConfigureBehavior(actor_,spatial);actor_.hitRadius=hitRadius=final ? native_sizes::kBoss48Radius : native_sizes::kBoss45Radius;actor_.damageable=false;
     actor_.Start(final ? cirno::FirstNonspell(actor_) : daiyousei::Midboss(actor_));position=actor_.Position();
 }
 bool Stage2Boss::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!active)return false;
     presentation.Update(seconds);actor_.health=health;actor_.Update(seconds,player,bullets);
-    health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
+    hitRadius=actor_.hitRadius;health=actor_.health;maxHealth=actor_.maxHealth;position=actor_.Position();phaseTimer=static_cast<float>(actor_.phaseFrames/60);
     animationScript=actor_.animationScript;animationAge=actor_.animationAge;animationRevision=actor_.animationRevision;
     defeatVisual=static_cast<VisualId>(kNativeDefeat+std::clamp(actor_.deathEffect,0,2));
     return actor_.pendingCallback||actor_.finished;

@@ -32,6 +32,7 @@ struct Bullet {
     float accelerationSeconds=1.0e9F; // 加速度剩余有效秒数；重启冻结弹时可独立设定，不重置视觉年龄。
     Vector3 rotationAxis{0.0F, 1.0F, 0.0F};
     float radius = 0.16F;
+    float visualScale = 1; // 原生显示的额外等比缩放；不从判定半径反推贴图大小。
     float age = 0.0F;
     float maxAge = 12.0F;
     float angularVelocity = 0.0F;

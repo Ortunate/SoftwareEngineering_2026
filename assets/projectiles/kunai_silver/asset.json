@@ -1,0 +1,49 @@
+{
+  "asset": "kunai_silver",
+  "nativeType": 4,
+  "nativeColor": 0,
+  "units": "normalized; total length approximately 1",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "parts": [
+    {
+      "name": "01_forged_blade",
+      "triangles": 288,
+      "closed": true
+    },
+    {
+      "name": "02_blade_socket",
+      "triangles": 764,
+      "closed": true
+    },
+    {
+      "name": "03_grip_core",
+      "triangles": 764,
+      "closed": true
+    },
+    {
+      "name": "04_grip_collar_upper",
+      "triangles": 764,
+      "closed": true
+    },
+    {
+      "name": "05_grip_collar_lower",
+      "triangles": 764,
+      "closed": true
+    },
+    {
+      "name": "06_woven_grip_binding",
+      "triangles": 5124,
+      "closed": true
+    },
+    {
+      "name": "07_pommel_ring",
+      "triangles": 3072,
+      "closed": true
+    }
+  ],
+  "humanAcceptance": "pending",
+  "textureResolution": 2048,
+  "reference": "real metal kunai; newly authored geometry and textures",
+  "triangles": 11540
+}

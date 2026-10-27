@@ -51,6 +51,8 @@ public:
               const SpriteShaders& shaders,
               const ActorEffectSystem& effects,
               std::span<const BombVolumeSprite> bombVolumes={}) const;
+    /// @brief 最近一次 Draw 排入的普通激光片段数，含预警、不含 Bomb；用于定位随弹量放大的渲染开销。
+    [[nodiscard]] std::size_t LastBeamSegmentCount() const { return beamSegmentCount_; }
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     /// @brief 在 Debug 构建中叠加判定球与发弹点。
     /// @param bullets 全部活动弹幕。
@@ -82,9 +84,19 @@ private:
         float from=0,to=1;
     };
     mutable std::vector<TransparentDraw> transparentDraws_;
-    // 缓冲逐帧复用；光束在精灵的深度平面处分段，避免一条长激光被整体排到演员前面或后面。
+    /// @brief 精灵沿相机前向的世界深度及投影包围框；透视坐标为相机 X/Z、Y/Z，正交坐标为 X、Y。
+    /// bounds.width < 0 表示无法安全界定（如跨越相机平面），必须保留该深度处的激光切分。
+    struct SpritePlane {
+        float depth;
+        Rectangle bounds{0,0,-1,-1};
+        // 实际四角覆盖的相机深度区间；倾斜公告板不能只用中心平面排除光束交集。
+        float nearDepth=0,farDepth=0;
+    };
+    // 缓冲逐帧复用；仅在投影可能重叠的精灵深度处分段，保留跨越演员前后的遮挡及连续 UV。
     mutable std::vector<const Bullet*> beams_;
-    mutable std::vector<float> spriteDepths_,bombActorDepths_,beamCuts_;
+    mutable std::vector<SpritePlane> spritePlanes_;
+    mutable std::vector<float> bombActorDepths_,beamCuts_;
+    mutable std::size_t beamSegmentCount_=0;
     mutable std::vector<int> glowCounts_;
 };
 

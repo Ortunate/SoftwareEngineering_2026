@@ -1,4 +1,4 @@
-// 本文件将二面演员、琪露诺原包立绘及本关音乐绑定到独立素材清单，公共玩家槽由共享模块提供。
+// 本文件将二面演员、琪露诺原姿态现代重绘立绘及本关音乐绑定到独立素材清单，公共玩家槽由共享模块提供。
 #include "stages/stage2/data.hpp"
 #include "stages/stage2/ids.hpp"
 #include "stages/common/assets.hpp"

@@ -2,6 +2,8 @@
 
 标题与对话立绘使用内置 ImageGen 生成；游戏界面文字与悬浮卡片由程序绘制，战斗角色、弹幕、道具及击破动画使用本机新典的原始素材。战斗 DDS/ANM 的完整目录与接口见 [原始战斗素材接口](NATIVE_BATTLE_ASSETS.md)。
 
+二至六面现已使用同一画风的现代重绘；全角色差分、装饰和手部重绘范围见 [立绘总览](STAGE_PORTRAITS.md)。
+
 | 文件 | 用途与生成提示 |
 |---|---|
 | `assets/runtime/common/title_reimu_modern.png` | 旧合成首页插画，仅在独立图层缺失时回退使用 |

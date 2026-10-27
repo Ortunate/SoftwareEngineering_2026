@@ -142,10 +142,6 @@ endif()
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
 target_link_libraries(generate_skybox PRIVATE raylib)
 
-add_executable(generate_sprite_assets EXCLUDE_FROM_ALL
-    tools/generate_sprite_assets.cpp)
-target_link_libraries(generate_sprite_assets PRIVATE raylib)
-
 add_executable(sprite_benchmark EXCLUDE_FROM_ALL tools/sprite_benchmark.cpp)
 target_link_libraries(sprite_benchmark PRIVATE koumakyou_engine)
 

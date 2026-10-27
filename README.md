@@ -63,8 +63,7 @@
 ├── assets/
 │   ├── runtime/common/                 # 启动时加载的天空盒、着色器和标题 BGM
 │   ├── runtime/stages/                 # 一至六面立绘及道中、Boss BGM
-│   ├── source/                         # 原始弹体图与旧背景参考图
-│   └── library/bgm/                    # 尚未在当前关卡使用的 BGM
+│   └── source/                         # 当前立绘的原始参考、来源及生成提示词
 ├── tools/                               # 素材生成器与渲染压力测试
 ├── tests/                               # 按设置、玩法、关卡拆分的测试
 └── docs/                                # 设计说明与录像对照记录
@@ -80,13 +79,13 @@
 - 支持 C++20 的编译器
 - Git，用于 CMake 首次下载 raylib 5.5
 
-raylib 会在首次配置时通过 CMake FetchContent 下载。仅 `assets/runtime` 会在构建时复制到可执行文件旁的 `assets` 目录；原图和备用音乐不进入运行包。
+raylib 会在首次配置时通过 CMake FetchContent 下载。仅 `assets/runtime` 会在构建时复制到可执行文件旁的 `assets` 目录；立绘原始参考和生成记录不进入运行包。
 
 `AssetManager` 在程序启动时加载菜单与关卡共用的天空盒和标题 BGM；进入各关时加载角色、弹幕、对话立绘、着色器及道中/Boss BGM；切关、结束或返回菜单前先清除全部借用者，再释放本关资源。世界角色使用原包 DDS/ANM，演出立绘独立加载。BGM 以流式方式播放，暂停游戏时暂停，静默截图模式不初始化音频设备。通用音效覆盖菜单、射击、击破、受击、Bomb、擦弹、拾取、符卡、通关与满火力，独立 SE 音量与 BGM 分开控制。新增插画、音效及字体的来源和重建方法见 [素材说明](docs/STAGE1_ASSETS.md)。
 
 天空盒素材是 `assets/runtime/common/crimson_mist_skybox.png`，按 OpenGL 的 +X、-X、+Y、-Y、+Z、-Z 顺序横向排列。六面由同一个方向采样函数生成；如需重绘，在项目根目录运行 `cmake --build build --target generate_skybox`，然后运行 `./build/generate_skybox assets/runtime/common/crimson_mist_skybox.png`（Windows 下使用对应的可执行文件路径）。常规构建只加载现成贴图，不在启动时生成纹理。
 
-`assets/source` 保留 `bullet_pearl.png` 与 `bullet_red.png` 原图；游戏使用裁去透明边并缩小到 512×512 的 `*_runtime.png`。重新生成时运行 `cmake --build build --target generate_sprite_assets`，然后运行 `./build/generate_sprite_assets assets/source assets/runtime/stages/stage1`。构建游戏目标时会把贴图和着色器复制到可执行文件旁。
+战斗角色、弹体、御札与道具统一使用 `assets/runtime/battle/native` 中的原始 DDS/ANM；旧替代 PNG、对应原图和裁剪生成器已移除。`assets/source` 保留当前立绘的原始参考、来源及生成提示词。构建游戏目标时会把运行时素材和着色器复制到可执行文件旁。
 
 需要检查高弹量绘制开销时，可运行 `cmake --build build --target sprite_benchmark`，再运行 `./build/sprite_benchmark assets/runtime`。该程序默认在隐藏窗口分别测量空场景和 8192 发弹幕场景的平均帧时间。需要测量实际可见窗口时，追加 `--visible`；两种模式的数值不可直接比较。
 

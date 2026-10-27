@@ -13,7 +13,7 @@
 | `assets/runtime/stages/stage1/portraits/reimu/*.png` | 灵梦 6 张原动作/表情的现代重绘，使用自然手指比例；a1 全身图保留为开局选择的半透明后景 |
 | `assets/runtime/stages/stage1/portraits/rumia/*.png` | 露米娅 4 张差分，保留金发、红结、黑白服装及平伸双臂；a0 用于默认对话，b0 用于符卡 |
 
-PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS 作为重绘参考，运行时立绘使用新绘制的 PNG；完整提示词保存在 `assets/source/portraits/prompts.json`。旧 `reimu_cutout.png`、`rumia_cutout.png` 与 `*_modern.png` 暂保留供比较，不再作为对话、菜单和 Boss 的立绘加载。
+PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS 作为重绘参考，运行时立绘使用新绘制的 PNG；完整提示词保存在 `assets/source/portraits/prompts.json`。一面根目录中已被替代的立绘、妖精、弹体、御札和道具 PNG 及其旧原图已移除；战斗使用原始 DDS/ANM，演出使用 `portraits` 中的差分。
 
 灵梦按 a0、a1、b0、b1、c0、c1 对应表情 0–5，露米娅按 a0、a1、b0、b1 对应 0–3。灵梦 a1 为已修正手指的样图；露米娅保留原素材右侧袖子出画面的构图。原 PNG 尺寸分别为 976×1612 和 887×1774，不重采样。对话通过清单中的 `dialogueCrop` 等比绘制上部；符卡使用完整图；世界露米娅使用独立 stg1enm2 动画，判定锚点为 `(0.5,0.5)`。
 
@@ -23,7 +23,7 @@ PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS �
 
 ## 新典界面图集
 
-`reference_frame.png` 为 CM 包的 `frame_zh-CN.dds` 格式转换，`reference_stage1.png` 为 `frame_stage1_zh-CN.dds` 格式转换。没有重采样或重新绘制；两者保留作原作界面参考。全窗口战斗界面不再加载侧栏图集，改为按关卡元数据绘制悬浮题签与状态卡。左上题签沿用新典一面的暖金文字、酒红斜带和带 `~` 的英文副标题；为适配紧凑浮窗，将斜排倾角收敛到 14°，完整保留关卡名称及下方独立的游玩模式。
+全窗口战斗界面按关卡元数据绘制悬浮题签与状态卡，旧侧栏参考图 `reference_frame.png` 和 `reference_stage1.png` 已移除。左上题签沿用新典一面的暖金文字、酒红斜带和带 `~` 的英文副标题；为适配紧凑浮窗，将斜排倾角收敛到 14°，完整保留关卡名称及下方独立的游玩模式。
 
 ## 音效
 

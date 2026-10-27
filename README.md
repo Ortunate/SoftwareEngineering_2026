@@ -140,7 +140,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 若 GitHub 下载失败，配置命令末尾追加 `-DFETCHCONTENT_SOURCE_DIR_RAYLIB="D:/Libraries/raylib-5.5"`（改为实际 raylib 源码目录，不是游戏项目）。
 
-Windows/MSVC 构建自动嵌入 UTF-8 应用清单，保留中文音乐名；无需修改系统全局 UTF-8 设置，也无需每次手工修补 exe。
+Windows 的 MSVC 与 MinGW 构建均自动嵌入 UTF-8 应用清单，保留中文音乐名；无需修改系统全局 UTF-8 设置，也无需每次手工修补 exe。MinGW 使用 `windres` 编译 `src/windows_utf8.rc`，该工具应随编译器一起安装。
 
 也可以使用 CMake GUI 打开项目根目录并选择对应的 Visual Studio 生成器。
 
@@ -151,6 +151,13 @@ cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 .\build\koumakyou.exe
+```
+
+有可用音频设备时，可额外静音验证标题和一面共 3 首 BGM 的文件加载、MP3 解码及播放推进；此测试不创建窗口，也不修改玩家设置：
+
+```powershell
+cmake --build build --target koumakyou_music_tests
+.\build\koumakyou_music_tests.exe
 ```
 
 ## 操作

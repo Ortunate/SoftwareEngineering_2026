@@ -23,8 +23,8 @@ def main() -> None:
         characters = set(chr(code) for code in range(32, 127))
         characters.update("·～「」《》：；，。！？（）★…←→↑↓、 / —")
         for path in args.source.rglob("*"):
-            if path.suffix in {".cpp", ".hpp"}:
-                characters.update(char for char in path.read_text() if '\u4e00' <= char <= '\u9fff')
+            if path.suffix in {".cpp", ".hpp", ".inc"}:
+                characters.update(char for char in path.read_text() if '\u2000' <= char <= '\uffff')
         text = "".join(sorted(characters))
     font = TTFont(args.font)
     options = subset.Options()

@@ -54,7 +54,9 @@ void Game::UpdateMainMenu() {
             if(spellPractice_)spellSelection_.page=spell::Page::Stage;
             state_ = RunState::StartSetup;
             break;
-        case 5: state_ = RunState::Score; break;
+        case 5:
+            scoreMode_=lastSelection_.challenge?1:0;scoreShot_=lastSelection_.character*2+lastSelection_.shot;
+            scorePageFromRun_=false;scoreHighlight_=-1;state_=RunState::Score;break;
         case 6: {
             // 音乐页借用 Stage 1 的流，离开时 EnterMainMenu 统一停止并释放。
             stage1::Stage1Content content;
@@ -74,6 +76,7 @@ void Game::UpdateMainMenu() {
 }
 
 void Game::UpdateMenuPage() {
+    if(state_==RunState::Score){UpdateScorePage();return;}
     if (state_ == RunState::StartSetup) {
         UpdateStartSetup();
         return;

@@ -25,7 +25,13 @@ using namespace game_math;
 void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
-    if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
+    if(state_==RunState::Ending) {
+        DrawEnding();
+    } else if(state_==RunState::ScoreSave || state_==RunState::ScoreName) {
+        DrawScoreEntry();
+    } else if(state_==RunState::Score) {
+        DrawScorePage();
+    } else if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
         DrawStartSetup();
     } else if (state_ == RunState::Loading) {
         DrawLoading();
@@ -33,8 +39,7 @@ void Game::Draw() const {
         DrawMainMenu();
     } else if (state_ == RunState::Options) {
         DrawOptions();
-    } else if (state_ == RunState::StartSetup || state_ == RunState::MusicRoom ||
-               state_ == RunState::Score || state_ == RunState::Credit) {
+    } else if (state_ == RunState::MusicRoom || state_ == RunState::Credit) {
         DrawMenuPage();
     } else {
         DrawWorld();

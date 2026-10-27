@@ -93,6 +93,8 @@ public:
     void UpdateAudio();
     /// @brief 设置全部已加载/未来加载的 BGM 音量；percent 限定到 0～100，不影响音效。
     void SetMusicVolumePercent(int percent);
+    /// @brief 临时演出音量系数，范围 0～1；与用户 BGM 音量相乘，不修改持久化设置，退出演出时恢复为 1。
+    void SetMusicGain(float gain);
     /// @brief 设置全部已加载/未来加载的音效音量；percent 钳制到 0～100，不影响 BGM。
     void SetSoundVolumePercent(int percent);
     /// @brief 按清单中的名字播放通用或当前关卡的音效。
@@ -134,6 +136,7 @@ private:
     std::unordered_map<battle::Atlas, BattleAtlasResource> battleAtlases_; // 按需图集统一随关卡卸载，目录本身不占 GPU。
     MusicSlot activeMusic_ = MusicSlot::None;
     int musicVolumePercent_ = 50;
+    float musicGain_ = 1;
     int soundVolumePercent_ = 60;
     bool commonLoaded_ = false;
     bool stageLoaded_ = false;

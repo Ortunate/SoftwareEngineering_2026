@@ -1340,7 +1340,8 @@ struct GameLifecycleProbe {
             const auto next=NextStage(*stage);game.ContinueStageClear();
             if(!next) {
                 assert(game.state_==RunState::Finishing);for(int tick=0;tick<200&&game.state_==RunState::Finishing;++tick)game.Update(1.0F/60);
-                assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty());break;
+                assert(game.state_==RunState::Loading && game.pendingEnding_==ending::Id::MarisaB && game.assets_.Stage().visuals.empty());
+                assert(game.clearedMainlineStages_==0x3f);break;
             }
             assert(game.state_==RunState::Loading&&game.stageId_==*next&&game.assets_.Stage().visuals.empty());
             assert(EnemyCount(game)==0&&game.actorEffects_.Pool().ActiveCount()==0&&game.bullets_.Pool().ActiveCount()==0&&PickupCount(game)==0);

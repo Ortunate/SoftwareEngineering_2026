@@ -576,7 +576,8 @@ void TestUnifiedUiInputs() {
         show(1); Key(game,KEY_X); // 首页返回只选中退出，不能直接退出游戏。
         Check(Probe::MenuSelection(game)==9 && !game.ShouldQuit(),"title back did not select Quit safely");
         Key(game,key);
-        Check(Probe::MenuSelection(game)==0,"title navigation alias failed");
+        // Debug 在 Quit 后还有 Preview；方向别名应进入实际下一项，不能固定假设 Quit 永远是末项。
+        Check(Probe::MenuSelection(game)==10%menu::kTitleRowCount,"title navigation alias failed");
     }
     // 删除的返回项不能保留悬停、点击或导航槽位；横条仅展示，不应把左键当成返回。
     for(const int id:{2,3,9,10}) {

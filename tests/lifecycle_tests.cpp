@@ -1094,7 +1094,10 @@ struct GameLifecycleProbe {
         };
         game.stageId_=StageId::Stage1;game.selectedCharacter_=game.selectedShot_=0;game.StartPreview();game.stage_=StageDirector{};
         game.boss_=std::make_unique<ClockBoss>();auto* clock=static_cast<ClockBoss*>(game.boss_.get());
-        game.player_.SetInvulnerability(0);game.debugInvincible_=false;
+        game.player_.SetInvulnerability(0);
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+        game.debugInvincible_=false; // Release 不含调试无敌字段，正常受伤状态由玩家保护期控制。
+#endif
         const auto playerPosition=game.player_.Position();const auto visualAge=game.player_.VisualAge();
         auto* contact=game.bullets_.Spawn(BulletOwner::Enemy,playerPosition,{},0.1F,WHITE,stage1::kBlueBullet);
         auto* enemy=game.bullets_.Spawn(BulletOwner::Enemy,{1,2,3},{1,0,0},0.1F,WHITE,stage1::kBlueBullet);

@@ -1,7 +1,9 @@
 // 本文件保留独立旧行为差分，并验证编队轨迹、三维插值及固定内容时钟。
+#include "gameplay/bosses/rumia.hpp"
 #include "actor_fixture.hpp"
 #include "reference_script.hpp"
 #include "stages/stage1/behaviors.hpp"
+#include "stages/stage1/boss_config.hpp"
 #include "stages/stage1/content.hpp"
 #include "gameplay/data/native_combat.hpp"
 #include <cassert>
@@ -39,11 +41,32 @@ void EqualPosition(Vector3 a,Vector3 b,const char* field) {
     maxPositionError=std::max({maxPositionError,std::abs(a.x-b.x),std::abs(a.y-b.y),std::abs(a.z-b.z)});
     Equal(a.x,b.x,field,0.0005F);Equal(a.y,b.y,field,0.0005F);Equal(a.z,b.z,field,0.0005F);
 }
+behavior::Entry Entry(int sub);
+/// @brief 差分侧将已移出的战斗配置装回独立演员；期望仍由旧解释器计算，未用于生产编排。
+/// 协程首步才安装，保持旧解释器在 dt=0 时尚未执行初始化的边界。
+behavior::Routine ConfiguredEntry(behavior::Actor& a,int sub) {
+    using S=bosses::RumiaBoss::Behavior;
+    const auto id=sub==9 ? S::Midboss : sub==14 ? S::FirstNonspell : sub==19 ? S::SecondNonspell : sub==26 ? S::NightBird : S::Demarcation;
+    const auto p=bosses::RumiaBoss{}.DescribeSkill(id);
+    if(sub==14||sub==19)a.health=a.maxHealth=p.NativeHealth();
+    a.lifeThreshold=p.reserveHealth>0 ? p.reserveHealth : -1;a.timeoutFrames=p.timeoutFrames;a.phaseFrames=p.initialFrame;
+    if(sub==9) {a.deathCallback=Entry(7);a.timeoutCallback=Entry(8);}
+    else if(sub==14) {a.lifeCallback=a.timeoutCallback=Entry(26);a.deathCallback=Entry(19);}
+    else if(sub==19) {a.lifeCallback=a.timeoutCallback=Entry(29);a.deathCallback=Entry(20);}
+    const behavior::Entry behavior=sub==9 ? bosses::RumiaBoss::Behaviors::Midboss : sub==14 ? bosses::RumiaBoss::Behaviors::FirstNonspell :
+        sub==19 ? bosses::RumiaBoss::Behaviors::SecondNonspell : sub==26 ? bosses::RumiaBoss::Behaviors::NightBird : bosses::RumiaBoss::Behaviors::Demarcation;
+    co_await behavior(a);
+}
+behavior::Routine MidbossEntry(behavior::Actor& a) {return ConfiguredEntry(a,9);}
+behavior::Routine FirstEntry(behavior::Actor& a) {return ConfiguredEntry(a,14);}
+behavior::Routine SecondEntry(behavior::Actor& a) {return ConfiguredEntry(a,19);}
+behavior::Routine BirdEntry(behavior::Actor& a) {return ConfiguredEntry(a,26);}
+behavior::Routine DarkEntry(behavior::Actor& a) {return ConfiguredEntry(a,29);}
 behavior::Entry Entry(int sub) {
     switch(sub) {
-    case 7:return rumia::MidbossDefeated;case 8:return rumia::MidbossTimeout;case 9:return rumia::Midboss;
-    case 14:return rumia::FirstNonspell;case 19:return rumia::SecondNonspell;case 20:return rumia::Defeated;
-    case 21:return rumia::End;case 26:return rumia::NightBird;case 29:return rumia::Demarcation;
+    case 7:return bosses::RumiaBoss::Behaviors::MidbossDefeated;case 8:return bosses::RumiaBoss::Behaviors::MidbossTimeout;case 9:return MidbossEntry;
+    case 14:return FirstEntry;case 19:return SecondEntry;case 20:return bosses::RumiaBoss::Behaviors::Defeated;
+    case 21:return bosses::RumiaBoss::Behaviors::End;case 26:return BirdEntry;case 29:return DarkEntry;
     case -1:return nullptr;
     default:std::abort();
     }
@@ -93,7 +116,7 @@ struct Pair {
         else replacement.Start(Entry(sub)(replacement));
         if(sub==26||sub==29) {
             original.SetDeathCallback(sub==26 ? 19 : 20);
-            replacement.SetDeathCallback(sub==26 ? rumia::SecondNonspell : rumia::Defeated);
+            replacement.SetDeathCallback(Entry(sub==26 ? 19 : 20));
         }
     }
     void Step(float dt,int step,int rank) {

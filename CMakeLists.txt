@@ -44,6 +44,24 @@ add_library(koumakyou_engine STATIC
     src/config/high_scores.cpp
     src/narrative/ending.cpp
     src/gameplay/actors/boss.cpp
+    src/gameplay/bosses/configured_boss.cpp
+    src/gameplay/bosses/rumia_behaviors.cpp
+    src/gameplay/bosses/daiyousei_behaviors.cpp
+    src/gameplay/bosses/cirno_behaviors.cpp
+    src/gameplay/bosses/meiling_behaviors.cpp
+    src/gameplay/bosses/koakuma_behaviors.cpp
+    src/gameplay/bosses/patchouli_behaviors.cpp
+    src/gameplay/bosses/sakuya_behaviors.cpp
+    src/gameplay/bosses/remilia_behaviors.cpp
+    src/gameplay/bosses/sakuya_eternal_meek.cpp
+    src/gameplay/bosses/rumia.cpp
+    src/gameplay/bosses/daiyousei.cpp
+    src/gameplay/bosses/cirno.cpp
+    src/gameplay/bosses/meiling.cpp
+    src/gameplay/bosses/koakuma.cpp
+    src/gameplay/bosses/patchouli.cpp
+    src/gameplay/bosses/sakuya.cpp
+    src/gameplay/bosses/remilia.cpp
     src/gameplay/actors/player.cpp
     src/gameplay/data/native_combat.cpp
     src/gameplay/bullets/system.cpp
@@ -77,44 +95,42 @@ add_library(koumakyou_engine STATIC
     src/stages/common/assets.cpp
     src/stages/common/content.cpp
     src/stages/stage2/behaviors.cpp
-    src/stages/stage2/boss.cpp
+    src/stages/stage2/boss_config.cpp
     src/stages/stage2/content.cpp
     src/stages/stage2/dialogue.cpp
     src/stages/stage2/manifest.cpp
     src/stages/stage2/scenery.cpp
     src/stages/stage2/timeline.cpp
     src/stages/stage3/behaviors.cpp
-    src/stages/stage3/boss.cpp
+    src/stages/stage3/boss_config.cpp
     src/stages/stage3/content.cpp
     src/stages/stage3/dialogue.cpp
     src/stages/stage3/manifest.cpp
     src/stages/stage3/scenery.cpp
     src/stages/stage3/timeline.cpp
     src/stages/stage4/behaviors.cpp
-    src/stages/stage4/boss.cpp
+    src/stages/stage4/boss_config.cpp
     src/stages/stage4/content.cpp
     src/stages/stage4/dialogue.cpp
     src/stages/stage4/manifest.cpp
     src/stages/stage4/scenery.cpp
     src/stages/stage4/timeline.cpp
     src/stages/stage5/behaviors.cpp
-    src/stages/stage5/boss_behaviors.cpp
-    src/stages/stage5/boss.cpp
+    src/stages/stage5/boss_config.cpp
     src/stages/stage5/content.cpp
     src/stages/stage5/scenery.cpp
     src/stages/stage5/dialogue.cpp
     src/stages/stage5/manifest.cpp
     src/stages/stage5/timeline.cpp
     src/stages/stage6/behaviors.cpp
-    src/stages/stage6/boss_behaviors.cpp
-    src/stages/stage6/boss.cpp
+    src/stages/stage6/boss_config.cpp
     src/stages/stage6/content.cpp
     src/stages/stage6/scenery.cpp
     src/stages/stage6/timeline.cpp
     src/stages/stage6/dialogue.cpp
     src/stages/stage6/manifest.cpp
     src/stages/stage1/behaviors.cpp
-    src/stages/stage1/boss.cpp
+    src/stages/stage1/boss_config.cpp
     src/stages/stage1/content.cpp
     src/stages/stage1/dialogue.cpp
     src/stages/stage1/scenery.cpp

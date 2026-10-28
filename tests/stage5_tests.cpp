@@ -2,7 +2,8 @@
 #include "stages/stage5/data.hpp"
 #include "stages/stage5/behaviors.hpp"
 #include "stages/stage5/ids.hpp"
-#include "stages/stage5/boss.hpp"
+#include "stages/stage5/boss_config.hpp"
+#include "gameplay/bosses/sakuya.hpp"
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -168,10 +169,10 @@ void TestBounceAndLockedSpatialAxis() {
 }
 /// @brief 从源跳转及调用栈独立展开的帧表；不读取新协程或以其输出生成期望值。
 void TestBossSourceClocks() {
-    using namespace stage5::sakuya;
+
     struct Case {behavior::Entry entry;int first,cycle,stop,unstop,initialCount;};
-    const std::array<Case,3> cases{{{ClockCorpse,288,400,338,490,128},{LunaClock,268,418,318,438,128},
-        {Marionette,120,0,195,273,8}}};
+    const std::array<Case,3> cases{{{bosses::SakuyaBoss::Behaviors::ClockCorpse,288,400,338,490,128},{bosses::SakuyaBoss::Behaviors::LunaClock,268,418,318,438,128},
+        {bosses::SakuyaBoss::Behaviors::Marionette,120,0,195,273,8}}};
     auto bullets=std::make_unique<BulletSystem>();
     for(const auto& c:cases) {
         behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,4.28571415F},10000,49);
@@ -184,7 +185,7 @@ void TestBossSourceClocks() {
             if(frame>=c.stop&&frame<c.unstop) {
                 assert(actor.phaseClockPaused&&!actor.CanBeTargeted()&&!actor.CanTakeDamage());++paused;
             } else if(frame<c.stop||frame<c.unstop+1)assert(!actor.phaseClockPaused);
-            if(c.entry!=Marionette&&frame>=c.stop&&frame<c.stop+(c.entry==ClockCorpse ? 90 : 60))
+            if(c.entry!=bosses::SakuyaBoss::Behaviors::Marionette&&frame>=c.stop&&frame<c.stop+(c.entry==bosses::SakuyaBoss::Behaviors::ClockCorpse ? 90 : 60))
                 assert(bullets->Pool().ActiveCount()==((frame-c.stop)%9==0 ? 9U : 0U));
             if(frame==c.unstop) {
                 assert(!actor.phaseClockPaused&&actor.interactable);assert(actor.animationScript==(actor.Position().x<0 ? 140 : 139));Near(static_cast<float>(actor.phaseFrames),frame+1-paused);
@@ -192,7 +193,7 @@ void TestBossSourceClocks() {
         }
     }
     behavior::Actor mid(behavior::UpdateRate::Hz60);mid.Reset({0,0,4.28571415F},15000,49);
-    stage5::ConfigureBehavior(mid,false);mid.Start(Midboss(mid));
+    stage5::ConfigureBehavior(mid,false);mid.Start(bosses::SakuyaBoss::Behaviors::MisdirectionNonspell(mid));
     for(int frame=0;frame<620;++frame) {
         bullets->Reset();mid.Update(1.0F/60,{},*bullets);
         const int local=frame<311 ? frame : (frame-311)%281+30;
@@ -203,7 +204,7 @@ void TestBossSourceClocks() {
     }
     // 瞬移两侧的物理周期均为 284 帧，首轮从 120 帧准备结束起算。
     behavior::Actor misdirection(behavior::UpdateRate::Hz60);misdirection.Reset({0,0,4.28571415F},710,49);
-    stage5::ConfigureBehavior(misdirection,false);misdirection.Start(Misdirection(misdirection));
+    stage5::ConfigureBehavior(misdirection,false);misdirection.Start(bosses::SakuyaBoss::Behaviors::Misdirection(misdirection));
     for(int frame=0;frame<730;++frame) {
         bullets->Reset();misdirection.Update(1.0F/60,{0,0,-6},*bullets);
         const int local=(frame-120)%284;int expected=0;
@@ -215,10 +216,10 @@ void TestBossSourceClocks() {
 }
 
 void TestMainNonspellSourceClocks() {
-    using namespace stage5::sakuya;auto bullets=std::make_unique<BulletSystem>();
+    auto bullets=std::make_unique<BulletSystem>();
     for(int phase=0;phase<3;++phase) {
         behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,4.28571415F},19000,49);stage5::ConfigureBehavior(actor,false);
-        const std::array<behavior::Entry,3> entries{FirstNonspell,SecondNonspell,ThirdNonspell};actor.Start(entries[phase](actor));
+        const std::array<behavior::Entry,3> entries{bosses::SakuyaBoss::Behaviors::FirstNonspell,bosses::SakuyaBoss::Behaviors::SecondNonspell,bosses::SakuyaBoss::Behaviors::ThirdNonspell};actor.Start(entries[phase](actor));
         for(int frame=0;frame<1100;++frame) {
             bullets->Reset();actor.Update(1.0F/60,{0,0,-6},*bullets);
             const bool summoned=phase<2&&frame>=(phase==0 ? 100 : 60)&&(frame-(phase==0 ? 100 : 60))%(phase==0 ? 586 : 420)==0;
@@ -239,7 +240,7 @@ void TestMainNonspellSourceClocks() {
     }
 }
 /// @brief 时停扩展的平面期望独立使用原始像素矩阵；三维版另检不同高度的瞄准与九枚真实世界出生点。
-behavior::Routine ArcProbe(behavior::Actor& actor) {for(int pulse=0;pulse<10;++pulse)stage5::sakuya::EmitClockArc(actor,pulse);co_await actor.At(100);}
+behavior::Routine ArcProbe(behavior::Actor& actor) {for(int pulse=0;pulse<10;++pulse)bosses::SakuyaBoss::Behaviors::EmitClockArc(actor,pulse);co_await actor.At(100);}
 void TestClockArcCoordinates() {
     auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor(behavior::UpdateRate::Hz60);
     actor.Reset({0,0,4.28571415F},100,49);stage5::ConfigureBehavior(actor,false);actor.Start(ArcProbe(actor));
@@ -258,24 +259,24 @@ void TestClockArcCoordinates() {
 void TestBossLifecycleAndSummons() {
     auto bullets=std::make_unique<BulletSystem>();
     for(bool final:{false,true})for(bool timeout:{false,true}) {
-        stage5::Stage5Boss boss(final,behavior::UpdateRate::Hz60,false);
+        bosses::SakuyaBoss boss(behavior::UpdateRate::Hz60,false);boss.StartBoss(final ? stage5::SakuyaFinalConfig() : stage5::SakuyaMidbossConfig());
         for(int frame=0;frame<65;++frame) {assert(!boss.Update(1.0F/60,{},*bullets));assert(!boss.CanTakeDamage()&&!boss.CanContactPlayer()&&boss.CanBeTargeted());}
         boss.ResumeCombat();const int phases=final ? 6 : timeout ? 1 : 2;
         for(int phase=1;phase<=phases;++phase) {
-            assert(boss.phase==phase);bool ready=false;
+            assert(boss.attack==phase);bool ready=false;
             for(int frame=0;frame<10000&&!ready;++frame) {
                 bullets->Reset();ready=boss.Update(1.0F/60,{},*bullets);
                 if(!timeout&&boss.CanTakeDamage()) {boss.health=0;ready=boss.ShouldAdvanceFromDamage();}
             }
-            assert(ready);if(!timeout&&phase%2==0)assert(boss.PhaseDefeated());
-            assert(boss.AdvancePhase());assert(!boss.WorldTimeStopped()&&!boss.CanTakeDamage());
+            assert(ready);if(!timeout&&phase%2==0)assert(boss.SkillDefeated());
+            assert(boss.AdvanceSkill());assert(!boss.WorldTimeStopped()&&!boss.CanTakeDamage());
         }
         bool ready=false;for(int frame=0;frame<200&&!ready;++frame)ready=boss.Update(1.0F/60,{},*bullets);
-        assert(ready&&!boss.AdvancePhase()&&!boss.active);assert(boss.Defeated()==!timeout);
+        assert(ready&&!boss.AdvanceSkill()&&!boss.active);assert(boss.Defeated()==!timeout);
     }
     for(bool ricochet:{false,true}) {
         behavior::Actor boss(behavior::UpdateRate::Hz60);boss.Reset({0,0,4.28571415F},19000,49);stage5::ConfigureBehavior(boss,false);
-        boss.Start(ricochet ? stage5::sakuya::SecondNonspell(boss) : stage5::sakuya::FirstNonspell(boss));
+        boss.Start(ricochet ? bosses::SakuyaBoss::Behaviors::SecondNonspell(boss) : bosses::SakuyaBoss::Behaviors::FirstNonspell(boss));
         std::vector<behavior::Spawn> summons;const int born=ricochet ? 60 : 100;
         for(int frame=0;frame<=born;++frame) {boss.Update(1.0F/60,{},*bullets);if(frame==born)summons=boss.spawnEvents;}
         assert(summons.size()==4);
@@ -295,7 +296,7 @@ void TestBossLifecycleAndSummons() {
     }
 }
 
-behavior::Routine RedirectProbe(behavior::Actor& actor) {stage5::sakuya::RedirectStoppedBullets(actor);co_await actor.At(100);}
+behavior::Routine RedirectProbe(behavior::Actor& actor) {bosses::SakuyaBoss::Behaviors::RedirectStoppedBullets(actor);co_await actor.At(100);}
 void TestRedirectRandomOrder() {
     auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor(behavior::UpdateRate::Hz60);
     actor.Reset({},100,49);stage5::ConfigureBehavior(actor,false);actor.Start(RedirectProbe(actor));
@@ -316,8 +317,8 @@ void TestRedirectRandomOrder() {
     assert(actor.Random(1)==static_cast<float>(Next(random)>>8)/16777216.0F);
 }
 void TestSpatialDisplayFrameRates() {
-    using namespace stage5::sakuya;
-    const std::array<behavior::Entry,8> entries{Midboss,Misdirection,FirstNonspell,ClockCorpse,SecondNonspell,LunaClock,ThirdNonspell,Marionette};
+
+    const std::array<behavior::Entry,8> entries{bosses::SakuyaBoss::Behaviors::MisdirectionNonspell,bosses::SakuyaBoss::Behaviors::Misdirection,bosses::SakuyaBoss::Behaviors::FirstNonspell,bosses::SakuyaBoss::Behaviors::ClockCorpse,bosses::SakuyaBoss::Behaviors::SecondNonspell,bosses::SakuyaBoss::Behaviors::LunaClock,bosses::SakuyaBoss::Behaviors::ThirdNonspell,bosses::SakuyaBoss::Behaviors::Marionette};
     struct Snapshot {Vector3 position,velocity;int type,color,bounces;};
     for(auto entry:entries) {
         std::vector<Snapshot> expected;Vector3 position{};float random=0;double phase=0;bool stopped=false;

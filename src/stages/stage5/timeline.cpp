@@ -1,5 +1,6 @@
 // 本文件显式保存五面全部出生与演出；道中对白等待后的事件以真实完成时刻恢复相对源帧距。
 #include "stages/stage5/data.hpp"
+#include "stages/stage5/boss_config.hpp"
 #include "stages/stage5/behaviors.hpp"
 #include "stages/stage5/ids.hpp"
 #include <array>
@@ -79,7 +80,7 @@ const std::array<StageEvent,234> kEvents{{
     {.atFrame=2662,.action=Spawn({-7.14285707F,0.75F,12.1428576F},kRandomBlueFans,900,2000,2,false,false,217865634U)},
     {.atFrame=2772,.action=Spawn({7.14285707F,0.0F,12.1428576F},kRandomBlueFans,900,2000,2,false,false,3098733652U)},
     {.atFrame=2872,.action=Spawn({-1.42857146F,-1.5F,12.1428576F},kRandomBlueFans,900,2000,2,false,false,2216127943U)},
-    {.atFrame=3272,.action=StartBoss{BossEncounter::Midboss},.id=1},
+    {.atFrame=3272,.action=StartBoss{&kSakuyaMidboss},.id=1},
     {.delay=0,.action=StartDialogue{false,DialogueScene::Midboss,DialogueClearPolicy::PreserveWorld},.id=2},
     {.delay=1.0F/60,.action=ResumeBoss{},.afterEndOf=2},
     {.delay=500.0F/60,.action=Spawn({-10.0F,1.5F,7.14285707F},kPassingRandomCrystals,150,2000,1,false,false,3442780652U)},
@@ -243,7 +244,7 @@ const std::array<StageEvent,234> kEvents{{
     {.delay=10.0F/60,.action=Spawn({2.85714293F,0.75F,12.1428576F},kShortBlueRings,900,2000,2,false,false,3326175394U)},
     {.delay=10.0F/60,.action=Spawn({-2.14285707F,0.75F,12.1428576F},kShortBlueRings,900,2000,2,false,false,2436490777U)},
     {.delay=10.0F/60,.action=Spawn({2.14285707F,0.75F,12.1428576F},kShortBlueRings,900,2000,2,false,false,2651218793U)},
-    {.delay=400.0F/60,.action=StartBoss{BossEncounter::Final},.id=3},
+    {.delay=400.0F/60,.action=StartBoss{&kSakuyaFinal},.id=3},
     {.delay=0,.action=StartDialogue{false,DialogueScene::FinalBoss,DialogueClearPolicy::PreserveWorld},.id=4},
     {.delay=1.0F/60,.action=ResumeBoss{},.afterEndOf=4},
     {.delay=1.0F/60,.action=StartDialogue{true},.id=5,.afterEndOf=3},

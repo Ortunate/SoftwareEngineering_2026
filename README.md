@@ -227,6 +227,8 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 敌弹、普通敌人、Boss、自机弹、副机、道具及 Bomb 的显示和判定尺寸已按新典数据统一，比例为 `20/448` 世界单位/逻辑像素；数据来源、例外与三维适配见 [新典战斗尺寸](docs/NATIVE_SIZES.md)。
 
 一面 Normal 的 222 次逐只出生与 570 条参考帧指令来自本机《东方红魔乡：新典》数据。生产运行使用可复用的 `movement`、`skill` 和 `behavior` 组件：`timeline.cpp` 显式定义全部 226 个 `StageEvent`，出生事件携带独立移动/技能配方与固定参数，`behavior::Actor` 与 `RumiaBoss` 按 120 Hz 执行路径、弹幕和命名阶段，内容帧号仍采用 60 Hz；位置、偏移与边界统一使用世界坐标。旧 `ReferenceScript` 及参考指令存放于 `tests/reference_script.*`、`tests/reference_program.hpp`，只编译进测试，新演员显式使用 60 Hz 与其核对轨迹、动画、技能及生命周期。完整子程序映射见 [一面行为配方](docs/STAGE1_BEHAVIORS.md)，从输入到代码的方法与原则见 [Stage 移植方法](docs/STAGE_PORTING_METHOD.md)。固定射击靶和测试场景也通过行为配置生成，不保留旧球面/锥面演员子类。
+Boss 角色类与各关启动配方的组织、阶段跳转和所有权约定见 [Boss 启动配置](docs/BOSS_START_CONFIG.md)。
+
 
 `StageEvent::atFrame` 是开局起算的绝对帧，不能同时设置 `afterEndOf`；普通关卡仍可用 `delay` 相对上一事件或指定事件结束调度。道中 Boss 在 1882 帧入场，战斗期间时间轴继续运行并跳过到期杂鱼；5092 帧开始战前对话，之后依次为普通攻击一、夜符「Night Bird」、普通攻击二、暗符「Demarcation」、退场、战后独白和关卡奖励明细。
 

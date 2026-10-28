@@ -1,5 +1,6 @@
 // 本文件直接定义一面固定 StageEvent 表，包含逐只出生、道中 Boss、战前/战后对话和关底 Boss。
 #include "stages/stage1/data.hpp"
+#include "stages/stage1/boss_config.hpp"
 #include "stages/stage1/behaviors.hpp"
 #include "stages/stage1/ids.hpp"
 #include <array>
@@ -146,7 +147,7 @@ const std::array<StageEvent,226> kEvents{{
     {.atFrame=1762,.action=Spawn({-1.78571439F,0.0F,11.4285717F},kTurningFairy,3,300,-1,false,false,54717U,kFairy)},
 
     // 道中遭遇独立异步执行，不以其结束时间重排后续波次。
-    {.atFrame=1882,.action=StartBoss{},.id=1},
+    {.atFrame=1882,.action=StartBoss{&kRumiaMidboss},.id=1},
 
     {.atFrame=2282,.action=Spawn({-7.14285755F,-1.5F,11.4285717F},kShootingDarkFairy,80,700,-1,false,false,70839U,kDarkFairy)},
 
@@ -319,7 +320,7 @@ const std::array<StageEvent,226> kEvents{{
 
     // 对话和战斗按实际结束衔接，不能把关底各阶段改成固定墙钟时刻。
     {.atFrame=5092,.action=StartDialogue{},.id=2},
-    {.action=StartBoss{BossEncounter::Final},.id=3,.afterEndOf=2},
+    {.action=StartBoss{&kRumiaFinal},.id=3,.afterEndOf=2},
     {.action=StartDialogue{true},.id=4,.afterEndOf=3},
 }};
 } // namespace

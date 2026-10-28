@@ -1,7 +1,10 @@
 // 本文件检查六面出生、独立像素轨迹、MSG 放行、Boss 阶段、星阵/地雷和空间回收；图形另由生命周期目标验证。
+#include "boss_fixture.hpp"
 #include "stages/stage6/data.hpp"
 #include "stages/stage6/behaviors.hpp"
-#include "stages/stage6/boss.hpp"
+#include "stages/stage6/boss_config.hpp"
+#include "gameplay/bosses/sakuya.hpp"
+#include "gameplay/bosses/remilia.hpp"
 #include "stages/stage6/ids.hpp"
 #include <cassert>
 #include <cmath>
@@ -73,7 +76,7 @@ void TestDialogueMilestones() {
     int midDialogue=-1,mainDialogue=-1,waitSignal=-1;bool midEnded=false;
     for(int frame=1;frame<22000;++frame) {
         director.Update(1.0F/60,[&](const StageEvent& event) {
-            if(const auto* boss=std::get_if<StartBoss>(&event.action)) {bosses.push_back(frame);if(boss->encounter==BossEncounter::Midboss)assert(frame==2493);return false;}
+            if(const auto* boss=std::get_if<StartBoss>(&event.action)) {bosses.push_back(frame);if(boss->battle==&stage6::kSakuyaMidboss)assert(frame==2493);return false;}
             if(const auto* dialogue=std::get_if<StartDialogue>(&event.action)) {
                 if(dialogue->scene==DialogueScene::Midboss)midDialogue=frame;else if(!dialogue->afterBattle)mainDialogue=frame;return false;
             }
@@ -95,25 +98,26 @@ void TestDialogueMilestones() {
 void TestBossPhaseLifecycle() {
     auto bullets=std::make_unique<BulletSystem>();
     for(int shot=0;shot<4;++shot)for(bool final:{false,true})for(bool timeout:{false,true}) {
-        stage6::Stage6Boss boss(final,behavior::UpdateRate::Hz60,false);boss.SetPlayerShot(static_cast<ShotType>(shot));
-        for(int frame=0;frame<130;++frame) {boss.Update(1.0F/60,{},*bullets);assert(boss.phase==0&&!boss.CanTakeDamage()&&!boss.CanContactPlayer()&&boss.CanBeTargeted());}
-        boss.ResumeCombat();if(final) {assert(boss.phase==0);boss.Update(1.0F/60,{},*bullets);boss.ResumeCombat();}
+        std::unique_ptr<bosses::ConfiguredBoss> ownedBoss=final ? std::unique_ptr<bosses::ConfiguredBoss>(new bosses::RemiliaBoss(behavior::UpdateRate::Hz60,false)) : std::unique_ptr<bosses::ConfiguredBoss>(new bosses::SakuyaBoss(behavior::UpdateRate::Hz60,false));
+        auto& boss=*ownedBoss;boss.StartBoss(final ? stage6::RemiliaFinalConfig(static_cast<ShotType>(shot)) : stage6::SakuyaMidbossConfig(static_cast<ShotType>(shot)));
+        for(int frame=0;frame<130;++frame) {boss.Update(1.0F/60,{},*bullets);assert(boss.attack==0&&!boss.CanTakeDamage()&&!boss.CanContactPlayer()&&boss.CanBeTargeted());}
+        boss.ResumeCombat();if(final) {assert(boss.attack==0);boss.Update(1.0F/60,{},*bullets);boss.ResumeCombat();}
         const int phases=final ? 9 : timeout ? 1 : 2;
         for(int phase=1;phase<=phases;++phase) {
-            assert(boss.phase==phase);bool ready=false;
+            assert(boss.attack==phase);bool ready=false;
             for(int frame=0;frame<10000&&!ready;++frame) {
                 bullets->Reset();ready=boss.Update(1.0F/60,{},*bullets);
                 if(!timeout&&boss.CanTakeDamage()) {boss.health=0;ready=boss.ShouldAdvanceFromDamage();}
             }
-            assert(ready);if(!timeout&&(phase%2==0||phase==9))assert(boss.PhaseDefeated());
+            assert(ready);if(!timeout&&(phase%2==0||phase==9))assert(boss.SkillDefeated());
             if(!final&&phase==2)Near(boss.maxHealth,std::array{750.0F,1000.0F,1100.0F,1100.0F}[shot]);
-            assert(boss.AdvancePhase()&&!boss.CanTakeDamage());
+            assert(boss.AdvanceSkill()&&!boss.CanTakeDamage());
         }
         bool ready=false;for(int frame=0;frame<130&&!ready;++frame)ready=boss.Update(1.0F/60,{},*bullets);
-        assert(ready&&!boss.AdvancePhase()&&!boss.active&&boss.Defeated()==!timeout);
+        assert(ready&&!boss.AdvanceSkill()&&!boss.active&&boss.Defeated()==!timeout);
     }
 }
-behavior::Routine StarProbe(behavior::Actor& actor) {stage6::remilia::StarLattice(actor,false);co_await actor.At(100);}
+behavior::Routine StarProbe(behavior::Actor& actor) {bosses::RemiliaBoss::Behaviors::StarLattice(actor,false);co_await actor.At(100);}
 void TestNativeStarGeometry() {
     auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,4},13000,49);
     stage6::ConfigureBehavior(actor,false);actor.Start(StarProbe(actor));actor.Update(1.0F/60,{},*bullets);
@@ -136,7 +140,7 @@ void TestNativeStarGeometry() {
     });
     assert(actor.Random(1)==static_cast<float>(Next(random)>>8)/16777216.0F);
 }
-behavior::Routine MineProbe(behavior::Actor& actor) {assert(stage6::remilia::SeedMines(actor)==4);stage6::remilia::ReleaseMines(actor);co_await actor.At(100);}
+behavior::Routine MineProbe(behavior::Actor& actor) {assert(bosses::RemiliaBoss::Behaviors::SeedMines(actor)==4);bosses::RemiliaBoss::Behaviors::ReleaseMines(actor);co_await actor.At(100);}
 void TestNativeMines() {
     auto bullets=std::make_unique<BulletSystem>();
     for(int type=0;type<10;++type) {
@@ -159,13 +163,13 @@ void TestNativeMines() {
     assert(actor.Random(1)==static_cast<float>(Next(random)>>8)/16777216.0F);
 }
 
-behavior::Routine StarsEntry(behavior::Actor& actor) {stage6::remilia::PhaseMemory memory;co_await stage6::remilia::StarOfVanities(actor,memory);}
-behavior::Routine SecondEntry(behavior::Actor& actor) {stage6::remilia::PhaseMemory memory;co_await stage6::remilia::SecondNonspell(actor,memory);}
+behavior::Routine StarsEntry(behavior::Actor& actor) {bosses::RemiliaBoss::Behaviors::PhaseMemory memory;co_await bosses::RemiliaBoss::Behaviors::StarOfVanities(actor,memory);}
+behavior::Routine SecondEntry(behavior::Actor& actor) {bosses::RemiliaBoss::Behaviors::PhaseMemory memory;co_await bosses::RemiliaBoss::Behaviors::SecondNonspell(actor,memory);}
 /// @brief 控制流见证独立展开源调用/回拨；与旧图形、原子程序索引工厂或生产协程不共享时刻计算。
 void TestBossSourceClocks() {
     using namespace stage6;auto bullets=std::make_unique<BulletSystem>();
-    const std::array<behavior::Entry,8> entries{sakuya::Midboss,sakuya::EternalMeek,remilia::FirstNonspell,StarsEntry,
-        SecondEntry,remilia::ScarletNetherworld,remilia::ThirdNonspell,remilia::ScarletShoot};
+    const std::array<behavior::Entry,8> entries{bosses::SakuyaBoss::Behaviors::EternalMeekNonspell,bosses::SakuyaBoss::Behaviors::EternalMeek,bosses::RemiliaBoss::Behaviors::FirstNonspell,StarsEntry,
+        SecondEntry,bosses::RemiliaBoss::Behaviors::ScarletNetherworld,bosses::RemiliaBoss::Behaviors::ThirdNonspell,bosses::RemiliaBoss::Behaviors::ScarletShoot};
     for(int kind=0;kind<8;++kind) {
         behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,4.28571415F},19000,49);ConfigureBehavior(actor,false);actor.Start(entries[kind](actor));
         for(int frame=0;frame<1200;++frame) {
@@ -200,8 +204,8 @@ void TestBossSourceClocks() {
 }
 void TestSpatialDisplayFrameRates() {
     using namespace stage6;
-    const std::array<behavior::Entry,11> entries{sakuya::Midboss,sakuya::EternalMeek,remilia::FirstNonspell,StarsEntry,SecondEntry,
-        remilia::ScarletNetherworld,remilia::ThirdNonspell,remilia::VladTepesCurse,remilia::BatNonspell,remilia::ScarletShoot,remilia::RedMagic};
+    const std::array<behavior::Entry,11> entries{bosses::SakuyaBoss::Behaviors::EternalMeekNonspell,bosses::SakuyaBoss::Behaviors::EternalMeek,bosses::RemiliaBoss::Behaviors::FirstNonspell,StarsEntry,SecondEntry,
+        bosses::RemiliaBoss::Behaviors::ScarletNetherworld,bosses::RemiliaBoss::Behaviors::ThirdNonspell,bosses::RemiliaBoss::Behaviors::VladTepesCurse,bosses::RemiliaBoss::Behaviors::BatNonspell,bosses::RemiliaBoss::Behaviors::ScarletShoot,bosses::RemiliaBoss::Behaviors::RedMagic};
     struct Snapshot {Vector3 position,velocity;int type,color,bounces;};
     for(auto entry:entries) {
         std::vector<Snapshot> expected;Vector3 position{};float random=0;double phase=0;int animation=-1;
@@ -228,7 +232,7 @@ void TestSpatialDisplayFrameRates() {
 /// @brief 长时间高速巡航后，空间本体不能漂离出生回收盒使化蝠永久占槽；按正式顺序处理全部子演员。
 void TestBatFamiliarRetirement() {
     auto bullets=std::make_unique<BulletSystem>();auto pool=std::make_unique<behavior::ActorPool<128>>();
-    behavior::Actor boss;boss.Reset({0,0,5},13000,7);stage6::ConfigureBehavior(boss,true);boss.Start(stage6::remilia::BatNonspell(boss));
+    behavior::Actor boss;boss.Reset({0,0,5},13000,7);stage6::ConfigureBehavior(boss,true);boss.Start(bosses::RemiliaBoss::Behaviors::BatNonspell(boss));
     std::size_t peak=0;
     for(int tick=0;tick<60*120;++tick) {
         bullets->Reset();pool->ForEachActive([&](behavior::Actor& actor){actor.Update(1.0F/120,{0,0,-6},*bullets);});
@@ -243,27 +247,27 @@ void TestBatFamiliarRetirement() {
 }
 
 void TestBombBatProtection() {
-    auto bullets=std::make_unique<BulletSystem>();stage6::Stage6Boss boss(true,behavior::UpdateRate::Hz60,false);
+    auto bullets=std::make_unique<BulletSystem>();bosses::RemiliaBoss boss(behavior::UpdateRate::Hz60,false);boss.StartBoss(stage6::RemiliaFinalConfig());
     boss.ResumeCombat();boss.Update(1.0F/60,{},*bullets);boss.ResumeCombat();
     for(int phase=1;phase<9;++phase) {
         int frames=0;while(!boss.CanTakeDamage()&&frames++<700)boss.Update(1.0F/60,{},*bullets);
-        assert(frames<700);boss.health=0;assert(boss.AdvancePhase());
+        assert(frames<700);boss.health=0;assert(boss.AdvanceSkill());
     }
     boss.SetPlayerBombActive(true);
     for(int frame=0;frame<240;++frame) {
         bullets->Reset();boss.Update(1.0F/60,{},*bullets);assert(!boss.CanBeTargeted()&&!boss.CanTakeDamage()&&boss.animationScript==165);
     }
-    const float time=boss.phaseTimer;boss.SetPlayerBombActive(false);
+    const float time=boss.skillTimer;boss.SetPlayerBombActive(false);
     for(int frame=0;frame<59;++frame) {boss.Update(1.0F/60,{},*bullets);assert(!boss.CanBeTargeted());}
-    boss.Update(1.0F/60,{},*bullets);assert(boss.CanTakeDamage()&&boss.CanBeTargeted()&&boss.phaseTimer>time);
+    boss.Update(1.0F/60,{},*bullets);assert(boss.CanTakeDamage()&&boss.CanBeTargeted()&&boss.skillTimer>time);
 }
 
 void TestCrossPhaseChargeMemory() {
-    auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor(behavior::UpdateRate::Hz60);stage6::remilia::PhaseMemory memory;
-    actor.Reset({0,0,5},1200,49);stage6::ConfigureBehavior(actor,false);actor.Start(stage6::remilia::StarOfVanities(actor,memory));
+    auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor(behavior::UpdateRate::Hz60);bosses::RemiliaBoss::Behaviors::PhaseMemory memory;
+    actor.Reset({0,0,5},1200,49);stage6::ConfigureBehavior(actor,false);actor.Start(bosses::RemiliaBoss::Behaviors::StarOfVanities(actor,memory));
     for(int frame=0;frame<=128;++frame)actor.Update(1.0F/60,{},*bullets);
-    assert(memory.chargingPulsesLeft==14);actor.pendingCallback=stage6::remilia::PhaseComplete;actor.Transition();
-    actor.Start(stage6::remilia::SecondNonspell(actor,memory));
+    assert(memory.chargingPulsesLeft==14);actor.pendingCallback=bosses::RemiliaBoss::Behaviors::SkillComplete;actor.Transition();
+    actor.Start(bosses::RemiliaBoss::Behaviors::SecondNonspell(actor,memory));
     for(int frame=0;frame<=174;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{},*bullets);
         assert(bullets->Pool().ActiveCount()==(frame==174 ? 21U : 0U));

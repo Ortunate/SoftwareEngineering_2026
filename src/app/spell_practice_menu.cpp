@@ -102,7 +102,7 @@ void Game::UpdateSpellPractice() {
         const auto* card=spell::Find(choice.stage,choice.group,choice.difficulty);
         if(!spell::Available(card,choice.character,spellRecords_)) {assets_.PlaySoundEffect("menu_cancel");return;}
         selectedCharacter_=choice.character/2;selectedShot_=choice.character%2;
-        practicePhase_=card->phase;
+        practiceAttack_=card->phase;
         stageId_=StageId::Stage1;
         challengeMode_=false;
         SaveSettings();

@@ -197,7 +197,7 @@ private:
     /// @param spec 按值复制的出生位置、行为配方及战斗和视觉配置。
     void SpawnStageActor(const behavior::Spawn& spec) override;
     /// @brief 开始 Boss 战并停止旧批次后续出怪，保留现存小怪、弹幕、道具及效果。
-    void BeginStageBoss(bool final, StageEventId id) override;
+    void BeginStageBoss(const bosses::Battle& battle, StageEventId id) override;
     /// @brief 开始原文对话；战后独白结束才固定 Bonus 并进入奖励明细，关闭后进入胜利收尾。
     void BeginStageDialogue(StageEventId id, bool afterBattle = false,DialogueScene scene=DialogueScene::FinalBoss,
         DialogueClearPolicy clearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets) override;
@@ -221,7 +221,7 @@ private:
     /// @brief 玩家命中后更新场景反馈，并按剩余残机处理游戏失败。
     void HandlePlayerHit();
     /// @brief 结算当前 Boss 阶段并进入下一阶段或一面结算。
-    void AdvanceBossPhase();
+    void AdvanceBossSkill();
     /// @brief 设置屏幕提示文字及显示时间。
     /// @param message 要展示的文字。
     /// @param duration 持续秒数。
@@ -404,7 +404,7 @@ private:
     ui::MenuMotion spellGroupMotion_{},spellDifficultyMotion_{}; // 同页两列分别保存强调，焦点递进不清空另列或重播页面动画。
     int spellAttemptNumber_=0,spellAttemptCharacter_=0;
     bool spellAttemptOpen_=false,spellAttemptPractice_=false,spellCaptured_=false; // 已打开记录只能结算一次；仅成功无伤无 Bomb 击破为取得。
-    int practicePhase_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
+    int practiceAttack_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
     bool spellPractice_ = false;
     int selectedTrack_ = 0; // 音乐页局部编号为 0～2；返回使用固定返回键，不占曲目槽。
     int selectedPauseItem_ = 0; // 暂停项：继续、主菜单、重开。

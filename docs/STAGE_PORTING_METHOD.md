@@ -80,8 +80,9 @@ python3 tools/export_native_combat_data.py /本机安装目录/th06nc.exe /tmp/e
 | 通用运动 | `src/gameplay/actors/movement.*` | 世界坐标的极坐标运动、插值、边界；不认识 ECL 或具体关卡 |
 | 通用攻击 | `src/gameplay/actors/skill.*` | 带参扇形/环形、速度层、瞄准、光束与运动特效 |
 | 演员执行与所有权 | `src/gameplay/actors/behavior.*` | 独立实例状态、协程、固定更新步、生命周期和演员池 |
-| 关卡配方与复杂攻击 | `src/stages/stageN/behaviors.*` | 命名常量配方、参数化辅助行为、Boss 阶段协程 |
-| Boss 公共战斗接口 | `src/stages/stageN/boss.*` | HP 与行为状态同步、准备期保护、阶段推进、HUD、完整退场 |
+| 关卡配方与复杂攻击 | `src/stages/stageN/behaviors.*` | 普通演员命名配方与参数化协程；Boss 专属行为归角色模块 |
+| Boss 角色和公共执行器 | `src/gameplay/bosses/<角色名>.*`、`configured_boss.*` | 八个角色内嵌 Behaviors 实现专属移动、攻击和演出，ResolveSkill 绑定血量/时限，实例独占状态 |
+| 每场 Boss 启动配方 | `src/stages/stageN/boss_config.*` | `StartConfig` 声明每阶段技能组合、跳转、血条比例/颜色/排列、对白入口、退场与奖励，不保存技能 HP；Boss 解析并绘制血条，`StartBoss` 事件借用命名 `Battle` |
 | 数值、素材与对话 | `native_combat`、`manifest.cpp`、`ids.hpp`、`dialogue.cpp` | 数值来源、编号空间及资源职责分别明确 |
 | 参考指令与执行语义 | `tests` 下按关卡隔离的参考数据、执行器或预期记录；现有一面文件为 `reference_program.hpp`、`reference_script.*`、`reference_coordinates.hpp` | 独立于生产配方，只供回归，不链接进生产引擎 |
 
@@ -120,7 +121,7 @@ Stage 1 示例：第一条原始出生在第 100 帧、位置 `(60,-32,0)`、8 H
 
 该实例的固定种子 `3100` 是项目为重放和兼容旧行为保存的值，不是原典出生记录中的字段。之后插入时间轴行也不能隐式重算既有种子。
 
-HP、阈值、分数保持原始点数。道中出生参数显式写入时间轴并由测试核对；Boss 阶段 HP、阈值与超时查询统一目录。不要重新引入生命 ÷25、弹伤害 ÷12 等缩放，也不要把完整时间轴隐藏在目录遍历中。
+HP、阈值、分数保持原始点数。道中出生参数显式写入时间轴并由测试核对；Boss 内部技能定义从统一目录读取 HP、预留偏移与超时。不要重新引入生命 ÷25、弹伤害 ÷12 等缩放，也不要把完整时间轴隐藏在目录遍历中。
 
 ## 6. 区分内容时钟、行为更新与显示帧率
 

@@ -223,6 +223,9 @@ public:
     Entry pendingCallback=nullptr,lifeCallback=nullptr,deathCallback=nullptr,timeoutCallback=nullptr;
     CallbackCause callbackCause=CallbackCause::None;
     double phaseFrames=0; // 60 Hz 阶段内容帧；120 Hz 更新时每步增加 0.5。
+    /// @brief 安排延迟启用的超时；frames=-1 禁用，armFrame 为不重置总时钟的 60 Hz 帧号。
+    void ScheduleTimeout(int frames,int armFrame=0);
+    int scheduledTimeout=-1,timeoutArmFrame=-1; // 每次 Transition 清除，避免上一攻击的延迟定时污染下一阶段。
     int timeoutFrames=-1,deathEffect=0; // timeoutFrames 为 60 Hz 内容帧，负值关闭超时。
     std::vector<int> soundEvents,dropEvents,itemEvents; // 本次 Update 的音效/散落数量/原生道具号，下次 Update 清空，调用方只即时借用。
     std::vector<Spawn> spawnEvents; // 本次 Update 请求的独立子演员；接收方复制后生成，不在 ActorPool 遍历中重入出怪。

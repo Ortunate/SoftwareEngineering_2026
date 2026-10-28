@@ -3,6 +3,7 @@
 #pragma once
 
 #include "gameplay/actors/behavior.hpp"
+#include "gameplay/bosses/config.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -27,12 +28,9 @@ struct SpawnActors {
     float interval = 0.5F;
 };
 
-/// @brief 当前关卡的 Boss 遭遇类型。
-enum class BossEncounter { Midboss, Final };
-
-/// @brief 开始 Boss 遭遇；所属 StageEvent 必须带 id，战斗结束时报告完成。
+/// @brief 按命名启动配置创建 Boss；所属 StageEvent 必须带 id，完整退场结束才报告完成。
 struct StartBoss {
-    BossEncounter encounter = BossEncounter::Midboss;
+    const bosses::Battle* battle = nullptr; // 借用静态战斗定义，必须覆盖调度器生命周期。
 };
 
 /// @brief 对话所属遭遇；道中战后对白结束后继续本关，只有关底战后对白进入结算。

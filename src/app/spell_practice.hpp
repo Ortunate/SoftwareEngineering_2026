@@ -13,7 +13,7 @@ struct Stage { const char* label; const char* title; const char* boss; int group
 struct Character { const char* name; const char* title; const char* displayName; const char* shot; const char* bomb;
     int portrait; std::array<int,3> stars; };
 /// @brief number 为原典 1～131 编号；stage/group 为从 0 开始的关内编号，difficulty=0～4 对应 E/N/H/L/EX。
-/// phase 为本项目已实现的 Boss 阶段（2/4），0 表示尚未实现，不能据此启动关卡。
+/// phase 为本项目已实现的 Boss 展开技能编号（2/4），对应运行时 attack，0 表示尚未实现，不能据此启动关卡。
 struct Card { int number,stage,group,difficulty; const char* name; const char* user; int phase; };
 /// @brief 返回七关只读目录；借用静态数据，不加载素材。
 [[nodiscard]] std::span<const Stage> Stages();

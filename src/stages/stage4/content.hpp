@@ -10,7 +10,7 @@ public:
     const StageAssetManifest& Assets() const override;
     void DrawScenery(float seconds) const override;
     std::span<const StageEvent> Events() const override;
-    std::unique_ptr<Boss> CreateBoss(bool final) const override;
+    const bosses::Battle& PracticeBoss() const override;
     std::span<const DialogueLine> Dialogue(bool afterBattle=false,ShotType shot=ShotType::HomingAmulet) const override;
     std::span<const DialogueCue> DialogueCues(bool afterBattle,ShotType shot) const override;
     float DialogueLineDuration() const override {return 5;}
@@ -20,7 +20,5 @@ public:
     const char* StartTitle() const override {return "Stage 4  Unmoving Great Library  Normal";}
     StageDisplayInfo DisplayInfo() const override {return {"STAGE 04","不动的大图书馆","Unmoving Great Library"};}
     const char* ClearTitle() const override {return "STAGE 4 CLEAR";}
-    const char* BossStartMessage(bool final) const override {return final ? "Patchouli Knowledge" : "Koakuma";}
-    const char* MidbossEndMessage() const override {return "Koakuma retreated";}
 };
 }

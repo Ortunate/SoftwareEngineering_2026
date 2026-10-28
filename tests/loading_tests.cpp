@@ -95,11 +95,11 @@ struct GameLifecycleProbe {
 
         // 从已有战斗重开，旧纹理借用须先清理；符卡练习在加载结束后才建 Boss。
         game.practiceMode_ = game.spellPractice_ = true;
-        game.practicePhase_ = 4;
+        game.practiceAttack_ = 4;
         game.StartRun(false);
         Check(game.IsLoading() && !game.boss_, "Practice started before assets were ready");
         Finish(game);
-        Check(game.boss_ && game.boss_->phase == 4 && game.player_.Power() == Player::kMaxPower,
+        Check(game.boss_ && game.boss_->attack == 4 && game.player_.Power() == Player::kMaxPower,
               "Practice setup was lost during loading");
 
         game.Start(false);

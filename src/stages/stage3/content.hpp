@@ -10,7 +10,7 @@ public:
     const StageAssetManifest& Assets() const override;
     void DrawScenery(float seconds) const override;
     std::span<const StageEvent> Events() const override;
-    std::unique_ptr<Boss> CreateBoss(bool final) const override;
+    const bosses::Battle& PracticeBoss() const override;
     std::span<const DialogueLine> Dialogue(bool afterBattle=false,ShotType shot=ShotType::HomingAmulet) const override;
     std::span<const DialogueCue> DialogueCues(bool afterBattle,ShotType shot) const override;
     std::span<const DialogueLine> SceneDialogue(DialogueScene scene,bool afterBattle,ShotType shot) const override;
@@ -22,7 +22,5 @@ public:
     const char* StartTitle() const override {return "Stage 3  Scarlet Land  Normal";}
     StageDisplayInfo DisplayInfo() const override {return {"STAGE 03","红色境域","Scarlet Land"};}
     const char* ClearTitle() const override {return "STAGE 3 CLEAR";}
-    const char* BossStartMessage(bool) const override {return "Hong Meiling";}
-    const char* MidbossEndMessage() const override {return "Meiling retreated";}
 };
 }

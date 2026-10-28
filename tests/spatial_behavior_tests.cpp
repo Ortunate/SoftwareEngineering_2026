@@ -1,4 +1,5 @@
 // 本文件独立检查球面/球冠的面积密度、队列保持、等路程移动和实际 Stage 1 阶段，不使用生产采样器构造期望值。
+#include "gameplay/bosses/rumia.hpp"
 #include "actor_fixture.hpp"
 #include "gameplay/spatial.hpp"
 #include "stages/stage1/behaviors.hpp"
@@ -132,16 +133,16 @@ void TestConservedMovement() {
     for(int tick=0;tick<240;++tick) {lifted.BeginFrame(world);lifted.EndFrame(world);}Near(world.position,stopped);
     // Actor 重开释放跨阶段的移动状态，不能沿用上一场的高度或编排进度。
     behavior::Actor actor;actor.Reset({},1,5093);stage1::ConfigureBehavior(actor);assert(!actor.liftedMotion);
-    auto bullets=std::make_unique<BulletSystem>();actor.Start(stage1::rumia::FirstNonspell(actor));
+    auto bullets=std::make_unique<BulletSystem>();actor.Start(bosses::RumiaBoss::Behaviors::FirstNonspell(actor));
     actor.Update(1.0F/120,{},*bullets);assert(actor.liftedMotion);
     actor.Reset({},1,1);assert(!actor.liftedMotion&&actor.spatialIndex==1);
 }
 void TestBossCadenceAndDistance() {
     auto plainBullets=std::make_unique<BulletSystem>(),spatialBullets=std::make_unique<BulletSystem>();
     float maximumDifference=0;int caseIndex=0;
-    for(const auto entry:{stage1::rumia::Midboss,stage1::rumia::MidbossDefeated,stage1::rumia::MidbossTimeout,
-            stage1::rumia::FirstNonspell,stage1::rumia::SecondNonspell,stage1::rumia::NightBird,
-            stage1::rumia::Demarcation,stage1::rumia::Defeated})for(unsigned seed:{1882U,5093U,12345U}) {
+    for(const auto entry:{bosses::RumiaBoss::Behaviors::Midboss,bosses::RumiaBoss::Behaviors::MidbossDefeated,bosses::RumiaBoss::Behaviors::MidbossTimeout,
+            bosses::RumiaBoss::Behaviors::FirstNonspell,bosses::RumiaBoss::Behaviors::SecondNonspell,bosses::RumiaBoss::Behaviors::NightBird,
+            bosses::RumiaBoss::Behaviors::Demarcation,bosses::RumiaBoss::Behaviors::Defeated})for(unsigned seed:{1882U,5093U,12345U}) {
         ++caseIndex;behavior::Actor plain,lifted;plain.Reset({0,0,5.71428585F},7000,seed);lifted.Reset({0,0,5.71428585F},7000,seed);
         stage1::ConfigureBehavior(plain,false);stage1::ConfigureBehavior(lifted,true);
         plain.Start(entry(plain));lifted.Start(entry(lifted));
@@ -168,7 +169,7 @@ void TestBossCadenceAndDistance() {
             plainBullets->Pool().ForEachActive([&](const Bullet& bullet){oldShots.insert({bullet.nativeType,bullet.nativeColor});oldBeams+=bullet.beamLength>0;});
             spatialBullets->Pool().ForEachActive([&](const Bullet& bullet){newShots.insert({bullet.nativeType,bullet.nativeColor});newBeams+=bullet.beamLength>0;});
             assert(oldShots==newShots&&oldBeams==newBeams); // 精确到每个 120 Hz 步的发射、光束和空档。
-            if(entry==stage1::rumia::FirstNonspell&&tick<200)Near(lifted.Position(),b);
+            if(entry==bosses::RumiaBoss::Behaviors::FirstNonspell&&tick<200)Near(lifted.Position(),b);
             if(plain.finished||plain.pendingCallback)break;
         }
         assert(std::abs(plainDistance-liftedDistance)<0.0005);
@@ -177,9 +178,9 @@ void TestBossCadenceAndDistance() {
 }
 void TestStageEncounters() {
     auto bullets=std::make_unique<BulletSystem>();std::size_t peak=0;
-    for(const behavior::Entry entry:{stage1::rumia::Midboss,stage1::rumia::MidbossDefeated,stage1::rumia::MidbossTimeout,
-            stage1::rumia::FirstNonspell,stage1::rumia::SecondNonspell,stage1::rumia::NightBird,
-            stage1::rumia::Demarcation,stage1::rumia::Defeated}) {
+    for(const behavior::Entry entry:{bosses::RumiaBoss::Behaviors::Midboss,bosses::RumiaBoss::Behaviors::MidbossDefeated,bosses::RumiaBoss::Behaviors::MidbossTimeout,
+            bosses::RumiaBoss::Behaviors::FirstNonspell,bosses::RumiaBoss::Behaviors::SecondNonspell,bosses::RumiaBoss::Behaviors::NightBird,
+            bosses::RumiaBoss::Behaviors::Demarcation,bosses::RumiaBoss::Behaviors::Defeated}) {
         behavior::Actor actor;actor.Reset({0,0,6},7000,5093);stage1::ConfigureBehavior(actor);actor.Start(entry(actor));
         bullets->Reset();float low=0,high=0;bool verticalBullet=false;
         for(int tick=0;tick<2400&&!actor.pendingCallback&&!actor.finished;++tick) {
@@ -188,7 +189,7 @@ void TestStageEncounters() {
             peak=std::max(peak,bullets->Pool().ActiveCount());bullets->Update(1.0F/120,{}, {2,3,-6});
         }
         assert(high-low>0.05F);
-        if(entry!=stage1::rumia::MidbossDefeated&&entry!=stage1::rumia::MidbossTimeout&&entry!=stage1::rumia::Defeated)assert(verticalBullet);
+        if(entry!=bosses::RumiaBoss::Behaviors::MidbossDefeated&&entry!=bosses::RumiaBoss::Behaviors::MidbossTimeout&&entry!=bosses::RumiaBoss::Behaviors::Defeated)assert(verticalBullet);
         assert(bullets->Pool().DroppedSpawns()==0);
     }
     std::cout<<"Uniform spatial Stage 1 encounters validated; sampled peak "<<peak<<" / "<<BulletSystem::kCapacity<<'\n';

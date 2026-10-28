@@ -37,20 +37,5 @@ inline constexpr behavior::Pattern kSummonedStream{
     .movement={.speed=4.01785707F},.initialAnimation=15,.deathEffect=0,.spatialShots=true,.routine=SummonedStream};
 /// @brief 初始化本关共用弹种素材和三维模式；中性对照显式传 false，不影响独立随机流。
 void ConfigureBehavior(behavior::Actor& actor,bool spatial=true);
-namespace meiling {
-/// @brief 入场/阶段入口由 Boss 包装层调用；阶段 HP、生命阈值及超时从 native_combat 读取。
-behavior::Routine Midboss(behavior::Actor& actor);
-behavior::Routine GorgeousSweetFlower(behavior::Actor& actor);
-behavior::Routine MidbossDefeated(behavior::Actor& actor);
-behavior::Routine MidbossTimeout(behavior::Actor& actor);
-behavior::Routine Entrance(behavior::Actor& actor);
-behavior::Routine FirstNonspell(behavior::Actor& actor);
-behavior::Routine RainbowWindChime(behavior::Actor& actor);
-behavior::Routine SummoningNonspell(behavior::Actor& actor);
-behavior::Routine RainNonspell(behavior::Actor& actor);
-behavior::Routine ColorfulRain(behavior::Actor& actor);
-behavior::Routine DazzlingColorTyphoon(behavior::Actor& actor);
-behavior::Routine Defeated(behavior::Actor& actor);
-behavior::Routine End(behavior::Actor& actor);
-}
+
 }

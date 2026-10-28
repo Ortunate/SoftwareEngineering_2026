@@ -46,11 +46,10 @@ struct EventExecutor {
     }
 
     bool operator()(const StartBoss& action) const {
-        if (!event.id || (action.encounter != BossEncounter::Midboss &&
-                          action.encounter != BossEncounter::Final)) {
+        if (!event.id || (!action.battle || !action.battle->create)) {
             throw std::invalid_argument("Invalid StartBoss request");
         }
-        sink.BeginStageBoss(action.encounter == BossEncounter::Final, *event.id);
+        sink.BeginStageBoss(*action.battle, *event.id);
         return false;
     }
 

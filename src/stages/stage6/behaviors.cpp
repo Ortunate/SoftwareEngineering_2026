@@ -1,5 +1,6 @@
 // 本文件编排六面晶体的弯曲横穿、一次蓝环与隐藏环境位置；不包含 ECL 分派或原始坐标换算。
 #include "stages/stage6/behaviors.hpp"
+#include "stages/stage6/ids.hpp"
 #include <numbers>
 namespace koumakyou::stage6 {
 namespace {
@@ -32,4 +33,5 @@ Routine RedHook(Actor& a) {co_await Hook(a,true);}
 Routine CrossingRing(Actor& a) {co_await Ring(a);}
 Routine DescendingRing(Actor& a) {co_await Ring(a);}
 Routine DropEight(Actor& a) {a.dropEvents.push_back(8);a.finished=true;co_return;}
+void ConfigureBehavior(Actor& a,bool spatial) {a.skills.bulletBase=kNativeBulletBase;a.skills.laserBase=kNativeLaserBase;a.skills.fallback=kBlueBullet;a.skills.spatial=spatial;if(!spatial)a.liftedMotion.reset();}
 }

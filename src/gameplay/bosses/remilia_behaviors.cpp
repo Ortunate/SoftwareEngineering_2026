@@ -1,12 +1,15 @@
-// 本文件编排六面道中咲夜、蕾米莉亚的阶段与星阵/地雷扩展；所有位置、速度与边界直接采用世界单位。
+// 本文件实现 RemiliaBoss 内部命名行为；移动、弹幕、演出和随机读取保持原内容时序。
+#include "gameplay/bosses/remilia.hpp"
 #include "stages/stage6/behaviors.hpp"
 #include "stages/stage6/ids.hpp"
-#include "gameplay/data/native_combat.hpp"
 #include "gameplay/spatial.hpp"
 #include <cmath>
 #include <numbers>
-namespace koumakyou::stage6 {
+namespace koumakyou::bosses {
+using namespace stage6;
+using behavior::Actor;using behavior::Routine;using skill::Formation;
 namespace {
+
 using behavior::Actor;using behavior::Routine;using skill::Formation;
 constexpr float pi=std::numbers::pi_v<float>;
 movement::State& Motion(Actor& a) {if(a.skills.spatial&&!a.liftedMotion)a.liftedMotion.emplace(a.motion);return a.liftedMotion ? a.liftedMotion->planar : a.motion;}
@@ -15,10 +18,7 @@ void MoveTo(Actor& a,int frames,Vector3 target) {
     auto& motion=Motion(a);if(a.liftedMotion)a.liftedMotion->Rebase(a.motion);
     motion.Interpolate(frames,target,2);Height(a);
 }
-void Teleport(Actor& a,Vector3 target) {
-    const bool lifted=a.liftedMotion.has_value();auto state=Motion(a);state.position=target;state.Polar(0,0);state.velocity={};
-    a.liftedMotion.reset();a.motion=state;if(lifted)a.liftedMotion.emplace(state);
-}
+
 void Wander(Actor& a,float speed,int frames) {
     auto& motion=Motion(a);if(a.liftedMotion)a.liftedMotion->Rebase(a.motion);
     a.RandomDirection(-pi,pi);motion.Apply({.speed=speed});motion.Decelerate(frames);Height(a);
@@ -42,18 +42,7 @@ Routine Prepare(Actor& a,Vector3 target) {
     a.SetEmitterPeriod(0);a.ClearBullets();a.defeatActors=true;a.damageable=false;a.skills.offset={};a.phaseFrames=0;
     MoveTo(a,120,target);co_await a.At(120);a.SetPoses({166,166,166,161,162});a.damageable=true;
 }
-Routine MidFans(Actor& a,float angle,float step) {
-    a.soundEvents.push_back(5);
-    for(int i=0;i<12;++i) {co_await a.At(i*4);Fire(a,{Formation::FixedFan,8,3,8,1,8.5714283F,2.67857143F,angle,0.261799395F,0});angle-=step;a.soundEvents.push_back(7);}
-    co_await a.At(48);
-}
-Routine MidDelayedFans(Actor& a) {
-    for(int i=0;i<16;++i) {
-        co_await a.At(i);const float angle=a.Random(2*pi)-pi,turn=a.Random(2*pi)-pi;
-        a.skills.projectile={.delayFrames=60,.turnAngle=turn,.preserveTurnSpeed=true};a.soundEvents.push_back(22);
-        co_await a.At(i+1);Fire(a,{Formation::FixedFan,4,2,5,1,6.69642878F,2.67857143F,angle,0.044879895F,66});
-    }
-}
+
 Routine FirstSpiral(Actor& a) {
     float angle=0.0490873866F,large=-pi/2,balls=a.Random(2*pi)-pi;a.SetEmitterSound(7);
     for(int i=0;i<32;++i) {
@@ -125,7 +114,7 @@ Routine BatPrepare(Actor& a,int variant) {
 }
 Routine MineSeeds(Actor& a,int repeats,int interval) {
     for(int i=0;i<repeats;++i) {
-        co_await a.At(i*interval);if(remilia::SeedMines(a)==0)co_return;
+        co_await a.At(i*interval);if(RemiliaBoss::Behaviors::SeedMines(a)==0)co_return;
     }
     co_await a.At(repeats*interval);
 }
@@ -146,47 +135,20 @@ void AimedScarletRays(Actor& a,bool narrow) {
     if(narrow)for(float offset:tight)ScarletRay(a,aim+offset);
     else for(float offset:wide)ScarletRay(a,aim+offset);
 }
+
 }
-void ConfigureBehavior(Actor& a,bool spatial) {a.skills.bulletBase=kNativeBulletBase;a.skills.laserBase=kNativeLaserBase;a.skills.fallback=kBlueBullet;a.skills.spatial=spatial;if(!spatial)a.liftedMotion.reset();}
-namespace sakuya {
-Routine Entrance(Actor& a) {
-    a.damageable=false;a.contactEnabled=false;a.SetPoses({128,131,132,129,130});a.skills.offset={0,0,0.535714269F};
-    Motion(a).clamped=false;MoveTo(a,60,{0,0,4.28571415F});co_await a.At(60);
-    Motion(a).bounds={{-7.14285714F,4.28571415F},{7.14285714F,7.85714286F}};Motion(a).clamped=true;co_await a.At(1000000);
-}
-Routine Midboss(Actor& a) {
-    Initialize(a);Motion(a).bounds.lower.y=4.28571415F;a.skills.offset={};a.Animate(128);a.ClearBullets();a.defeatActors=true;
-    a.interactable=false;Teleport(a,{0,0,4.28571415F});a.soundEvents.push_back(5);co_await a.At(20);a.Animate(139);co_await a.At(30);a.interactable=true;
-    for(;;) {
-        co_await MidFans(a,0,pi/12);Wander(a,4.01785707F,90);co_await MidDelayedFans(a);
-        co_await a.At(31);co_await MidFans(a,pi,-pi/12);co_await MidDelayedFans(a);
-        co_await a.At(32);a.Rewind(30);
-    }
-}
-Routine EternalMeek(Actor& a) {
-    a.SetEmitterPeriod(0);a.damageable=false;a.skills.offset={};a.phaseFrames=0;MoveTo(a,120,{0,0,3.57142854F});
-    co_await a.At(120);a.damageable=true;a.Animate(139);
-    for(;;) {
-        Fire(a,{Formation::RandomAngleSpeed,3,6,4,1,16.0714283F,8.03571415F,pi,0,4});
-        Fire(a,{Formation::RandomAngleSpeed,3,6,12,1,13.3928576F,8.03571415F,0,-pi,4});a.soundEvents.push_back(7);
-        co_await a.At(124);a.Rewind(120);
-    }
-}
-Routine Retreat(Actor& a) {a.SetEmitterPeriod(0);a.ClearBullets();a.damageable=false;a.contactEnabled=false;a.Animate(128);a.finished=true;co_return;}
-Routine Defeated(Actor& a) {a.soundEvents.push_back(18);a.dropEvents.push_back(20);a.itemEvents.push_back(3);co_await Retreat(a);}
-}
-namespace remilia {
-Routine Entrance(Actor& a) {
+
+Routine RemiliaBoss::Behaviors::Entrance(Actor& a) {
     a.damageable=false;a.contactEnabled=false;a.SetPoses({160,163,164,161,162});a.skills.offset={0,0,0.535714269F};
     Motion(a).clamped=false;MoveTo(a,120,{0,0,5.71428585F});co_await a.At(120);
     Motion(a).bounds={{-7.14285714F,4.64285714F},{7.14285714F,7.85714286F}};Motion(a).clamped=true;co_await a.At(1000000);
 }
-Routine Prelude(Actor& a) {co_await a.At(1000000);}
-Routine FirstNonspell(Actor& a) {
+Routine RemiliaBoss::Behaviors::Prelude(Actor& a) {co_await a.At(1000000);}
+Routine RemiliaBoss::Behaviors::FirstNonspell(Actor& a) {
     Initialize(a);
     for(;;) {co_await a.At(100);co_await FirstSpiral(a);Wander(a,6.69642878F,90);co_await FirstSpiral(a);co_await a.At(210);a.Rewind(100);}
 }
-void StarLattice(Actor& a,bool emitProjectiles) {
+void RemiliaBoss::Behaviors::StarLattice(Actor& a,bool emitProjectiles) {
     const float random=a.Random(2*pi);const auto origin=a.Position();
     for(int pass=0;pass<2;++pass) {
         const float first=pass ? -7*pi/8+random : -pi+random,step=pass ? -pi/4 : pi/4;
@@ -213,14 +175,14 @@ void StarLattice(Actor& a,bool emitProjectiles) {
         }
     }
 }
-int SeedMines(Actor& a) {
+int RemiliaBoss::Behaviors::SeedMines(Actor& a) {
     std::vector<Vector3> positions;
     a.ModifyEnemyProjectiles([&](Bullet& b){if(!b.pendingExpiration&&b.nativeType>=6&&b.nativeType<=9)positions.push_back(b.position);});
     auto config=a.skills;config.offset={};config.rankInfluence={};config.projectile={};
     for(auto position:positions)a.FireAt({Formation::FixedFan,3,1,1,1,0,0,a.Random(2*pi)-pi,0,8},position,&config);
     return static_cast<int>(positions.size());
 }
-void ReleaseMines(Actor& a) {
+void RemiliaBoss::Behaviors::ReleaseMines(Actor& a) {
     const float phase=a.Random(2*pi)-pi;const auto center=a.Position();
     a.ModifyEnemyProjectiles([&](Bullet& b) {
         if(b.pendingExpiration||b.nativeType<0||b.nativeType>5||BulletSystem::Length(b.velocity)>0||BulletSystem::Length(b.acceleration)>0)return;
@@ -232,7 +194,7 @@ void ReleaseMines(Actor& a) {
         b.nativeColor=2;b.visual=static_cast<VisualId>(a.skills.bulletBase+b.nativeType*16+2);
     });
 }
-Routine StarOfVanities(Actor& a,PhaseMemory& memory) {
+Routine RemiliaBoss::Behaviors::StarOfVanities(Actor& a,PhaseMemory& memory) {
     co_await Prepare(a,{0,0,5});int cycle=0;
     for(;;) {
         a.soundEvents.push_back(5);
@@ -245,7 +207,7 @@ Routine StarOfVanities(Actor& a,PhaseMemory& memory) {
         co_await a.At(124);a.Rewind(0);
     }
 }
-Routine SecondNonspell(Actor& a,PhaseMemory& memory) {
+Routine RemiliaBoss::Behaviors::SecondNonspell(Actor& a,PhaseMemory& memory) {
     Initialize(a);a.ClearBullets();a.dropEvents.push_back(12);a.SetPoses({160,163,164,161,162});
     for(;;) {
         co_await a.At(60);Wander(a,6.69642878F,90);
@@ -257,7 +219,7 @@ Routine SecondNonspell(Actor& a,PhaseMemory& memory) {
         co_await a.At(63);co_await RotatingCones(a,true);co_await LayeredAim(a);co_await a.At(73);a.Rewind(60);
     }
 }
-Routine ScarletNetherworld(Actor& a) {
+Routine RemiliaBoss::Behaviors::ScarletNetherworld(Actor& a) {
     co_await Prepare(a,{0,0,3.57142854F});a.SetEmitterSound(23);
     for(;;) {
         float angle=a.Random(2*pi)-pi;
@@ -271,12 +233,12 @@ Routine ScarletNetherworld(Actor& a) {
         co_await a.At(126);Wander(a,4.01785707F,90);co_await a.At(216);a.Rewind(0);
     }
 }
-Routine ThirdNonspell(Actor& a) {
+Routine RemiliaBoss::Behaviors::ThirdNonspell(Actor& a) {
     Initialize(a);a.ClearBullets();a.dropEvents.push_back(12);a.SetPoses({160,163,164,161,162});
     for(;;) {co_await a.At(60);co_await CounterRotatingKnives(a,false);Wander(a,6.69642878F,90);
         co_await a.At(188);co_await CounterRotatingKnives(a,true);co_await a.At(298);a.Rewind(60);}
 }
-Routine VladTepesCurse(Actor& a) {
+Routine RemiliaBoss::Behaviors::VladTepesCurse(Actor& a) {
     co_await Prepare(a,{0,0,3.57142854F});const float angle=a.Random(2*pi)-pi;int cycle=0;
     for(;;) {
         a.soundEvents.push_back(5);a.skills.projectile={.angularVelocity=cycle%2 ? 1.17809725F : -1.17809725F,.angularFrames=108};
@@ -284,7 +246,7 @@ Routine VladTepesCurse(Actor& a) {
         co_await MineSeeds(a,32,14);ReleaseMines(a);Wander(a,6.69642878F,60);++cycle;
     }
 }
-Routine BatNonspell(Actor& a) {
+Routine RemiliaBoss::Behaviors::BatNonspell(Actor& a) {
     Initialize(a);a.ClearBullets();a.dropEvents.push_back(12);int cycle=0;
     for(;;) {
         co_await a.At(60);co_await BatPrepare(a,cycle%3);
@@ -293,7 +255,7 @@ Routine BatNonspell(Actor& a) {
         co_await a.At(360);++cycle;a.Rewind(60);
     }
 }
-Routine ScarletShoot(Actor& a) {
+Routine RemiliaBoss::Behaviors::ScarletShoot(Actor& a) {
     co_await Prepare(a,{0,0,5});a.soundEvents.push_back(5);
     for(;;) {
         a.soundEvents.push_back(5);co_await a.At(64);AimedScarletRays(a,false);
@@ -306,9 +268,8 @@ Routine ScarletShoot(Actor& a) {
         co_await a.At(484);a.Rewind(0);
     }
 }
-Routine RedMagic(Actor& a) {
+Routine RemiliaBoss::Behaviors::RedMagic(Actor& a) {
     Initialize(a);a.damageable=false;a.ClearBullets();a.dropEvents.push_back(12);co_await a.At(60);
-    a.timeoutFrames=static_cast<int>(native_combat::RequireLiteral(native_combat::Setting(6,62,115)));
     co_await Prepare(a,{0,0,4.28571415F});a.Rewind(0);
     for(;;) {
         a.soundEvents.push_back(5);const auto size=battle::EnemyBulletLogicalSize(9);
@@ -325,11 +286,11 @@ Routine RedMagic(Actor& a) {
         co_await MineSeeds(a,10,17);ReleaseMines(a);co_await a.At(206);a.Rewind(0);
     }
 }
-Routine Defeated(Actor& a) {
+Routine RemiliaBoss::Behaviors::Defeated(Actor& a) {
     a.SetEmitterPeriod(0);a.interactable=true;a.contactEnabled=false;a.damageable=false;a.SetPoses({160,163,164,161,162});Wander(a,1.60714281F,60);
     for(int i=0;i<6;++i) {co_await a.At((i+1)*10);a.soundEvents.push_back(7);}
     a.soundEvents.push_back(18);a.ClearBullets();a.finished=true;
 }
-Routine PhaseComplete(Actor& a) {a.finished=true;co_return;}
-}
+Routine RemiliaBoss::Behaviors::SkillComplete(Actor& a) {a.finished=true;co_return;}
+
 }

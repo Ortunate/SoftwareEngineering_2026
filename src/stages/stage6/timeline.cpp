@@ -1,5 +1,6 @@
 // 本文件显式保存六面全部出生与演出；道中对白等待后的事件以真实完成时刻恢复相对源帧距。
 #include "stages/stage6/data.hpp"
+#include "stages/stage6/boss_config.hpp"
 #include "stages/stage6/behaviors.hpp"
 #include "stages/stage6/ids.hpp"
 #include <array>
@@ -137,12 +138,12 @@ const std::array<StageEvent,135> kEvents{{
     {.atFrame=2033,.action=Spawn({-10.0F,0.0F,7.14285707F},kCrossingRing,500,1000,2,false,false,1421025756U,-1,true)},
     {.atFrame=2053,.action=Spawn({10.0F,0.0F,7.85714293F},kCrossingRing,500,1000,2,true,false,704746365U,-1,true)},
     {.atFrame=2053,.action=Spawn({-10.0F,0.0F,7.85714293F},kCrossingRing,500,1000,2,false,false,251501740U,-1,true)},
-    {.atFrame=2493,.action=StartBoss{BossEncounter::Midboss},.id=1},
+    {.atFrame=2493,.action=StartBoss{&kSakuyaMidboss},.id=1},
     {.delay=0,.action=StartDialogue{false,DialogueScene::Midboss,DialogueClearPolicy::PreserveWorld},.id=2},
     {.delay=1.0F/60,.action=ResumeBoss{},.afterEndOf=2},
     {.delay=600.0F/60,.action=StartDialogue{false,DialogueScene::FinalBoss,DialogueClearPolicy::PreserveWorld},.id=3,.afterEndOf=1},
     {.delay=0,.action=WaitDialogueSignal{1},.id=6},
-    {.delay=1.0F/60,.action=StartBoss{BossEncounter::Final},.id=4,.afterEndOf=6},
+    {.delay=1.0F/60,.action=StartBoss{&kRemiliaFinal},.id=4,.afterEndOf=6},
     {.delay=1.0F/60,.action=WaitDialogueSignal{2},.id=7},
     {.delay=1.0F/60,.action=ResumeBoss{},.afterEndOf=7},
     {.delay=1.0F/60,.action=WaitDialogueSignal{0},.id=8},

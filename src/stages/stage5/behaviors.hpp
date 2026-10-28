@@ -41,25 +41,5 @@ inline constexpr behavior::Pattern kPassingRandomRedRings{
     .movement={.angle=0,.speed=6.69642878F},.initialAnimation=12,.deathEffect=0,.spatialShots=true,.routine=PassingRandomRedRings};
 /// @brief 给独占 Boss 演员安装当前关卡的弹幕素材；空间模式不改变内容时钟或随机读取顺序。
 void ConfigureBehavior(behavior::Actor& actor,bool spatial);
-namespace sakuya {
-/// @brief 入场只移动和等待；对白完成由 Boss 接收端切入 Midboss 或 FirstNonspell。
-behavior::Routine Entrance(behavior::Actor& actor);
-behavior::Routine Midboss(behavior::Actor& actor);
-behavior::Routine Misdirection(behavior::Actor& actor);
-behavior::Routine MidbossRetreat(behavior::Actor& actor);
-behavior::Routine MidbossDefeated(behavior::Actor& actor);
-behavior::Routine FirstNonspell(behavior::Actor& actor);
-behavior::Routine ClockCorpse(behavior::Actor& actor);
-behavior::Routine SecondNonspell(behavior::Actor& actor);
-behavior::Routine LunaClock(behavior::Actor& actor);
-behavior::Routine ThirdNonspell(behavior::Actor& actor);
-behavior::Routine Marionette(behavior::Actor& actor);
-behavior::Routine Defeated(behavior::Actor& actor);
-/// @brief 阶段回调只标记交接，实际生命、血条和完整退场由 Stage5Boss 统一推进。
-behavior::Routine PhaseComplete(behavior::Actor& actor);
-/// @brief 原生时停弧线与改向的世界坐标实现；只在 Actor 的 Update 内调用，使用其借用弹池。
-/// 弧线每次九枚、pulse 为从零起算的九帧周期编号；改向最多成功修改十四枚，保留槽位和随机读取顺序。
-void EmitClockArc(behavior::Actor& actor,int pulse);
-void RedirectStoppedBullets(behavior::Actor& actor);
-}
+
 }

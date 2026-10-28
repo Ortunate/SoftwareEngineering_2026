@@ -64,37 +64,5 @@ inline constexpr behavior::Pattern kHiddenLaserEmitter{
     .movement={.speed=0},.initialAnimation=16,.deathEffect=0,.spatialShots=true,.routine=HiddenLaserEmitter};
 /// @brief 配置本关弹幕素材与三维模式；false 仅供独立源参数对照，不消耗演员随机流。
 void ConfigureBehavior(behavior::Actor& actor,bool spatial=true);
-namespace koakuma {
-/// @brief 小恶魔道中、击破与超时；原始 HP/超时由统一目录初始化，召唤独立发射体。
-behavior::Routine Encounter(behavior::Actor& actor);
-behavior::Routine Defeated(behavior::Actor& actor);
-behavior::Routine Timeout(behavior::Actor& actor);
-}
-namespace patchouli {
-/// @brief 帕秋莉入场等待独立开战通知；两个非符阶段保存自己的激光槽与跨子行为的自动发射。
-behavior::Routine Entrance(behavior::Actor& actor);
-behavior::Routine FirstNonspell(behavior::Actor& actor);
-behavior::Routine SecondNonspell(behavior::Actor& actor);
-/// @brief Normal 按机体选用的元素符卡及其强化版；均含 120 内容帧准备期，返回条件由 Boss 生命周期设置。
-behavior::Routine AgniShine(behavior::Actor& actor);
-behavior::Routine AgniShineAdvanced(behavior::Actor& actor);
-behavior::Routine PrincessUndine(behavior::Actor& actor);
-behavior::Routine SylphyHorn(behavior::Actor& actor);
-behavior::Routine SylphyHornAdvanced(behavior::Actor& actor);
-behavior::Routine LazyTrilithon(behavior::Actor& actor);
-behavior::Routine LazyTrilithonAdvanced(behavior::Actor& actor);
-behavior::Routine MetalFatigue(behavior::Actor& actor);
-/// @brief 组合符卡的命名攻击，含自身准备期；组合阶段额外的演出等待由 CombinationEntrance 负责。
-behavior::Routine LavaCromlech(behavior::Actor& actor);
-behavior::Routine ForestBlaze(behavior::Actor& actor);
-behavior::Routine WaterElf(behavior::Actor& actor);
-behavior::Routine MercuryPoison(behavior::Actor& actor);
-behavior::Routine EmeraldMegalith(behavior::Actor& actor);
-behavior::Routine CombinationEntrance(behavior::Actor& actor);
-/// @brief 组合段在包装层等待后重设自身超时并执行命名攻击；entry 必须为本关的组合符卡入口，timeout 为内容帧。
-behavior::Routine Combination(behavior::Actor& actor,behavior::Entry entry,int timeout);
-/// @brief 供统一阶段回调使用的交接标记；必须由 Boss 在 Update 外推进，不能在协程中销毁当前调用链。
-behavior::Routine PhaseComplete(behavior::Actor& actor);
-behavior::Routine Defeated(behavior::Actor& actor);
-}
+
 }

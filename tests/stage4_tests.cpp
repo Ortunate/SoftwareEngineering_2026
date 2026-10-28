@@ -1,8 +1,10 @@
 // 本文件验证四面出生、普通演员、Boss 源时钟、四机体阶段与通用弹道；整关图形另有集成测试。
+#include "gameplay/bosses/koakuma.hpp"
 #include "stages/stage4/behaviors.hpp"
 #include "stages/stage4/ids.hpp"
 #include "stages/stage4/data.hpp"
-#include "stages/stage4/boss.hpp"
+#include "stages/stage4/boss_config.hpp"
+#include "gameplay/bosses/patchouli.hpp"
 #include "app/spell_practice.hpp"
 #include <cassert>
 #include <cmath>
@@ -203,7 +205,7 @@ void TestEmitterSoundFlags() {
 }
 void TestBossPreludeWitnesses() {
     auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor(behavior::UpdateRate::Hz60);
-    actor.Reset({},7000,7);stage4::ConfigureBehavior(actor,false);actor.Start(stage4::koakuma::Encounter(actor));
+    actor.Reset({},7000,7);stage4::ConfigureBehavior(actor,false);actor.Start(bosses::KoakumaBoss::Behaviors::Encounter(actor));
     for(int frame=0;frame<475;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         const bool first=frame>=30&&frame<=170&&(frame-30)%20==0;
@@ -215,7 +217,7 @@ void TestBossPreludeWitnesses() {
     }
     for(bool second:{false,true}) {
         actor.Reset({},second ? 16000 : 17000,7);stage4::ConfigureBehavior(actor,false);bullets->Reset();
-        actor.Start(second ? stage4::patchouli::SecondNonspell(actor) : stage4::patchouli::FirstNonspell(actor));
+        actor.Start(second ? bosses::PatchouliBoss::Behaviors::SecondNonspell(actor) : bosses::PatchouliBoss::Behaviors::FirstNonspell(actor));
         for(int frame=0;frame<=800;++frame) {
             actor.Update(1.0F/60,{2,3,-6},*bullets);int shots=0,beams=0;
             bullets->Pool().ForEachActive([&](Bullet& bullet){if(bullet.beamLength>0)++beams;else {++shots;bullet.active=false;}});
@@ -323,9 +325,9 @@ void TestExtendedProjectileMotion() {
     }
 }
 void TestSpellClockWitnesses() {
-    using namespace stage4::patchouli;
-    const std::array<behavior::Entry,13> entries{AgniShine,AgniShineAdvanced,PrincessUndine,SylphyHorn,SylphyHornAdvanced,
-        LazyTrilithon,LazyTrilithonAdvanced,MetalFatigue,LavaCromlech,ForestBlaze,WaterElf,MercuryPoison,EmeraldMegalith};
+
+    const std::array<behavior::Entry,13> entries{bosses::PatchouliBoss::Behaviors::AgniShine,bosses::PatchouliBoss::Behaviors::AgniShineAdvanced,bosses::PatchouliBoss::Behaviors::PrincessUndine,bosses::PatchouliBoss::Behaviors::SylphyHorn,bosses::PatchouliBoss::Behaviors::SylphyHornAdvanced,
+        bosses::PatchouliBoss::Behaviors::LazyTrilithon,bosses::PatchouliBoss::Behaviors::LazyTrilithonAdvanced,bosses::PatchouliBoss::Behaviors::MetalFatigue,bosses::PatchouliBoss::Behaviors::LavaCromlech,bosses::PatchouliBoss::Behaviors::ForestBlaze,bosses::PatchouliBoss::Behaviors::WaterElf,bosses::PatchouliBoss::Behaviors::MercuryPoison,bosses::PatchouliBoss::Behaviors::EmeraldMegalith};
     auto bullets=std::make_unique<BulletSystem>();
     for(int variant=0;variant<13;++variant)for(auto rate:{behavior::UpdateRate::Hz60,behavior::UpdateRate::Hz120}) {
         behavior::Actor actor(rate);actor.Reset({0,0,4},1000,7);stage4::ConfigureBehavior(actor,false);actor.Start(entries[variant](actor));
@@ -362,13 +364,13 @@ void TestBossBranchesAndLifecycle() {
     constexpr std::array<std::array<int,4>,4> cards{{{39,58,67,78},{46,51,75,78},{50,40,71,82},{57,63,82,75}}};
     constexpr std::array<float,4> first{1600,1600,1600,1800},second{1500,1600,1700,1800};
     for(int shot=0;shot<4;++shot)for(bool timeout:{false,true}) {
-        stage4::Stage4Boss boss(true,behavior::UpdateRate::Hz60,false);boss.SetPlayerShot(static_cast<ShotType>(shot));
-        assert(!boss.CanTakeDamage()&&!boss.SpellName()&&boss.phase==0);
+        bosses::PatchouliBoss boss(behavior::UpdateRate::Hz60,false);boss.StartBoss(stage4::PatchouliFinalConfig(static_cast<ShotType>(shot)));
+        assert(!boss.CanTakeDamage()&&!boss.SpellName()&&boss.attack==0);
         for(int frame=0;frame<100;++frame)assert(!boss.Update(1.0F/60,{2,0,-6},*bullets));
-        boss.ResumeCombat();assert(boss.phase==1&&boss.health==17000&&!boss.CanTakeDamage());
+        boss.ResumeCombat();assert(boss.attack==1&&boss.health==17000&&!boss.CanTakeDamage());
         int card=0;
         for(int phase=1;phase<=6;++phase) {
-            assert(boss.phase==phase);assert(boss.HealthBar().count==2);
+            assert(boss.attack==phase);assert(boss.HealthBar().count==2);
             const int prepare=phase==1||phase==3 ? 0 : phase>=5 ? 240 : 120;
             for(int frame=0;frame<=prepare;++frame) {bullets->Reset();assert(!boss.Update(1.0F/60,{2,0,-6},*bullets));}
             assert(boss.CanTakeDamage());
@@ -380,31 +382,31 @@ void TestBossBranchesAndLifecycle() {
             if(timeout) {
                 bool ended=false;
                 for(int frame=0;frame<2600&&!ended;++frame) {bullets->Reset();ended=boss.Update(1.0F/60,{2,0,-6},*bullets);}
-                assert(ended&&!boss.PhaseDefeated());
+                assert(ended&&!boss.SkillDefeated());
             } else {
                 boss.health=phase==1 ? first[shot]-1 : phase==3 ? second[shot]-1 : phase==5 ? 1699 : 0;
-                assert(boss.ShouldAdvanceFromDamage());assert(boss.PhaseDefeated()==(phase!=1&&phase!=3));
+                assert(boss.ShouldAdvanceFromDamage());assert(boss.SkillDefeated()==(phase!=1&&phase!=3));
             }
-            assert(boss.AdvancePhase());assert(!boss.CanTakeDamage());
+            assert(boss.AdvanceSkill());assert(!boss.CanTakeDamage());
         }
         assert(!boss.SpellName());bool ended=false;
         for(int frame=0;frame<70&&!ended;++frame)ended=boss.Update(1.0F/60,{2,0,-6},*bullets);
-        assert(ended&&!boss.AdvancePhase()&&!boss.active&&boss.Defeated()==!timeout);
+        assert(ended&&!boss.AdvanceSkill()&&!boss.active&&boss.Defeated()==!timeout);
     }
 }
 void TestEntranceSourceBoundary() {
-    auto bullets=std::make_unique<BulletSystem>();stage4::Stage4Boss boss(true,behavior::UpdateRate::Hz60,false);
+    auto bullets=std::make_unique<BulletSystem>();bosses::PatchouliBoss boss(behavior::UpdateRate::Hz60,false);boss.StartBoss(stage4::PatchouliFinalConfig());
     for(int frame=0;frame<100;++frame) {
         boss.Update(1.0F/60,{},*bullets);
         const float ratio=frame>=59 ? 1 : 1-std::pow(1-frame/60.0F,2.0F);
         Near(boss.position.x,(64+128*ratio-192)*20/448);Near(boss.position.z,10-(-32+160*ratio)*20/448);
-        assert(!boss.CanTakeDamage()&&boss.phase==0);
+        assert(!boss.CanTakeDamage()&&boss.attack==0);
     }
 }
 void TestSpatialDisplayFrameRates() {
-    using namespace stage4::patchouli;
-    const std::array<behavior::Entry,14> entries{stage4::koakuma::Encounter,AgniShine,AgniShineAdvanced,PrincessUndine,SylphyHorn,
-        SylphyHornAdvanced,LazyTrilithon,LazyTrilithonAdvanced,MetalFatigue,LavaCromlech,ForestBlaze,WaterElf,MercuryPoison,EmeraldMegalith};
+
+    const std::array<behavior::Entry,14> entries{bosses::KoakumaBoss::Behaviors::Encounter,bosses::PatchouliBoss::Behaviors::AgniShine,bosses::PatchouliBoss::Behaviors::AgniShineAdvanced,bosses::PatchouliBoss::Behaviors::PrincessUndine,bosses::PatchouliBoss::Behaviors::SylphyHorn,
+        bosses::PatchouliBoss::Behaviors::SylphyHornAdvanced,bosses::PatchouliBoss::Behaviors::LazyTrilithon,bosses::PatchouliBoss::Behaviors::LazyTrilithonAdvanced,bosses::PatchouliBoss::Behaviors::MetalFatigue,bosses::PatchouliBoss::Behaviors::LavaCromlech,bosses::PatchouliBoss::Behaviors::ForestBlaze,bosses::PatchouliBoss::Behaviors::WaterElf,bosses::PatchouliBoss::Behaviors::MercuryPoison,bosses::PatchouliBoss::Behaviors::EmeraldMegalith};
     struct Snapshot {Vector3 position,velocity;int type,color,turns;};
     for(auto entry:entries) {
         std::vector<Snapshot> expected;Vector3 position{};float random=0;int animation=-1;

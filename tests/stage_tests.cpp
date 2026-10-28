@@ -1,5 +1,15 @@
 // 本文件负责验证带参事件、连续出怪时序、异步依赖及已注册关卡的内容工厂。
 
+#include "boss_fixture.hpp"
+#include "stages/stage1/boss_config.hpp"
+#include "gameplay/bosses/rumia.hpp"
+#include "gameplay/bosses/daiyousei.hpp"
+#include "gameplay/bosses/cirno.hpp"
+#include "gameplay/bosses/meiling.hpp"
+#include "gameplay/bosses/koakuma.hpp"
+#include "gameplay/bosses/patchouli.hpp"
+#include "gameplay/bosses/sakuya.hpp"
+#include "gameplay/bosses/remilia.hpp"
 #include "actor_fixture.hpp"
 #include "gameplay/actors/behavior.hpp"
 #include "stage/catalog.hpp"
@@ -149,7 +159,7 @@ void TestContinuousSpawns() {
 void TestSpawnCancellation() {
     const std::array<StageEvent, 3> events{{
         {.action = SpawnActors{testing::SpawnAt(), 8}, .id = 1},
-        {.delay = 0.25F, .action = StartBoss{}, .id = 2},
+        {.delay = 0.25F, .action = StartBoss{&stage1::kRumiaMidboss}, .id = 2},
         {.action = SpawnActors{testing::SpawnAt({},stage1::kDarkFairy)}, .afterEndOf = 2},
     }};
     StageDirector stage(events);
@@ -201,12 +211,14 @@ void TestInvalidEvents() {
                                          std::numeric_limits<float>::max()}}));
     auto invalid=testing::SpawnAt();invalid.pattern.movement.count=5;
     assert(rejects({.action=SpawnActors{invalid}}));
-    assert(rejects({.action = StartBoss{}}));
+    assert(rejects({.action = StartBoss{&stage1::kRumiaMidboss}}));
     assert(rejects({.action = StartDialogue{}}));
     assert(rejects({.action=WaitDialogueSignal{}}));
     assert(rejects({.action=WaitDialogueSignal{-1},.id=1}));
     assert(rejects({.action=StartDialogue{false,DialogueScene::FinalBoss,static_cast<DialogueClearPolicy>(99)},.id=20}));
-    assert(rejects({.action = StartBoss{static_cast<BossEncounter>(999)}, .id = 1}));
+    assert(rejects({.action = StartBoss{nullptr}, .id = 1}));
+    const bosses::Battle emptyBattle{};
+    assert(rejects({.action = StartBoss{&emptyBattle}, .id = 1}));
     StageDirector empty;
     for (float value : {-1.0F, infinity, nan}) {
         bool rejected = false;
@@ -236,8 +248,8 @@ struct EventProbe final : StageEventSink {
         assert(enemy && enemy->active && enemy->age == 0.0F);
         enemies.push_back(std::move(enemy));
     }
-    void BeginStageBoss(bool final, StageEventId id) override {
-        if (final) ++finalBosses;
+    void BeginStageBoss(const bosses::Battle& battle, StageEventId id) override {
+        if (&battle==&content.PracticeBoss()) ++finalBosses;
         else { ++midbosses; midbossId = id; }
     }
     void BeginStageDialogue(StageEventId id, bool = false,DialogueScene=DialogueScene::FinalBoss,
@@ -291,8 +303,8 @@ void TestStage1Content() {
     assert(!pool.Spawn(testing::SpawnAt())&&pool.DroppedSpawns()==1);
     actor->active=false;assert(pool.Spawn(testing::SpawnAt({},stage1::kDarkFairy)));
     pool.Clear();assert(pool.DroppedSpawns()==0);
-    const auto finalBoss = content->CreateBoss(true);
-    assert(finalBoss && finalBoss->active && !finalBoss->IsMidboss());
+    const auto finalBoss = content->CreateBoss(testing::BattleAt(*content,1));
+    assert(finalBoss && finalBoss->active && finalBoss->DisplayName()==std::string_view("Rumia"));
 
     const auto& visuals = content->Assets().visuals;
     assert(visuals.size() == stage1::kVisualCount);
@@ -389,10 +401,18 @@ void TestPlayableCatalog() {
         const auto content=CreateStageContent(id);
         assert(content && !content->Events().empty() && !content->Assets().visuals.empty());
         StageDirector director(content->Events()); // 同时验证所有生产事件表的依赖和参数约束。
-        const auto mid=content->CreateBoss(false),final=content->CreateBoss(true);
+        const auto mid=content->CreateBoss(testing::BattleAt(*content,0)),final=content->CreateBoss(testing::BattleAt(*content,1));
         // 原 ECL 103 的 X/Y 全宽，受弹球取短边的一半；道中咲夜在对白开战时才从 56 改为 40。
         constexpr std::array<float,6> midWidths{48,45,56,40,56,56},finalWidths{48,48,56,48,56,56};
         assert(mid&&final);
+        switch(index) {
+            case 0:assert(dynamic_cast<bosses::RumiaBoss*>(mid.get())&&dynamic_cast<bosses::RumiaBoss*>(final.get()));break;
+            case 1:assert(dynamic_cast<bosses::DaiyouseiBoss*>(mid.get())&&dynamic_cast<bosses::CirnoBoss*>(final.get()));break;
+            case 2:assert(dynamic_cast<bosses::MeilingBoss*>(mid.get())&&dynamic_cast<bosses::MeilingBoss*>(final.get()));break;
+            case 3:assert(dynamic_cast<bosses::KoakumaBoss*>(mid.get())&&dynamic_cast<bosses::PatchouliBoss*>(final.get()));break;
+            case 4:assert(dynamic_cast<bosses::SakuyaBoss*>(mid.get())&&dynamic_cast<bosses::SakuyaBoss*>(final.get()));break;
+            case 5:assert(dynamic_cast<bosses::SakuyaBoss*>(mid.get())&&dynamic_cast<bosses::RemiliaBoss*>(final.get()));break;
+        }
         assert(std::abs(mid->hitRadius-midWidths[index]*0.5F*(20.0F/448))<1e-6F);
         assert(std::abs(final->hitRadius-finalWidths[index]*0.5F*(20.0F/448))<1e-6F);
         if(index>=4) {
@@ -412,6 +432,84 @@ void TestPlayableCatalog() {
     try { (void)CreateStageContent(invalid); } catch(const std::invalid_argument&) {rejected=true;}
     assert(rejected);
 }
+/// @brief 测试角色把血量绑定在自己的技能目录中，公共执行器只接收引用及显式血条外观。
+class ConfigTestBoss final : public bosses::ConfiguredBoss {
+public:
+    enum class Behavior {First,Second,Third,Timed,Exit};
+    const char* DisplayName() const override {return "Config test";}
+protected:
+    bosses::Attack ResolveBehavior(bosses::BehaviorId id) const override {
+        if(!id.Is<Behavior>())throw std::invalid_argument("Foreign test behavior");
+        return bosses::Run(static_cast<Behavior>(id.value)==Behavior::Exit ? Leave : Wait);
+    }
+    bosses::SkillDefinition ResolveSkill(bosses::BehaviorId id,ShotType) const override {
+        if(!id.Is<Behavior>())throw std::invalid_argument("Foreign test skill");
+        bosses::SkillDefinition p;p.behavior=ResolveBehavior(id);p.timeoutFrames=6;
+        switch(static_cast<Behavior>(id.value)) {
+            case Behavior::First:p.health=6;p.reserveHealth=4;break;
+            case Behavior::Second:p.health=4;p.timeoutFrames=12;break;
+            case Behavior::Third:p.health=20;p.timeoutFrames=18;break;
+            case Behavior::Timed:p.health=10;p.timeoutArmFrame=2;break;
+            default:throw std::invalid_argument("Not a test skill");
+        }
+        return p;
+    }
+private:
+    static behavior::Routine Wait(behavior::Actor& actor) {actor.damageable=true;co_await actor.At(100000);}
+    static behavior::Routine Leave(behavior::Actor& actor) {co_await actor.At(4);actor.finished=true;}
+};
+/// @brief 验证一阶段多技能、与 HP 无关的比例/颜色、可变段数、复制、跳转和原子交接。
+void TestBossStartupConfig() {
+    using namespace bosses;using S=ConfigTestBoss::Behavior;
+    auto config=stage1::RumiaMidbossConfig();config.initialContact=false;
+    config.phases={{{S::First,S::Second},{{{1,0.75F,GREEN},{0,0.25F,BLUE}}}},{{S::Third},{{{0,1,RED}}}}};
+    config.intro={};config.defeated=config.retreat=S::Exit;config.defeatScore=77;config.retreatScore=11;
+    config.phases[0].healthBar.background=BLACK;
+    ConfigTestBoss boss;boss.StartBoss(config);auto bullets=std::make_unique<BulletSystem>();
+    config.phases[0].healthBar.segments[0].ratio=0.1F;config.phases.clear(); // 容器复制后不再借用调用方。
+    auto bar=boss.HealthBar();assert(ColorToInt(bar.background)==ColorToInt(BLACK));assert(boss.health==10&&boss.phase==1&&boss.skill==1&&boss.attack==1);
+    assert(bar.count==2&&bar.remainingBars==1&&bar.segments[0].capacity==0.75F&&ColorToInt(bar.segments[0].color)==ColorToInt(GREEN));
+    boss.health=7;bar=boss.HealthBar();assert(bar.segments[0].remaining==0.75F&&bar.segments[1].remaining==0.125F);
+    boss.Update(1.0F/120,{},*bullets);boss.health=3;
+    assert(boss.ShouldAdvanceFromDamage()&&boss.AdvanceSkill()&&boss.phase==1&&boss.skill==2&&boss.attack==2&&boss.health==4);
+    bar=boss.HealthBar();assert(bar.segments[1].remaining==0&&bar.segments[0].remaining==0.75F);
+    assert(!boss.CanTakeDamage()&&!boss.ShouldAdvanceFromDamage());
+    boss.Update(1.0F/240,{},*bullets);assert(!boss.CanTakeDamage());boss.Update(1.0F/240,{},*bullets);assert(boss.CanTakeDamage());
+    boss.health=0;assert(boss.AdvanceSkill()&&boss.phase==2&&boss.skill==1&&boss.attack==3&&boss.health==20);
+    boss.Update(1.0F/120,{},*bullets);boss.health=0;assert(boss.AdvanceSkill()&&boss.active);
+    bool finished=false;for(int i=0;i<10&&!finished;++i)if(boss.Update(1.0F/120,{},*bullets))finished=!boss.AdvanceSkill();
+    assert(finished&&boss.Defeated()&&boss.CompletionScore()==77);
+    // 自定义组合可以用阈值技能收尾；寄存器仍为正时也必须按实际技能血量判定整场击破。
+    config.phases={{{S::First},{{{0,1,WHITE}}}}};boss.StartBoss(config);
+    boss.Update(1.0F/120,{},*bullets);boss.health=3;
+    boss.Update(1.0F/120,{},*bullets);assert(boss.health==4&&boss.AdvanceSkill()&&boss.Defeated());
+    for(int i=0;i<12&&boss.active;++i)if(boss.Update(1.0F/120,{},*bullets))boss.AdvanceSkill();
+    assert(!boss.active&&boss.CompletionScore()==77);
+    // 同一技能出现四次，各段按本阶段的使用索引绑定，不能依赖固定三段或用技能 ID 去重。
+    config.phases={{{S::Timed,S::Timed,S::Timed,S::Timed},{{{3,0.1F,RED},{2,0.2F,BLUE},{1,0.3F,GREEN},{0,0.4F,YELLOW}}}}};
+    boss.StartBoss(config);assert(boss.HealthBar().count==4);boss.AdvanceSkill();boss.AdvanceSkill();
+    assert(boss.phase==1&&boss.skill==3&&boss.HealthBar().segments[3].remaining==0&&boss.HealthBar().segments[0].remaining==0.1F);
+    config.phases={{{S::Timed},{{{0,1,RED}}}}};
+    for(int fps:{30,60,120,144,240}) {
+        boss.StartBoss(config);double elapsed=0;
+        while(boss.active&&elapsed<1) {if(boss.Update(1.0F/fps,{},*bullets))boss.AdvanceSkill();elapsed+=1.0/fps;}
+        assert(!boss.active&&!boss.Defeated()&&boss.CompletionScore()==11);
+        assert(std::abs(elapsed-12.0/60)<=2.0/fps+1.0/120);
+    }
+    config.phases={{{S::Timed,S::Second},{{{0,0.5F,RED},{1,0.5F,BLUE}}}},{{S::Third},{{{0,1,GREEN}}}}};
+    config.phases[0].skills[0].onTimeout=Transition::Jump(1,0);boss.StartBoss(config);
+    for(int i=0;i<20&&boss.phase==1;++i)if(boss.Update(1.0F/120,{},*bullets))boss.AdvanceSkill();
+    assert(boss.phase==2&&boss.skill==1&&boss.attack==3);
+    const auto rejects=[&](StartConfig invalid) {try {boss.StartBoss(invalid);}catch(const std::invalid_argument&){return true;}return false;};
+    auto invalid=config;invalid.phases.clear();assert(rejects(invalid));
+    invalid=config;invalid.phases[0].skills[0].onTimeout=Transition::Jump(9,0);assert(rejects(invalid));
+    invalid=config;invalid.phases[0].skills[0].id=RumiaBoss::Behavior::Midboss;assert(rejects(invalid));
+    invalid=config;invalid.phases[0].healthBar.segments[0].ratio=std::numeric_limits<float>::quiet_NaN();assert(rejects(invalid));
+    invalid=config;invalid.phases[0].healthBar.segments[0].ratio=0.1F;assert(rejects(invalid));
+    invalid=config;invalid.phases[0].healthBar.segments[0].skillIndex=9;assert(rejects(invalid));
+    invalid=config;invalid.phases[0].healthBar.segments[0].skillIndex=1;assert(rejects(invalid));
+    assert(boss.phase==2&&boss.attack==3); // 非法新配置不能破坏仍在运行的旧战斗。
+}
 }  // namespace
 
 /// @brief 执行关卡事件、连续出怪与内容契约测试；断言失败时终止进程。
@@ -422,4 +520,5 @@ void RunStageTests() {
     TestInvalidEvents();
     TestStage1Content();
     TestPlayableCatalog();
+    TestBossStartupConfig();
 }

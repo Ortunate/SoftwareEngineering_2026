@@ -1,11 +1,15 @@
-// 本文件编排咲夜的召唤、瞬移和三种时停符卡；所有参数均为世界单位和 60 Hz 内容帧。
+// 本文件实现 SakuyaBoss 内部命名行为；移动、弹幕、演出和随机读取保持原内容时序。
+#include "gameplay/bosses/sakuya.hpp"
 #include "stages/stage5/behaviors.hpp"
 #include "stages/stage5/ids.hpp"
 #include "gameplay/spatial.hpp"
 #include <cmath>
 #include <numbers>
-namespace koumakyou::stage5 {
+namespace koumakyou::bosses {
+using namespace stage5;
+using behavior::Actor;using behavior::Routine;using skill::Formation;
 namespace {
+
 using behavior::Actor;using behavior::Routine;using skill::Formation;
 constexpr float pi=std::numbers::pi_v<float>;
 movement::State& Motion(Actor& a) {
@@ -125,7 +129,7 @@ Routine RotatingKnifeRings(Actor& a,bool reverse) {
     co_await a.At(100);
 }
 Routine PrepareSpell(Actor& a,bool center) {
-    a.SetEmitterPeriod(0);a.ClearBullets();a.defeatActors=true;a.damageable=false;a.skills.offset={};a.lifeThreshold=-1;
+    a.SetEmitterPeriod(0);a.ClearBullets();a.defeatActors=true;a.damageable=false;a.skills.offset={};
     a.phaseClockPaused=false;a.interactable=true;a.phaseFrames=0;a.SetPoses({128,131,132,129,130});
     MoveTo(a,120,{0,0,center ? 3.57142854F : 5.0F});co_await a.At(120);a.damageable=true;
 }
@@ -133,7 +137,7 @@ void StopWorld(Actor& a,bool stopped) {a.phaseClockPaused=stopped;a.interactable
 void RestorePose(Actor& a,bool moving) {a.Animate(Motion(a).position.x<0 ? (moving ? 143 : 140) : (moving ? 142 : 139));}
 Routine FrozenArcEmitter(Actor& a,int duration) {
     // 原生逐帧回调从计数零开始；父协程的等待在调用期间冻结，返回处显式补回同一段墙钟帧。
-    for(int frame=0;frame<duration;frame+=9) {co_await a.At(frame);sakuya::EmitClockArc(a,frame/9);}
+    for(int frame=0;frame<duration;frame+=9) {co_await a.At(frame);SakuyaBoss::Behaviors::EmitClockArc(a,frame/9);}
     co_await a.At(duration);
 }
 Routine LockedKnifeBurst(Actor& a,bool red) {
@@ -147,18 +151,15 @@ Routine LockedKnifeBurst(Actor& a,bool red) {
     }
     co_await a.At(red ? 35 : 40);
 }
+
 }
-void ConfigureBehavior(Actor& a,bool spatial) {
-    a.skills.bulletBase=kNativeBulletBase;a.skills.laserBase=kNativeLaserBase;a.skills.fallback=kBlueBullet;a.skills.spatial=spatial;
-    if(!spatial)a.liftedMotion.reset();
-}
-namespace sakuya {
-Routine Entrance(Actor& a) {
+
+Routine SakuyaBoss::Behaviors::Entrance(Actor& a) {
     a.damageable=false;a.contactEnabled=false;a.SetPoses({128,131,132,129,130});a.skills.offset={0,0,0.535714269F};
     Motion(a).clamped=false;MoveTo(a,60,{0,0,4.28571415F});co_await a.At(60);
     Motion(a).bounds={{-7.14285714F,4.10714286F},{7.14285714F,7.85714286F}};Motion(a).clamped=true;co_await a.At(1000000);
 }
-Routine Midboss(Actor& a) {
+Routine SakuyaBoss::Behaviors::MisdirectionNonspell(Actor& a) {
     Initialize(a);Motion(a).bounds.lower.y=2.14285714F;a.skills.offset={};a.Animate(128);
     a.SetEmitterPeriod(0);a.ClearBullets();a.defeatActors=true;a.interactable=false;Teleport(a,{0,0,4.28571415F});
     a.soundEvents.push_back(5);co_await a.At(30);a.interactable=true;
@@ -169,17 +170,17 @@ Routine Midboss(Actor& a) {
         co_await a.At(91);a.Rewind(30);
     }
 }
-Routine Misdirection(Actor& a) {
+Routine SakuyaBoss::Behaviors::Misdirection(Actor& a) {
     co_await PrepareSpell(a,true);bool left=a.RandomIndex(2)==0;
     for(;;) {co_await MisdirectionSide(a,left);left=!left;}
 }
-Routine MidbossRetreat(Actor& a) {
+Routine SakuyaBoss::Behaviors::MisdirectionRetreat(Actor& a) {
     StopWorld(a,false);a.SetEmitterPeriod(0);a.ClearBullets();a.damageable=false;a.contactEnabled=false;
     Motion(a).Polar(0,0);Motion(a).clamped=false;a.Animate(128);
     co_await a.At(130);MoveTo(a,60,{0,0,12.8571424F});co_await a.At(190);a.finished=true;
 }
-Routine MidbossDefeated(Actor& a) {a.soundEvents.push_back(18);a.itemEvents.push_back(5);a.dropEvents.push_back(10);co_await MidbossRetreat(a);}
-Routine FirstNonspell(Actor& a) {
+Routine SakuyaBoss::Behaviors::MisdirectionDefeated(Actor& a) {a.soundEvents.push_back(18);a.itemEvents.push_back(5);a.dropEvents.push_back(10);co_await MisdirectionRetreat(a);}
+Routine SakuyaBoss::Behaviors::FirstNonspell(Actor& a) {
     Initialize(a);
     for(;;) {
         co_await a.At(100);a.Animate(148);co_await Summon(a,false);AutoRing(a,50,true);Wander(a,4.5535717F,60);
@@ -187,7 +188,7 @@ Routine FirstNonspell(Actor& a) {
         a.SetEmitterPeriod(0);co_await KnifeSweep(a);a.InterruptAnimation(1);co_await a.At(300);a.Rewind(100);
     }
 }
-Routine SecondNonspell(Actor& a) {
+Routine SakuyaBoss::Behaviors::SecondNonspell(Actor& a) {
     Initialize(a);a.dropEvents.push_back(12);a.ClearBullets();
     for(;;) {
         co_await a.At(60);a.Animate(148);co_await Summon(a,true);AutoRing(a,50,true);Wander(a,4.01785707F,60);
@@ -195,7 +196,7 @@ Routine SecondNonspell(Actor& a) {
         a.SetEmitterPeriod(0);co_await FixedKnifeRing(a);co_await a.At(260);a.Rewind(60);
     }
 }
-Routine ThirdNonspell(Actor& a) {
+Routine SakuyaBoss::Behaviors::ThirdNonspell(Actor& a) {
     Initialize(a);a.dropEvents.push_back(12);a.ClearBullets();
     for(;;) {
         co_await a.At(60);a.Animate(148);co_await RotatingKnifeRings(a,false);Wander(a,5.35714293F,50);
@@ -203,7 +204,7 @@ Routine ThirdNonspell(Actor& a) {
         co_await a.At(230);a.Rewind(60);
     }
 }
-void EmitClockArc(Actor& a,int pulse) {
+void SakuyaBoss::Behaviors::EmitClockArc(Actor& a,int pulse) {
     const auto boss=a.Position(),player=a.PlayerPosition();const Vector3 relative{player.x-boss.x,player.y-boss.y,player.z-boss.z};
     const Vector3 axis=spatial::Normalize(relative);const float radius=(pulse%2 ? -1 : 1)*11.4285714F;
     const Vector3 base=spatial::Add(spatial::Scale(relative,0.5F-pulse*0.5F/9),spatial::Scale(axis,radius));
@@ -222,7 +223,7 @@ void EmitClockArc(Actor& a,int pulse) {
     }
     a.soundEvents.push_back(7);
 }
-void RedirectStoppedBullets(Actor& a) {
+void SakuyaBoss::Behaviors::RedirectStoppedBullets(Actor& a) {
     int changed=0;const auto player=a.PlayerPosition();
     a.ModifyEnemyProjectiles([&](Bullet& bullet) {
         // 原生筛选读取逻辑高而非裁图高；6～9 才满足阈值，退场弹不参与读取随机数。
@@ -241,7 +242,7 @@ void RedirectStoppedBullets(Actor& a) {
         bullet.nativeColor=5;bullet.visual=static_cast<VisualId>(a.skills.bulletBase+bullet.nativeType*16+5);++changed;
     });
 }
-Routine ClockCorpse(Actor& a) {
+Routine SakuyaBoss::Behaviors::ClockCorpse(Actor& a) {
     co_await PrepareSpell(a,false);
     for(;;) {
         a.soundEvents.push_back(5);co_await a.At(148);a.Animate(149);
@@ -251,7 +252,7 @@ Routine ClockCorpse(Actor& a) {
         co_await a.At(400);RestorePose(a,true);a.Rewind(0);
     }
 }
-Routine LunaClock(Actor& a) {
+Routine SakuyaBoss::Behaviors::LunaClock(Actor& a) {
     co_await PrepareSpell(a,false);
     for(;;) {
         a.soundEvents.push_back(5);co_await a.At(148);a.Animate(148);
@@ -263,7 +264,7 @@ Routine LunaClock(Actor& a) {
         co_await a.At(378);RestorePose(a,true);co_await a.At(418);a.Rewind(0);
     }
 }
-Routine Marionette(Actor& a) {
+Routine SakuyaBoss::Behaviors::Marionette(Actor& a) {
     co_await PrepareSpell(a,true);
     for(;;) {
         co_await LockedKnifeBurst(a,false);a.soundEvents.push_back(5);co_await LockedKnifeBurst(a,true);
@@ -274,12 +275,12 @@ Routine Marionette(Actor& a) {
         co_await a.At(138);RestorePose(a,true);if(Motion(a).position.x>=0)co_await a.At(178);a.Rewind(0);
     }
 }
-Routine Defeated(Actor& a) {
+Routine SakuyaBoss::Behaviors::Defeated(Actor& a) {
     StopWorld(a,false);a.SetEmitterPeriod(0);a.damageable=false;a.contactEnabled=false;a.lifeThreshold=-1;a.timeoutFrames=-1;
     Wander(a,1.60714281F,60);
     for(int i=0;i<6;++i) {co_await a.At((i+1)*10);a.soundEvents.push_back(7);}
     a.soundEvents.push_back(18);a.ClearBullets();a.finished=true;
 }
-Routine PhaseComplete(Actor& a) {a.finished=true;co_return;}
-}
+Routine SakuyaBoss::Behaviors::SkillComplete(Actor& a) {a.finished=true;co_return;}
+
 }

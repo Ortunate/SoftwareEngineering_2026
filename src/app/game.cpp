@@ -91,7 +91,7 @@ void Game::LoadSettings() {
     selectedShot_ = lastSelection_.shot;
     selectedCharacter_ = lastSelection_.character;
     challengeMode_ = lastSelection_.challenge;
-    practicePhase_ = lastSelection_.practicePhase;
+    practiceAttack_ = lastSelection_.practicePhase;
     assets_.SetMusicVolumePercent(musicVolume_);
     assets_.SetSoundVolumePercent(soundVolume_);
 
@@ -220,8 +220,8 @@ void Game::CompleteStartRun() {
     messageTimer_=0;
     if (spellPractice_) {
         stage_ = StageDirector{};
-        BeginStageBoss(true, 3);
-        while (boss_->phase < practicePhase_) boss_->AdvancePhase();
+        BeginStageBoss(stageContent_->PracticeBoss(), 3);
+        while (boss_->attack < practiceAttack_) boss_->AdvanceSkill();
         player_.AdjustPower(Player::kMaxPower);
         spellCutInTimer_ = kSpellCutInDuration;
     }
@@ -745,13 +745,12 @@ void Game::SpawnStageActor(const behavior::Spawn& spec) {
     actors_.Spawn(spec);
 }
 
-void Game::BeginStageBoss(bool final, StageEventId id) {
+void Game::BeginStageBoss(const bosses::Battle& battle, StageEventId id) {
     // 只停止旧批次的后续出怪；现存小怪和弹幕继续更新，不能在 Boss 入场时清场。
     stage_.CancelEnemySpawns();
     bossEventId_ = id;
-    boss_ = stageContent_->CreateBoss(final);
-    boss_->SetPlayerShot(player_.Shot());
-    if (final && boss_->MusicOnEntrance() && !dialogueBossMusic_) assets_.PlayBossMusic();
+    boss_ = stageContent_->CreateBoss(battle,player_.Shot());
+    if (boss_->MusicOnEntrance() && !dialogueBossMusic_) assets_.PlayBossMusic();
     messageTimer_=0;
 }
 

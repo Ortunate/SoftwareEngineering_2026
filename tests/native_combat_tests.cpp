@@ -1,4 +1,5 @@
 // 本文件验证全部导入目录、原始 HP 解释器映射、四机体实际伤害及未实现结算的扩展边界。
+#include "boss_fixture.hpp"
 #include "actor_fixture.hpp"
 #include "gameplay/data/native_combat.hpp"
 #include "gameplay/combat/damage_rules.hpp"
@@ -70,7 +71,7 @@ void TestCatalogAndHealth() {
         ++births;
     }
     assert(births==222);
-    auto boss=content.CreateBoss(true);
+    auto boss=content.CreateBoss(testing::BattleAt(content,1));
     assert(boss->health==7000 && boss->maxHealth==7000);
 }
 

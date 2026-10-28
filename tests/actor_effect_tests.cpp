@@ -4,7 +4,8 @@
 #include "gameplay/effects/actor_effects.hpp"
 #include "gameplay/arena.hpp"
 #include "stages/stage1/behaviors.hpp"
-#include "stages/stage1/boss.hpp"
+#include "stages/stage1/boss_config.hpp"
+#include "gameplay/bosses/rumia.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -91,12 +92,12 @@ void RunActorEffectTests() {
     behavior::Actor actor;actor.Activate(spawn);actor.Update(6.0F/60,{},*bullets);
     assert(!actor.active&&actor.finished&&bullets->Pool().ActiveCount()==0);
 
-    stage1::RumiaBoss boss;
-    boss.StartFinalBoss();
+    bosses::RumiaBoss boss;
+    boss.StartBoss(koumakyou::stage1::RumiaFinalConfig());
     boss.Update(0.3F, {}, *bullets);
     const float alpha = boss.presentation.Sample().alpha;
     assert(std::abs(alpha - 0.5F) < 0.0001F);
-    assert(boss.AdvancePhase());
+    assert(boss.AdvanceSkill());
     assert(boss.presentation.Sample().alpha == alpha);
     assert(effects.Spawn(boss.visual, boss.position, boss.hitRadius,
                          boss.presentation, ActorExitReason::Defeated));

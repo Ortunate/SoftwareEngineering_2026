@@ -50,7 +50,7 @@ void Game::UpdateMainMenu() {
             stageId_ = StageId::Stage1;
             // 符卡练习跳过模式页，仍沿用固定练习规则；不能将它的临时模式写回上次开局记录。
             challengeMode_ = !spellPractice_ && lastSelection_.challenge;
-            practicePhase_ = lastSelection_.practicePhase;
+            practiceAttack_ = lastSelection_.practicePhase;
             if(spellPractice_)spellSelection_.page=spell::Page::Stage;
             state_ = RunState::StartSetup;
             break;

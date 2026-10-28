@@ -1,5 +1,6 @@
 // 本文件显式定义二面全部出生与遭遇事件；世界坐标已转写，运行时不读取原始 ECL 或按编号选择行为。
 #include "stages/stage2/data.hpp"
+#include "stages/stage2/boss_config.hpp"
 #include "stages/stage2/behaviors.hpp"
 #include "stages/stage2/ids.hpp"
 #include <array>
@@ -179,7 +180,7 @@ const std::array<StageEvent,468> kEvents{{
     {.atFrame=2202,.action=Spawn({-4.28571415F,0.0F,11.4285717F},kAimedFairy,60,500,-1,false,false,3720350076U,kFairy,0.625F)},
     {.atFrame=2208,.action=Spawn({0.0F,0.0F,11.4285717F},kLeftBlueOrb,70,700,1,false,true,4058694794U,kOrb,0.625F)},
     {.atFrame=2218,.action=Spawn({-5.0F,0.0F,11.4285717F},kAimedFairy,60,500,-1,false,false,1219156185U,kFairy,0.625F)},
-    {.atFrame=2498,.action=StartBoss{BossEncounter::Midboss},.id=1},
+    {.atFrame=2498,.action=StartBoss{&kDaiyouseiMidboss},.id=1},
     {.atFrame=3498,.action=Spawn({0.0F,-1.5F,11.4285717F},kSmallDriftingOrb,30,350,-1,false,true,205738405U,kOrb,0.357142866F)},
     {.atFrame=3503,.action=Spawn({0.0F,-1.5F,11.4285717F},kSmallDriftingOrb,30,350,-1,false,true,720561448U,kOrb,0.357142866F)},
     {.atFrame=3508,.action=Spawn({0.0F,-1.5F,11.4285717F},kSmallDriftingOrb,30,350,-1,false,true,1182449388U,kOrb,0.357142866F)},
@@ -483,7 +484,7 @@ const std::array<StageEvent,468> kEvents{{
     {.atFrame=5593,.action=Spawn({0.0F,-0.75F,11.4285717F},kYellowDriftingOrb,50,350,-1,false,true,1654427708U,kOrb,0.491071433F)},
     {.atFrame=5593,.action=Spawn({-7.14285707F,-0.75F,11.4285717F},kShootingDarkFairy,80,600,-1,false,false,2071183059U,kDarkFairy,0.625F)},
     {.atFrame=5893,.action=StartDialogue{},.id=2},
-    {.delay=1.0F/60,.action=StartBoss{BossEncounter::Final},.id=3,.afterEndOf=2},
+    {.delay=1.0F/60,.action=StartBoss{&kCirnoFinal},.id=3,.afterEndOf=2},
     {.delay=2.0F/60,.action=StartDialogue{true},.id=4,.afterEndOf=3},
 }};
 }

@@ -1,5 +1,6 @@
 // 本文件直接列出三面 437 次普通出生、两场遭遇、三段对白及开战通知；源等待用真实完成依赖表达。
 #include "stages/stage3/data.hpp"
+#include "stages/stage3/boss_config.hpp"
 #include "stages/stage3/behaviors.hpp"
 #include "stages/stage3/ids.hpp"
 #include <array>
@@ -236,7 +237,7 @@ const std::array<StageEvent,443> kEvents{{
     {.atFrame=3294,.action=Spawn({-4.28571415F,-0.75F,11.4285717F},kAimedStreamOrb,400,1000,1,false,false,118614289U,kOrb)},
     {.atFrame=3304,.action=Spawn({5.71428585F,-0.75F,11.4285717F},kAimedStreamOrb,400,1000,1,false,false,2211408404U,kOrb)},
     {.atFrame=3304,.action=Spawn({-5.71428585F,-0.75F,11.4285717F},kAimedStreamOrb,400,1000,1,false,false,2411102877U,kOrb)},
-    {.atFrame=3474,.action=StartBoss{BossEncounter::Midboss},.id=1},
+    {.atFrame=3474,.action=StartBoss{&kMeilingMidboss},.id=1},
     {.delay=1.0F/60,.action=StartDialogue{true,DialogueScene::Midboss},.id=2,.afterEndOf=1},
     {.delay=60.0F/60,.action=Spawn({-5.71428585F,0.75F,11.4285717F},kRisingStreamOrb,450,1000,-1,false,false,1705191382U,kOrb),.afterEndOf=2},
     {.delay=0.0F/60,.action=Spawn({5.71428585F,0.75F,11.4285717F},kRisingStreamOrb,450,1000,-1,true,false,3619637085U,kOrb)},
@@ -455,7 +456,7 @@ const std::array<StageEvent,443> kEvents{{
     {.delay=0.0F/60,.action=Spawn({0.714285731F,1.5F,11.4285717F},kRisingStreamOrb,450,1000,1,true,false,3502590943U,kOrb)},
     {.delay=10.0F/60,.action=Spawn({1.42857146F,1.5F,11.4285717F},kRisingStreamOrb,450,1000,1,false,false,1492975082U,kOrb)},
     {.delay=0.0F/60,.action=Spawn({-1.42857146F,1.5F,11.4285717F},kRisingStreamOrb,450,1000,1,true,false,3110636691U,kOrb)},
-    {.delay=460.0F/60,.action=StartBoss{BossEncounter::Final},.id=3},
+    {.delay=460.0F/60,.action=StartBoss{&kMeilingFinal},.id=3},
     {.delay=1.0F,.action=StartDialogue{},.id=4},
     {.delay=1.0F/60,.action=ResumeBoss{},.afterEndOf=4},
     {.delay=1.0F/60,.action=StartDialogue{true},.id=6,.afterEndOf=3},

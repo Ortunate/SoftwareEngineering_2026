@@ -26,7 +26,7 @@ void Actor::Reset(Vector3 initialPosition,float hp,std::uint32_t seed,bool mirro
     emitterShot_={};emitterSkills_={};emitterPeriod_=0;emitterElapsed_=0;emitterConfigured_=false;emitterSound_=-1;
     pendingCallback=lifeCallback=deathCallback=timeoutCallback=nullptr;
     callbackCause=CallbackCause::None;
-    phaseFrames=0;timeoutFrames=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();defeatActors=false;
+    phaseFrames=0;timeoutFrames=-1;scheduledTimeout=timeoutArmFrame=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();defeatActors=false;
     animationScript=-1;animationAge=0;animationRevision=0;animationInterrupt.reset();animationInterruptSequence_=0;poses={-1,-1,-1,-1,-1};pose_=-1;
     random_=seed ? seed : 1;remainingTicks_=0;bullets_=nullptr;
     active=true;phaseClockPaused=false;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=native_sizes::kDefaultEnemyRadius;
@@ -75,7 +75,7 @@ void Actor::Transition() {
     const auto next=std::exchange(pendingCallback,nullptr);
     callbackCause=CallbackCause::None;
     if(health<=0)health=1;
-    timeoutCallback=deathCallback;lifeThreshold=-1;timeoutFrames=-1;phaseFrames=0;
+    timeoutCallback=deathCallback;lifeThreshold=-1;timeoutFrames=-1;scheduledTimeout=timeoutArmFrame=-1;phaseFrames=0;
     Start(next(*this));
 }
 bool Actor::Defeat() {
@@ -151,7 +151,15 @@ void Actor::InterruptAnimation(int label) {
     animationInterrupt=battle::AnimationInterrupt{animationAge,label,animationRevision,++animationInterruptSequence_};
 }
 void Actor::ClearBullets() { bullets_->ClearEnemyBullets();skills.rankInfluence=skill::kDefaultRankInfluence; }
+void Actor::ScheduleTimeout(int frames,int armFrame) {
+    if(frames< -1||armFrame<0)throw std::invalid_argument("Invalid scheduled timeout");
+    scheduledTimeout=frames;timeoutArmFrame=armFrame;
+    timeoutFrames=armFrame==0 ? frames : -1;
+}
 void Actor::Tick() {
+    if(timeoutArmFrame>=0&&phaseFrames>=timeoutArmFrame) {
+        timeoutFrames=scheduledTimeout;timeoutArmFrame=-1;
+    }
     if(liftedMotion)liftedMotion->BeginFrame(motion,updateHz_);else motion.BeginFrame(updateHz_);
     if(health<lifeThreshold) { health=lifeThreshold;pendingCallback=lifeCallback;callbackCause=CallbackCause::HealthThreshold;return; }
     if(health<=0&&deathCallback) { pendingCallback=deathCallback;callbackCause=CallbackCause::Defeat;return; }

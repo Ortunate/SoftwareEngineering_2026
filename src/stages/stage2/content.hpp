@@ -10,7 +10,7 @@ public:
     const StageAssetManifest& Assets() const override;
     void DrawScenery(float seconds) const override;
     std::span<const StageEvent> Events() const override;
-    std::unique_ptr<Boss> CreateBoss(bool final) const override;
+    const bosses::Battle& PracticeBoss() const override;
     std::span<const DialogueLine> Dialogue(bool afterBattle=false,ShotType shot=ShotType::HomingAmulet) const override;
     std::span<const DialogueCue> DialogueCues(bool afterBattle,ShotType shot) const override;
     float DialogueLineDuration() const override { return 5; }
@@ -20,7 +20,5 @@ public:
     const char* StartTitle() const override { return "Stage 2  Water Magus  Normal"; }
     StageDisplayInfo DisplayInfo() const override { return {"STAGE 02","湖面的魔精","Water Magus"}; }
     const char* ClearTitle() const override { return "STAGE 2 CLEAR"; }
-    const char* BossStartMessage(bool final) const override { return final ? "Cirno  Stage 2 Boss" : "Daiyousei  Midboss"; }
-    const char* MidbossEndMessage() const override { return "Daiyousei retreated"; }
 };
 }

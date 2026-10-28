@@ -1,5 +1,6 @@
 // 本文件显式定义四面全部出生与遭遇事件；世界坐标已转写，运行时不读取原始 ECL 或按编号选择行为。
 #include "stages/stage4/data.hpp"
+#include "stages/stage4/boss_config.hpp"
 #include "stages/stage4/behaviors.hpp"
 #include "stages/stage4/ids.hpp"
 #include <array>
@@ -133,7 +134,7 @@ const std::array<StageEvent,400> kEvents{{
     {.atFrame=3508,.action=Spawn({0.0F,-1.5F,7.14285707F},kGreenRingEmitter,4500,2000,1,false,true,506585927U,kOrb,0.625F)},
     {.atFrame=3558,.action=Spawn({0.0F,-1.5F,6.42857122F},kGreenRingEmitter,4500,2000,1,false,true,223476221U,kOrb,0.625F)},
     {.atFrame=3618,.action=Spawn({0.0F,-1.5F,5.71428585F},kGreenRingEmitter,4500,2000,1,false,true,3934349269U,kOrb,0.625F)},
-    {.atFrame=4058,.action=StartBoss{BossEncounter::Midboss},.id=1},
+    {.atFrame=4058,.action=StartBoss{&kKoakumaMidboss},.id=1},
     {.atFrame=4858,.action=Spawn({-10.0F,1.5F,2.41071439F},kPassingHookCrystal,40,500,1,false,false,468245388U,kOrb,0.625F)},
     {.atFrame=4868,.action=Spawn({10.0F,1.5F,2.41071439F},kPassingHookCrystal,40,500,1,true,false,1089707816U,kOrb,0.625F)},
     {.atFrame=4878,.action=Spawn({-10.0F,1.5F,2.41071439F},kPassingHookCrystal,40,500,0,false,false,1196559959U,kOrb,0.625F)},
@@ -414,7 +415,7 @@ const std::array<StageEvent,400> kEvents{{
     {.atFrame=10080,.action=Spawn({-10.0F,-0.75F,5.71428585F},kCrossingFanShooter,40,500,1,false,false,586640525U,kOrb,0.625F)},
     {.atFrame=10080,.action=Spawn({7.14285707F,-0.75F,5.71428585F},kCrossingFanShooter,40,500,0,true,false,435691946U,kOrb,0.625F)},
     {.atFrame=10510,.action=StartDialogue{false,DialogueScene::FinalBoss,DialogueClearPolicy::PreserveWorld},.id=2},
-    {.atFrame=10511,.action=StartBoss{BossEncounter::Final},.id=3},
+    {.atFrame=10511,.action=StartBoss{&kPatchouliFinal},.id=3},
     {.delay=2.0F/60,.action=ResumeBoss{},.afterEndOf=2},
     {.delay=1.0F/60,.action=StartDialogue{true},.id=4,.afterEndOf=3},
 }};

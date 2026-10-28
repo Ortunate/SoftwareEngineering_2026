@@ -1,13 +1,13 @@
 // 本文件将二面静态内容接入 StageContent；Boss 工厂只选择遭遇，不按原始子程序编号分派行为。
 #include "stages/stage2/content.hpp"
 #include "stages/stage2/data.hpp"
-#include "stages/stage2/boss.hpp"
+#include "stages/stage2/boss_config.hpp"
 #include "stages/stage2/scenery.hpp"
 namespace koumakyou::stage2 {
 const StageAssetManifest& Stage2Content::Assets() const { return Stage2Manifest(); }
 void Stage2Content::DrawScenery(float seconds) const { stage2::DrawScenery(seconds); }
 std::span<const StageEvent> Stage2Content::Events() const { return Stage2Timeline(); }
-std::unique_ptr<Boss> Stage2Content::CreateBoss(bool final) const { return std::make_unique<Stage2Boss>(final); }
+const bosses::Battle& Stage2Content::PracticeBoss() const {return kCirnoFinal;}
 std::span<const DialogueLine> Stage2Content::Dialogue(bool afterBattle,ShotType shot) const {
     return Stage2Dialogue(afterBattle,shot==ShotType::MagicMissile||shot==ShotType::IllusionLaser);
 }

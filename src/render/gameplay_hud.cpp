@@ -129,7 +129,7 @@ void Game::DrawHud() const {
         Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
     row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
     const auto& namedScores=scoreProfile_.Get(challengeMode_,static_cast<int>(player_.Shot()));
-    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practicePhase_==2?3:7).bestScore:
+    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practiceAttack_==2?3:7).bestScore:
         namedScores[0]?namedScores[0]->value:challengeMode_?0:bestScore_;
     row("最高得分", TextFormat("%09lld", displayedBest), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
@@ -167,17 +167,8 @@ void Game::DrawHud() const {
         Panel(panel, s);
         Label(font, WorldTimeStopped() ? "TIME STOP" : TextFormat("Enemy %d", bossHealth.remainingBars),
                {row.enemy.x, row.enemy.y + (row.enemy.height - 21 * s) / 2}, 21 * s, row.enemy.width, kGold);
-        DrawRectangleRec(row.bar, Color{64, 35, 50, 160});
-        float offset = 0;
-        for (std::size_t index = 0; index < bossHealth.count; ++index) {
-            const auto segment = bossHealth.segments[index];
-            // 累加固定容量而非剩余量：后续符卡始终留在左端，非符从右侧消耗，切换时不跳成满条。
-            if (segment.remaining > 0)
-                DrawRectangleRec({row.bar.x + offset * row.bar.width, row.bar.y,
-                                  segment.remaining * row.bar.width, row.bar.height}, ui::BossHealthColor(segment.kind));
-            offset += segment.capacity;
-        }
-        const int seconds = ui::BossSeconds(boss_->TimeLimit(), boss_->phaseTimer);
+        boss_->DrawHealthBar(row.bar);
+        const int seconds = ui::BossSeconds(boss_->TimeLimit(), boss_->skillTimer);
         Label(font, seconds < 0 ? "--" : TextFormat("%02d", seconds),
                {row.timer.x + row.timer.width, row.timer.y + (row.timer.height - 27 * s) / 2},
                27 * s, row.timer.width, ui::BossTimerColor(seconds), 1, true);

@@ -1,9 +1,12 @@
 // 本文件负责在隐藏图形窗口中验证自机射击、本体碰撞、Game 战斗演出、结算及资源生命周期。
 
+#include "gameplay/bosses/rumia.hpp"
+#include "boss_fixture.hpp"
 #include "actor_fixture.hpp"
 #include "app/game.hpp"
 #include "rlgl.h"
 #include "stages/stage1/behaviors.hpp"
+#include "stages/stage1/boss_config.hpp"
 #include "ui/typography.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/boss_hud.hpp"
@@ -75,9 +78,8 @@ struct GameLifecycleProbe {
         struct TargetBoss final:Boss {
             explicit TargetBoss(Vector3 p){active=true;position=p;health=maxHealth=100;visual=stage1::kRumia;}
             bool Update(float,Vector3,BulletSystem&) override {return false;}
-            bool AdvancePhase() override {return false;}
+            bool AdvanceSkill() override {return false;}
             const char* SpellName() const override {return nullptr;}
-            bool IsMidboss() const override {return false;}
             const char* DisplayName() const override {return "Body contact target";}
             bool CanTakeDamage() const override {return false;}
         };
@@ -114,8 +116,8 @@ struct GameLifecycleProbe {
         reset();assert(game.actors_.Spawn(MakeTarget(position)));
         game.debugInvincible_=true;game.ResolveCollisions();assert(game.missCount_==0 && game.player_.Power()==80);
 #endif
-        reset();game.BeginStageBoss(false,3);game.boss_->position=position;
-        assert(game.boss_->AdvancePhase());game.ResolveCollisions();assert(game.missCount_==0);
+        reset();game.BeginStageBoss(testing::BattleAt(*game.stageContent_,0),3);game.boss_->position=position;
+        assert(game.boss_->AdvanceSkill());game.ResolveCollisions();assert(game.missCount_==0);
         // 四面关闭本体接触的晶体仍吸收自机弹；隐藏/非交互发射体则同时退出接触、伤害和弹接触。
         for(int mode=0;mode<3;++mode) {
             reset();auto* actor=game.actors_.Spawn(MakeTarget(position));assert(actor);
@@ -186,50 +188,50 @@ struct GameLifecycleProbe {
             for(int alignment=0;alignment<std::max(1,fps/60);++alignment) {
                 const float dt=1.0F/fps;
                 game.bullets_.Reset(); game.drops_.Clear();
-                game.BeginStageBoss(true,1);
+                game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),1);
                 const auto ready=[&](int phase) {
                     int frames=0;
                     while(!game.boss_->CanTakeDamage() && frames++<5*fps) {
                         game.Update(dt);
-                        assert(game.boss_->phase==phase);
+                        assert(game.boss_->attack==phase);
                     }
-                    assert(game.boss_->phase==phase && game.boss_->CanTakeDamage());
+                    assert(game.boss_->attack==phase && game.boss_->CanTakeDamage());
                 };
                 const auto hit=[&] {
                     auto* shot=game.bullets_.Spawn(BulletOwner::Player,game.boss_->position,{},0.1F,WHITE,kInvalidVisualId);
                     assert(shot); shot->damage=100000;
-                    const int phase=game.boss_->phase;
-                    for(int frame=0;frame<std::max(1,(fps+119)/120)&&game.boss_->phase==phase;++frame)
+                    const int phase=game.boss_->attack;
+                    for(int frame=0;frame<std::max(1,(fps+119)/120)&&game.boss_->attack==phase;++frame)
                         game.Update(dt); // 经过实际固定步、弹幕移动与碰撞，不能直接推进阶段。
                 };
                 ready(1); hit();
-                assert(game.boss_->phase==2);
+                assert(game.boss_->attack==2);
                 ready(2);
                 for(int frame=0;frame<alignment;++frame)game.Update(dt);
                 if(timeout) {
                     int frames=0;
-                    while(game.boss_->phase==2 && frames++<30*fps)game.Update(dt);
+                    while(game.boss_->attack==2 && frames++<30*fps)game.Update(dt);
                 } else hit();
-                assert(game.boss_->phase==3 && game.boss_->SpellName()==nullptr);
+                assert(game.boss_->attack==3 && game.boss_->SpellName()==nullptr);
                 assert(game.boss_->health==7500);
                 assert(game.boss_->maxHealth==7500);
                 const auto bar=game.boss_->HealthBar();
                 assert(bar.remainingBars==0 && std::abs(bar.segments[1].remaining-6700.0F/7500)<0.00001F);
                 for(int frame=0;frame<std::max(1,fps/60);++frame) {
                     game.Update(dt);
-                    assert(game.boss_->phase==3 && game.boss_->SpellName()==nullptr);
+                    assert(game.boss_->attack==3 && game.boss_->SpellName()==nullptr);
                 }
                 ready(3);
                 for(int frame=0;frame<static_cast<int>(1.1F*fps);++frame) {
                     game.Update(dt);
-                    assert(game.boss_->phase==3);
+                    assert(game.boss_->attack==3);
                 }
                 int beams=0;
                 game.bullets_.Pool().ForEachActive([&](const Bullet& bullet) { if(bullet.beamLength>0)++beams; });
                 assert(beams==6 && game.boss_->TimeLimit()==30);
                 if(!timeout && fps==240 && alignment==3)Capture(game,prefix,"second-nonspell-restored");
                 hit();
-                assert(game.boss_->phase==4 && game.boss_->SpellName()!=nullptr);
+                assert(game.boss_->attack==4 && game.boss_->SpellName()!=nullptr);
                 assert(std::abs(game.boss_->HealthBar().segments[0].remaining-800.0F/7500)<0.00001F);
             }
         }
@@ -240,23 +242,29 @@ struct GameLifecycleProbe {
     static void TestBossHud(Game& game, const std::string& prefix) {
         game.StartPreview();
         const int width=GetScreenWidth(),height=GetScreenHeight();
-        struct Scene { int phase; float sourceHealth; const char* name; };
-        const std::array<Scene,10> scenes{{
+        struct Scene { int phase; float sourceHealth; const char* name; bool configured=false; };
+        const std::array<Scene,11> scenes{{
             {1,7000,"first-full"},{1,3950,"first-normal-half"},{1,900,"first-boundary"},
             {2,900,"first-spell-full"},{2,450,"first-spell-half"},{2,0,"first-spell-empty"},
             {3,7500,"second-full"},{3,4150,"second-normal-half"},
-            {4,400,"second-spell-half"},{0,6000,"midboss-full"}}};
+            {4,400,"second-spell-half"},{0,6000,"midboss-full"},{1,3950,"custom-ratios-colors",true}}};
         for(const Vector2 size : {Vector2{1280,720},{900,900},{390,844},{1600,400},{320,240}}) {
             SetWindowSize(static_cast<int>(size.x),static_cast<int>(size.y));
             const GameplayLayout layout(GetScreenWidth(),GetScreenHeight());
             const ui::BossHudLayout row(layout.BossPanel(),layout.scale);
             const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
             for(const auto& scene : scenes) {
-                game.BeginStageBoss(scene.phase!=0,1);
-                while(game.boss_->phase<scene.phase)assert(game.boss_->AdvancePhase());
+                game.BeginStageBoss(testing::BattleAt(*game.stageContent_,static_cast<std::size_t>(scene.phase!=0)),1);
+                if(scene.configured) {
+                    auto config=stage1::RumiaFinalConfig();
+                    config.phases[0].healthBar.segments={{0,0.3F,GREEN},{1,0.7F,BLUE}};
+                    config.phases[0].healthBar.background=BLACK;
+                    dynamic_cast<bosses::RumiaBoss&>(*game.boss_).StartBoss(config);
+                }
+                while(game.boss_->attack<scene.phase)assert(game.boss_->AdvanceSkill());
                 game.UpdateBoss(1.0F/60);
                 game.bullets_.Reset(); game.drops_.Clear(); // 隔离 Sub19 的散落，截图不能累积上一个展示场景的对象。
-                game.boss_->phaseTimer=5;
+                game.boss_->skillTimer=5;
                 game.boss_->health=scene.sourceHealth;
                 const auto health=game.boss_->HealthBar();
                 BeginDrawing(); BeginTextureMode(target); ClearBackground(Color{17,31,47,255});
@@ -275,7 +283,7 @@ struct GameLifecycleProbe {
                         const int y=static_cast<int>(row.bar.y+row.bar.height/2);
                         const auto color=GetImageColor(pixels,x,y);
                         if(sample<segment.remaining) {
-                            const Color expected=segment.kind==BossHealthKind::Spell ? Color{239,138,152,255} : WHITE;
+                            const Color expected=segment.color;
                             assert(near(color,expected));
                         } else {
                             assert(!near(color,WHITE) && !near(color,Color{239,138,152,255}));
@@ -420,9 +428,8 @@ struct GameLifecycleProbe {
             bool damageable=true;
             SpellTarget() {active=true;position={0,0,4};health=maxHealth=1000;visual=stage1::kRumia;}
             bool Update(float,Vector3,BulletSystem&) override {return false;}
-            bool AdvancePhase() override {return false;}
+            bool AdvanceSkill() override {return false;}
             const char* SpellName() const override {return "Bomb test";}
-            bool IsMidboss() const override {return false;}
             const char* DisplayName() const override {return "Bomb test";}
             bool CanTakeDamage() const override {return damageable;}
         };
@@ -700,8 +707,8 @@ struct GameLifecycleProbe {
         game.UpdateUiMotion(1);
         Capture(game,prefix,"portrait-menu");
         game.state_=RunState::Playing;
-        game.BeginStageBoss(true,2);
-        game.boss_->AdvancePhase();
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),2);
+        game.boss_->AdvanceSkill();
         game.spellCutInTimer_=1.5F;
         Capture(game,prefix,"portrait-spell");
         game.EnterMainMenu();
@@ -726,7 +733,7 @@ struct GameLifecycleProbe {
             const auto pickups = PickupCount(game);
             assert(pickups > 0);
 
-            game.BeginStageBoss(final, 1);
+            game.BeginStageBoss(testing::BattleAt(*game.stageContent_,static_cast<std::size_t>(final)), 1);
             assert(game.boss_ && game.boss_->active);
             assert(EnemyCount(game) == 1);
             assert(enemyShot->active && playerShot->active);
@@ -758,14 +765,14 @@ struct GameLifecycleProbe {
         for(int phase:{0,1,2,3,4}) {
             std::vector<BulletSample> expected;Vector3 expectedBoss{};float expectedTimer=0;
             for(int fps:{120,30,60,144,240}) {
-                game.StartPreview();game.stage_=StageDirector{};game.BeginStageBoss(phase!=0,3);
-                while(game.boss_->phase<phase)game.boss_->AdvancePhase();
+                game.StartPreview();game.stage_=StageDirector{};game.BeginStageBoss(testing::BattleAt(*game.stageContent_,static_cast<std::size_t>(phase!=0)),3);
+                while(game.boss_->attack<phase)game.boss_->AdvanceSkill();
                 // 以同频率的原编排给出实际位移预算；包含原边界与插值终点补偿，不能用任意速度上限代替。
                 behavior::Actor original;
                 original.Reset(phase==0 ? Vector3{0,0,11.4285717F} : Vector3{0,0,5.71428585F},game.boss_->health,phase==0 ? 1882 : 5093);
                 stage1::ConfigureBehavior(original,false);
-                constexpr std::array<behavior::Entry,5> entries{stage1::rumia::Midboss,stage1::rumia::FirstNonspell,
-                    stage1::rumia::NightBird,stage1::rumia::SecondNonspell,stage1::rumia::Demarcation};
+                constexpr std::array<behavior::Entry,5> entries{bosses::RumiaBoss::Behaviors::Midboss,bosses::RumiaBoss::Behaviors::FirstNonspell,
+                    bosses::RumiaBoss::Behaviors::NightBird,bosses::RumiaBoss::Behaviors::SecondNonspell,bosses::RumiaBoss::Behaviors::Demarcation};
                 original.Start(entries[phase](original));auto referenceBullets=std::make_unique<BulletSystem>();
                 double referenceTicks=0;
                 for(int frame=0;frame<6*fps;++frame) {
@@ -789,10 +796,10 @@ struct GameLifecycleProbe {
                 const auto equal=[](Vector3 a,Vector3 b) {
                     assert(std::abs(a.x-b.x)<1e-5F&&std::abs(a.y-b.y)<1e-5F&&std::abs(a.z-b.z)<1e-5F);
                 };
-                if(fps==120) {expected=actual;expectedBoss=game.boss_->position;expectedTimer=game.boss_->phaseTimer;}
+                if(fps==120) {expected=actual;expectedBoss=game.boss_->position;expectedTimer=game.boss_->skillTimer;}
                 else {
                     assert(expected.size()==actual.size());equal(expectedBoss,game.boss_->position);
-                    assert(expectedTimer==game.boss_->phaseTimer);
+                    assert(expectedTimer==game.boss_->skillTimer);
                     for(std::size_t i=0;i<actual.size();++i) {
                         equal(expected[i].position,actual[i].position);equal(expected[i].velocity,actual[i].velocity);
                         equal(expected[i].acceleration,actual[i].acceleration);equal(expected[i].rotationAxis,actual[i].rotationAxis);
@@ -851,10 +858,10 @@ struct GameLifecycleProbe {
                 Capture(game, prefix, "dialogue");
             }
             if (game.boss_ && game.boss_->active) {
-                if (game.boss_->IsMidboss()) midbossSeen = true;
-                else if (game.boss_->phaseTimer > 5.1F && !phases[game.boss_->phase - 1]) {
-                    phases[game.boss_->phase - 1] = true;
-                    const auto name = "phase-" + std::to_string(game.boss_->phase);
+                if (game.bossEventId_==1) midbossSeen = true;
+                else if (game.boss_->skillTimer > 5.1F && !phases[game.boss_->attack - 1]) {
+                    phases[game.boss_->attack - 1] = true;
+                    const auto name = "phase-" + std::to_string(game.boss_->attack);
                     Capture(game, prefix, name.c_str());
                 }
             }
@@ -862,8 +869,8 @@ struct GameLifecycleProbe {
         }
         if (frame>=400*60) std::cerr << "Stage stalled: state " << static_cast<int>(game.state_)
             << " stage " << game.stage_.Elapsed() << " dialogue " << game.dialogueActive_
-            << " after " << game.dialogueAfterBattle_ << " boss phase " << (game.boss_ ? game.boss_->phase : -1)
-            << " hp " << (game.boss_ ? game.boss_->health : -1) << " timer " << (game.boss_ ? game.boss_->phaseTimer : -1) << "\n";
+            << " after " << game.dialogueAfterBattle_ << " boss phase " << (game.boss_ ? game.boss_->attack : -1)
+            << " hp " << (game.boss_ ? game.boss_->health : -1) << " timer " << (game.boss_ ? game.boss_->skillTimer : -1) << "\n";
         assert(frame < 400 * 60 && midbossSeen && dialogueSeen);
         for (bool seen : phases) assert(seen);
         assert(game.state_ == RunState::StageClear && game.bullets_.Pool().ActiveCount() == 0);
@@ -877,11 +884,11 @@ struct GameLifecycleProbe {
 
         for (int phase : {2, 4}) {
             game.practiceMode_ = game.spellPractice_ = true;
-            game.practicePhase_ = phase;
+            game.practiceAttack_ = phase;
             const int bestScore = game.bestScore_;
             game.StartRun(false, true);
             game.player_.SetInvulnerability(1000);
-            assert(game.boss_->phase == phase && game.player_.Power() == Player::kMaxPower);
+            assert(game.boss_->attack == phase && game.player_.Power() == Player::kMaxPower);
             for (int step = 0; step < 30 * 60 && game.state_ != RunState::Won; ++step)
                 game.Update(1.0F / 60);
             assert(game.state_ == RunState::Won && game.bestScore_ == bestScore);
@@ -941,23 +948,23 @@ struct GameLifecycleProbe {
                     }
                 }
                 if(game.boss_&&game.boss_->active) {
-                    if(game.boss_->IsMidboss())midboss=true;
-                    else if(game.boss_->phase>=1&&game.boss_->phase<=5&&game.boss_->phaseTimer>5.1F) {
-                        const int phase=game.boss_->phase;
+                    if(game.bossEventId_==1)midboss=true;
+                    else if(game.boss_->attack>=1&&game.boss_->attack<=5&&game.boss_->skillTimer>5.1F) {
+                        const int phase=game.boss_->attack;
                         if(!phases[phase-1]) {
                             phases[phase-1]=true;const auto name="stage2-phase-"+std::to_string(phase);
                             Capture(game,prefix,name.c_str());
                         }
                         if(phase==4&&!pauseChecked) {
-                            pauseChecked=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
+                            pauseChecked=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->skillTimer;
                             game.TogglePause();game.Update(0.5F);
-                            assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);
+                            assert(game.stage_.Elapsed()==time&&game.boss_->skillTimer==timer);
                             game.TogglePause();
                         }
                     }
                 }
             }
-            if(frame>=420*60)std::cerr<<"Stage 2 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            if(frame>=420*60)std::cerr<<"Stage 2 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->attack:-1)<<'\n';
             assert(frame<420*60&&midboss&&before&&after&&pauseChecked);
             for(bool seen:phases)assert(seen);
             assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty());
@@ -967,7 +974,7 @@ struct GameLifecycleProbe {
         // 击破路线独立于超时：真实总控必须只生成一枚 Bomb，并将正 HP 符卡阈值视为取得。
         game.stageId_=StageId::Stage2;game.selectedCharacter_=game.selectedShot_=0;
         game.StartPreview();game.previewMode_=false;game.stage_=StageDirector{};
-        game.BeginStageBoss(false,100);
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,0),100);
         for(int tick=0;tick<130;++tick)game.Update(1.0F/120);
         assert(game.boss_->CanTakeDamage());game.boss_->health=0;game.ResolveCollisions();
         for(int tick=0;tick<5&&game.boss_->active;++tick)game.Update(1.0F/120);
@@ -977,14 +984,14 @@ struct GameLifecycleProbe {
         game.drops_.MagnetAllItems();
         for(int tick=0;tick<240;++tick)game.UpdatePickups(1.0F/120);
         assert(game.player_.Bombs()==4);
-        game.BeginStageBoss(true,101);
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),101);
         for(int phase=1;phase<=5;++phase) {
             int ticks=0;
             while(!game.boss_->CanTakeDamage()&&ticks++<600)game.Update(1.0F/120);
-            assert(ticks<600&&game.boss_->phase==phase);
+            assert(ticks<600&&game.boss_->attack==phase);
             const auto scoreBefore=game.score_;
             game.boss_->health=phase==4 ? 1399 : 0;game.ResolveCollisions();
-            if(phase==4)assert(game.score_>scoreBefore&&game.spellBonus_>0&&game.boss_->phase==5);
+            if(phase==4)assert(game.score_>scoreBefore&&game.spellBonus_>0&&game.boss_->attack==5);
         }
         for(int tick=0;tick<180&&game.boss_->active;++tick)game.Update(1.0F/120);
         assert(!game.boss_->active&&game.boss_->Defeated());
@@ -1012,7 +1019,7 @@ struct GameLifecycleProbe {
                         Capture(game,prefix,name.c_str());
                     }
                     if(middle)assert(!game.boss_->active&&game.state_==RunState::Playing);
-                    else if(!game.dialogueAfterBattle_)assert(game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                    else if(!game.dialogueAfterBattle_)assert(game.boss_->attack==0&&!game.boss_->CanTakeDamage());
                     float start=0;const int line=game.DialogueIndex(&start);
                     if(!middle&&!game.dialogueAfterBattle_&&!nameplate&&game.CurrentDialogue()[line].introduce&&game.dialogueTimer_-start>0.75F) {
                         nameplate=true;Capture(game,prefix,"stage3-nameplate");
@@ -1020,41 +1027,41 @@ struct GameLifecycleProbe {
                     }
                 }
                 if(game.boss_&&game.boss_->active) {
-                    if(game.boss_->IsMidboss())mid=true;
-                    else if(game.boss_->phase>0&&game.boss_->phase<=6&&game.boss_->phaseTimer>5.1F) {
-                        const int phase=game.boss_->phase;
+                    if(game.bossEventId_==1)mid=true;
+                    else if(game.boss_->attack>0&&game.boss_->attack<=6&&game.boss_->skillTimer>5.1F) {
+                        const int phase=game.boss_->attack;
                         if(!phases[phase-1]) {phases[phase-1]=true;const auto name="stage3-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());}
                         if(phase==3&&EnemyCount(game)>0)children=true;
                         if(phase==5&&!paused) {
-                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
-                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->skillTimer;
+                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->skillTimer==timer);game.TogglePause();
                         }
                     }
                 }
             }
-            if(frame>=550*60)std::cerr<<"Stage 3 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            if(frame>=550*60)std::cerr<<"Stage 3 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->attack:-1)<<'\n';
             assert(frame<550*60&&mid&&midDialogue&&before&&after&&nameplate&&children&&paused);for(bool seen:phases)assert(seen);
             assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
             std::cout<<"Whole Stage 3 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
         }
         game.stageId_=StageId::Stage3;game.selectedCharacter_=game.selectedShot_=0;game.StartPreview();
-        game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(false,100);
+        game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(testing::BattleAt(*game.stageContent_,0),100);
         for(int tick=0;tick<210;++tick)game.Update(1.0F/120);assert(game.boss_->CanTakeDamage());
-        game.boss_->health=1299;game.ResolveCollisions();assert(game.boss_->phase==2&&!game.boss_->CanTakeDamage());
+        game.boss_->health=1299;game.ResolveCollisions();assert(game.boss_->attack==2&&!game.boss_->CanTakeDamage());
         for(int tick=0;tick<245;++tick)game.Update(1.0F/120);assert(game.boss_->CanTakeDamage());
         Capture(game,prefix,"stage3-midboss-spell");game.boss_->health=0;game.ResolveCollisions();
         for(int tick=0;tick<370&&game.boss_->active;++tick)game.Update(1.0F/120);
         assert(!game.boss_->active&&game.boss_->Defeated()&&game.spellRecords_.Seen(0,22));
-        game.BeginStageBoss(true,101);game.ResumeStageBoss();
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),101);game.ResumeStageBoss();
         for(int phase=1;phase<=6;++phase) {
             int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
-            assert(ticks<700&&game.boss_->phase==phase);
+            assert(ticks<700&&game.boss_->attack==phase);
             if(phase==3) {
                 for(int tick=0;tick<450;++tick)game.Update(1.0F/120);
                 assert(EnemyCount(game)>=6);Capture(game,prefix,"stage3-summons");
             }
             const auto score=game.score_;game.boss_->health=phase==5 ? 1999 : 0;game.ResolveCollisions();
-            if(phase==5)assert(game.score_>score&&game.spellBonus_>0&&game.boss_->phase==6);
+            if(phase==5)assert(game.score_>score&&game.spellBonus_>0&&game.boss_->attack==6);
         }
         for(int tick=0;tick<180&&game.boss_->active;++tick)game.Update(1.0F/120);
         assert(!game.boss_->active&&game.boss_->Defeated());for(int card:{26,32,35})assert(game.spellRecords_.Seen(0,card));
@@ -1077,10 +1084,9 @@ struct GameLifecycleProbe {
         struct ClockBoss final:Boss {
             bool stopped=true;
             ClockBoss() {active=true;phase=1;health=maxHealth=1000;visual=stage1::kRumia;position={0,0,4};}
-            bool Update(float seconds,Vector3,BulletSystem&) override {phaseTimer+=seconds;return false;}
-            bool AdvancePhase() override {return true;}
+            bool Update(float seconds,Vector3,BulletSystem&) override {skillTimer+=seconds;return false;}
+            bool AdvanceSkill() override {return true;}
             const char* SpellName() const override {return nullptr;}
-            bool IsMidboss() const override {return false;}
             const char* DisplayName() const override {return "Clock probe";}
             bool ControlsWorldTime() const override {return true;}
             bool WorldTimeStopped() const override {return stopped;}
@@ -1136,7 +1142,7 @@ struct GameLifecycleProbe {
                 if(game.dialogueActive_&&game.dialogueTimer_>1) {
                     bool& seen=game.dialogueAfterBattle_ ? after : before;
                     if(!seen) {seen=true;const auto name="stage4-dialogue-"+std::to_string(character)+(game.dialogueAfterBattle_ ? "-after" : "-before");Capture(game,prefix,name.c_str());}
-                    if(!game.dialogueAfterBattle_)assert(game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                    if(!game.dialogueAfterBattle_)assert(game.boss_->attack==0&&!game.boss_->CanTakeDamage());
                     float start=0;const int line=game.DialogueIndex(&start);
                     if(!game.dialogueAfterBattle_&&!nameplate&&game.CurrentDialogue()[line].introduce&&game.dialogueTimer_-start>0.75F) {
                         nameplate=true;Capture(game,prefix,"stage4-nameplate");const int w=GetScreenWidth(),h=GetScreenHeight();
@@ -1144,18 +1150,18 @@ struct GameLifecycleProbe {
                     }
                 }
                 if(game.boss_&&game.boss_->active) {
-                    if(game.boss_->IsMidboss()) {mid=true;children|=EnemyCount(game)>0;}
-                    else if(game.boss_->phase>0&&game.boss_->phase<=6&&game.boss_->phaseTimer>5.1F) {
-                        const int phase=game.boss_->phase;
+                    if(game.bossEventId_==1) {mid=true;children|=EnemyCount(game)>0;}
+                    else if(game.boss_->attack>0&&game.boss_->attack<=6&&game.boss_->skillTimer>5.1F) {
+                        const int phase=game.boss_->attack;
                         if(!phases[phase-1]) {phases[phase-1]=true;const auto name="stage4-character-"+std::to_string(character)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());}
                         if(phase==5&&!paused) {
-                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
-                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->skillTimer;
+                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->skillTimer==timer);game.TogglePause();
                         }
                     }
                 }
             }
-            if(frame>=700*60)std::cerr<<"Stage 4 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            if(frame>=700*60)std::cerr<<"Stage 4 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->attack:-1)<<'\n';
             assert(frame<700*60&&mid&&before&&after&&nameplate&&children&&paused&&beams);for(bool seen:phases)assert(seen);
             assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
             std::cout<<"Whole Stage 4 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
@@ -1163,24 +1169,24 @@ struct GameLifecycleProbe {
         constexpr std::array<std::array<int,4>,4> cards{{{39,58,67,78},{46,51,75,78},{50,40,71,82},{57,63,82,75}}};
         for(int shot=0;shot<4;++shot) {
             game.stageId_=StageId::Stage4;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();
-            game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(false,100);
+            game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(testing::BattleAt(*game.stageContent_,0),100);
             for(int tick=0;tick<65;++tick)game.Update(1.0F/120);assert(game.boss_->CanTakeDamage());
             game.boss_->health=0;game.ResolveCollisions();
             for(int tick=0;tick<10&&game.boss_->active;++tick)game.Update(1.0F/120);
             assert(!game.boss_->active&&game.boss_->Defeated());
-            game.BeginStageBoss(true,101);game.ResumeStageBoss();
+            game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),101);game.ResumeStageBoss();
             for(int phase=1;phase<=6;++phase) {
                 int ticks=0;bool announced=false;
                 while(!game.boss_->CanTakeDamage()&&ticks++<700) {
                     game.Update(1.0F/120);
                     if(phase>=5&&!announced&&game.boss_->SpellCardNumber()>0) {announced=true;assert(game.spellAttemptOpen_&&game.spellCutInTimer_>1.9F);}
                 }
-                assert(ticks<700&&game.boss_->phase==phase);
+                assert(ticks<700&&game.boss_->attack==phase);
                 for(int tick=0;tick<260;++tick)game.Update(1.0F/120);
                 const auto name="stage4-shot-"+std::to_string(shot)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());
                 if(phase==5||phase==6)assert(game.spellAttemptOpen_&&announced);
                 const auto score=game.score_;game.boss_->health=phase==5 ? 1699 : 0;game.ResolveCollisions();
-                if(phase==5)assert(game.score_>score&&game.boss_->phase==6&&!game.boss_->CanTakeDamage());
+                if(phase==5)assert(game.score_>score&&game.boss_->attack==6&&!game.boss_->CanTakeDamage());
             }
             for(int tick=0;tick<150&&game.boss_->active;++tick)game.Update(1.0F/120);
             assert(!game.boss_->active&&game.boss_->Defeated());for(int card:cards[shot])assert(game.spellRecords_.Seen(shot,card));
@@ -1202,13 +1208,13 @@ struct GameLifecycleProbe {
                 if(game.dialogueActive_&&game.dialogueTimer_>1) {
                     bool& seen=game.dialogueScene_==DialogueScene::Midboss ? midDialogue : game.dialogueAfterBattle_ ? after : before;
                     if(!seen) {seen=true;const auto name="stage5-dialogue-"+std::to_string(character)+(game.dialogueScene_==DialogueScene::Midboss ? "-mid" : game.dialogueAfterBattle_ ? "-after" : "-before");Capture(game,prefix,name.c_str());}
-                    if(!game.dialogueAfterBattle_)assert(game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                    if(!game.dialogueAfterBattle_)assert(game.boss_->attack==0&&!game.boss_->CanTakeDamage());
                 }
                 if(game.boss_&&game.boss_->active) {
-                    if(game.boss_->IsMidboss())mid=true;
-                    else if(game.boss_->phase>0&&game.boss_->phase<=6) {
-                        const int phase=game.boss_->phase;children|=EnemyCount(game)>0;
-                        if(game.boss_->phaseTimer>5.1F&&!phases[phase-1]) {
+                    if(game.bossEventId_==1)mid=true;
+                    else if(game.boss_->attack>0&&game.boss_->attack<=6) {
+                        const int phase=game.boss_->attack;children|=EnemyCount(game)>0;
+                        if(game.boss_->skillTimer>5.1F&&!phases[phase-1]) {
                             phases[phase-1]=true;const auto name="stage5-character-"+std::to_string(character)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());
                         }
                         if(game.WorldTimeStopped()) {
@@ -1216,14 +1222,14 @@ struct GameLifecycleProbe {
                             const int group=phase/2-1;assert(group>=0&&group<3);
                             if(!stops[group]) {stops[group]=true;const auto name="stage5-time-stop-"+std::to_string(group);Capture(game,prefix,name.c_str());}
                             if(!paused) {
-                                paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
-                                game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                                paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->skillTimer;
+                                game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->skillTimer==timer);game.TogglePause();
                             }
                         }
                     }
                 }
             }
-            if(frame>=1100*60)std::cerr<<"Stage 5 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            if(frame>=1100*60)std::cerr<<"Stage 5 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->attack:-1)<<'\n';
             assert(frame<1100*60&&mid&&midDialogue&&before&&after&&children&&paused);
             for(bool seen:phases)assert(seen);for(bool stopped:stops)assert(stopped);
             assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
@@ -1231,16 +1237,16 @@ struct GameLifecycleProbe {
         }
         for(int shot=0;shot<4;++shot) {
             game.stageId_=StageId::Stage5;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();
-            game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(false,100);game.ResumeStageBoss();
+            game.previewMode_=false;game.stage_=StageDirector{};game.BeginStageBoss(testing::BattleAt(*game.stageContent_,0),100);game.ResumeStageBoss();
             for(int phase=1;phase<=2;++phase) {
                 int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
-                assert(ticks<700&&game.boss_->phase==phase);game.boss_->health=0;game.ResolveCollisions();
+                assert(ticks<700&&game.boss_->attack==phase);game.boss_->health=0;game.ResolveCollisions();
             }
             for(int tick=0;tick<400&&game.boss_->active;++tick)game.Update(1.0F/120);
-            assert(!game.boss_->active&&game.boss_->Defeated());game.BeginStageBoss(true,101);game.ResumeStageBoss();
+            assert(!game.boss_->active&&game.boss_->Defeated());game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),101);game.ResumeStageBoss();
             for(int phase=1;phase<=6;++phase) {
                 int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
-                assert(ticks<700&&game.boss_->phase==phase);game.boss_->health=0;game.ResolveCollisions();
+                assert(ticks<700&&game.boss_->attack==phase);game.boss_->health=0;game.ResolveCollisions();
             }
             for(int tick=0;tick<150&&game.boss_->active;++tick)game.Update(1.0F/120);
             assert(!game.boss_->active&&game.boss_->Defeated());for(int card:{86,90,94,98})assert(game.spellRecords_.Seen(shot,card));
@@ -1258,8 +1264,8 @@ struct GameLifecycleProbe {
             for(;frame<1300*60&&game.state_!=RunState::Won;++frame) {
                 game.Update(1.0F/60);assert(game.state_!=RunState::GameOver);
                 if(game.bullets_.Pool().DroppedSpawns()||game.actors_.DroppedSpawns())
-                    std::cerr<<"Stage 6 dropped at "<<frame<<" stage "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)
-                        <<" timer "<<(game.boss_?game.boss_->phaseTimer:-1)<<" actors "<<EnemyCount(game)<<" bullets "<<game.bullets_.Pool().ActiveCount()
+                    std::cerr<<"Stage 6 dropped at "<<frame<<" stage "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->attack:-1)
+                        <<" timer "<<(game.boss_?game.boss_->skillTimer:-1)<<" actors "<<EnemyCount(game)<<" bullets "<<game.bullets_.Pool().ActiveCount()
                         <<" actor drops "<<game.actors_.DroppedSpawns()<<" bullet drops "<<game.bullets_.Pool().DroppedSpawns()<<'\n';
                 assert(game.bullets_.Pool().DroppedSpawns()==0&&game.actors_.DroppedSpawns()==0);peak=std::max(peak,game.bullets_.Pool().ActiveCount());
                 game.bullets_.Pool().ForEachActive([&](const Bullet& b){beams|=b.owner==BulletOwner::Enemy&&b.IsBeam();});
@@ -1269,43 +1275,43 @@ struct GameLifecycleProbe {
                         assert(game.CurrentDialogue().empty());assert(std::abs(game.DialogueDuration()-1)<1e-5F);if(!after)Capture(game,prefix,"stage6-silent-ending");after=true;
                     } else {
                         if(!before&&game.dialogueTimer_>1) {before=true;const auto name="stage6-dialogue-"+std::to_string(character);Capture(game,prefix,name.c_str());}
-                        if(game.boss_&&game.boss_->active&&!game.boss_->IsMidboss()) {
-                            signalBirth=true;assert(game.dialogueSignalsSeen_>=1&&game.boss_->phase==0&&!game.boss_->CanTakeDamage());
+                        if(game.boss_&&game.boss_->active&&!(game.bossEventId_==1)) {
+                            signalBirth=true;assert(game.dialogueSignalsSeen_>=1&&game.boss_->attack==0&&!game.boss_->CanTakeDamage());
                             if(game.dialogueSignalsSeen_>=2)prelude=true;
                         }
                     }
                 }
                 if(game.boss_&&game.boss_->active) {
-                    if(game.boss_->IsMidboss())mid=true;
-                    else if(game.boss_->phase>0&&game.boss_->phase<=9) {
-                        const int phase=game.boss_->phase;children|=EnemyCount(game)>0;
-                        if(game.boss_->phaseTimer>5.1F&&!phases[phase-1]) {
+                    if(game.bossEventId_==1)mid=true;
+                    else if(game.boss_->attack>0&&game.boss_->attack<=9) {
+                        const int phase=game.boss_->attack;children|=EnemyCount(game)>0;
+                        if(game.boss_->skillTimer>5.1F&&!phases[phase-1]) {
                             phases[phase-1]=true;const auto name="stage6-character-"+std::to_string(character)+"-phase-"+std::to_string(phase);Capture(game,prefix,name.c_str());
                         }
                         if(phase==9&&!paused) {
-                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->phaseTimer;
-                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->phaseTimer==timer);game.TogglePause();
+                            paused=true;const auto time=game.stage_.Elapsed(),timer=game.boss_->skillTimer;
+                            game.TogglePause();game.Update(0.5F);assert(game.stage_.Elapsed()==time&&game.boss_->skillTimer==timer);game.TogglePause();
                         }
                     }
                 }
             }
-            if(frame>=1300*60)std::cerr<<"Stage 6 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->phase:-1)<<'\n';
+            if(frame>=1300*60)std::cerr<<"Stage 6 stalled at "<<game.stage_.Elapsed()<<" phase "<<(game.boss_?game.boss_->attack:-1)<<'\n';
             assert(frame<1300*60&&mid&&midDialogue&&before&&after&&signalBirth&&prelude&&children&&beams&&paused);for(bool seen:phases)assert(seen);
             assert(game.state_==RunState::Won&&game.assets_.Stage().visuals.empty()&&EnemyCount(game)==0&&game.bullets_.Pool().ActiveCount()==0);
             std::cout<<"Whole Stage 6 character "<<character<<" cleared; peak "<<peak<<" projectiles\n";
         }
         for(int shot=0;shot<4;++shot) {
             game.stageId_=StageId::Stage6;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();game.previewMode_=false;
-            game.stage_=StageDirector{};game.BeginStageBoss(false,100);game.ResumeStageBoss();
+            game.stage_=StageDirector{};game.BeginStageBoss(testing::BattleAt(*game.stageContent_,0),100);game.ResumeStageBoss();
             for(int phase=1;phase<=2;++phase) {
                 int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
-                assert(ticks<700&&game.boss_->phase==phase);game.boss_->health=0;game.ResolveCollisions();
+                assert(ticks<700&&game.boss_->attack==phase);game.boss_->health=0;game.ResolveCollisions();
             }
             for(int tick=0;tick<10&&game.boss_->active;++tick)game.Update(1.0F/120);
-            assert(!game.boss_->active&&game.boss_->Defeated());game.BeginStageBoss(true,101);game.ResumeStageBoss();game.Update(1.0F/60);game.ResumeStageBoss();
+            assert(!game.boss_->active&&game.boss_->Defeated());game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),101);game.ResumeStageBoss();game.Update(1.0F/60);game.ResumeStageBoss();
             for(int phase=1;phase<=9;++phase) {
                 int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
-                assert(ticks<700&&game.boss_->phase==phase);
+                assert(ticks<700&&game.boss_->attack==phase);
                 if(phase==9) {
                     const float health=game.boss_->health;game.UpdateBattleStep(1.0F/120,PlayerInput{.bomb=true},false,false);
                     assert(game.playerBomb_.Active()&&!game.boss_->CanBeTargeted()&&!game.boss_->CanTakeDamage()&&game.boss_->health==health);
@@ -1590,7 +1596,7 @@ struct GameLifecycleProbe {
             for(float depth:{4.0F,7.0F}) {
                 auto* enemy=game.actors_.Spawn(testing::SpawnAt({origin.x+direction.x*depth,origin.y+direction.y*depth,origin.z+direction.z*depth},stage1::kFairy,1000,0.1F));assert(enemy);
             }
-            game.boss_=game.stageContent_->CreateBoss(true);game.boss_->hitRadius=0.1F;
+            game.boss_=game.stageContent_->CreateBoss(testing::BattleAt(*game.stageContent_,1));game.boss_->hitRadius=0.1F;
             game.boss_->position={origin.x+direction.x*7,origin.y+direction.y*7,origin.z+direction.z*7};
             game.score_=0;
             for(int frame=0;frame<fps;++frame) {game.bullets_.Update(1.0F/fps);game.ResolveCollisions();game.ResolveCollisions();}
@@ -1615,7 +1621,7 @@ struct GameLifecycleProbe {
             game.FinishSpellRecord(false);game.selectedCharacter_=1;game.selectedShot_=combination%2;
             game.player_.ConfigureRun(3,3,false,static_cast<ShotType>(combination));
             const int before=game.spellRecords_.Get(combination,3).mainAttempts;
-            game.BeginStageBoss(true,3);game.AdvanceBossPhase();
+            game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),3);game.AdvanceBossSkill();
             assert(game.player_.IsMarisa() && game.spellRecords_.Get(combination,3).mainAttempts==before+1);
             game.FinishSpellRecord(false);
         }
@@ -1709,19 +1715,19 @@ struct GameLifecycleProbe {
         game.dialogueActive_ = false;
         game.actorEffects_.Update(1.0F);
 
-        game.BeginStageBoss(true, 2);
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1), 2);
         game.UpdateBoss(0.3F);
         assert(game.boss_ && game.boss_->active);
         Capture(game, prefix, "boss-entry");
         const float alpha = game.boss_->presentation.Sample().alpha;
         game.boss_->health = 0.0F;
-        game.AdvanceBossPhase();
-        assert(game.boss_->phase == 2);
+        game.AdvanceBossSkill();
+        assert(game.boss_->attack == 2);
         assert(game.boss_->presentation.Sample().alpha == alpha);
         assert(game.actorEffects_.Pool().ActiveCount() == 0);
         for (int phase = 2; phase <= 4; ++phase) {
             game.boss_->health = 0.0F;
-            game.AdvanceBossPhase();
+            game.AdvanceBossSkill();
         }
         // 末符击破后先完成两句战后独白，再展示关卡奖励；关闭后完成剩余死亡演出与资源释放。
         for(int frame=0;frame<62;++frame)game.UpdateBoss(1.0F/60);
@@ -1739,7 +1745,7 @@ struct GameLifecycleProbe {
         assert(game.bullets_.Pool().ActiveCount() == 0 && PickupCount(game) == 0);
         assert(game.actorEffects_.Pool().ActiveCount() == 1);
         const auto finalScore = game.score_;
-        game.AdvanceBossPhase();
+        game.AdvanceBossSkill();
         assert(game.score_ == finalScore);
         game.Update(0.2F);
         Capture(game, prefix, "boss-defeat");
@@ -1776,7 +1782,7 @@ struct GameLifecycleProbe {
         assert(game.actorEffects_.Pool().ActiveCount() == 1);
         game.actorEffects_.Clear();
 
-        game.BeginStageBoss(false, 3);
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,0), 3);
         for(int frame=0;frame<1503;++frame)game.UpdateBoss(1.0F/60);
         assert(game.state_ == RunState::Playing);
         assert(!game.boss_->active);
@@ -1789,7 +1795,7 @@ struct GameLifecycleProbe {
 
         game.StartPreview();
         assert(game.actorEffects_.Pool().ActiveCount() == 0);
-        game.BeginStageBoss(true, 4);
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1), 4);
         game.EndStage(RunState::GameOver);
         assert(game.state_ == RunState::Finishing);
         assert(!game.assets_.Stage().visuals.empty());
@@ -1797,7 +1803,7 @@ struct GameLifecycleProbe {
         assert(game.state_ == RunState::GameOver && game.assets_.Stage().visuals.empty());
 
         game.StartPreview();
-        game.BeginStageBoss(true, 5);
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1), 5);
         game.EndStage(RunState::Won);
         assert(game.actorEffects_.Pool().ActiveCount() == 1);
         game.Reset();

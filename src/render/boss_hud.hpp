@@ -17,15 +17,11 @@ struct BossHudLayout {
           spell{panel.x + 14 * scale, panel.y + 39 * scale, panel.width - 28 * scale, 20 * scale} {}
 };
 
-/// @brief 按原录屏区分非符的白色与符卡的淡粉色；分段宽度由 Boss 快照决定，颜色只取决于攻击类别。
-inline Color BossHealthColor(BossHealthKind kind) {
-    return kind == BossHealthKind::Spell ? Color{239, 138, 152, 255} : WHITE;
-}
 /// @brief limit 为有限秒数，elapsed 为非负有限秒数；向下取整显示剩余整秒，钳制到 00～99。
 /// limit 为负时返回 -1，表示尚无计时；零上限仍显示 00。
 inline int BossSeconds(float limit, float elapsed) {
     if (limit < 0) return -1;
-    // phaseTimer 从整数 60 Hz 帧换算，容许浮点减法在整秒边界产生的微小误差。
+    // skillTimer 从整数 60 Hz 帧换算，容许浮点减法在整秒边界产生的微小误差。
     return static_cast<int>(std::clamp(std::floor(limit - elapsed + 0.0001F), 0.0F, 99.0F));
 }
 /// @brief 倒计时沿用蓝、紫、粉、红的 20/10/5 秒警示分界；负数时使用无计时占位的弱色。

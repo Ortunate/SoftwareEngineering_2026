@@ -80,7 +80,7 @@ void Game::UpdateBoss(float deltaTime) {
         for(int item:boss_->ItemEvents())drops_.SpawnNativeItem(boss_->position,item,player_.Power()==Player::kMaxPower);
         if(boss_->DefeatActorsRequested())actors_.ForEachActive([](behavior::Actor& actor){actor.health=0;});
         SpawnBehaviorActors(boss_->SpawnEvents(),deltaTime);
-        if(ended)AdvanceBossPhase();
+        if(ended)AdvanceBossSkill();
     }
 }
 
@@ -176,7 +176,7 @@ void Game::ResolveCollisions() {
                 applyShotImpact(bullet);
             }
         });
-        if (boss_->ShouldAdvanceFromDamage()) AdvanceBossPhase();
+        if (boss_->ShouldAdvanceFromDamage()) AdvanceBossSkill();
     }
     // 持续弹可穿过多个目标，但同一份经过秒数只能结算一次，重复碰撞调用不能再次扣血。
     bullets_.Pool().ForEachActive([](Bullet& bullet){
@@ -308,13 +308,13 @@ void Game::HandlePlayerHit() {
     }
 }
 
-void Game::AdvanceBossPhase() {
+void Game::AdvanceBossSkill() {
     if (!boss_ || !boss_->active) return;
     BeginSpellRecord();
-    const bool captured=boss_->SpellName() && boss_->PhaseDefeated() && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_;
+    const bool captured=boss_->SpellName() && boss_->SkillDefeated() && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_;
     // 捕获奖励只在符卡击破时结算；退场回调仍保留 phase，必须用 SpellName 排除重复结算。
     if(captured) {
-        const int seconds=static_cast<int>(std::max(0.0F,boss_->TimeLimit()-boss_->phaseTimer));
+        const int seconds=static_cast<int>(std::max(0.0F,boss_->TimeLimit()-boss_->skillTimer));
         spellBonus_=200000+20000*seconds; score_+=spellBonus_;
         spellBonusTimer_=280.0F/60;
     }
@@ -324,10 +324,8 @@ void Game::AdvanceBossPhase() {
         return;
     }
     bullets_.ClearEnemyBullets();
-    const bool wasMidboss =
-        boss_->IsMidboss();
-    const int completedPhase = boss_->phase;
-    const bool hasNextPhase = boss_->AdvancePhase();
+    const int completedAttack = boss_->attack;
+    const bool hasNextPhase = boss_->AdvanceSkill();
     const ActorExitReason exitReason = boss_->Defeated()
         ? ActorExitReason::Defeated : ActorExitReason::Retreat;
     if (!hasNextPhase)
@@ -338,7 +336,7 @@ void Game::AdvanceBossPhase() {
         stage_.EndEvent(*bossEventId_);
         bossEventId_.reset();
     }
-    if (hasNextPhase && boss_->phase != completedPhase) {
+    if (hasNextPhase && boss_->attack != completedAttack) {
         spellStartMisses_=missCount_; spellStartBombs_=bombCount_;
         spellCutInTimer_ = boss_->SpellName() != nullptr
                                ? kSpellCutInDuration : 0.0F;
@@ -346,13 +344,10 @@ void Game::AdvanceBossPhase() {
         BeginSpellRecord();
         messageTimer_ = 0.0F;
         assets_.PlaySoundEffect(boss_->SpellName() ? "spell" : "enemy_down");
-    } else if (!hasNextPhase && wasMidboss) {
-        if(boss_->Defeated())score_+=100000;
-        messageTimer_=0;
     } else if (!hasNextPhase) {
-        score_ += 200000;
+        score_ += boss_->CompletionScore();
         messageTimer_ = 0.0F;
-        // 战斗事件已结束，下一帧时间轴开始战后独白，独白结束才展示关卡奖励。
+        // 后续演出由事件表对实际结束的依赖启动，道中和关底共用此完成路径。
     }
 }
 

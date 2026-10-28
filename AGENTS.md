@@ -19,8 +19,8 @@
 - `src/stage/system.*`：定义 `StageEvent` / `StageAction`，由 `StageDirector` 保存关卡时钟、事件进度、批次出怪进度和结束依赖；不实现具体关卡的移动、攻击或素材选择。
 - `src/stage/content.*`：`StageContent` 提供素材、事件表、Boss 工厂、对话及战斗规则；`HandleEvent` 将动作交给 `StageEventSink`。`Game` 实现接收端，负责演员池、Boss、对话和事件完成通知。
 - `src/stages/stageN/timeline.cpp`：直接定义静态事件表；一面当前为 222 次逐只出生和 4 个 Boss/对话事件。事件表的存储必须覆盖 `StageDirector` 的借用期。
-- `src/stages/stageN/behaviors.*`：定义关卡专用的命名行为配方与阶段协程，复用 `src/gameplay/actors/movement.*`、`skill.*` 和 `behavior.*` 的通用能力。
-- `src/stages/stageN/boss.*`：将行为阶段接入公共 `Boss` 生命周期、伤害判定、HUD、符卡与退场接口；`content.*` 负责创建道中或关底遭遇。
+- `src/stages/stageN/behaviors.*`：定义普通演员的关卡专用命名行为配方与协程，Boss 专属行为放入角色模块，复用 `src/gameplay/actors/movement.*`、`skill.*` 和 `behavior.*` 的通用能力。
+- `src/gameplay/bosses/<角色名>.*` 和 `<角色名>_behaviors.cpp`：角色内嵌 `Behaviors` 定义全部专属行为，`ResolveSkill` 绑定技能血量、时限和符卡信息；`StartBoss(StartConfig)` 解析阶段技能数组。`src/stages/stageN/boss_config.*` 只定义技能组合、跳转、血条比例/颜色/排列、入退场和奖励；同一种 `StartBoss` 事件借用静态 `Battle`，不使用遭遇枚举或 `bool final` 工厂。
 - `manifest.cpp` / `ids.hpp` 管理关卡素材清单与编号，`dialogue.cpp` 管理台词和演出指令，`scenery.*` 管理背景。新增可玩关卡时，在 `src/stage/catalog.*` 注册内容，并在 `CMakeLists.txt` 登记源码。
 
 ## 时间轴事件
@@ -49,10 +49,11 @@
 
 ## Boss 与对话衔接
 
-1. 当前 Boss 仍使用公共 `Boss` 接口；一面的 `RumiaBoss` 持有 `behavior::Actor`，负责把生命、位置、动画、音效、掉落与阶段完成状态接入游戏。移动与攻击编排在 `stage1::rumia` 命名行为中，不能在 `timeline.cpp` 按固定时刻展开各战斗阶段。
-2. Boss 阶段生命、生命阈值和超时从 `native_combat` 统一目录读取，阶段回调使用命名行为。当前关底顺序为非符 → `NightBird` → 非符 → `Demarcation`，道中遭遇独立初始化。
-3. 保持受伤开关、生命阈值、击破和超时的交接语义；碰撞发生在行为更新之后，阶段切换必须看到当帧扣血。准备期保护要在交接时立即生效，不能等下一次 120 Hz Tick；HUD 的非符/符卡分组血条与行为当前 HP 上限分别维护。
-4. 战斗入口、阶段推进和完整退场分别处理；只有遭遇真正结束才通知对应 StageEvent 完成。对话台词和 `DialogueCue` 使用独立内容表，由游戏完成对话后报告事件结束，不通过演员行为伪造对话完成。
+1. Boss 保留公共 `Boss` 接口，角色类集中在 `src/gameplay/bosses`；`ConfiguredBoss` 独占 `behavior::Actor` 和启动配置。道中与关底通过不同 `StartConfig` 驱动同一角色类；五、六面的咲夜均为 `SakuyaBoss`，不能恢复按关卡编号分支的角色类。角色专属入场、攻击、准备和退场都在其内嵌 `Behaviors` 中实现，不能在 `timeline.cpp` 展开战斗技能。
+2. 技能生命、预留偏移和时限由角色 `ResolveSkill` 从 `native_combat` 绑定，配置不能覆盖技能血量。`phases.size()` 为阶段数，每阶段 `skills` 顺序组合多个非符/符卡，完成去向分别由 `onDamage`、`onTimeout` 指定；`Jump` 使用 0 起算的阶段/技能索引。`phase` / `skill` 为 1 起算的运行阶段和组内技能，`attack` 是用于练习与记录的展开技能编号。行为只报告完成，不选择下一技能；可变状态由角色实例独占。
+3. 血条比例、RGBA 颜色与左右排列必须显式写入阶段 config；每段按 `skillIndex` 绑定本阶段一次技能使用，比例为正且总和为 1，不能按 HP 自动分配或按非符/符卡自动上色。Boss 解析并通过 `DrawHealthBar` 绘制，Game HUD 只提供区域；快照段数不限于三段。
+4. 保持受伤开关、生命阈值、击破和超时的交接语义；碰撞发生在行为更新之后，阶段切换必须看到当帧扣血。准备期保护要在交接时立即生效，不能等下一次 120 Hz Tick；HUD 的非符/符卡分组血条与行为当前 HP 上限分别维护。
+5. 战斗入口、阶段推进和完整退场分别处理；只有遭遇真正结束才通知对应 StageEvent 完成。对话台词和 `DialogueCue` 使用独立内容表，由游戏完成对话后报告事件结束，不通过演员行为伪造对话完成。
 
 ## 参考数据与验证
 

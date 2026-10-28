@@ -28,9 +28,8 @@ StageDirector::StageDirector(std::span<const StageEvent> events)
                     throw std::invalid_argument("Invalid SpawnActors parameters");
                 }
             } else if constexpr (std::is_same_v<Action, StartBoss>) {
-                if (!event.id || (action.encounter != BossEncounter::Midboss &&
-                                  action.encounter != BossEncounter::Final)) {
-                    throw std::invalid_argument("StartBoss requires an id and valid encounter");
+                if (!event.id || (!action.battle || !action.battle->create)) {
+                    throw std::invalid_argument("StartBoss requires an id and valid battle definition");
                 }
             } else if constexpr (std::is_same_v<Action, StartDialogue>) {
                 if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss)||

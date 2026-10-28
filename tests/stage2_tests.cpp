@@ -1,7 +1,10 @@
 // 本文件以独立源参数检查二面全部出生、60 Hz 普通演员轨迹、发射边界、Boss 血量/超时与新公共能力。
+#include "boss_fixture.hpp"
 #include "stages/stage2/content.hpp"
 #include "stages/stage2/behaviors.hpp"
-#include "stages/stage2/boss.hpp"
+#include "stages/stage2/boss_config.hpp"
+#include "gameplay/bosses/cirno.hpp"
+#include "gameplay/bosses/daiyousei.hpp"
 #include "gameplay/items/drop_system.hpp"
 #include <cassert>
 #include <cmath>
@@ -99,7 +102,7 @@ void TestBirthsAndSourceMovement() {
     // 异步依赖必须等待实际完成；不能因原始出生帧为 5894 就在对白尚未结束时启动关底。
     StageDirector director(content.Events());bool finalStarted=false,dialogueStarted=false;
     director.Update(100, [&](const StageEvent& event) {
-        if(const auto* boss=std::get_if<StartBoss>(&event.action))finalStarted|=boss->encounter==BossEncounter::Final;
+        if(const auto* boss=std::get_if<StartBoss>(&event.action))finalStarted|=boss->battle==&stage2::kCirnoFinal;
         if(std::holds_alternative<StartDialogue>(event.action))dialogueStarted=true;
         return std::holds_alternative<SpawnActors>(event.action);
     });
@@ -147,40 +150,40 @@ void TestRandomShotInterval() {
     }
 }
 void TestBossHealthAndTimeouts() {
-    auto bullets=std::make_unique<BulletSystem>();stage2::Stage2Boss boss(true);
-    assert(boss.health==10000&&boss.phase==1&&!boss.CanTakeDamage());
+    auto bullets=std::make_unique<BulletSystem>();bosses::CirnoBoss boss(behavior::UpdateRate::Hz120,true);boss.StartBoss(stage2::CirnoFinalConfig());
+    assert(boss.health==10000&&boss.attack==1&&!boss.CanTakeDamage());
     for(int i=0;i<42;++i)boss.Update(1.0F/120,{2,3,-6},*bullets);
-    assert(boss.CanTakeDamage());boss.health=0;assert(boss.ShouldAdvanceFromDamage());assert(boss.AdvancePhase());
-    assert(boss.phase==2&&boss.health==1500&&boss.maxHealth==1500&&!boss.CanTakeDamage());
+    assert(boss.CanTakeDamage());boss.health=0;assert(boss.ShouldAdvanceFromDamage());assert(boss.AdvanceSkill());
+    assert(boss.attack==2&&boss.health==1500&&boss.maxHealth==1500&&!boss.CanTakeDamage());
     assert(boss.SpellCardNumber()==11);
     boss.Update(1.0F/240,{},*bullets);assert(!boss.CanTakeDamage()&&!boss.ShouldAdvanceFromDamage());
-    boss.AdvancePhase();assert(boss.phase==3&&boss.health==13000);
-    boss.AdvancePhase();assert(boss.phase==4&&boss.health==3200);
+    boss.AdvanceSkill();assert(boss.attack==3&&boss.health==13000);
+    boss.AdvanceSkill();assert(boss.attack==4&&boss.health==3200);
     auto bar=boss.HealthBar();assert(bar.count==3&&bar.remainingBars==0);
     assert(boss.SpellCardNumber()==15);
     Near(bar.segments[0].remaining,1400.0F/13000);Near(bar.segments[1].remaining,1800.0F/13000);Near(bar.segments[2].remaining,0);
-    boss.health=1399;assert(boss.PhaseDefeated()); // Perfect Freeze 完成时还要保留下一张符卡的 1400 HP。
-    boss.AdvancePhase();assert(boss.phase==5&&boss.health==1400);
+    boss.health=1399;assert(boss.SkillDefeated()); // Perfect Freeze 完成时还要保留下一张符卡的 1400 HP。
+    boss.AdvanceSkill();assert(boss.attack==5&&boss.health==1400);
     assert(boss.SpellCardNumber()==18);
-    stage2::Stage2Boss timed(true);std::array<double,6> phaseLengths{};std::array<int,6> counts{};
+    bosses::CirnoBoss timed(behavior::UpdateRate::Hz120,true);timed.StartBoss(stage2::CirnoFinalConfig());std::array<double,6> phaseLengths{};std::array<int,6> counts{};
     double elapsed=0;int previous=1;std::size_t peak=0;
     while(timed.active&&elapsed<185) {
         const bool transition=timed.Update(1.0F/120,{2,3,-6},*bullets);
         phaseLengths[previous]+=1.0/120;++counts[previous];elapsed+=1.0/120;
         peak=std::max(peak,bullets->Pool().ActiveCount());bullets->Update(1.0F/120,{}, {2,3,-6});
-        if(transition) { bullets->ClearEnemyBullets();timed.AdvancePhase();previous=std::max(1,timed.phase); }
+        if(transition) { bullets->ClearEnemyBullets();timed.AdvanceSkill();previous=std::max(1,timed.attack); }
     }
     assert(!timed.active&&!timed.Defeated());
     // 时间来自独立 ECL 初始化常量：1500/1800/3000/2400/1980 帧，末阶段另有 60 帧完整退场。
     Near(static_cast<float>(phaseLengths[1]),25,0.02F);Near(static_cast<float>(phaseLengths[2]),30,0.02F);
     Near(static_cast<float>(phaseLengths[3]),50,0.02F);Near(static_cast<float>(phaseLengths[4]),40,0.02F);
     Near(static_cast<float>(phaseLengths[5]),34,0.04F);assert(bullets->Pool().DroppedSpawns()==0);
-    stage2::Stage2Boss mid(false);assert(mid.health==10000);int bombDrops=0;
-    mid.health=0;mid.AdvancePhase();
+    bosses::DaiyouseiBoss mid(behavior::UpdateRate::Hz120,true);mid.StartBoss(stage2::DaiyouseiMidbossConfig());assert(mid.health==10000);int bombDrops=0;
+    mid.health=0;mid.AdvanceSkill();
     for(int i=0;i<4&&mid.active;++i) {
         const bool ended=mid.Update(1.0F/120,{},*bullets);
         for(int item:mid.ItemEvents()) {assert(item==3);++bombDrops;}
-        if(ended)mid.AdvancePhase();
+        if(ended)mid.AdvanceSkill();
     }
     assert(!mid.active&&bombDrops==1&&mid.Defeated());
     std::cout<<"Stage 2 timeout phases validated; peak projectiles "<<peak<<'\n';
@@ -191,7 +194,7 @@ void TestSourceAttackFrames() {
     const auto start=[&](behavior::Entry entry,float health) {
         actor.Reset({0,0,5.71428585F},health,7);stage2::ConfigureBehavior(actor,false);actor.Start(entry(actor));bullets->Reset();
     };
-    start(stage2::cirno::FirstNonspell,10000);
+    start(bosses::CirnoBoss::Behaviors::FirstNonspell,10000);
     for(int frame=0;frame<=342;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);int expected=0;
         for(int base:{111,181,251})for(int index=0;index<6;++index)if(frame==base+index*2)expected=index+2;
@@ -202,7 +205,7 @@ void TestSourceAttackFrames() {
             Near(bullet.spawnVisualSeconds,16.0F/60);
         });
     }
-    start(stage2::cirno::IcicleFall,1500);
+    start(bosses::CirnoBoss::Behaviors::IcicleFall,1500);
     unsigned random=7;const float jitter=Random(random,0.0490873866F);
     for(int frame=0;frame<=147;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
@@ -217,7 +220,7 @@ void TestSourceAttackFrames() {
             });
         }
     }
-    start(stage2::cirno::PerfectFreeze,3200);Bullet* friendly=nullptr;Bullet* beam=nullptr;
+    start(bosses::CirnoBoss::Behaviors::PerfectFreeze,3200);Bullet* friendly=nullptr;Bullet* beam=nullptr;
     for(int frame=0;frame<=570;++frame) {
         actor.Update(1.0F/60,{2,3,-6},*bullets);
         if(frame==329) {
@@ -244,12 +247,12 @@ void TestSourceAttackFrames() {
         }
         bullets->Update(1.0F/60,{}, {2,3,-6});
     }
-    start(stage2::cirno::DiamondBlizzard,1400);
+    start(bosses::CirnoBoss::Behaviors::DiamondBlizzard,1400);
     for(int frame=0;frame<=190;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         assert(bullets->Pool().ActiveCount()==(frame==190 ? 12U : 0U));
     }
-    start(stage2::daiyousei::Midboss,10000);
+    start(bosses::DaiyouseiBoss::Behaviors::Midboss,10000);
     unsigned teleportRandom=7;const float teleportX=(Random(teleportRandom,320)+32-192)*scale;
     for(int frame=0;frame<=258;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);

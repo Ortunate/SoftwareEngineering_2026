@@ -48,21 +48,5 @@ inline constexpr behavior::Pattern kShootingDarkFairy{
     .initialAnimation=3,.stoppedAnimation=5,.deathEffect=0,.muzzleOffset={0.535714269F,0,0.535714269F},.spatialShots=true};
 /// @brief 配置二面发弹素材与三维模式；仅修改当前演员，不借用外部资源；spatial=false 用于源时钟对照。
 void ConfigureBehavior(behavior::Actor& actor,bool spatial=true);
-namespace daiyousei {
-/// @brief 大妖精入场、三种攻击与瞬移循环；HP/超时由统一目录读取，结束依赖由 Boss 包装层报告。
-behavior::Routine Midboss(behavior::Actor& actor);
-behavior::Routine Defeated(behavior::Actor& actor);
-behavior::Routine Timeout(behavior::Actor& actor);
-}
-namespace cirno {
-/// @brief Normal 阶段入口：非符、Icicle Fall、非符、Perfect Freeze、Diamond Blizzard 与完整退场。
-/// 继承生命与技能上下文；各阶段通过命名回调衔接，准备期不能提前受击。
-behavior::Routine FirstNonspell(behavior::Actor& actor);
-behavior::Routine IcicleFall(behavior::Actor& actor);
-behavior::Routine SecondNonspell(behavior::Actor& actor);
-behavior::Routine PerfectFreeze(behavior::Actor& actor);
-behavior::Routine DiamondBlizzard(behavior::Actor& actor);
-behavior::Routine Defeated(behavior::Actor& actor);
-behavior::Routine End(behavior::Actor& actor);
-}
+
 }

@@ -1,5 +1,6 @@
 // 本文件编排五面普通晶体的停顿、环形速度序列和跨场发射，不持有原始 ECL 或资源所有权。
 #include "stages/stage5/behaviors.hpp"
+#include "stages/stage5/ids.hpp"
 #include <numbers>
 namespace koumakyou::stage5 {
 namespace {
@@ -59,4 +60,8 @@ Routine PassingRedFans(Actor& a) {co_await Passing(a,30,{Formation::AimedFan,4,2
 Routine PassingRandomRedRings(Actor& a) {co_await Passing(a,10,{Formation::RandomAngleSpeed,3,2,4,1,4.01785707F,2.14285707F,pi,-pi,516});}
 Routine DropFour(Actor& a) {a.dropEvents.push_back(4);a.finished=true;co_return;}
 Routine DropSix(Actor& a) {a.dropEvents.push_back(6);a.finished=true;co_return;}
+void ConfigureBehavior(Actor& a,bool spatial) {
+    a.skills.bulletBase=kNativeBulletBase;a.skills.laserBase=kNativeLaserBase;a.skills.fallback=kBlueBullet;a.skills.spatial=spatial;
+    if(!spatial)a.liftedMotion.reset();
+}
 }

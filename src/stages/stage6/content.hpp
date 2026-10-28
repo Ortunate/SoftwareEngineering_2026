@@ -10,7 +10,7 @@ public:
     const StageAssetManifest& Assets() const override;
     void DrawScenery(float seconds) const override;
     std::span<const StageEvent> Events() const override;
-    std::unique_ptr<Boss> CreateBoss(bool final) const override;
+    const bosses::Battle& PracticeBoss() const override;
     std::span<const DialogueLine> Dialogue(bool afterBattle=false,ShotType shot=ShotType::HomingAmulet) const override;
     std::span<const DialogueCue> DialogueCues(bool afterBattle,ShotType shot) const override;
     std::span<const DialogueLine> SceneDialogue(DialogueScene scene,bool afterBattle,ShotType shot) const override;
@@ -24,7 +24,5 @@ public:
     const char* StartTitle() const override {return "Stage 6  Bloody Scarlet  Normal";}
     StageDisplayInfo DisplayInfo() const override {return {"STAGE 06","至福乐土降下血雨","Bloody Scarlet"};}
     const char* ClearTitle() const override {return "STAGE 6 CLEAR";}
-    const char* BossStartMessage(bool final) const override {return final ? "Remilia Scarlet" : "Sakuya Izayoi";}
-    const char* MidbossEndMessage() const override {return "Sakuya retreated";}
 };
 }

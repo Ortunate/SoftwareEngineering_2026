@@ -24,8 +24,8 @@ public:
     virtual ~StageEventSink() = default;
     /// @brief 请求立即创建一个敌人；spec 为借用的出生配置，接收方须复制需保留的数据。
     virtual void SpawnStageActor(const behavior::Spawn& spec) = 0;
-    /// @brief 请求开始道中或关底 Boss，并登记等待战斗结束的异步事件编号。
-    virtual void BeginStageBoss(bool final, StageEventId id) = 0;
+    /// @brief 请求按 battle 启动 Boss，并登记等待完整退场结束的异步事件编号；battle 借用静态内容。
+    virtual void BeginStageBoss(const bosses::Battle& battle, StageEventId id) = 0;
     /// @brief 请求对话并登记异步事件编号；只有 FinalBoss 的 afterBattle 全部结束后展示关卡结算。
     virtual void BeginStageDialogue(StageEventId id, bool afterBattle = false,DialogueScene scene=DialogueScene::FinalBoss,
         DialogueClearPolicy clearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets) = 0;
@@ -91,8 +91,13 @@ public:
     [[nodiscard]] virtual const StageAssetManifest& Assets() const = 0;
     /// @brief 返回按触发顺序排列的时间轴事件；底层存储须覆盖 StageDirector 的生命周期。
     [[nodiscard]] virtual std::span<const StageEvent> Events() const = 0;
-    /// @brief 构造道中或关底 Boss 并初始化遭遇状态，所有权交给调用方。
-    [[nodiscard]] virtual std::unique_ptr<Boss> CreateBoss(bool final) const = 0;
+    /// @brief 按事件携带的命名战斗定义创建并启动 Boss；shot 在配置解析前提供，所有权交给调用方。
+    [[nodiscard]] std::unique_ptr<Boss> CreateBoss(const bosses::Battle& battle,ShotType shot=ShotType::HomingAmulet) const {
+        if(!battle.create)throw std::invalid_argument("Missing Boss factory");
+        return battle.create(shot);
+    }
+    /// @brief 符卡练习使用的完整战斗入口；配置存储由关卡静态持有。
+    [[nodiscard]] virtual const bosses::Battle& PracticeBoss() const = 0;
     /// @brief 执行调度器交付的一次动作；出怪请求必须已规范为 count=1。
     /// @return Boss 与对话返回 false，结束后通过 StageDirector::EndEvent 报告；其他返回 true。
     /// @throws std::invalid_argument 未规范的批次、缺少异步 ID 或动作参数非法。
@@ -163,10 +168,6 @@ public:
     [[nodiscard]] virtual StageDisplayInfo DisplayInfo() const { return {"STAGE", StartTitle(), {}}; }
     /// @brief 返回胜利结算标题。
     [[nodiscard]] virtual const char* ClearTitle() const = 0;
-    /// @brief 返回 Boss 出场提示。
-    [[nodiscard]] virtual const char* BossStartMessage(bool final) const = 0;
-    /// @brief 返回道中 Boss 退场提示。
-    [[nodiscard]] virtual const char* MidbossEndMessage() const = 0;
 };
 
 }  // namespace koumakyou

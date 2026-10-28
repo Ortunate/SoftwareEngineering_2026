@@ -14,7 +14,7 @@ public:
     [[nodiscard]] const StageAssetManifest& Assets() const override;
     void DrawScenery(float seconds) const override;
     [[nodiscard]] std::span<const StageEvent> Events() const override;
-    [[nodiscard]] std::unique_ptr<Boss> CreateBoss(bool final) const override;
+    const bosses::Battle& PracticeBoss() const override;
     [[nodiscard]] std::span<const DialogueLine> Dialogue(bool afterBattle = false, ShotType shot=ShotType::HomingAmulet) const override;
     [[nodiscard]] std::span<const DialogueCue> DialogueCues(bool afterBattle, ShotType shot) const override;
     [[nodiscard]] float DialogueLineDuration() const override { return 5.0F; }
@@ -29,12 +29,6 @@ public:
         return {"STAGE 01", "梦幻夜行绘卷", "Mystic Flier"};
     }
     [[nodiscard]] const char* ClearTitle() const override { return "STAGE 1 CLEAR"; }
-    [[nodiscard]] const char* BossStartMessage(bool final) const override {
-        return final ? "Rumia  Stage 1 Boss" : "Rumia  Midboss";
-    }
-    [[nodiscard]] const char* MidbossEndMessage() const override {
-        return "Rumia retreated";
-    }
 };
 
 }  // namespace koumakyou::stage1

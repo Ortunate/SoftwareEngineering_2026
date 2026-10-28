@@ -3,7 +3,7 @@
 #include "stages/stage1/content.hpp"
 #include "stages/stage1/data.hpp"
 
-#include "stages/stage1/boss.hpp"
+#include "stages/stage1/boss_config.hpp"
 #include "stages/stage1/scenery.hpp"
 
 
@@ -29,11 +29,6 @@ VisualId Stage1Content::BossPortraitVisual(int expression) const {
         ? kRumiaPortraits[expression] : kRumiaPortraits.front();
 }
 
-std::unique_ptr<Boss> Stage1Content::CreateBoss(bool final) const {
-    auto boss = std::make_unique<RumiaBoss>();
-    if (final) boss->StartFinalBoss();
-    else boss->StartMidboss();
-    return boss;
-}
+const bosses::Battle& Stage1Content::PracticeBoss() const {return kRumiaFinal;}
 
 }  // namespace koumakyou::stage1

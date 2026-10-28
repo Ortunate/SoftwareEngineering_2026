@@ -64,18 +64,4 @@ inline constexpr behavior::Pattern kPassingDarkFairy{
 /// @brief 配置一面素材与空间发弹模式；Boss 阶段按需启用等路程移动，Actor::Reset 后调用，不借用外部资源。
 /// spatial=false 只关闭新增空间适配，用于独立旧行为差分；不改变更新频率、随机源或内容时钟。
 void ConfigureBehavior(behavior::Actor& actor,bool spatial=true);
-namespace rumia {
-using behavior::Actor;
-using behavior::Routine;
-/// @brief 以下入口接管各阶段的移动、攻击、阈值及退场；HP/超时使用原始目录，角为弧度、时间为逻辑帧。
-Routine Midboss(Actor& actor);
-Routine MidbossDefeated(Actor& actor);
-Routine MidbossTimeout(Actor& actor);
-Routine FirstNonspell(Actor& actor);
-Routine SecondNonspell(Actor& actor);
-Routine NightBird(Actor& actor);
-Routine Demarcation(Actor& actor);
-Routine Defeated(Actor& actor);
-Routine End(Actor& actor);
-} // namespace rumia
 } // namespace koumakyou::stage1

@@ -22,12 +22,12 @@ public:
     /// @param deltaTime 本帧经过的秒数。
     /// @param playerPosition 玩家判定中心。
     /// @param bullets 接收技能弹幕的系统。
-    /// @return 到达生命/时间回调或脚本结束时返回 true，调用方需执行 AdvancePhase。
+    /// @return 到达生命/时间回调或脚本结束时返回 true，调用方需执行 AdvanceSkill。
     virtual bool Update(float deltaTime, Vector3 playerPosition,
                         BulletSystem& bullets) = 0;
-    /// @brief 当前阶段结束后尝试进入下一阶段。
+    /// @brief 当前技能结束后按配置进入下一个技能或阶段；只有完整退场结束才返回 false。
     /// @return 演员仍需继续更新（下一阶段或退场）时返回 true；整场结束返回 false。
-    virtual bool AdvancePhase() = 0;
+    virtual bool AdvanceSkill() = 0;
     /// @brief 对话后的外部开战通知；仅延迟开战的遭遇覆盖，默认拒绝非法调用。
     virtual void ResumeCombat() { throw std::logic_error("Boss is not waiting for combat"); }
     /// @brief 是否入场即换 Boss 音乐；先入场再对白的遭遇可返回 false，由 DialogueCue 决定换曲。
@@ -37,8 +37,8 @@ public:
     [[nodiscard]] virtual const char* SpellName() const = 0;
     /// @brief 当前符卡在全局只读目录中的编号；0 表示非符或未绑定，不据此开放原生符卡练习入口。
     [[nodiscard]] virtual int SpellCardNumber() const { return 0; }
-    /// @brief 当前遭遇是否为道中 Boss。
-    [[nodiscard]] virtual bool IsMidboss() const = 0;
+    /// @brief 整场完成后的奖励点数，由启动配置明确区分击破和撤退。
+    [[nodiscard]] virtual int CompletionScore() const { return 0; }
     /// @brief HUD 中展示的 Boss 名称。
     [[nodiscard]] virtual const char* DisplayName() const = 0;
 
@@ -48,20 +48,20 @@ public:
     [[nodiscard]] virtual bool CanBeTargeted() const { return active&&health>0; }
     /// @brief 活动且存活的本体可接触玩家，独立于受伤开关；子类须排除只保留演员的无害退场状态。
     [[nodiscard]] virtual bool CanContactPlayer() const { return active && health>0; }
-    /// @brief 生命耗尽或达到下一阶段阈值时返回 true；Game 统一清弹并调用 AdvancePhase。
+    /// @brief 生命耗尽或达到下一阶段阈值时返回 true；Game 统一清弹并调用 AdvanceSkill。
     [[nodiscard]] virtual bool ShouldAdvanceFromDamage() const { return health <= 0; }
     /// @brief 当前攻击是否由伤害完成；正 HP 符卡阈值须由子类明确覆盖，超时不得视为击破。
-    /// Game 在 AdvancePhase 之前读取，用于符卡取得与奖励，和整场 Defeated 分开。
-    [[nodiscard]] virtual bool PhaseDefeated() const { return health<=0; }
-    /// @brief 当前阶段原始时间上限（秒）；负值表示退场或无计时阶段。
+    /// Game 在 AdvanceSkill 之前读取，用于符卡取得与奖励，和整场 Defeated 分开。
+    [[nodiscard]] virtual bool SkillDefeated() const { return health<=0; }
+    /// @brief 当前技能原始时间上限（秒）；负值表示退场或无计时技能。
     [[nodiscard]] virtual float TimeLimit() const { return -1; }
     /// @brief 返回当前组的独立血条快照；默认按 health/maxHealth 显示单段，组合阶段由具体 Boss 覆盖。
     /// 仅供展示，不能用于伤害或阶段判定；无效生命上限、未活动或退场应返回空快照。
     [[nodiscard]] virtual BossHealthBar HealthBar() const;
+    /// @brief Boss 在 HUD 提供的窗口逻辑像素区域绘制自身血条；必须在有效绘制上下文调用。
+    virtual void DrawHealthBar(Rectangle area) const;
     /// @brief 接收关卡自适应难度值 10…32；普通演员默认忽略，原作脚本演员用于弹速/弹数。
     virtual void SetChallengeRank(int) {}
-    /// @brief 工厂创建后、开战前接收当前机体；按机体分支的遭遇保存它，其他 Boss 默认忽略。
-    virtual void SetPlayerShot(ShotType) {}
     /// @brief 固定步开始前接收当前 Bomb 活动状态；用于内容明确定义的化蝠等反应，不持有自机对象。
     virtual void SetPlayerBombActive(bool) {}
     /// @brief 支持操纵世界时钟的遭遇须先更新敌方，再采样玩家输入；默认保持既有关卡的更新顺序。
@@ -93,16 +93,20 @@ public:
     double animationAge = 0; // 本次脚本启动后的秒数，换阶段不自动重启待机动画。
     std::uint32_t animationRevision = 0;
     Vector3 position{0.0F, 2.0F, 7.2F};
+    // 当前生命寄存器；ConfiguredBoss 的值为技能实际剩余 HP＋reserveHealth，保留原行为的阈值量纲。
+    // 技能真实 HP 上限来自 SkillDefinition，HUD 不能使用本寄存器反推配置比例。
     float health = 0.0F;
     float maxHealth = 0.0F;
     float hitRadius = native_sizes::kDefaultEnemyRadius; // 世界受弹半径；具体遭遇按 ECL 配置，本体接触另乘 2/3。
-    /// @brief 当前阶段已运行秒数；换阶段时归零，超时由具体 Boss 决定。
-    float phaseTimer = 0.0F;
+    /// @brief 当前技能已运行秒数；换技能归零，超时采用技能定义。
+    float skillTimer = 0.0F;
     float fireTimer = 0.0F;
     float moveClock = 0.0F;
     float starRotation = 0.0F;
-    /// @brief 当前阶段编号；0 表示未开始或已退场，正数由具体 Boss 定义。
-    int phase = 0;
+    /// @brief 配置阶段、阶段内技能与展开技能编号；三者在入场和完整退场后均为 0。
+    int phase = 0; // 当前配置阶段，1 起算；阶段可含多个技能。
+    int skill = 0; // 当前阶段内的技能号，1 起算；入场和完成时为 0。
+    int attack = 0; // 全部阶段展开后的技能号，1 起算，仅供练习入口及遇见记录定位。
 
     /// @brief 沿瞄准方向求 Boss 的发弹点。
     /// @param playerPosition 玩家判定中心。

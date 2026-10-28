@@ -1,4 +1,5 @@
 // 本文件以隐藏窗口回放键鼠输入，检查全界面统一操作、比例适配、录入防误触和开局记忆。
+#include "boss_fixture.hpp"
 #include "app/game.hpp"
 #include "app/constants.hpp"
 #include "config/settings.hpp"
@@ -90,7 +91,7 @@ struct GameLifecycleProbe {
                 game.state_=RunState::Playing; game.dialogueActive_=true; game.dialogueAfterBattle_=false;
                 game.dialogueTimer_=31; break;
             case 14:
-                game.state_=RunState::Playing; game.BeginStageBoss(true,3); game.boss_->AdvancePhase();
+                game.state_=RunState::Playing; game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),3); game.boss_->AdvanceSkill();
                 game.spellCutInTimer_=1.5F; break;
             case 15: game.state_=RunState::Paused; game.pausedState_=RunState::Playing; break;
             case 16: game.state_=RunState::Won; break;
@@ -138,7 +139,7 @@ struct GameLifecycleProbe {
         if(game.state_==RunState::Paused)return game.selectedPauseItem_;
         if(game.state_==RunState::Won || game.state_==RunState::GameOver)return game.selectedResultItem_;
         return game.setupStep_==StartSetupStep::Character?game.selectedCharacter_:game.setupStep_==StartSetupStep::Shot?game.selectedShot_:
-            game.setupStep_==StartSetupStep::Mode?int(game.challengeMode_):int(game.practicePhase_==4);
+            game.setupStep_==StartSetupStep::Mode?int(game.challengeMode_):int(game.practiceAttack_==4);
     }
     static spell::Selection SpellChoice(const Game& game) {return game.spellSelection_;}
     static float SpellPageReveal(const Game& game) {return game.menuMotion_.Reveal();}
@@ -148,7 +149,7 @@ struct GameLifecycleProbe {
         game.setupStep_=StartSetupStep::Spell;game.spellSelection_=choice;game.state_=RunState::StartSetup;
     }
     static void SpellTitle(Game& game) {game.EnterMainMenu();game.selectedMenuItem_=3;game.titleEntrance_.Complete();}
-    static int BossPhase(const Game& game) {return game.boss_?game.boss_->phase:0;}
+    static int BossPhase(const Game& game) {return game.boss_?game.boss_->attack:0;}
     static bool SpellCaptured(const Game& game) {return game.spellCaptured_;}
     static spell::Record SpellRecord(const Game& game,int character,int number) {return game.spellRecords_.Get(character,number);}
     static bool SpellAvailable(const Game& game,int character,int group) {return spell::Available(spell::Find(0,group,1),character,game.spellRecords_);}
@@ -159,12 +160,12 @@ struct GameLifecycleProbe {
         game.stage_=StageDirector{};game.practiceMode_=stagePractice;game.spellPractice_=false;
         game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;
         game.player_.ConfigureRun(game.initialLives_,game.initialBombs_,game.challengeMode_,static_cast<ShotType>(shot));
-        game.BeginStageBoss(true,3);
+        game.BeginStageBoss(testing::BattleAt(*game.stageContent_,1),3);
     }
     /// @brief 以真实阶段结算入口分别触发击破与超时；不代写成绩，实际记录由 Game 保存。
     static void FinishSpell(Game& game,bool capture) {
-        if(capture)game.boss_->health=0;else game.boss_->phaseTimer=game.boss_->TimeLimit();
-        game.AdvanceBossPhase();
+        if(capture)game.boss_->health=0;else game.boss_->skillTimer=game.boss_->TimeLimit();
+        game.AdvanceBossSkill();
     }
     static bool SpellPortraits(const Game& game) {const auto& p=game.assets_.Common().spellPortraits;return IsTextureValid(p[0]) && IsTextureValid(p[1]) && p[0].id!=p[1].id;}
     /// @brief 前后层必须分别持有不同姿势的纹理，不能以同一前景图放大冒充后层。
@@ -215,7 +216,7 @@ struct GameLifecycleProbe {
 
     /// @brief 读取实际选择页使用的值，不能以配置文件存在代替界面恢复检查。
     static StartSelection Selection(const Game& game) {
-        return {game.selectedShot_,game.challengeMode_,game.practicePhase_,game.selectedPracticeStage_+1,game.selectedCharacter_};
+        return {game.selectedShot_,game.challengeMode_,game.practiceAttack_,game.selectedPracticeStage_+1,game.selectedCharacter_};
     }
 };
 }

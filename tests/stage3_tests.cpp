@@ -1,6 +1,8 @@
 // 本文件以独立三面源参数和局部时钟见证记录，检查全部出生、普通轨迹、实际攻击、召唤和遭遇衔接。
 #include "stages/stage3/content.hpp"
-#include "stages/stage3/boss.hpp"
+#include "stages/stage3/boss_config.hpp"
+#include "stages/stage3/behaviors.hpp"
+#include "gameplay/bosses/meiling.hpp"
 #include "app/spell_practice.hpp"
 #include <cassert>
 #include <cmath>
@@ -78,19 +80,19 @@ void TestBirthsAndMovement() {
 void TestAttackWitnesses() {
     auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor(behavior::UpdateRate::Hz60);
     const auto start=[&](behavior::Entry entry,float hp) {actor.Reset({},hp,7);stage3::ConfigureBehavior(actor,false);actor.Start(entry(actor));};
-    start(stage3::meiling::Midboss,13000);
+    start(bosses::MeilingBoss::Behaviors::Midboss,13000);
     for(int frame=0;frame<=365;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         const bool rain=frame>=150&&frame<=206&&(frame-150)%8==0;
         assert(bullets->Pool().ActiveCount()==(rain ? 16U : frame==364 ? 76U : 0U));
     }
-    start(stage3::meiling::GorgeousSweetFlower,1300);
+    start(bosses::MeilingBoss::Behaviors::GorgeousSweetFlower,1300);
     for(int frame=0;frame<1000;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         const std::size_t count=frame<120 ? 0 : ((frame-120)%6==0 ? 10 : 0)+(frame%80==0 ? 43 : 0);
         assert(bullets->Pool().ActiveCount()==count);
     }
-    start(stage3::meiling::FirstNonspell,14000);
+    start(bosses::MeilingBoss::Behaviors::FirstNonspell,14000);
     for(int frame=0;frame<=324;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         const bool first=frame>=50&&frame<170&&(frame-50)%4==0;
@@ -98,7 +100,7 @@ void TestAttackWitnesses() {
         const bool next=frame==322;
         assert(bullets->Pool().ActiveCount()==(first||second ? 5U : next ? 6U : 0U));
     }
-    start(stage3::meiling::RainNonspell,16500);
+    start(bosses::MeilingBoss::Behaviors::RainNonspell,16500);
     for(int frame=0;frame<=340;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         const bool rings=(frame>=160&&frame<=165)||(frame>=236&&frame<=241);
@@ -106,20 +108,20 @@ void TestAttackWitnesses() {
         assert(bullets->Pool().ActiveCount()==(rings ? 24U : rain ? 1U : 0U));
         if(rain)bullets->Pool().ForEachActive([](const Bullet& b){Near(b.acceleration.x,0);Near(b.acceleration.z,-4.33928585F);});
     }
-    start(stage3::meiling::ColorfulRain,3400);
+    start(bosses::MeilingBoss::Behaviors::ColorfulRain,3400);
     for(int frame=0;frame<=365;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         const bool first=(frame>=120&&frame<=196&&(frame-120)%4==0)||(frame>=360&&(frame-360)%4==0);
         const bool second=frame>=300&&frame<=357&&(frame-300)%3==0;
         assert(bullets->Pool().ActiveCount()==(first||second ? 4U : 0U));
     }
-    start(stage3::meiling::DazzlingColorTyphoon,2000);
+    start(bosses::MeilingBoss::Behaviors::DazzlingColorTyphoon,2000);
     for(int frame=0;frame<200;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
         const std::size_t expected=frame<180 ? 0 : (frame-180)%6==0||(frame-180)%6==3 ? 2 : 1;
         assert(bullets->Pool().ActiveCount()==expected);
     }
-    start(stage3::meiling::SummoningNonspell,12000);std::vector<behavior::Spawn> summons;
+    start(bosses::MeilingBoss::Behaviors::SummoningNonspell,12000);std::vector<behavior::Spawn> summons;
     actor.Animate(71);actor.SetPoses({71,71,71,67,68});
     for(int frame=0;frame<=220;++frame) {
         bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
@@ -132,7 +134,7 @@ void TestAttackWitnesses() {
     std::array<bool,3> choices{};
     for(unsigned seed:{1U,48U,49U}) {
         unsigned random=seed;const int choice=Next(random)%3;choices[choice]=true;
-        actor.Reset({},12000,seed);stage3::ConfigureBehavior(actor,false);actor.Start(stage3::meiling::SummoningNonspell(actor));
+        actor.Reset({},12000,seed);stage3::ConfigureBehavior(actor,false);actor.Start(bosses::MeilingBoss::Behaviors::SummoningNonspell(actor));
         for(int frame=0;frame<=220;++frame) {bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);}
         const std::size_t count=choice==0 ? 36 : choice==1 ? 16 : 26;
         assert(bullets->Pool().ActiveCount()==count);
@@ -150,12 +152,12 @@ void TestAttackWitnesses() {
     }
 }
 void TestBossTransitions() {
-    auto bullets=std::make_unique<BulletSystem>();stage3::Stage3Boss boss(true,behavior::UpdateRate::Hz60,false);
-    assert(boss.phase==0&&!boss.CanTakeDamage()&&!boss.MusicOnEntrance());
-    boss.Update(2,{},*bullets);boss.ResumeCombat();assert(boss.phase==1&&boss.health==14000&&!boss.CanTakeDamage());
+    auto bullets=std::make_unique<BulletSystem>();bosses::MeilingBoss boss(behavior::UpdateRate::Hz60,false);boss.StartBoss(stage3::MeilingFinalConfig());
+    assert(boss.attack==0&&!boss.CanTakeDamage()&&!boss.MusicOnEntrance());
+    boss.Update(2,{},*bullets);boss.ResumeCombat();assert(boss.attack==1&&boss.health==14000&&!boss.CanTakeDamage());
     constexpr std::array<int,6> health{14000,1900,12000,16500,3400,2000},seconds{30,30,40,40,36,36};
     for(int phase=1;phase<=6;++phase) {
-        assert(boss.phase==phase&&boss.health==health[phase-1]);bool ended=false;
+        assert(boss.attack==phase&&boss.health==health[phase-1]);bool ended=false;
         if(phase==2||phase==5||phase==6) {
             const auto* card=spell::Find(2,phase==2 ? 1 : phase==5 ? 3 : 4,1);
             assert(card&&boss.SpellCardNumber()==card->number&&std::string_view(boss.SpellName())==card->name);
@@ -163,16 +165,16 @@ void TestBossTransitions() {
         for(int frame=0;frame<=seconds[phase-1]*60+1&&!ended;++frame) {
             bullets->Reset();ended=boss.Update(1.0F/60,{2,3,-6},*bullets);
         }
-        assert(ended&&boss.health>0&&!boss.PhaseDefeated());assert(boss.AdvancePhase());
+        assert(ended&&boss.health>0&&!boss.SkillDefeated());assert(boss.AdvanceSkill());
     }
-    for(int i=0;i<65&&boss.active;++i)if(boss.Update(1.0F/60,{},*bullets))boss.AdvancePhase();
+    for(int i=0;i<65&&boss.active;++i)if(boss.Update(1.0F/60,{},*bullets))boss.AdvanceSkill();
     assert(!boss.active&&!boss.Defeated());
-    stage3::Stage3Boss mid(false,behavior::UpdateRate::Hz60,false);
+    bosses::MeilingBoss mid(behavior::UpdateRate::Hz60,false);mid.StartBoss(stage3::MeilingMidbossConfig());
     for(int i=0;i<=100;++i)mid.Update(1.0F/60,{},*bullets);assert(mid.CanTakeDamage());
-    mid.health=1299;assert(mid.ShouldAdvanceFromDamage());assert(mid.AdvancePhase()&&mid.phase==2&&mid.health==1300&&!mid.CanTakeDamage());
+    mid.health=1299;assert(mid.ShouldAdvanceFromDamage());assert(mid.AdvanceSkill()&&mid.attack==2&&mid.health==1300&&!mid.CanTakeDamage());
     for(int i=0;i<=120;++i)mid.Update(1.0F/60,{},*bullets);assert(mid.CanTakeDamage()&&mid.SpellCardNumber()==22);
-    mid.health=0;assert(mid.AdvancePhase());int drops=0;
-    for(int i=0;i<182&&mid.active;++i) {const bool ended=mid.Update(1.0F/60,{},*bullets);for(int n:mid.DropEvents())drops+=n;if(ended)mid.AdvancePhase();}
+    mid.health=0;assert(mid.AdvanceSkill());int drops=0;
+    for(int i=0;i<182&&mid.active;++i) {const bool ended=mid.Update(1.0F/60,{},*bullets);for(int n:mid.DropEvents())drops+=n;if(ended)mid.AdvanceSkill();}
     assert(!mid.active&&mid.Defeated()&&drops==5);
 }
 void TestSceneAndTimelineWaits() {
@@ -231,7 +233,7 @@ void TestSpatialAndDisplayRates() {
             }
         }
     }
-    behavior::Actor rain(behavior::UpdateRate::Hz60);rain.Reset({},3400,7);stage3::ConfigureBehavior(rain);rain.Start(stage3::meiling::ColorfulRain(rain));
+    behavior::Actor rain(behavior::UpdateRate::Hz60);rain.Reset({},3400,7);stage3::ConfigureBehavior(rain);rain.Start(bosses::MeilingBoss::Behaviors::ColorfulRain(rain));
     std::array<int,8> bands{};
     for(int frame=0;frame<400;++frame) {
         bullets->Reset();rain.Update(1.0F/60,{2,3,-6},*bullets);
@@ -246,7 +248,7 @@ void TestEntranceAndDepartureSourceBoundaries() {
     auto bullets=std::make_unique<BulletSystem>();
     for(bool middle:{false,true}) {
         behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({7.14285707F,0,14.2857141F},13000,7);
-        stage3::ConfigureBehavior(actor,false);actor.Start(middle ? stage3::meiling::Midboss(actor) : stage3::meiling::Entrance(actor));
+        stage3::ConfigureBehavior(actor,false);actor.Start(middle ? bosses::MeilingBoss::Behaviors::Midboss(actor) : bosses::MeilingBoss::Behaviors::Entrance(actor));
         for(int frame=0;frame<110;++frame) {
             actor.Update(1.0F/60,{},*bullets);const float fraction=frame>=99 ? 1 : std::pow(frame/100.0F,2.0F);
             Near(actor.position.x,(352-160*fraction-192)*20/448);
@@ -256,7 +258,7 @@ void TestEntranceAndDepartureSourceBoundaries() {
         }
     }
     behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({2,0,4},100,7);stage3::ConfigureBehavior(actor,false);
-    actor.motion.clamped=true;actor.Start(stage3::meiling::MidbossTimeout(actor));
+    actor.motion.clamped=true;actor.Start(bosses::MeilingBoss::Behaviors::MidbossTimeout(actor));
     for(int frame=0;frame<180;++frame)actor.Update(1.0F/60,{},*bullets);
     assert(actor.position.z>12&&!actor.motion.clamped);
 }

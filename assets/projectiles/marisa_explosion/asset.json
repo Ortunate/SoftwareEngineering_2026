@@ -1,0 +1,340 @@
+{
+  "asset": "marisa_explosion",
+  "kind": 3,
+  "triangles": 280,
+  "glowTriangles": 664,
+  "triangleHardLimit": 960,
+  "axis": "+Y",
+  "humanAcceptance": "approved",
+  "variants": [
+    {
+      "script": 97,
+      "scale": [
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "alpha": 96,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.07500000298023224,
+        0.07500000298023224
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            96
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            67
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.800000011920929,
+            0.800000011920929
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 11,
+          "args": [
+            0.07500000298023224,
+            0.07500000298023224
+          ]
+        },
+        {
+          "frame": 6,
+          "opcode": 12,
+          "args": [
+            0,
+            14
+          ]
+        },
+        {
+          "frame": 20,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 98,
+      "scale": [
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "alpha": 96,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.10000000149011612,
+        0.10000000149011612
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            96
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            67
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.800000011920929,
+            0.800000011920929
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 11,
+          "args": [
+            0.10000000149011612,
+            0.10000000149011612
+          ]
+        },
+        {
+          "frame": 6,
+          "opcode": 12,
+          "args": [
+            0,
+            14
+          ]
+        },
+        {
+          "frame": 20,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 99,
+      "scale": [
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "alpha": 96,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.125,
+        0.125
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            96
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            67
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.800000011920929,
+            0.800000011920929
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 11,
+          "args": [
+            0.125,
+            0.125
+          ]
+        },
+        {
+          "frame": 6,
+          "opcode": 12,
+          "args": [
+            0,
+            14
+          ]
+        },
+        {
+          "frame": 20,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 100,
+      "scale": [
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "alpha": 96,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.15000000596046448,
+        0.15000000596046448
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            96
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            67
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.800000011920929,
+            0.800000011920929
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 11,
+          "args": [
+            0.15000000596046448,
+            0.15000000596046448
+          ]
+        },
+        {
+          "frame": 6,
+          "opcode": 12,
+          "args": [
+            0,
+            14
+          ]
+        },
+        {
+          "frame": 20,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    }
+  ],
+  "collision": {
+    "shape": "closed mesh union",
+    "file": "collision.bin"
+  },
+  "glowCollides": false,
+  "displayTrianglesWithGlow": 944,
+  "collisionDiametersPixels": [
+    32,
+    42,
+    48,
+    48
+  ],
+  "acceptanceFingerprint": "9f6a52bbf023479269058030ae29a6f63d7984d009004b5dd39fdc2108ee0dbe"
+}

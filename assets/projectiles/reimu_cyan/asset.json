@@ -1,0 +1,12 @@
+{
+  "asset": "reimu_cyan",
+  "triangles": 108,
+  "displayTrianglesWithGlow": 216,
+  "triangleHardLimit": 256,
+  "humanAcceptance": "approved",
+  "axis": "+Y",
+  "collision": "closed solid; glow excluded",
+  "texture": "seal.png",
+  "referenceAnm": 65,
+  "acceptanceFingerprint": "748298427f683fecc0212e27c1aba1c146cee5f25223ca8d1f6a6ad331c6cab7"
+}

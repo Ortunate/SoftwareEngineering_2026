@@ -1,0 +1,28 @@
+{
+  "asset": "laser_default",
+  "variant": 0,
+  "colors": 16,
+  "triangles": 288,
+  "triangleHardLimit": 384,
+  "humanAcceptance": "approved",
+  "axis": "+Y",
+  "units": "parameterized; endpoints at Y=0,1; cap offsets in radius units",
+  "collision": {
+    "shape": "capsule",
+    "parameters": [
+      "origin",
+      "unitDirection",
+      "length",
+      "radius"
+    ],
+    "haloCollides": false
+  },
+  "reference": {
+    "anm": 0,
+    "sprites": [
+      0,
+      15
+    ]
+  },
+  "interpretation": "continuous band"
+}

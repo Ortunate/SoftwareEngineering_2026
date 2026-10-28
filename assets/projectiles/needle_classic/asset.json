@@ -1,0 +1,37 @@
+{
+  "asset": "needle_classic",
+  "nativeType": 5,
+  "effectiveColors": 16,
+  "representativeColor": 2,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "双端尖棱晶、直柱中段、白色主面和彩色侧棱",
+  "collisionSemantics": "全部棱晶实体",
+  "humanAcceptance": "approved",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 96,
+  "revision": 2,
+  "vertexChannels": {
+    "r": "fixed highlight mask",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "FacetedCrystal",
+      "role": 0,
+      "collision": true,
+      "triangles": 32
+    }
+  ],
+  "triangles": 32,
+  "collisionTriangles": 32,
+  "humanAcceptanceBy": [
+    "user"
+  ],
+  "humanAcceptanceDate": "2026-10-28",
+  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision."
+}

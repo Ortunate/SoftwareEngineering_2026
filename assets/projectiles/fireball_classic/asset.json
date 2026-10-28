@@ -1,0 +1,78 @@
+{
+  "asset": "fireball_classic",
+  "nativeType": 7,
+  "effectiveColors": 1,
+  "representativeColor": 0,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "稳定白黄热核与红橙色立体火焰瓣、循环形变",
+  "collisionSemantics": "稳定热核有碰撞，外焰和尾部是装饰",
+  "humanAcceptance": "approved",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 384,
+  "revision": 2,
+  "vertexChannels": {
+    "r": "fixed highlight mask",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "StableHotCore",
+      "role": 0,
+      "collision": true,
+      "triangles": 80
+    },
+    {
+      "name": "FlameTongue_0",
+      "role": 2,
+      "collision": false,
+      "triangles": 58
+    },
+    {
+      "name": "FlameTongue_1",
+      "role": 2,
+      "collision": false,
+      "triangles": 58
+    },
+    {
+      "name": "FlameTongue_2",
+      "role": 2,
+      "collision": false,
+      "triangles": 58
+    },
+    {
+      "name": "FlameTongue_3",
+      "role": 2,
+      "collision": false,
+      "triangles": 58
+    }
+  ],
+  "animation": {
+    "referenceFrames": [
+      0,
+      5,
+      10,
+      15
+    ],
+    "referenceSprites": [
+      118,
+      119,
+      120,
+      121
+    ],
+    "loopFrames": 20,
+    "fps": 60,
+    "method": "continuous bounded deformation; stable collision core"
+  },
+  "triangles": 312,
+  "collisionTriangles": 80,
+  "humanAcceptanceBy": [
+    "user"
+  ],
+  "humanAcceptanceDate": "2026-10-28",
+  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision."
+}

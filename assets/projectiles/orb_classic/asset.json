@@ -1,0 +1,43 @@
+{
+  "asset": "orb_classic",
+  "nativeType": 3,
+  "effectiveColors": 16,
+  "representativeColor": 2,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "白亮内核、半透明球壳、柔和边缘",
+  "collisionSemantics": "外壳外表面围成的整个实体，内部有碰撞",
+  "humanAcceptance": "approved",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 320,
+  "revision": 2,
+  "vertexChannels": {
+    "r": "fixed highlight mask",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "BrightCore",
+      "role": 0,
+      "collision": false,
+      "triangles": 140
+    },
+    {
+      "name": "TransparentOuterShell",
+      "role": 1,
+      "collision": true,
+      "triangles": 168
+    }
+  ],
+  "triangles": 308,
+  "collisionTriangles": 168,
+  "humanAcceptanceBy": [
+    "user"
+  ],
+  "humanAcceptanceDate": "2026-10-28",
+  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision."
+}

@@ -1,0 +1,391 @@
+{
+  "asset": "bubble_classic",
+  "nativeType": 9,
+  "effectiveColors": 5,
+  "representativeColor": 1,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "收紧内部球、加厚白亮外球壳与静态三维放射尖丝",
+  "collisionSemantics": "白色光圈内缘以内的整个球体有碰撞（半径 0.40）；白色光圈不参与",
+  "humanAcceptance": "pending",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 768,
+  "revision": 2,
+  "vertexChannels": {
+    "r": "fixed highlight mask",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "InnerVisualSphere",
+      "role": 0,
+      "collision": false,
+      "display": true,
+      "triangles": 120
+    },
+    {
+      "name": "TransparentOuterShell",
+      "role": 1,
+      "collision": false,
+      "display": true,
+      "triangles": 288
+    },
+    {
+      "name": "StaticRadialFilament_00",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_01",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_02",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_03",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_04",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_05",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_06",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_07",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_08",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_09",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_10",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_11",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_12",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_13",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_14",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_15",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_16",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_17",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_18",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_19",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_20",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_21",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_22",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_23",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_24",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_25",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_26",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_27",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_28",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_29",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_30",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_31",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_32",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_33",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_34",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_35",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_36",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_37",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_38",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_39",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_40",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_41",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_42",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_43",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_44",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_45",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_46",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "StaticRadialFilament_47",
+      "role": 2,
+      "collision": false,
+      "display": true,
+      "triangles": 6
+    },
+    {
+      "name": "CollisionInsideHalo",
+      "role": 0,
+      "collision": true,
+      "display": false,
+      "triangles": 288
+    }
+  ],
+  "bubbleStructure": {
+    "outerRadius": 0.5,
+    "innerVisualRadius": 0.19,
+    "collisionRadius": 0.4,
+    "filaments": 48,
+    "animated": false,
+    "radiusBasis": "entire volume inside white halo; same outer-shell topology scaled by 0.8"
+  },
+  "triangles": 696,
+  "collisionTriangles": 288
+}

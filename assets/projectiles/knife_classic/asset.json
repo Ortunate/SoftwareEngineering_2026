@@ -1,0 +1,49 @@
+{
+  "asset": "knife_classic",
+  "nativeType": 8,
+  "effectiveColors": 8,
+  "representativeColor": 1,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "短直刀、短护手、中央贯通孔的圆柱柄，纯色刃脊",
+  "collisionSemantics": "刀刃、护手、穿孔圆柱柄实体并集；柄孔为空",
+  "humanAcceptance": "approved",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 256,
+  "revision": 2,
+  "vertexChannels": {
+    "r": "fixed highlight mask",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "DoubleBevelBlade",
+      "role": 0,
+      "collision": true,
+      "triangles": 14
+    },
+    {
+      "name": "ShortGuard",
+      "role": 0,
+      "collision": true,
+      "triangles": 12
+    },
+    {
+      "name": "PiercedCylinderHandle",
+      "role": 0,
+      "collision": true,
+      "triangles": 96
+    }
+  ],
+  "triangles": 122,
+  "collisionTriangles": 122,
+  "humanAcceptanceBy": [
+    "user"
+  ],
+  "humanAcceptanceDate": "2026-10-28",
+  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision."
+}

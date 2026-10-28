@@ -1,101 +1,62 @@
-# 敌方普通弹体整组交付与验收
+# 普通弹体模型与独立审阅
 
-最新碰撞纠正：Type 9 泡弹以白色光圈内缘为危险体积边界（半径 0.40），圈内全部参与碰撞，包含尖丝与空隙；外光圈无碰撞。暗中心球半径 0.19 只控制显示，不是碰撞范围。当前泡弹显示 696 面、碰撞 288 面。J 的预设现为内部体积/白色光圈/外部，预期 CONTACT/CLEAR/CLEAR。下文早期“只有内部球碰撞”的说明作废，详见修订记录顶部。
+本组为 Type 0–9 普通敌弹，共 118 个有效颜色组合；颜色通过实例参数变化，不复制模型。苦无及其他八类已由用户验收通过，泡弹待最终复验。具体记录以各目录 asset.json 为准。激光、自机弹和 Bomb 不属于本组。
 
-2026-10-28 最新人工状态：用户确认苦无之外的八类通过，当前仅 Type 9 大泡待复验。泡弹已按反馈收紧内球与尖丝内端、加厚外侧白亮光圈；当前内部球半径 0.19。下文早期“新九类待验收”描述为制作阶段历史，具体状态以各类 `asset.json` 为准。
+## 文件组织
 
-按用户最新要求，先逐件完成剩余九类模型，再统一执行资产、碰撞、图形与性能测试。本轮涵盖 Type 0–9 普通敌弹；苦无 Type 4 保留原已验收资源，八类新增资产已由用户验收通过，Type 9 大泡待最终复验。激光、自机弹、Bomb 不在本组中。
+所有正式资源位于 `assets/projectiles/`，每个 `*_classic/` 目录对应一个弹体类型：
 
-当前为第二轮修订：小刀圆柱柄贯通孔、泡弹双层球与静态三维尖丝、三种 orb 的独立原图特征。详细依据、结构和本轮测试见 [第二轮修订记录](PROJECTILE_COLLECTION_REVISION2.md)。
+| Type | 目录 | 弹体 | 颜色数 | 显示 / 碰撞三角形 |
+| --- | --- | --- | ---: | ---: |
+| 0 | pellet_classic | 粒弹 | 16 | 120 / 120 |
+| 1 | ring_orb_classic | 环形小玉 | 16 | 308 / 168 |
+| 2 | rice_classic | 米弹 | 16 | 120 / 120 |
+| 3 | orb_classic | 实心小玉 | 16 | 308 / 168 |
+| 4 | kunai_classic | 苦无 | 16 | 146 / 146 |
+| 5 | needle_classic | 针形弹 | 16 | 32 / 32 |
+| 6 | large_orb_classic | 大玉 | 8 | 512 / 288 |
+| 7 | fireball_classic | 火球 | 1 | 312 / 80 |
+| 8 | knife_classic | 小刀 | 8 | 122 / 122 |
+| 9 | bubble_classic | 泡弹 | 5 | 696 / 288 |
 
-## 资源清单
+每个目录包含六个文件：
 
-| Type | 弹体 | 目录（相对 assets/projectiles） | 有效颜色 | 显示总面数 | 精确碰撞面数 |
-| --- | --- | --- | ---: | ---: | ---: |
-| 0 | 粒弹 | pellet_classic | 16 | 120 | 120 |
-| 1 | 环形小玉 | ring_orb_classic | 16 | 308 | 168 |
-| 2 | 米弹 | rice_classic | 16 | 120 | 120 |
-| 3 | 实心小玉 | orb_classic | 16 | 308 | 168 |
-| 4 | 苦无（已通过） | kunai_classic | 16 | 146 | 146 |
-| 5 | 针形弹 | needle_classic | 16 | 32 | 32 |
-| 6 | 大玉 | large_orb_classic | 8 | 512 | 288 |
-| 7 | 火球 | fireball_classic | 1 | 312 | 80 |
-| 8 | 刀弹 | knife_classic | 8 | 122 | 122 |
-| 9 | 大泡 | bubble_classic | 5 | 696 | 288 |
+- `<目录名>.blend`：可编辑制作源文件，保留分部件结构；材质预览为制作辅助。
+- `<目录名>.gltf` 和同名 `.bin`：配套的运行时显示模型，必须一起使用；每类一个共享网格、一个材质。
+- `collision.bin`：KCOL0001 格式碰撞数据，闭合部件取并集，保留真实孔洞。
+- `asset.json`：类型编号、面数、颜色数量、部件角色、碰撞语义及人工验收状态。
+- `REVIEW.md`：本类结构与人工检查项目。
 
-每类一份 `.blend`、glTF/bin、`collision.bin`、`asset.json`、`REVIEW.md`。颜色是实例参数，不复制网格；合计 118 个有效组合，其中新增 102 个。所有模型都有真实厚度，使用纯色、亮面遮罩和程序化材质，无原精灵贴图拉伸。原图仅用于独立审阅对照，来源见 [references/SOURCE.md](../assets/projectiles/references/SOURCE.md)。
+`references/` 是原作对照图片和来源说明，仅供查看器对照，不作为模型贴图。当前模型使用纯色、顶点遮罩和程序化着色，无额外纹理目录。被否定的银色写实苦无及其 2K 贴图、专用制作和查看工具已移除；旧版内容可从 Git 历史查阅。
 
-三种 orb 最外层为半透明三维球壳，整个外壳包围体有碰撞。大泡在白色光圈内缘以内的整个体积有碰撞（半径 0.40），包含尖丝区域及空隙；最内侧暗球半径 0.19 只控制显示，外侧白色光圈无碰撞。刀柄为有真实贯通孔的圆柱。火球稳定热核有碰撞，动态外焰是无碰撞装饰；其 20 个 60 Hz 内容帧循环已从原 ANM 脚本确认，使用 1/3 秒连续形变表达四个原相位。
+## 形体与碰撞约定
 
-球壳、尖丝和火焰使用**加色能量材质**，透明层保留深度测试、关闭深度写入；泡内球用乘法衰减背景，之后叠加外壳和尖丝，不进行逐实例深度排序。该分层是风格化能量显示，不是物理玻璃透射。极高重叠仍可能泛白，浅色背景对比度降低；泡内球吸收与跨类别加色的先后固定，不能宣称所有透明效果在任意混合顺序下等价。
++Y 为弹尖，+Z 为正面；球体显示直径为 1，方向弹总长约为 1。实例只允许正的统一缩放和单位四元数。模型归一化尺寸不代表游戏世界尺寸。
 
-## 启动与操作
+实体弹碰撞从最终几何导出；小刀使用圆柱柄、沿正背贯通的纵向孔，孔内为空。三种 orb 的外球体整体参与碰撞；环形小玉是白核、暗间隔、彩色环带，实心小玉是紧凑连续柔边，大玉是更宽的柔边。原图源矩形比例为 1∶1∶2，对照时保留家族相似性。
 
-双击根目录 **`Review-Projectiles.cmd`**，或运行 `Review-Kunai.cmd -Action collection`。窗口可缩放，画布等比显示，截图固定为 1520×1000。程序独立链接 raylib，不启动关卡、不读取玩家数据。原苦无单件查看器仍使用 `Review-Kunai.cmd`。
+泡弹显示由半径 0.19 的暗中心球、外半径 0.5 的透明球壳、48 根静态三维尖丝组成。**碰撞覆盖白色光圈内缘以内的整个体积，半径 0.40，包含尖丝区域及空隙；外白色光圈无碰撞。** 碰撞网格采用外球壳相同拓扑缩放 0.8，单独导出，不加入显示模型。暗中心球不是碰撞范围。
 
-| 操作 | 功能 |
-| --- | --- |
-| Tab / Shift+Tab / 点击左侧列表 | 选择下一类 / 上一类 / 指定类别 |
-| C / 色块 | 切换本类有效颜色 |
-| T / A | 本类全部颜色 / 十类同屏总览 |
-| 1 / 2 / 3 | 成品 / 灰模 / 线框 |
-| 4 / 5 | 精确碰撞单显 / 精确碰撞叠加 |
-| 6 / 7 | 内核或实体单显 / 球壳或火焰单显 |
-| 8 / 9 | 外球壳单显 / 尖丝或火焰单显 |
-| V | 三种 orb 同色等尺寸 / 原图尺寸比例 1∶1∶2 / 退出对照 |
-| J | 泡弹危险体积内 / 白色光圈 / 外壳之外探针预设 |
-| G / Q、E | 光效开关 / 光效强度 |
-| [、] | 球壳与装饰外焰透明度 |
-| B / O | 深色、浅色、中性背景 / 三颗交错重叠 |
-| P / H | 探针开关 / 体积中心或柄孔预设 |
-| 方向键 / PgUp、PgDn / +、- | 探针 XY / Z / 球半径 |
-| Space / 逗号、句号 | 暂停动画 / 每次倒退、前进 1/60 秒 |
-| 左键拖动 / 滚轮 / R | 旋转 / 缩放 / 重置相机 |
-| F12 | 截图保存到项目 output 目录 |
+火球只有稳定热核参与碰撞，动态外焰为装饰。原 ANM 在 0/5/10/15 内容帧换相，第 20 帧跳回，三维形变按 60 Hz 的 1/3 秒循环。
 
-绿色 CLEAR 为无接触，橙色 CONTACT 为接触。多件展示时单件探针没有比较意义，应回到单件模式后检查。球壳关闭后，实体碰撞仍保持不变；刀和苦无探针放在柄孔时应为 CLEAR。泡弹 J 的三个预设分别应为 CONTACT、CLEAR、CLEAR；默认探针半径 0.02，较大探针可能从球间位置接触内部球。
+球壳、尖丝与火焰采用加色，泡暗球乘法衰减背景；透明层深度测试开启、深度写入关闭，按固定角色顺序绘制，不做逐弹深度排序。高覆盖泛白和浅背景对比度仍是边界，详见[性能记录](PROJECTILE_COLLECTION_PERFORMANCE.md)。
 
-自动截图命令：`Review-Kunai.cmd -Action capture-collection`。输出位于 `output/projectile-review/collection/`，每类 20 张，加十类同屏总览、两种 orb 对照、泡弹三层拆解和球外探针、小刀圆柱侧视，共 209 张。截图与自动检查均不代替用户验收。
+## 独立查看与制作
 
-右下角提供固定相机下 8/16/32/64 像素画布预览，便于与主视图的大幅放大区分；标注是画布边长，不声称物体恰好占满该高度。当前采用低面数游戏网格，放大后可看到轮廓分段。验收同时检查常用镜头尺寸下的轮廓和颜色可读性，不能用大光晕掩盖实际体积或碰撞边界。
+双击 `Review-Projectiles.cmd` 查看全组，`Review-Kunai.cmd` 查看苦无单件。查看器不启动游戏。Tab 选类型，C 切颜色，T 全色，A 十类总览，V 三种 orb 等尺寸/原图比例对照。鼠标旋转，滚轮缩放。
 
-## raylib 接口
+1/2/3 为成品/灰模/线框，4/5 为碰撞单显/叠加，6 为本体，7 为全部装饰，8 为球壳，9 为尖丝/火焰。G 开关光效，B 切背景，O 看重叠。P 开关探针，H 置于中心或柄孔，J 切泡弹内部体积/白光圈/外部（默认探针预期 CONTACT/CLEAR/CLEAR）。方向键与 PgUp/PgDn 移探针，+/- 调半径。Space 暂停，逗号/句号逐帧，F12 截图。
 
-资源可由 raylib 5.5 读取，完整材质需要配套 `collection_renderer.*` 与 `shaders/collection.*`（OpenGL 3.3）。顶点 `COLOR_0.r` 表示亮面、`.g` 表示实体/球壳/装饰角色、`.b` 表示火焰相位；装饰角色在 Type 7 是动态火焰，在 Type 9 是静态尖丝。普通 `DrawModel` 不会解释这些编码，不能作为最终效果。
+`Review-Projectiles.cmd -Action capture-collection` 导出 209 张审阅截图；`-Action test` 构建并执行资产检查及两项 CTest；`Stress-Projectiles.cmd` 跑完整压测。输出均在忽略的 `output/projectile-review/` 和 `build/projectile-review/`。
 
-```cpp
-// InitWindow 之后构造，CloseWindow 之前销毁；总容量为共享池容量。
-review::CollectionRenderer renderer(projectRoot, BulletSystem::kCapacity);
-review::CollectionInstance p;
-p.type = 3;
-p.transform.appearance = review::AppearanceFor(3, 2);
-p.transform.position = worldPosition;
-p.transform.rotation = unitQuaternion;
-p.transform.scale = worldLength;
-p.shellOpacity = 0.65f;
-// instances 由调用方持久保存；camera 必须是透视相机。
-renderer.Prepare(instances, camera, width / float(height));
-BeginMode3D(camera);
-renderer.Draw(animationSeconds, true);
-EndMode3D();
-```
+制作脚本位于 `tools/projectile_review/`：`create_classic.py` 制作苦无，`create_collection.py` 制作其余九类，后者支持 `--only-bubble` 单件返修。全组重新生成会重置对应人工验收状态。工具依赖保存在项目 `.tools/`、`.deps/`，缓存位于 `.cache/`，启动器在子进程设置环境。
 
-坐标 +Y 为弹尖、+Z 为正面；球体直径为 1，方向弹总长约为 1。`scale` 必须是正的统一缩放。不同类型实际世界尺寸由接入方明确设置，不把目录图尺寸当物理尺寸。`phase` 是每个实例的有限弧度偏移；`shellOpacity` 为 0–1。已有颜色/光效参数范围沿用苦无：强度 0–2、宽度 0–0.025 标准化长度。
+## raylib 接入接口
 
-8192 是全部玩家/敌方弹幕共享上限。渲染器十类共享一份 768 KiB GPU 实例缓冲；CPU 打包缓冲也是 768 KiB，另有 32 KiB 可见性索引，网格/碰撞各一份。每帧只更新缓冲内容，无逐弹 GPU 对象或堆分配。普通实体类开启光效共 2 次绘制；三种 orb 3 次，大泡 4 次（内球、外壳、尖丝、仅外壳光效），火球 3 次。混合类型调用数按实际非空批次累加。
+使用 raylib 5.5 / OpenGL 3.3，完整效果需配套 `collection_renderer.*` 与 `shaders/collection.*`；普通 DrawModel 不会解释顶点角色编码。COLOR_0.r 为亮面遮罩，g 为角色/2（实体、壳、装饰），b 为火焰相位；只有火球装饰形变，泡尖丝静态。
 
-碰撞复用 `CollisionAsset` 和每线程预分配的 `CollisionScratch`，调用 `TouchesInstance`。显示剔除不影响碰撞。正式游戏当前仍使用球/胶囊判定；本次没有接入游戏的命中、擦弹和清弹流程，也没有提供连续扫掠。后续接入必须同时处理这些语义与高速运动穿透。
+构造 `CollectionRenderer(projectRoot, sharedCapacity)`，为每个 `CollectionInstance` 设置 type、transform、AppearanceFor(type,color)、shellOpacity 与 phase。先 Prepare(instances,camera,aspect)，再在 BeginMode3D/EndMode3D 中 Draw(seconds,glow)。秒数非负有限、透明度 0–1；光效强度 0–2、宽度 0–0.025。资源在窗口上下文存在时创建和销毁。
 
-## 统一检查与性能实验
+8192 是全部弹体共享容量。共享实例 GPU/CPU 打包缓冲各 768 KiB，可见索引 32 KiB；无逐弹 GPU 对象。实体类带光效 2 次绘制、三种 orb 3 次、泡弹 4 次、火球 3 次；混合弹种调用数累加。Collision(type) 返回碰撞资产，配合每线程复用 CollisionScratch 和 TouchesInstance 查询，显示剔除不改变物理状态。
 
-`Review-Kunai.cmd -Action test` 构建并检查两版苦无及全组模型，包括面预算、有限坐标、法线、三角形非退化、碰撞部件闭合、同源逐三角形匹配、颜色取模、真实孔洞、世界变换、光效独立性、透明层可见性、火球动画、容量、剔除与 GL 状态。
-
-`Stress-Projectiles.cmd` 执行完整实验，约 20 分钟。测试窗口可见、1920×1080、关闭垂直同步和限帧、无 MSAA。每种新弹先诊断 1024/4096 发，然后对 8192 静态无光效、8192 运动全色带光效分别预热 3 秒、采样 10 秒、重复 3 次。
-
-另测五类球壳/火焰的极近覆盖、三种混合构成、75% 视锥剔除、大量窄相候选与 1024/4096/8192 简化二维基线。共 18 个短时诊断、31 个完整场景，111 次运行；诊断数据不参与验收结论。混合构成的各类确切数量记录在 CSV `type_counts`，所有场景的总活动量均未超过 8192。
-
-记录 CPU 更新、精确碰撞、打包上传、绘制提交、整帧及异步 GPU 的均值/P50/P95/P99，并记录候选数、命中数、实际绘制/面数和 GPU 样本跳过数。能量壳使用加色混合，因此排序成本为零；sprite 调用数为按 raylib 默认批容量估计，其他为实际调用计数。完整结果写入 `output/projectile-review/collection/performance/`。
-
-普通 8192 场景目标仍为整帧 P95≤16.7 ms、GPU P95≤6 ms、更新+碰撞 CPU≤2 ms。阶段 CPU 指标使用两阶段各自 P95 相加的保守值。[第一轮报告](PROJECTILE_COLLECTION_PERFORMANCE.md)仅为历史；本轮结果记录于[第二轮修订](PROJECTILE_COLLECTION_REVISION2.md)。独立合成实验不代表完整游戏或最低硬件承诺。
-
-重建九类资源：`Review-Kunai.cmd -Action generate-collection`；该操作重置九类的人工验收状态，不重建已验收苦无。工具、依赖、构建、缓存和截图全部隔离在项目目录。当前九类已通过（含既有苦无），仅大泡待最终复验。
+正式游戏命中、擦弹、清弹和连续运动碰撞尚未接入，独立模型测试不能证明高速运动没有跨帧穿透。

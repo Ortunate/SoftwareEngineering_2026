@@ -1,6 +1,6 @@
 # koumakyou
 
-弹体独立建模首件（Type 4 苦无）通过根目录 `Review-Kunai.cmd` 查看原版风格低面数模型、16 色/光效参数及真实碰撞体；`Review-Kunai.cmd -Action silver` 查看保留的银色样品，`Stress-Kunai.cmd` 运行 8192 发压力测试。工具与依赖隔离在项目目录，不启动游戏；首次准备工具运行 `Setup-Projectile-Tools.cmd`。新版操作、性能范围及 raylib 接口见 [原版风格苦无验收卡](assets/projectiles/kunai_classic/REVIEW.md)，新版已由用户与 leader 人工验收通过。
+弹体独立建模首件（Type 4 苦无）通过根目录 `Review-Kunai.cmd` 查看原版风格低面数模型、16 色/光效参数及真实碰撞体；`Stress-Kunai.cmd` 运行 8192 发压力测试。工具与依赖隔离在项目目录，不启动游戏；首次准备工具运行 `Setup-Projectile-Tools.cmd`。新版操作、性能范围及 raylib 接口见 [原版风格苦无验收卡](assets/projectiles/kunai_classic/REVIEW.md)，新版已由用户与 leader 人工验收通过。
 
 敌方普通弹体整组（Type 0–9）可通过根目录 `Review-Projectiles.cmd` 独立查看模型、色表、球壳/火焰及精确碰撞；`Stress-Projectiles.cmd` 统一测试 8192 发与混合弹种。新增九类已制作，其中八类已人工通过，泡弹待最终复验，操作与接口见 [全组交付说明](docs/PROJECTILE_COLLECTION_REVIEW.md)。
 

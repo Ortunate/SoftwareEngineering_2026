@@ -1,0 +1,296 @@
+{
+  "asset": "bomb_spark",
+  "kind": 3,
+  "triangles": 400,
+  "triangleHardLimit": 960,
+  "parts": {
+    "body": 96,
+    "shell": 48,
+    "effect": 256
+  },
+  "axis": "+Y",
+  "humanAcceptance": "approved",
+  "collision": {
+    "shape": "finite frustum",
+    "parameters": [
+      "origin",
+      "unitDirection",
+      "length",
+      "nearRadius",
+      "farRadius"
+    ]
+  },
+  "decorationsCollide": false,
+  "sourceAtlas": "player01",
+  "scripts": [
+    {
+      "script": 8,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            19
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            16744576
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            64,
+            50
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            1069379748,
+            1069379748
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 180,
+          "opcode": 12,
+          "args": [
+            0,
+            120
+          ]
+        },
+        {
+          "frame": 300,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 9,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            19
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            8454016
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            96,
+            20
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            1069379748,
+            1069379748
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 180,
+          "opcode": 12,
+          "args": [
+            0,
+            120
+          ]
+        },
+        {
+          "frame": 300,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 10,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            19
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            8421631
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            96,
+            20
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            1069379748,
+            1069379748
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 180,
+          "opcode": 12,
+          "args": [
+            0,
+            120
+          ]
+        },
+        {
+          "frame": 300,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 11,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            19
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            8454143
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            64,
+            50
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            1069379748,
+            1069379748
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 180,
+          "opcode": 12,
+          "args": [
+            0,
+            120
+          ]
+        },
+        {
+          "frame": 300,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    }
+  ],
+  "acceptanceFingerprint": "e57898650522ff46a34707e49d890dc2c828071dba72baa7667e9bd41dd30b8a"
+}

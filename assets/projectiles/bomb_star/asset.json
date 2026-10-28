@@ -1,0 +1,226 @@
+{
+  "asset": "bomb_star",
+  "kind": 2,
+  "triangles": 160,
+  "triangleHardLimit": 320,
+  "parts": {
+    "body": 80,
+    "shell": 80,
+    "effect": 0
+  },
+  "axis": "+Y",
+  "humanAcceptance": "approved",
+  "collision": {
+    "shape": "closed mesh",
+    "file": "collision.bin"
+  },
+  "decorationsCollide": false,
+  "sourceAtlas": "player01",
+  "scripts": [
+    {
+      "script": 5,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            18
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            8421631
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            128,
+            30
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 10,
+          "args": [
+            0,
+            0,
+            1036586971
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 220,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 6,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            18
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            8454016
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            128,
+            30
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 10,
+          "args": [
+            0,
+            0,
+            3184070619
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 220,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 7,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            18
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            16744576
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            128,
+            30
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 10,
+          "args": [
+            0,
+            0,
+            1036586971
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 220,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 250,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    }
+  ],
+  "acceptanceFingerprint": "5f9f7490a21238b264511fc8be357b02680fa0e624fbc62f19da616b8a8bf8c2"
+}

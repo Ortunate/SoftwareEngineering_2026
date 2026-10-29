@@ -1,6 +1,5 @@
-"""制作三种 Bomb 源模型、分层光效、独立波纹贴图及原始 ANM 配置，不启动游戏。"""
+"""制作三种 Bomb 源模型、分层光效及原始 ANM 配置，不启动游戏。"""
 import bpy,bmesh,math,json,struct,sys,ast
-import numpy as np
 from pathlib import Path
 ROOT=Path(sys.argv[sys.argv.index('--')+1]).resolve();BASE=ROOT/'assets/projectiles'
 sys.dont_write_bytecode=True;sys.path.insert(0,str(ROOT/'tools/projectile_review'))
@@ -9,11 +8,11 @@ bpy.context.preferences.filepaths.save_version=0;bpy.context.preferences.filepat
 # 只复用无副作用的网格导出函数，不执行其他类别的生成入口。
 tree=ast.parse((ROOT/'tools/projectile_review/create_marisa.py').read_text(encoding='utf-8'))
 for node in tree.body:
- if isinstance(node,ast.FunctionDef) and node.name in ('material','mesh','spindle','sphere','triangle_count','export_group'):exec(compile(ast.Module(body=[node],type_ignores=[]),'<mesh helpers>','exec'))
+ if isinstance(node,ast.FunctionDef) and node.name in ('material','mesh','spindle','triangle_count','export_group'):exec(compile(ast.Module(body=[node],type_ignores=[]),'<mesh helpers>','exec'))
 def sphere(name,r,mat,solid=True):
     profile=[(r,0)]+[(r*math.cos(math.pi*i/8),r*math.sin(math.pi*i/8)) for i in range(1,8)]+[(-r,0)]
     return spindle(name,profile,24,mat,solid=solid)
-NAMES=('bomb_seal','bomb_barrier','bomb_star','bomb_spark')
+SPECS=((0,'bomb_seal'),(2,'bomb_star'),(3,'bomb_spark'))
 def scripts(atlas,ids):
  """保留来源脚本全部指令，帧为 60 Hz；浮点参数仍保留原始位以避免误判指令类型。"""
  b=(ROOT/f'assets/runtime/battle/native/{atlas}.anm').read_bytes();n,m=struct.unpack_from('<II',b);result=[]
@@ -40,10 +39,9 @@ def star(name,scale,mat,solid=True):
  for face in obj.data.polygons:face.use_smooth=False
  return obj
 
-for kind,name in enumerate(NAMES):
+for kind,name in SPECS:
  if "--only-spark" in sys.argv and kind!=3:continue
  if "--only-star" in sys.argv and kind!=2:continue
- if kind==1:continue # 用户取消封魔阵建模，保留原游戏素材与逻辑。
  bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False);out=BASE/name;out.mkdir(parents=True,exist_ok=True)
  mat=material('Body',(1,1,1));fxmat=material('Glow',(1,1,1));body=[];shell=[];effect=[]
  if kind==0:

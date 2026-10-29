@@ -13,9 +13,7 @@ uniform float seconds;
 uniform float opacity;
 uniform float strength;
 uniform vec3 tintMultiplier;
-uniform sampler2D texture0;
 out vec4 finalColor;
-vec3 hue(float a){return .5+.5*cos(a+vec3(0,2.094,4.188));}
 void main(){float facing=abs(dot(normalize(normal),normalize(eye-world)));float rim=pow(1-facing,1.5);
  vec3 colors[4]=vec3[4](vec3(.25,.22,1),vec3(.1,1,1),vec3(.25,1,.1),vec3(1,.15,.18));
  if(kind==3){colors[0]=vec3(1,.5,.5);colors[1]=vec3(.5,1,.5);colors[2]=vec3(.5,.5,1);colors[3]=vec3(.5,1,1);}
@@ -23,7 +21,6 @@ void main(){float facing=abs(dot(normalize(normal),normalize(eye-world)));float 
  vec3 tint=palette>=0?colors[palette%4]:mix(colors[index],colors[(index+1)%4],smoothstep(0.0,1.0,fract(sector)));
  float a=opacity;vec3 c=mix(tint,vec3(1),.15+.65*pow(facing,5));
  if(kind==0){if(layer==0)c=mix(tint,vec3(1),.55);else{c=mix(tint,vec3(1),.2);a*=.6*pow(facing,3.5);}}
- if(kind==1){tint=palette<0?mix(vec3(1,.32,.38),vec3(.5,.4,1),.5+.5*sin(local.y*5+seconds)):palette%2==0?vec3(1,.32,.38):vec3(.5,.4,1);float line=texture(texture0,uv).a*(.75+.25*sin(uv.x*32-seconds*7));c=mix(tint,vec3(1),line*.7);a*=layer==0?.12+.85*line:.35*line;}
  if(kind==2){tint=palette%3==0?vec3(.45,.4,1):palette%3==1?vec3(.4,1,.35):vec3(1,.35,.4);float facet=mix(.65,1.0,step(.5,fract((atan(local.y,local.x)-1.5707963)*.7957747)));c=tint*facet*(.8+.2*facing);if(layer>0){c=tint;a*=layer==1?.15:.24;}}
  if(kind==3){
   float endFade=smoothstep(0.0,.025,local.y)*(1.0-smoothstep(.75,1.0,local.y));

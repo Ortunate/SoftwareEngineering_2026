@@ -36,4 +36,4 @@ verify_bombs.py 检查三款所有显示层预算、文件引用、索引、有�
 
 以八条宽幅螺旋带替代原十二条细直流光，使用横向软边、白金亮芯和彩色边缘，沿束轴向前移动脉冲并缓慢旋转。第一视角形成围绕中央视野的螺旋光流，外部可见交织光纹；主体/外缘保持有限圆台，碰撞参数未改。含效果共 400 面，无性能测试。
 
-新版第一视角：master-spark-first-person.png，外部：bomb_spark-front.png。上一版对照截图仅保留在忽略的审阅输出中：master-spark-first-person-v1.png 和 master-spark-external-v1.png，不保留废弃模型资产。
+新版第一视角：master-spark-first-person.png，外部：bomb_spark-front.png。旧版对照截图及临时诊断文件已清理，仅保留当前审阅截图与正式资产。

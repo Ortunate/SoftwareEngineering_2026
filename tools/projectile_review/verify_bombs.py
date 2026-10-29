@@ -8,8 +8,7 @@ root=Path(sys.argv[1])
 tree=ast.parse((root/'tools/projectile_review/verify_marisa.py').read_text(encoding='utf-8-sig'))
 for n in tree.body:
  if isinstance(n,ast.FunctionDef) and n.name=='gltf_count':exec(compile(ast.Module(body=[n],type_ignores=[]),'<gltf validator>','exec'))
-for kind,name in enumerate(('bomb_seal','bomb_barrier','bomb_star','bomb_spark')):
- if kind==1:continue
+for kind,name in ((0,'bomb_seal'),(2,'bomb_star'),(3,'bomb_spark')):
  d=root/'assets/projectiles'/name;m=json.loads((d/'asset.json').read_text());assert m['kind']==kind and not m['decorationsCollide']
  counts=[gltf_count(d/(file+'.gltf')) if (d/(file+'.gltf')).exists() else 0 for file in (name,'shell','effect')];assert sum(counts)==m['triangles']<=m['triangleHardLimit']<=1000
  assert counts==[m['parts'][x] for x in ('body','shell','effect')]

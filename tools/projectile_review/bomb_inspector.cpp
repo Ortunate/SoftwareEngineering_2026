@@ -1,4 +1,4 @@
-// 本文件独立审阅四种 Bomb 的单件/组合、分层光效与模型/游戏两套体积，绘制不改变游戏数据。
+// 本文件独立审阅三种 Bomb 的单件/组合、分层光效与模型/游戏两套体积，绘制不改变游戏数据。
 #include "collision.hpp"
 #include "bomb_asset.hpp"
 #include "raymath.h"
@@ -9,8 +9,9 @@
 #include <iostream>
 #include <cmath>
 namespace {
-const char* names[]={"bomb_seal","bomb_barrier","bomb_star","bomb_spark"};
-const char* refs[]={"bomb-seal.png","bomb-barrier.png","bomb-stars.png","bomb-spark.png"};
+// kind 沿用 0/2/3 编号；已取消的 1 号槽为空，所有遍历均显式跳过。
+const char* names[]={"bomb_seal",nullptr,"bomb_star","bomb_spark"};
+const char* refs[]={"bomb-seal.png",nullptr,"bomb-stars.png","bomb-spark.png"};
 const float durations[]={5,140/60.F,250/60.F,5};
 // 光炮参数为世界长度；三维演出为独立美术预览，攻击范围对照不参与游戏结算。
 using BombPreview=review::BombAssetInstance;
@@ -45,21 +46,20 @@ int main(int argc,char**argv){try{
    for(int i=-4;i<=4;i++){DrawLine3D({float(i),0,-1.5F},{float(i),18,-1.5F},{55,65,85,255});DrawLine3D({-4,float((i+4)*2),-1.5F},{4,float((i+4)*2),-1.5F},{55,65,85,255});}
    DrawCube({0,15,0},.35F,.35F,.35F,{170,185,205,255});DrawCubeWires({0,15,0},.35F,.35F,.35F,WHITE);
   }
-  for(int k=0;k<4;k++){if(k==1)continue;if(!all&&k!=item.kind)continue;int count=item.combination&&!all?(k==0?7:k==1?6:k==2?64:1):1;
+  for(int k=0;k<4;k++){if(k==1)continue;if(!all&&k!=item.kind)continue;int count=item.combination&&!all?(k==0?7:k==2?64:1):1;
    for(int j=0;j<count;j++){float age=item.seconds;float scale=item.scale;Vector3 pos{all?((k==0?0:k==2?1:2)-1.F)*2.4F:0,k==3?-item.length/2:0,0};if(inside&&!all&&k==3)pos={0,0,0};Vector3 axis{0,1,0};float angle=0;int palette=item.palette;
-    if(count>1){if(k==0){if(age*60<80+j*16)continue;float a=j*2*PI/7;pos={cosf(a)*2,sinf(a)*1.5F,sinf(a*2)*.6F};scale=.65F;}if(k==1){float progress=Clamp((age*60-60)/79,0,1);float d=.3F+2.7F*progress;scale=.5F+2*progress;int side=j%2?1:-1;pos=j/2==0?Vector3{side*d,0,0}:j/2==1?Vector3{0,side*d,0}:Vector3{0,0,side*d};if(j/2==0){axis={0,1,0};angle=90;}if(j/2==1){axis={1,0,0};angle=90;}}if(k==2){float progress=Clamp(age*60/180,0,1);pos={(j%4-1.5F)*1.6F*progress,((j/4)%4-1.5F)*1.6F*progress,(j/16-1.5F)*1.6F*progress};scale=.35F;palette=j%3;}}
+    if(count>1){if(k==0){if(age*60<80+j*16)continue;float a=j*2*PI/7;pos={cosf(a)*2,sinf(a)*1.5F,sinf(a*2)*.6F};scale=.65F;}if(k==2){float progress=Clamp(age*60/180,0,1);pos={(j%4-1.5F)*1.6F*progress,((j/4)%4-1.5F)*1.6F*progress,(j/16-1.5F)*1.6F*progress};scale=.35F;palette=j%3;}}
     float opacity=Clamp(age*60/20,0,1)*Clamp((durations[k]-age)*60/30,0,1);if(mode==1)opacity=1;
     integer(shader,"kind",k);integer(shader,"palette",palette);integer(shader,"clay",mode==1);real(shader,"seconds",age);real(shader,"opacity",opacity*item.opacity);real(shader,"strength",item.strength);SetShaderValue(shader,GetShaderLocation(shader,"tintMultiplier"),&item.color,SHADER_UNIFORM_VEC3);real(shader,"beamLength",item.length);real(shader,"nearRadius",item.nearRadius);real(shader,"farRadius",item.farRadius);
-    bool inBeam=false; // 顺向相机在束体外，显示完整光束，不能套用束内隐藏主体的规则。
-    for(int l=0;l<3;l++){if((k==0&&l==1)||(k==2&&l==2))continue;if(mode==5||mode==6)break;if(mode==1&&l>0)continue;if(mode==2&&l>0)continue;if(mode==3&&l!=1)continue;if(mode==4&&l!=2)continue;if(l==1&&!showShell)continue;if(l==2&&!showFx)continue;if(inBeam&&l!=2)continue;
+    for(int l=0;l<3;l++){if((k==0&&l==1)||(k==2&&l==2))continue;if(mode==5||mode==6)break;if(mode==1&&l>0)continue;if(mode==2&&l>0)continue;if(mode==3&&l!=1)continue;if(mode==4&&l!=2)continue;if(l==1&&!showShell)continue;if(l==2&&!showFx)continue;
      integer(shader,"layer",l);Vector3 p=pos;float size=scale;if(l==2&&k==0)size*=1+std::max(0.F,(age*60-270)/30)*2;
      rlDrawRenderBatchActive();if(l>0||k==3){rlDisableBackfaceCulling();rlDisableDepthMask();BeginBlendMode(BLEND_ADDITIVE);}draw(models[k][l],shader,p,size,axis,angle);if(l>0||k==3){EndBlendMode();rlDrawRenderBatchActive();rlEnableDepthMask();rlEnableBackfaceCulling();}
     }
     Matrix transform=MatrixMultiply(MatrixScale(scale,scale,scale),MatrixMultiply(MatrixRotate(axis,angle*DEG2RAD),MatrixTranslate(pos.x,pos.y,pos.z)));
-    koumakyou::BombVolume volume;if(k==3){volume.shape=koumakyou::BombVolume::Shape::Frustum;volume.origin=pos;volume.end=Vector3Add(pos,{0,item.length,0});volume.radius=item.nearRadius;volume.endRadius=item.farRadius;}else if(k==1){volume.shape=koumakyou::BombVolume::Shape::Slab;volume.origin=pos;volume.halfExtents={.7F*scale,.65F*scale,.045F*scale};}else{volume.origin=pos;volume.radius=(k==0?.5F:1.08F)*scale;}
+    koumakyou::BombVolume volume;if(k==3){volume.shape=koumakyou::BombVolume::Shape::Frustum;volume.origin=pos;volume.end=Vector3Add(pos,{0,item.length,0});volume.radius=item.nearRadius;volume.endRadius=item.farRadius;}else{volume.origin=pos;volume.radius=(k==0?.5F:1.08F)*scale;}
     if(!all&&count==1)contact=k==3||mode==6?volume.IntersectsSphere(probe,.025F):collisions[k]->WorldDistanceSquared(probe,transform)<=.025F*.025F;
     if(mode==5||mode==6){rlDrawRenderBatchActive();rlDisableDepthTest();Color color=mode==5?GREEN:ORANGE;
-     if(k==3){DrawCylinderWiresEx(volume.origin,volume.end,volume.radius,volume.endRadius,24,color);}else if(mode==6&&k!=1){DrawSphereWires(pos,volume.radius,12,20,color);}else{for(auto&p:collisions[k]->Parts())for(auto&t:p.triangles){auto a=Vector3Transform(t.a,transform),b=Vector3Transform(t.b,transform),c=Vector3Transform(t.c,transform);DrawLine3D(a,b,color);DrawLine3D(b,c,color);DrawLine3D(c,a,color);}}
+     if(k==3){DrawCylinderWiresEx(volume.origin,volume.end,volume.radius,volume.endRadius,24,color);}else if(mode==6){DrawSphereWires(pos,volume.radius,12,20,color);}else{for(auto&p:collisions[k]->Parts())for(auto&t:p.triangles){auto a=Vector3Transform(t.a,transform),b=Vector3Transform(t.b,transform),c=Vector3Transform(t.c,transform);DrawLine3D(a,b,color);DrawLine3D(b,c,color);DrawLine3D(c,a,color);}}
      rlDrawRenderBatchActive();rlEnableDepthTest();
     }
    }

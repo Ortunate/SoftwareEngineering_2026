@@ -1,5 +1,5 @@
 ﻿# 本文件在子进程内构建、生成或运行独立弹体查看器，所有输出限定项目目录。
-param([ValidateSet('options','capture-options','generate-options','bombs','capture-bombs','generate-bombs','marisa','capture-marisa','generate-marisa','reimu','capture-reimu','generate-reimu','lasers','capture-lasers','generate-lasers','stress-lasers','stress-lasers-quick','view','collection','build','generate-classic','generate-collection','test','capture','capture-collection','stress','stress-quick','stress-collection','stress-collection-quick')][string]$Action='view')
+param([ValidateSet('effects','capture-effects','options','capture-options','generate-options','bombs','capture-bombs','generate-bombs','marisa','capture-marisa','generate-marisa','reimu','capture-reimu','generate-reimu','lasers','capture-lasers','generate-lasers','stress-lasers','stress-lasers-quick','view','collection','build','generate-classic','generate-collection','test','capture','capture-collection','stress','stress-quick','stress-collection','stress-collection-quick')][string]$Action='view')
 . "$PSScriptRoot/environment.ps1"
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "工具失败，退出码 $LASTEXITCODE" } }
 if ($Action -eq 'generate-options') {
@@ -37,7 +37,7 @@ if ($Action -eq 'generate-collection') {
     Check-Exit
     exit
 }
-if (!(Test-Path build/projectile-review/options_inspector.exe) -or !(Test-Path build/projectile-review/bomb_inspector.exe) -or !(Test-Path build/projectile-review/marisa_inspector.exe) -or !(Test-Path build/projectile-review/reimu_inspector.exe) -or $Action -in @('build','test') -or !(Test-Path build/projectile-review/classic_inspector.exe) -or !(Test-Path build/projectile-review/collection_inspector.exe) -or !(Test-Path build/projectile-review/laser_inspector.exe)) {
+if (!(Test-Path build/projectile-review/effects_inspector.exe) -or !(Test-Path build/projectile-review/options_inspector.exe) -or !(Test-Path build/projectile-review/bomb_inspector.exe) -or !(Test-Path build/projectile-review/marisa_inspector.exe) -or !(Test-Path build/projectile-review/reimu_inspector.exe) -or $Action -in @('build','test') -or !(Test-Path build/projectile-review/classic_inspector.exe) -or !(Test-Path build/projectile-review/collection_inspector.exe) -or !(Test-Path build/projectile-review/laser_inspector.exe)) {
     & $CMakeExe -S tools/projectile_review -B build/projectile-review -G 'MinGW Makefiles' "-DCMAKE_MAKE_PROGRAM=$ProjectRoot/.tools/mingw/bin/mingw32-make.exe" "-DCMAKE_C_COMPILER=$ProjectRoot/.tools/mingw/bin/gcc.exe" "-DCMAKE_CXX_COMPILER=$ProjectRoot/.tools/mingw/bin/g++.exe" -DCMAKE_BUILD_TYPE=Release -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF -DCMAKE_EXPORT_NO_PACKAGE_REGISTRY=ON
     Check-Exit
     & $CMakeExe --build build/projectile-review --parallel 6
@@ -81,6 +81,8 @@ if ($Action -in @('bombs','capture-bombs')) { $program = 'bomb_inspector.exe' }
 if ($Action -eq 'capture-bombs') { $argsForViewer += '--capture' }
 if ($Action -in @('options','capture-options')) { $program = 'options_inspector.exe' }
 if ($Action -eq 'capture-options') { $argsForViewer += '--capture' }
+if ($Action -in @('effects','capture-effects')) { $program='effects_inspector.exe' }
+if ($Action -eq 'capture-effects') { $argsForViewer += '--capture' }
 & "$ProjectRoot/build/projectile-review/$program" @argsForViewer
 Check-Exit
 if ($Action -eq 'stress') {

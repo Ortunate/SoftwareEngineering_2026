@@ -11,7 +11,7 @@
 
 ## 文件与接入
 
-每个目录保存 blend、同名 glTF/bin 主体、glow.gltf/bin、asset.json 和 REVIEW.md。普通主体带 KCOL0001 collision.bin；激光使用参数胶囊，无固定碰撞文件。blend 保留独立部件，glTF 可由 raylib LoadModel 读取。最终效果须使用 tools/projectile_review/shaders/marisa.vs/fs；不依赖外部贴图。
+每个目录保存 blend、同名 glTF/bin 主体、glow.gltf/bin、asset.json 和 REVIEW.md。普通主体带 KCOL0001 collision.bin；激光使用参数胶囊，无固定碰撞文件。blend 保留独立部件，glTF 可由 raylib LoadModel 读取。最终效果须使用 assets/runtime/shaders/projectiles/marisa.vs/fs；不依赖外部贴图。
 
 `marisa_asset.hpp` 提供 MarisaInstance 和 SampleMarisa：位置、单位方向、正的统一缩放、档位、秒数、激光长度/半径、RGB 乘数、透明度和光效强度。非法参数抛异常。采样不持有资源；调用方在有效 GL 上下文内加载并共享网格与着色器。绘制时将本地 +Y 转向实例 direction；独立审阅场景固定 +Y，允许围绕模型旋转相机。
 

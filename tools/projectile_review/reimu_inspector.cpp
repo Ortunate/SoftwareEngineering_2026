@@ -1,4 +1,5 @@
 // 本文件独立审阅灵梦三款实体、光效和同源碰撞，不依赖游戏场景。
+#include "resources/projectile_paths.hpp"
 #include "collision.hpp"
 #include "raymath.h"
 #include "rlgl.h"
@@ -12,7 +13,7 @@ int main(int argc,char**argv){try{
  const char* names[]={"reimu_gold","reimu_cyan","reimu_needle"};std::array<Model,3> models;std::array<std::unique_ptr<review::CollisionAsset>,3> collisions;
  for(int i=0;i<3;i++){auto dir=root/"assets/projectiles"/names[i];models[i]=LoadModel((dir/(std::string(names[i])+".gltf")).string().c_str());if(!models[i].meshCount)throw std::runtime_error("model load failed");collisions[i]=std::make_unique<review::CollisionAsset>(dir/"collision.bin");}
  Model cone=LoadModel((root/"assets/projectiles/reimu_needle/glow.gltf").string().c_str());
- Shader coneShader=LoadShader((root/"tools/projectile_review/shaders/reimu_cone.vs").string().c_str(),(root/"tools/projectile_review/shaders/reimu_cone.fs").string().c_str());
+ Shader coneShader=LoadShader((review::ProjectileShaderDirectory(root)/"reimu_cone.vs").string().c_str(),(review::ProjectileShaderDirectory(root)/"reimu_cone.fs").string().c_str());
  if(!cone.meshCount||!IsShaderValid(coneShader))throw std::runtime_error("cone glow load failed");
  for(int j=0;j<cone.materialCount;j++)cone.materials[j].shader=coneShader;
  Texture2D ref=LoadTexture((root/"docs/images/projectiles/reimu-shots.png").string().c_str());RenderTexture2D target=LoadRenderTexture(1440,900);

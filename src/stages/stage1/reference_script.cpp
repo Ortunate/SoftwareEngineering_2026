@@ -222,16 +222,16 @@ void ReferenceScript::Emit(const reference::Instruction& i, Vector3 player, Bull
         const int flags=static_cast<int>(a[8]);
         if(flags&16)bullet->acceleration=Multiply(direction,effects_[4]*3600*kReferenceScale);
         if(flags&1) { bullet->launchBoost=5*60*kReferenceScale*heightFactor; bullet->launchBoostSeconds=16.0F/60;
-                     bullet->baseVelocity=bullet->velocity; }
+                     bullet->baseVelocity=bullet->Velocity(); }
         if(flags&(64|128)) {
             bullet->turnDelaySeconds=effects_[0]/60;
             bullet->turnAngle=effects_[4]; bullet->turnSpeed=effects_[5]*60*kReferenceScale*heightFactor;
-            bullet->turnAimed=(flags&128)!=0; bullet->baseVelocity=bullet->velocity;
+            bullet->turnAimed=(flags&128)!=0; bullet->baseVelocity=bullet->Velocity();
         }
         // etama3.anm 的显现脚本结束于 10/16/32 帧；ECL 运动特效在显现结束后才起算。
         bullet->spawnVisualSeconds=flags&8 ? 32.0F/60 : flags&4 ? 16.0F/60 : flags&2 ? 10.0F/60 : 0;
         bullet->spawnMoveScale=flags&8 ? 1.0F/3 : flags&4 ? 0.4F : flags&2 ? 0.5F : 1;
-        if(bullet->spawnVisualSeconds>0)bullet->baseVelocity=bullet->velocity;
+        if(bullet->spawnVisualSeconds>0)bullet->baseVelocity=bullet->Velocity();
     }
 }
 } // namespace koumakyou::stage1

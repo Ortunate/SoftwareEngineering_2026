@@ -1,4 +1,5 @@
 // 本文件独立审阅三种 Bomb 的单件/组合、分层光效与模型/游戏两套体积，绘制不改变游戏数据。
+#include "resources/projectile_paths.hpp"
 #include "collision.hpp"
 #include "bomb_asset.hpp"
 #include "raymath.h"
@@ -24,7 +25,7 @@ int main(int argc,char**argv){try{
  std::filesystem::path root=argc>1?argv[1]:".";bool capture=argc>2;SetConfigFlags(capture?FLAG_WINDOW_HIDDEN:FLAG_MSAA_4X_HINT);InitWindow(1440,900,"Bomb assets | independent review");SetTargetFPS(capture?0:60);
  std::array<std::array<Model,3>,4> models{};std::array<std::unique_ptr<review::CollisionAsset>,4> collisions;std::array<Texture2D,4> references{};
  for(int k=0;k<4;k++){if(k==1)continue;auto d=root/"assets/projectiles"/names[k];for(int l=0;l<3;l++){if((k==0&&l==1)||(k==2&&l==2))continue;auto file=l==0?std::string(names[k]):l==1?"shell":"effect";models[k][l]=LoadModel((d/(file+".gltf")).string().c_str());if(!models[k][l].meshCount)throw std::runtime_error("Bomb asset missing");}if(k<3)collisions[k]=std::make_unique<review::CollisionAsset>(d/"collision.bin");references[k]=LoadTexture((root/"docs/images/projectiles"/refs[k]).string().c_str());}
- Shader shader=LoadShader((root/"tools/projectile_review/shaders/bombs.vs").string().c_str(),(root/"tools/projectile_review/shaders/bombs.fs").string().c_str());if(!IsShaderValid(shader))throw std::runtime_error("Bomb shader invalid");
+ Shader shader=LoadShader((review::ProjectileShaderDirectory(root)/"bombs.vs").string().c_str(),(review::ProjectileShaderDirectory(root)/"bombs.fs").string().c_str());if(!IsShaderValid(shader))throw std::runtime_error("Bomb shader invalid");
  RenderTexture2D target=LoadRenderTexture(1440,900);Font font=LoadFontEx((root/".deps/raylib-5.5/examples/text/resources/anonymous_pro_bold.ttf").string().c_str(),28,nullptr,0);
  auto text=[&](const char*s,int x,int y,int size,Color c){DrawTextEx(font,s,{float(x),float(y)},float(size),.2F,c);};
  BombPreview item;int mode=0,frame=0;bool all=true,paused=true,light=false,inside=false,showShell=true,showFx=true;float yaw=.3F,pitch=.2F,distance=8;Vector3 probe{};

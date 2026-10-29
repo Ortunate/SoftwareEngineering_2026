@@ -8,5 +8,20 @@
   "collision": "closed solid; glow excluded",
   "texture": "seal.png",
   "referenceAnm": 64,
-  "acceptanceFingerprint": "8ff6d5b32c58d03dd84d7e6a426b70e20ac8695b76eefe87f8dd668e25f27c2b"
+  "acceptanceFingerprint": "8ff6d5b32c58d03dd84d7e6a426b70e20ac8695b76eefe87f8dd668e25f27c2b",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

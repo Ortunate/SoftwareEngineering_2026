@@ -1,4 +1,5 @@
 // 本文件执行可复现的可见窗口弹幕压力实验；结果只代表独立通道，不等于整场游戏。
+#include "resources/projectile_paths.hpp"
 #include "classic_renderer.hpp"
 #include "gl_state.hpp"
 #include "gameplay/bullets/system.hpp"
@@ -39,7 +40,7 @@ int main(int argc,char** argv){try{
     if(GetRenderWidth()!=1920||GetRenderHeight()!=1080)throw std::runtime_error("Required 1920x1080 framebuffer unavailable");
     {
     constexpr size_t capacity=koumakyou::BulletSystem::kCapacity;
-    review::ClassicRenderer renderer(root/"assets/projectiles/kunai_classic/kunai_classic.gltf",root/"tools/projectile_review/shaders",capacity);
+    review::ClassicRenderer renderer(root/"assets/projectiles/kunai_classic/kunai_classic.gltf",review::ProjectileShaderDirectory(root),capacity);
     review::CollisionAsset collider(root/"assets/projectiles/kunai_classic/collision.bin");review::CollisionScratch scratch;scratch.Prepare(collider.MaxPartTriangles());
     std::vector<review::ProjectileInstance> instances(capacity);std::vector<Vector3> bases(capacity);
     // 简化二维基线：同样的朝向、尺寸、数量，使用一次生成的白色三角刃/环 sprite。

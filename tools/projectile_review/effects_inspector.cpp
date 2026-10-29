@@ -2,6 +2,7 @@
 #include "spawn_renderer.hpp"
 #include "collection_renderer.hpp"
 #include "raymath.h"
+#include "render/projectile_pose.hpp"
 #include <filesystem>
 #include <array>
 #include <iostream>
@@ -10,13 +11,13 @@ int main(int argc,char**argv){try{
  std::filesystem::path root=argc>1?argv[1]:".";bool capture=argc>2;
  SetConfigFlags(capture?FLAG_WINDOW_HIDDEN:FLAG_MSAA_4X_HINT);InitWindow(1440,900,"Shared spawn on projectiles");SetTargetFPS(capture?0:60);
  {
- review::SpawnRenderer spawn(root);std::array<Model,10> models{};
- for(int i=0;i<10;i++){auto name=review::ProjectileKinds()[i].directory;models[i]=LoadModel((root/"assets/projectiles"/name/(std::string(name)+".gltf")).string().c_str());if(!models[i].meshCount)throw std::runtime_error("Input model load failed");}
+ std::array<std::unique_ptr<review::CollisionAsset>,10> collisions;std::array<Quaternion,10> previous{};std::array<bool,10> havePrevious{};bool arrows=true,showCollision=false;review::SpawnRenderer spawn(root);std::array<Model,10> models{};
+ for(int i=0;i<10;i++){auto name=review::ProjectileKinds()[i].directory;models[i]=LoadModel((root/"assets/projectiles"/name/(std::string(name)+".gltf")).string().c_str());if(!models[i].meshCount)throw std::runtime_error("Input model load failed");collisions[i]=std::make_unique<review::CollisionAsset>(root/"assets/projectiles"/name/"collision.bin");}
  RenderTexture2D target=LoadRenderTexture(1440,900);
  int frame=0,selected=0;bool all=true,light=false,paused=false,effect=true;float seconds=0,yaw=.12F,pitch=.12F,distance=8,duration=.65F;
  while(!WindowShouldClose()){
   if(capture)seconds=frame/30.F;
-  else{if(!paused)seconds+=GetFrameTime();if(IsKeyPressed(KEY_SPACE))paused=!paused;if(IsKeyPressed(KEY_R))seconds=0;if(IsKeyPressed(KEY_TAB))selected=(selected+1)%10;if(IsKeyPressed(KEY_V))all=!all;if(IsKeyPressed(KEY_B))light=!light;if(IsKeyPressed(KEY_G))effect=!effect;
+  else{if(!paused)seconds+=GetFrameTime();if(IsKeyPressed(KEY_SPACE))paused=!paused;if(IsKeyPressed(KEY_R))seconds=0;if(IsKeyPressed(KEY_TAB))selected=(selected+1)%10;if(IsKeyPressed(KEY_V))all=!all;if(IsKeyPressed(KEY_B))light=!light;if(IsKeyPressed(KEY_G))effect=!effect;if(IsKeyPressed(KEY_D))arrows=!arrows;if(IsKeyPressed(KEY_C))showCollision=!showCollision;
    if(IsKeyPressed(KEY_ONE)){duration=10.F/60;seconds=0;}if(IsKeyPressed(KEY_TWO)){duration=16.F/60;seconds=0;}if(IsKeyPressed(KEY_THREE)){duration=32.F/60;seconds=0;}
    if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){auto d=GetMouseDelta();yaw-=d.x*.006F;pitch=Clamp(pitch+d.y*.006F,-1.3F,1.3F);}distance=Clamp(distance-GetMouseWheelMove()*.3F,2.F,15.F);
   }
@@ -27,11 +28,16 @@ int main(int argc,char**argv){try{
   Color bg=light?Color{100,110,125,255}:Color{15,21,33,255};
   BeginTextureMode(target);ClearBackground(bg);BeginMode3D(camera);
   for(int i=0;i<count;i++){auto& b=bullets[i];review::SpawnParams p;p.position=b.transform.position;p.scale=.40F;p.age=age;p.duration=duration;p.tint=b.transform.appearance.bodyColor;p.projectileMask=true;
-   if(effect)spawn.Draw(models[b.type],p);else DrawModel(models[b.type],p.position,p.scale,WHITE);
+   Vector3 direction=Vector3Normalize(Vector3{std::sin(seconds),.35F,std::cos(seconds)});
+   auto pose=koumakyou::ProjectilePoseBuilder::BuildPose(koumakyou::DescribeProjectileModel(review::ProjectileKinds()[b.type].directory).direction,direction,p.position,p.scale,havePrevious[b.type]?&previous[b.type]:nullptr);
+   p.rotation=pose.rotation;previous[b.type]=pose.rotation;havePrevious[b.type]=true;
+   if(arrows)DrawLine3D(p.position,Vector3Add(p.position,Vector3Scale(direction,.7F)),GREEN);
+   if(effect)spawn.Draw(models[b.type],p);else DrawModelEx(models[b.type],p.position,{p.rotation.x,p.rotation.y,p.rotation.z},2*std::acos(Clamp(p.rotation.w,-1,1))*RAD2DEG,{p.scale,p.scale,p.scale},WHITE);
+   if(showCollision){Matrix transform=MatrixMultiply(MatrixMultiply(MatrixScale(p.scale,p.scale,p.scale),QuaternionToMatrix(p.rotation)),MatrixTranslate(p.position.x,p.position.y,p.position.z));for(auto&part:collisions[b.type]->Parts())for(auto&t:part.triangles){auto a=Vector3Transform(t.a,transform),v=Vector3Transform(t.b,transform),c=Vector3Transform(t.c,transform);DrawLine3D(a,v,GREEN);DrawLine3D(v,c,GREEN);DrawLine3D(c,a,GREEN);}}
   }
   EndMode3D();
   DrawText("SHARED SPAWN / INPUT MODEL SHRINKS AND BECOMES OPAQUE",25,22,26,RAYWHITE);
-  DrawText("TAB select | V overview | SPACE pause | R restart | G effect | B background | drag orbit | wheel zoom",25,65,18,LIGHTGRAY);
+  DrawText("TAB select | V overview | SPACE pause | R restart | G effect | D direction | C collision | B background | drag orbit | wheel zoom",25,65,18,LIGHTGRAY);
   DrawText(TextFormat("age %.2f s | duration %.3f s | 1/2/3 = 10/16/32 frames | visual only, collision unchanged",age,duration),25,98,18,LIGHTGRAY);
   for(int i=0;i<count;i++){auto screen=GetWorldToScreen(bullets[i].transform.position,camera);DrawText(review::ProjectileKinds()[bullets[i].type].directory,screen.x-70,screen.y+80,16,LIGHTGRAY);}
   EndTextureMode();BeginDrawing();ClearBackground(BLACK);DrawTextureRec(target.texture,{0,0,1440,-900},{0,0},WHITE);EndDrawing();

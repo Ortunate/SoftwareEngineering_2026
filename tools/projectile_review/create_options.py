@@ -80,6 +80,7 @@ for star,name in enumerate(('reimu_option','marisa_option')):
     bpy.ops.wm.save_as_mainfile(filepath=str(out/(name+'.blend')))
     bpy.ops.export_scene.gltf(filepath=str(out/(name+'.gltf')),export_format='GLTF_SEPARATE',use_selection=True)
     meta=dict(asset=name,bodyTriangles=count,collision='none',humanAcceptance='pending',front='+Z',up='+Y',referenceAnm=[128,129])
+    meta.update(localForward=[0,0,1],localUp=[0,1,0],surfaceFront=[0,0,1])
     carry_acceptance(meta,out/'asset.json',[ROOT/'tools/projectile_review/options_inspector.cpp'])
     (out/'asset.json').write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
     if meta['humanAcceptance']!='approved':

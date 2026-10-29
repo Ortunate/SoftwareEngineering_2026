@@ -11,10 +11,12 @@ uniform int palette;
 uniform int clay;
 uniform float seconds;
 uniform float opacity;
+uniform int clipEnabled;
+uniform float clipFrom,clipTo;
 uniform float strength;
 uniform vec3 tintMultiplier;
 out vec4 finalColor;
-void main(){float facing=abs(dot(normalize(normal),normalize(eye-world)));float rim=pow(1-facing,1.5);
+void main(){if(kind==3&&clipEnabled==1&&(local.y<clipFrom||local.y>clipTo))discard;float facing=abs(dot(normalize(normal),normalize(eye-world)));float rim=pow(1-facing,1.5);
  vec3 colors[4]=vec3[4](vec3(.25,.22,1),vec3(.1,1,1),vec3(.25,1,.1),vec3(1,.15,.18));
  if(kind==3){colors[0]=vec3(1,.5,.5);colors[1]=vec3(.5,1,.5);colors[2]=vec3(.5,.5,1);colors[3]=vec3(.5,1,1);}
  float sector=mod((atan(local.z,local.x)+3.14159265)*.63661977+seconds*.1+local.y*.3,4.0);int index=int(floor(sector));

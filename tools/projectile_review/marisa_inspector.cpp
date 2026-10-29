@@ -1,4 +1,5 @@
 // 本文件提供魔理沙四种造型及十二个档位的独立查看、动画冻结、碰撞探针和截图。
+#include "resources/projectile_paths.hpp"
 #include "collision.hpp"
 #include "marisa_asset.hpp"
 #include "raymath.h"
@@ -24,7 +25,7 @@ int main(int argc,char**argv){try{
  std::filesystem::path root=argc>1?argv[1]:".";bool capture=argc>2&&std::string(argv[2])=="--capture";SetConfigFlags(capture?FLAG_WINDOW_HIDDEN:FLAG_MSAA_4X_HINT);InitWindow(1440,900,"Marisa independent projectile review");SetTargetFPS(capture?0:60);
  std::array<Model,4> body,glow;std::array<std::unique_ptr<review::CollisionAsset>,4> collision;
  for(int k=0;k<4;k++){auto dir=root/"assets/projectiles"/names[k];body[k]=LoadModel((dir/(std::string(names[k])+".gltf")).string().c_str());glow[k]=LoadModel((dir/"glow.gltf").string().c_str());if(!body[k].meshCount||!glow[k].meshCount)throw std::runtime_error("Missing Marisa mesh");if(k!=2)collision[k]=std::make_unique<review::CollisionAsset>(dir/"collision.bin");}
- Shader shader=LoadShader((root/"tools/projectile_review/shaders/marisa.vs").string().c_str(),(root/"tools/projectile_review/shaders/marisa.fs").string().c_str());if(!IsShaderValid(shader))throw std::runtime_error("Marisa shader invalid");
+ Shader shader=LoadShader((review::ProjectileShaderDirectory(root)/"marisa.vs").string().c_str(),(review::ProjectileShaderDirectory(root)/"marisa.fs").string().c_str());if(!IsShaderValid(shader))throw std::runtime_error("Marisa shader invalid");
  Texture2D reference=LoadTexture((root/"docs/images/projectiles/marisa-shots.png").string().c_str());RenderTexture2D target=LoadRenderTexture(1440,900);
  Font font=LoadFontEx((root/".deps/raylib-5.5/examples/text/resources/anonymous_pro_bold.ttf").string().c_str(),28,nullptr,0);
  auto label=[&](const char*text,int x,int y,int size,Color c){DrawTextEx(font,text,{float(x),float(y)},float(size),.2F,c);};

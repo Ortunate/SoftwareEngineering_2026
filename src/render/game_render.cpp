@@ -157,14 +157,15 @@ void Game::DrawWorld() const {
         }
     }
     DrawPlayerBombBackdrop(viewport.width,viewport.height);
+    combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,camera_,viewport.width/viewport.height,stage_.Elapsed());
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
-                         actorEffects_,playerBombVolumes_);
+                         actorEffects_,playerBombVolumes_,&combatRenderer_);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
-                                          player_.Position());
+                                          player_.Position(),assets_.Projectiles(),assets_.Stage().visuals);
     }
 #endif
 

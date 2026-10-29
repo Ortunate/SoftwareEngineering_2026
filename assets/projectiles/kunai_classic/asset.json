@@ -9,7 +9,10 @@
   "textureMaps": 0,
   "vertexMask": "COLOR_0.r = highlight mix",
   "humanAcceptance": "approved",
-  "humanAcceptanceBy": ["user", "leader"],
+  "humanAcceptanceBy": [
+    "user",
+    "leader"
+  ],
   "humanAcceptanceDate": "2026-10-27",
   "parts": [
     {
@@ -28,5 +31,20 @@
       "closed": true
     }
   ],
-  "triangles": 146
+  "triangles": 146,
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

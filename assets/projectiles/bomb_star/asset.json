@@ -222,5 +222,20 @@
       ]
     }
   ],
-  "acceptanceFingerprint": "1dcef4adf44725c0d74a7959656df15ee167eec4771911f9e9ab690a02c487ad"
+  "acceptanceFingerprint": "1dcef4adf44725c0d74a7959656df15ee167eec4771911f9e9ab690a02c487ad",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

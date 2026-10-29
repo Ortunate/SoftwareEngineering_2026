@@ -1,4 +1,5 @@
 // 本文件提供原版风格苦无的独立人工审阅：颜色、光效、实体碰撞与参考图。
+#include "resources/projectile_paths.hpp"
 #include "classic_renderer.hpp"
 #include "raymath.h"
 #include "rlgl.h"
@@ -20,7 +21,7 @@ int main(int argc,char** argv){try{
     SetTraceLogLevel(LOG_WARNING);SetConfigFlags(FLAG_MSAA_4X_HINT|(capture?FLAG_WINDOW_HIDDEN:0));
     InitWindow(1440,960,"Classic Kunai | Independent review");SetTargetFPS(capture?0:60);
     {
-    review::ClassicRenderer renderer(root/"assets/projectiles/kunai_classic/kunai_classic.gltf",root/"tools/projectile_review/shaders",16);
+    review::ClassicRenderer renderer(root/"assets/projectiles/kunai_classic/kunai_classic.gltf",review::ProjectileShaderDirectory(root),16);
     review::CollisionAsset collider(root/"assets/projectiles/kunai_classic/collision.bin");
     // 验收状态来自人工记录；重新生成的资产默认待验收，不由查看器自动认定通过。
     std::ifstream metadata(root/"assets/projectiles/kunai_classic/asset.json");

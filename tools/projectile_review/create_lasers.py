@@ -46,6 +46,7 @@ for variant,name in enumerate(('laser_default','laser_round')):
     previous=out/'asset.json'
     if previous.exists():
         meta['humanAcceptance']=json.loads(previous.read_text(encoding='utf-8')).get('humanAcceptance','pending')
+    meta.update(localForward=[0,1,0],localUp=[0,0,1],surfaceFront=[0,0,1])
     (out/'asset.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2),encoding='utf-8')
     accepted_review=(out/'REVIEW.md').read_text(encoding='utf-8') if meta['humanAcceptance']=='approved' and (out/'REVIEW.md').exists() else None
     (out/'REVIEW.md').write_text(f'''# 敌方激光套组 {variant}\n\n待人工验收。16 色共享模型，288 三角形（本体/外光层各 144）。\n\n源几何的端点在 Y=0、1，半球半径为 1；需配套 laser_renderer 和 laser 着色器按实际长度、半径重建。普通 DrawModel 不会得到成品比例。碰撞是同端点、半径的解析胶囊，包含端帽；外光层无碰撞。无固定 collision.bin，参数契约见 asset.json。\n\n- [ ] 正侧端视及 16 色符合原图特征\n- [ ] 长宽独立调节，端帽无拉伸\n- [ ] 主体/光效/胶囊叠加，轴身、端帽、外光层探针正确\n- [ ] 预警、展开、持续、收束时窗正确\n- [ ] 交叉、入束、浅色背景与性能报告已检查\n\n套组 1 是原圆形光斑的三维适配，未改变关卡绑定。运行 Review-Lasers.cmd 独立查看。\n''',encoding='utf-8')

@@ -1,0 +1,2 @@
+// 本文件为 MinGW 正式游戏嵌入 UTF-8 进程清单，支持中文音频与素材路径。
+1 24 "@CMAKE_CURRENT_SOURCE_DIR@/src/windows_utf8.manifest"

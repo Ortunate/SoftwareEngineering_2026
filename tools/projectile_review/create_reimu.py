@@ -122,7 +122,8 @@ for kind,name in enumerate(NAMES):
  meta=dict(asset=name,triangles=len(tris),displayTrianglesWithGlow=len(tris)*2 if kind<2 else len(tris)+288,triangleHardLimit=256 if kind<2 else 384,humanAcceptance='pending',axis='+Y',collision='closed solid; glow excluded',texture='seal.png' if kind<2 else None,referenceAnm=64+kind)
  if kind==2:meta['glow']={'asset':'glow.gltf','shape':'open cone side','triangles':288,'tipY':1.1,'baseY':-1.1,'baseRadius':.24,'collides':False}
  previous=out/'asset.json'
- carry_acceptance(meta,previous,[ROOT/'tools/projectile_review/reimu_inspector.cpp',*sorted((ROOT/'tools/projectile_review/shaders').glob('reimu_cone.*'))])
+ meta.update(localForward=[0,1,0],localUp=[0,0,1],surfaceFront=[0,0,1])
+ carry_acceptance(meta,previous,[ROOT/'tools/projectile_review/reimu_inspector.cpp',*sorted((ROOT/'assets/runtime/shaders/projectiles').glob('reimu_cone.*'))])
  accepted_review=(out/'REVIEW.md').read_text(encoding='utf-8') if meta['humanAcceptance']=='approved' and (out/'REVIEW.md').exists() else None
  (out/'asset.json').write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
  (out/'REVIEW.md').write_text('# 灵梦弹体独立验收\n\n待人工验收。外围纹样依据用户根目录草图制作长弧框、角钩和横划，保持中心对称；中央仅一枚正立“博”字，不参与对称；针弹周围为增强亮度的圆锥侧面光效，不参与碰撞。需重点对照原图还原程度。\n\n- [ ] 正侧背轮廓和符纹\n- [ ] 光效关闭后实体完整\n- [ ] 碰撞叠加及仅碰撞\n- [ ] 深浅背景和游戏透明度\n',encoding='utf-8')

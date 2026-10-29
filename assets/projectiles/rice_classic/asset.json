@@ -33,5 +33,20 @@
     "user"
   ],
   "humanAcceptanceDate": "2026-10-28",
-  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision."
+  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision.",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

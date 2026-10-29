@@ -130,7 +130,8 @@ for kind,name in enumerate(NAMES):
     meta['displayTrianglesWithGlow']=meta['triangles']+meta['glowTriangles']
     if kind<2:meta['trail']={'direction':'-Y','lengthScaleDefault':1,'widthScaleDefault':1,'periodSeconds':.6,'brightnessModulation':.1,'collides':False}
     if kind==3:meta['collisionDiametersPixels']=[32,42,48,48]
-    carry_acceptance(meta,out/'asset.json',[ROOT/'tools/projectile_review/marisa_inspector.cpp',ROOT/'tools/projectile_review/marisa_asset.hpp',*sorted((ROOT/'tools/projectile_review/shaders').glob('marisa.*'))])
+    meta.update(localForward=[0,1,0],localUp=[0,0,1],surfaceFront=[0,0,1])
+    carry_acceptance(meta,out/'asset.json',[ROOT/'tools/projectile_review/marisa_inspector.cpp',ROOT/'tools/projectile_review/marisa_asset.hpp',*sorted((ROOT/'assets/runtime/shaders/projectiles').glob('marisa.*'))])
     accepted_review=(out/'REVIEW.md').read_text(encoding='utf-8') if meta['humanAcceptance']=='approved' and (out/'REVIEW.md').exists() else None
     (out/'asset.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     (out/'REVIEW.md').write_text('# 魔理沙弹体验收\n\n待人工验收。\n\n- [ ] 原图与所有档位\n- [ ] 正侧背视图、灰模及独立光效\n- [ ] 实体碰撞，装饰无碰撞\n- [ ] 深浅背景及动画关键帧\n\n通过根目录 Review-Marisa.cmd 查看。\n',encoding='utf-8')

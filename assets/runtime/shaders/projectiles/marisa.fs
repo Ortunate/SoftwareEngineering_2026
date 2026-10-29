@@ -9,11 +9,14 @@ uniform int kind;
 uniform int effect;
 uniform int clay;
 uniform float opacity;
+uniform int clipEnabled;
+uniform float clipFrom,clipTo,beamLength;
 uniform float strength;
 uniform vec3 eye;
 uniform vec3 tintMultiplier;
 out vec4 finalColor;
 void main(){
+ if(kind==2&&clipEnabled==1&&((clipFrom>0.0&&localPosition.y<clipFrom*beamLength)||(clipTo<1.0&&localPosition.y>clipTo*beamLength)))discard;
  float facing=abs(dot(normalize(worldNormal),normalize(eye-worldPosition)));
  float rim=pow(1.0-facing,1.8);
  vec3 tint=kind==0?vec3(.25,.8,1):kind==2?vec3(1,.23,.36):vec3(.3,1,.045);

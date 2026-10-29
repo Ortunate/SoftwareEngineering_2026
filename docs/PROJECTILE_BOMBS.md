@@ -12,7 +12,7 @@
 
 ## 资源和参数
 
-每款有 blend、同名 glTF/bin、asset.json、REVIEW.md。梦想封印和光炮另有 effect.gltf/bin；星体没有拖影或 effect 文件。只有星体和光炮有 shell.gltf/bin；梦想封印没有 shell 文件。前两款有 KCOL0001 collision.bin；光炮使用起点、单位方向、长度和近远端半径参数。着色器位于 tools/projectile_review/shaders/bombs.vs/fs，kind 使用原分类编号 0/2/3，layer=主体0、外缘1、效果2。
+每款有 blend、同名 glTF/bin、asset.json、REVIEW.md。梦想封印和光炮另有 effect.gltf/bin；星体没有拖影或 effect 文件。只有星体和光炮有 shell.gltf/bin；梦想封印没有 shell 文件。前两款有 KCOL0001 collision.bin；光炮使用起点、单位方向、长度和近远端半径参数。着色器位于 assets/runtime/shaders/projectiles/bombs.vs/fs，kind 使用原分类编号 0/2/3，layer=主体0、外缘1、效果2。
 
 bomb_asset.hpp 定义尺寸、位置、单位方向、统一正缩放、RGB 乘数、透明度、光效强度及非负时间参数。独立查看器固定本地 +Y，接入调用方负责应用位置/方向变换及同一碰撞变换；所有图形资源须在有效 GL 上下文内创建和销毁。材质层不增加游戏攻击通道。当前没有新增贴图依赖。
 

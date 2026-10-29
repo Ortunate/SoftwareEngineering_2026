@@ -336,5 +336,20 @@
     48,
     48
   ],
-  "acceptanceFingerprint": "9f6a52bbf023479269058030ae29a6f63d7984d009004b5dd39fdc2108ee0dbe"
+  "acceptanceFingerprint": "9f6a52bbf023479269058030ae29a6f63d7984d009004b5dd39fdc2108ee0dbe",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

@@ -219,6 +219,7 @@ for kind,name,colors,limit,description,danger in SPECS:
     bpy.ops.export_scene.gltf(filepath=str(out/(name+'.gltf')),export_format='GLTF_SEPARATE',use_selection=True,export_yup=True,
         export_normals=True,export_materials='EXPORT',export_texcoords=False,export_tangents=False,
         export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_active_vertex_color_when_no_material=True)
+    info.update(localForward=[0,1,0],localUp=[0,0,1],surfaceFront=[0,0,1])
     (out/'asset.json').write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding='utf-8')
     checks='\n'.join('- [ ] '+c for c in CHECKS[kind])
     composition='\n'.join(f"| {p['name']} | {p['triangles']} | {'实体碰撞' if p['collision'] else '显示装饰'} |" for p in info['parts'])

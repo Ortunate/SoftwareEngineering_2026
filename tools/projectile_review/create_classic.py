@@ -103,5 +103,6 @@ bpy.ops.export_scene.gltf(filepath=str(OUT/'kunai_classic.gltf'),export_format='
     use_selection=True,export_yup=True,export_normals=True,export_materials='EXPORT',
     export_texcoords=False,export_tangents=False,export_cameras=False,export_lights=False,
     export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_active_vertex_color_when_no_material=True)
+summary.update(localForward=[0,1,0],localUp=[0,0,1],surfaceFront=[0,0,1])
 (OUT/'asset.json').write_text(json.dumps(summary,indent=2),encoding='utf-8')
 print('CLASSIC_COMPLETE',json.dumps(summary))

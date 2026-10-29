@@ -86,7 +86,8 @@ for kind,name in SPECS:
     stale=out/(filename+extension)
     if stale.exists():stale.unlink()
  meta=dict(asset=name,kind=kind,triangles=sum(triangle_count(o) for o in body+shell+effect),triangleHardLimit=[896,384,320,960][kind],parts={n:sum(map(triangle_count,g)) for n,g in (('body',body),('shell',shell),('effect',effect))},axis='+Y',humanAcceptance='pending',collision={'shape':'finite frustum','parameters':['origin','unitDirection','length','nearRadius','farRadius']} if kind==3 else {'shape':'closed mesh','file':'collision.bin'},decorationsCollide=False,sourceAtlas='player00' if kind<2 else 'player01',scripts=scripts('player00' if kind<2 else 'player01',range(133,137) if kind==0 else range(137,141) if kind==1 else range(5,8) if kind==2 else range(8,12)))
- carry_acceptance(meta,out/'asset.json',[ROOT/'tools/projectile_review/bomb_inspector.cpp',ROOT/'tools/projectile_review/bomb_asset.hpp',*sorted((ROOT/'tools/projectile_review/shaders').glob('bombs.*'))]);(out/'asset.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+ meta.update(localForward=[0,1,0],localUp=[0,0,1],surfaceFront=[0,0,1])
+ carry_acceptance(meta,out/'asset.json',[ROOT/'tools/projectile_review/bomb_inspector.cpp',ROOT/'tools/projectile_review/bomb_asset.hpp',*sorted((ROOT/'assets/runtime/shaders/projectiles').glob('bombs.*'))]);(out/'asset.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
  accepted_review=(out/'REVIEW.md').read_text(encoding='utf-8') if meta['humanAcceptance']=='approved' and (out/'REVIEW.md').exists() else None
  (out/'REVIEW.md').write_text('# Bomb 人工验收\n\n待人工验收。模型碰撞与现有游戏攻击范围分别显示，不能混用。\n\n- [ ] 原图、正侧背面及灰模\n- [ ] 主体、球壳、光效和拖影分层\n- [ ] 模型碰撞及游戏范围对照\n- [ ] 单件、组合、动画关键帧、深浅背景\n',encoding='utf-8');print('CREATED',name,meta['triangles'])
  if accepted_review is not None:(out/'REVIEW.md').write_text(accepted_review,encoding='utf-8')

@@ -8,13 +8,14 @@ uniform vec3 eye;
 uniform int kind,role,pass,mode;
 uniform float seconds;
 out vec4 finalColor;
-void main(){
+vec4 sampledColor;
+void Shade(){
     vec3 N=normalize(n),V=normalize(eye-world);float facing=abs(dot(N,V));
     float diffuse=.74+.26*max(dot(N,normalize(vec3(-.5,.6,1))),0);
-    if(mode==1){finalColor=vec4(vec3(.54,.60,.68)*(.45+.55*max(dot(N,normalize(vec3(-.5,.6,1))),0)),1);return;}
-    if(pass==2){finalColor=vec4(glowTint.rgb,clamp(fx.x*.35,0,.7)*pow(1-facing,1.3)*glowTint.a);return;}
+    if(mode==1){sampledColor=vec4(vec3(.54,.60,.68)*(.45+.55*max(dot(N,normalize(vec3(-.5,.6,1))),0)),1);return;}
+    if(pass==2){sampledColor=vec4(glowTint.rgb,clamp(fx.x*.35,0,.7)*pow(1-facing,1.3)*glowTint.a);return;}
     // 泡的暗透内球只吸收少量背景光；碰撞几何独立于透明度。
-    if(kind==9&&role==0){finalColor=vec4(0,0,0,.32*fx.z*(.5+.5*facing));return;}
+    if(kind==9&&role==0){sampledColor=vec4(0,0,0,.32*fx.z*(.5+.5*facing));return;}
     if(role==1){
         if(!gl_FrontFacing && length(eye-center)>.5*instanceScale)discard;
         float rho=sqrt(max(0,1-facing*facing));
@@ -25,7 +26,7 @@ void main(){
         if(kind==9){strength=1.45*smoothstep(.69,.85,rho)*(1-smoothstep(.985,1,rho));white=smoothstep(.69,.82,rho);
             if(length(eye-center)<.5*instanceScale){strength=.10+.20*facing;white=.3;}}
         vec3 color=mix(bodyTint.rgb,highlightTint.rgb,white);
-        finalColor=vec4(color,min(1,strength*fx.z));return;
+        sampledColor=vec4(color,min(1,strength*fx.z));return;
     }
     if(role==2){
         if(kind==9){float r=length(local);float white=smoothstep(.425,.47,r);
@@ -33,19 +34,22 @@ void main(){
             // 端向观察时淡出丝束，避免前后端面在暗中心形成亮色方块；侧向仍保留真实厚度。
             float side=1-abs(dot(normalize(world-center),V));
             float alpha=smoothstep(.12,.7,side)*smoothstep(.19,.27,r)*fx.z;
-            finalColor=vec4(mix(bodyTint.rgb,highlightTint.rgb,white),alpha*mix(.08,1.4,smoothstep(.08,.4,saturation)));return;}
+            sampledColor=vec4(mix(bodyTint.rgb,highlightTint.rgb,white),alpha*mix(.08,1.4,smoothstep(.08,.4,saturation)));return;}
         float h=clamp((local.y+.34)/.9,0,1);float wave=.5+.5*sin(local.y*34+local.x*20-seconds*18.849556+fx.w);
         vec3 color=mix(vec3(1,.78,.18),bodyTint.rgb,smoothstep(.05,.55,h));
         color=mix(color,vec3(1,.19,.015),smoothstep(.5,1,h));
-        finalColor=vec4(color,(.55+.3*wave)*(.7+.3*facing)*(1-.45*h)*fx.z);return;
+        sampledColor=vec4(color,(.55+.3*wave)*(.7+.3*facing)*(1-.45*h)*fx.z);return;
     }
-    if(kind==4||kind==5||kind==8){finalColor=vec4(mix(bodyTint.rgb*diffuse,highlightTint.rgb,mask),1);return;}
-    if(kind==1){finalColor=vec4(highlightTint.rgb,1);return;}
+    if(kind==4||kind==5||kind==8){sampledColor=vec4(mix(bodyTint.rgb*diffuse,highlightTint.rgb,mask),1);return;}
+    if(kind==1){sampledColor=vec4(highlightTint.rgb,1);return;}
     if(kind==3||kind==6){float rho=sqrt(max(0,1-facing*facing));
         float white=1-smoothstep(kind==3?.72:.48,1.0,rho);
-        finalColor=vec4(mix(bodyTint.rgb,highlightTint.rgb,white),1);return;}
+        sampledColor=vec4(mix(bodyTint.rgb,highlightTint.rgb,white),1);return;}
     float center=smoothstep(.05,.82,facing);
     if(kind==2)center=pow(max(dot(N,normalize(vec3(-.6,.2,1))),0),.4);
     float bright=kind==0?.94:kind==7?1:.98;
-    finalColor=vec4(mix(bodyTint.rgb*diffuse,highlightTint.rgb,center*bright),1);
+    sampledColor=vec4(mix(bodyTint.rgb*diffuse,highlightTint.rgb,center*bright),1);
 }
+
+// 所有显示层共享实例显现系数，不改变原材质形状或危险体积。
+void main(){Shade();finalColor=vec4(sampledColor.rgb,sampledColor.a*bodyTint.a);}

@@ -247,5 +247,20 @@
     "brightnessModulation": 0.1,
     "collides": false
   },
-  "acceptanceFingerprint": "c880438c5bd496b4ab836bb23ba511136aa5294ceb0d9213520ca8b7184cf0c5"
+  "acceptanceFingerprint": "c880438c5bd496b4ab836bb23ba511136aa5294ceb0d9213520ca8b7184cf0c5",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

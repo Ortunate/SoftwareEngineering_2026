@@ -1,4 +1,5 @@
 // 本文件验证低面数实体的真实孔洞、世界变换、显示剔除、光效独立性及 GL 状态恢复。
+#include "resources/projectile_paths.hpp"
 #include "classic_renderer.hpp"
 #include "gl_state.hpp"
 #include "raymath.h"
@@ -31,7 +32,7 @@ int main(int argc,char** argv){try{
     rejects([&]{review::ClassicPalette(16);});
     SetTraceLogLevel(LOG_WARNING);SetConfigFlags(FLAG_WINDOW_HIDDEN);InitWindow(128,128,"Classic renderer tests");
     {
-        review::ClassicRenderer renderer(root/"assets/projectiles/kunai_classic/kunai_classic.gltf",root/"tools/projectile_review/shaders",2);
+        review::ClassicRenderer renderer(root/"assets/projectiles/kunai_classic/kunai_classic.gltf",review::ProjectileShaderDirectory(root),2);
         Camera3D camera{{0,0,3},{0,0,0},{0,1,0},45,CAMERA_PERSPECTIVE};
         std::vector<review::ProjectileInstance> items(2);items[1].position={100,0,0};
         renderer.Prepare(items,camera,1);require(renderer.Stats().visible==1,"Frustum culling");

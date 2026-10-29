@@ -24,5 +24,20 @@
       15
     ]
   },
-  "interpretation": "continuous band"
+  "interpretation": "continuous band",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

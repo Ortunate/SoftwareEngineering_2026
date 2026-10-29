@@ -387,5 +387,20 @@
     "radiusBasis": "entire volume inside white halo; same outer-shell topology scaled by 0.8"
   },
   "triangles": 696,
-  "collisionTriangles": 288
+  "collisionTriangles": 288,
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

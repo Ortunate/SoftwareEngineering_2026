@@ -1,3 +1,5 @@
+三维弹体已接入正式游戏。双击 `Run-Model-Game.cmd` 使用项目内工具构建并运行；资源、模块结构、碰撞约定和验收截图见[运行时接入说明](docs/PROJECTILE_RUNTIME.md)。独立审阅工具继续保留，并复用正式实现。
+
 # koumakyou
 
 敌方激光两套模型使用 `Review-Lasers.cmd` 独立审阅，`Stress-Lasers.cmd` 压测；长宽、时序、碰撞与资源说明见[敌方激光](docs/PROJECTILE_LASERS.md)。两套均已人工验收通过。

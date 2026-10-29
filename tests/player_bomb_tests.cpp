@@ -79,7 +79,10 @@ void TestNativeBombs() {
         } else {
             assert(expected[0].shape==PlayerBombSprite::Shape::Beam && expected[0].width>28);
             for(const auto& layer:expected) {
-                assert(game_math::DistanceSquared(layer.position,kCamera.position)==0);
+                // 可见炮口前移并下移，攻击起点仍在玩家视点；显示偏移不能缩小攻击覆盖。
+                const Vector3 muzzle{kCamera.position.x,kCamera.position.y-.6F,kCamera.position.z+.9F};
+                assert(game_math::DistanceSquared(layer.position,muzzle)<1e-8F);
+                assert(game_math::DistanceSquared(layer.volume.origin,kCamera.position)==0);
                 assert(game_math::DistanceSquared(layer.end,expected[0].end)==0);
             }
             PlayerBombEffect bomb;bomb.Start(shot,kCamera,archive);bomb.Update(1,kCamera);

@@ -275,5 +275,20 @@
   },
   "glowCollides": false,
   "displayTrianglesWithGlow": 288,
-  "acceptanceFingerprint": "fff8e7ac58dca8f2203fffe7e343f21f11acb6077b98dc6dc73e210625fd3894"
+  "acceptanceFingerprint": "fff8e7ac58dca8f2203fffe7e343f21f11acb6077b98dc6dc73e210625fd3894",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

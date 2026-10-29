@@ -24,5 +24,20 @@
       31
     ]
   },
-  "interpretation": "round-profile adaptation; not yet selectable by game"
+  "interpretation": "round-profile adaptation; not yet selectable by game",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
 }

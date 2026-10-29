@@ -135,7 +135,7 @@ void Game::DrawWorld() const {
                 visual = stageContent_->StarPickupVisual();
             const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
-            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample()});
+            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),255,pickup.RotationRadians()});
         });
         if (player_.OptionsVisible()) {
             const auto positions = player_.OptionPositions();

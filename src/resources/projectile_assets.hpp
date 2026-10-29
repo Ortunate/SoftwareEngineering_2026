@@ -16,8 +16,9 @@ public:
  explicit ProjectileAssets(const std::filesystem::path&root,bool immediate=true);
  /// @brief 图形线程每次推进一款模型（或共享 shader/批次），完成后返回 true；失败须销毁重建。
  bool AdvanceLoad();
- bool Ready()const{return !failed_&&loadStep_==ProjectileModels.size()+2;}
- float LoadProgress()const{return float(loadStep_)/float(ProjectileModels.size()+2); }
+ static constexpr std::size_t LoadSteps=ProjectileModels.size()+9; // 24 弹体、7 道具、材质与批次。
+ bool Ready()const{return !failed_&&loadStep_==LoadSteps;}
+ float LoadProgress()const{return float(loadStep_)/float(LoadSteps); }
  ~ProjectileAssets();
  ProjectileAssets(const ProjectileAssets&)=delete;
  ProjectileAssets& operator=(const ProjectileAssets&)=delete;
@@ -26,6 +27,8 @@ public:
  const ProjectileModelResource& Get(ProjectileAssetId id)const;
  projectiles::CollectionRenderer& Collection()const{return *collection_;}
  projectiles::LaserRenderer& Lasers()const{return *lasers_;}
+ /// @brief 原始 Item 编号 0…6；关卡卸载后失效，不得由调用方释放。
+ const Model& Item(int type)const;
  Texture2D OptionHalo()const{return optionHalo_;}
  Shader Marisa()const{return marisa_;} Shader Bomb()const{return bomb_;} Shader Needle()const{return needle_;}
 private:
@@ -34,6 +37,7 @@ private:
  std::filesystem::path root_;
  std::size_t loadStep_=0;bool failed_=false;
  std::array<ProjectileModelResource,ProjectileModels.size()> resources_{};
+ std::array<Model,7> items_{};
  std::unique_ptr<projectiles::CollectionRenderer> collection_;
  std::unique_ptr<projectiles::LaserRenderer> lasers_;
  Texture2D optionHalo_{};

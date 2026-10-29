@@ -25,6 +25,7 @@ struct PickupSprite {
     float heightScale = 1.0F;
     const anm::Frame* animation = nullptr; // 借用道具或副机的当前帧，只在本次 Draw 内有效。
     unsigned char alpha = 255; // 额外不透明度（0～255），与贴图及原生动画 Alpha 相乘。
+    float itemRotation = 0; // 本地 +Y 长轴弧度；由 DropSystem 模拟年龄产生，不跟随相机。
 };
 /// @brief 本帧借用的 Bomb 三维实体；几何由攻击实例提供，visual 决定原图集回退，模型按演出形状选择，绘制不做二次伤害计算。
 struct BombVolumeSprite {

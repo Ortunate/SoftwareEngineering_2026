@@ -904,6 +904,60 @@ struct GameLifecycleProbe {
         game.StartPreview();
     }
 
+    /// @brief 以正式玩家更新、原 ANM 和 Game::Draw 录制两款副机；8 秒包含 Focus 按下和松开。
+    static void CaptureOptionAnimations(Game& game,const std::string& prefix) {
+        for(int character=0;character<2;character++) {
+            game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
+            game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();game.bullets_.Reset();game.drops_.Clear();game.actorEffects_.Clear();
+            const auto visuals=game.stageContent_->PlayerVisuals(game.player_.Shot());
+            const auto folder=std::filesystem::path(prefix)/(character?"marisa":"reimu");std::filesystem::create_directories(folder);
+            const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+            float normalSeparation=0,focusedSeparation=0;float firstAngle=0,lastAngle=0;
+            for(int frame=0;frame<200;frame++) {
+                const bool focus=frame>=50&&frame<125;
+                game.player_.Update(.04F,{.focus=focus},game.bullets_,visuals,false);
+                game.player_.SyncCamera(game.camera_);game.UpdateBattleAnimations();
+                auto positions=game.player_.OptionPositions();float separation=Vector3Distance(positions[0],positions[1]);
+                if(frame==49)normalSeparation=separation;if(frame==100)focusedSeparation=separation;
+                auto angle=game.playerOptionAnimations_[0].player.Sample().rotation.z;if(frame==0)firstAngle=angle;if(frame==199)lastAngle=angle;
+                BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);game.Draw();
+                DrawText(character?"MARISA":"REIMU",430,95,24,WHITE);
+                DrawText(focus?"FOCUS held":"NORMAL / Focus released",370,125,20,WHITE);
+                EndTextureMode();EndDrawing();
+                Image image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);
+                assert(ExportImage(image,(folder/(std::to_string(frame)+".png")).string().c_str()));UnloadImage(image);
+            }
+            assert(normalSeparation>focusedSeparation*2.9F);assert(firstAngle!=lastAngle);
+            auto released=game.player_.OptionPositions();assert(std::abs(Vector3Distance(released[0],released[1])-normalSeparation)<.001F);
+            UnloadRenderTexture(target);
+        }
+    }
+
+    /// @brief 通过正式 DropSystem、动画和 Game::Draw 渲染六秒场内掉落，固定 25 fps 供 GIF 验收。
+    /// 前段为实际抛落与旋转，4.4 秒吸取现有道具并将新敌弹转换为清弹星点。
+    static void CaptureDrops(Game& game,const std::string& prefix) {
+        game.StartPreview();game.stage_=StageDirector{};game.enemies_.Clear();game.boss_.reset();
+        game.bullets_.Reset();game.drops_.Clear();game.actorEffects_.Clear();
+        game.drops_.SpawnFixedPower({-2.4F,.8F,3.5F},1);
+        game.drops_.SpawnReferenceDrop({0,.8F,3.5F},1,false);
+        game.drops_.SpawnFixedPower({2.4F,.8F,3.5F},8);
+        const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());
+        std::filesystem::create_directories(prefix);
+        for(int frame=0;frame<150;frame++) {
+            if(frame==110){
+                game.drops_.MagnetAllItems();
+                for(int i=0;i<12;i++)game.bullets_.Spawn(BulletOwner::Enemy,{(i%4-1.5F)*1.2F,(i/4-1)*.8F,1},{},.1F,WHITE,0);
+                game.drops_.ConvertEnemyBulletsToStars(game.bullets_);
+            }
+            if(frame>0)game.UpdatePickups(.04F);
+            game.UpdateBattleAnimations();
+            BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);game.Draw();EndTextureMode();EndDrawing();
+            Image image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);
+            assert(ExportImage(image,(std::filesystem::path(prefix)/(std::to_string(frame)+".png")).string().c_str()));UnloadImage(image);
+        }
+        assert(PickupCount(game)==0);UnloadRenderTexture(target);
+    }
+
     /// @brief 隔离真实太极圈资源，检查双圈像素、Focus 收拢、暂停冻结及卸载时动画借用的释放。
     static void TestPlayerOptions(Game& game, const std::string& prefix) {
         game.StartPreview();
@@ -1281,7 +1335,7 @@ struct GameLifecycleProbe {
 
 }  // namespace koumakyou
 
-/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --actor-contacts-only、--viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
+/// @brief 隐藏窗口集成测试；argv[1] 为可选截图前缀，argv[2] 支持 --options-capture、--drops-capture、--actor-contacts-only、--viewport-only、--dialogue-only、--boss-hud-only、--player-shots-only、--player-options-only、--marisa-only、--bomb-only、--bomb-audio-only。
 /// 仅 --bomb-audio-only 初始化音频且强制静音，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
@@ -1310,6 +1364,10 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestPlayerBombs(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--marisa-only") {
             koumakyou::GameLifecycleProbe::TestMarisa(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--options-capture") {
+            koumakyou::GameLifecycleProbe::CaptureOptionAnimations(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--drops-capture") {
+            koumakyou::GameLifecycleProbe::CaptureDrops(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--player-options-only") {
             koumakyou::GameLifecycleProbe::TestPlayerOptions(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--player-shots-only") {

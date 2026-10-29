@@ -260,3 +260,6 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 魔理沙四类、十二档自机弹体使用 `Review-Marisa.cmd` 独立审阅，见 [模型与验收说明](docs/PROJECTILE_MARISA.md)。
 
 三种 Bomb 模型（梦想封印、星群、Master Spark）使用 `Review-Bombs.cmd` 独立审阅，见 [模型与体积对照说明](docs/PROJECTILE_BOMBS.md)，三款均已人工验收通过。
+# 掉落物模型验收
+
+七款薄板道具：运行 `Review-Items.cmd`，旋转 GIF 和制作方式见 [掉落物模型](docs/ITEM_MODELS.md)。

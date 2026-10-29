@@ -20,6 +20,8 @@ public:
  void DrawGroups(std::span<const std::size_t> groups);
  bool DrawBullet(const Bullet&,const VisualResource&);
  bool DrawBeam(const Bullet&,const VisualResource&,float from,float to);
+ /// @brief 已绑定原始 Item(0…6) 时绘制共享薄板；未知外观返回 false。
+ bool DrawItem(const PickupSprite&,const VisualResource&);
  bool DrawOption(const PickupSprite&,const VisualResource&);
  bool DrawBomb(const BombVolumeSprite&,const VisualResource&,float from,float to);
 private:

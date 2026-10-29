@@ -348,7 +348,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                 DrawActorBurst(actor.position,actor.hitRadius,appearance.burst,Fade(color,appearance.burstAlpha),actor.kind);
         } else if(command.kind==Kind::Pickup) {
             const auto& pickup=pickups[command.index];const auto& visual=FindVisual(visuals,pickup.visual);
-            if(models&&models->DrawOption(pickup,visual))continue;
+            if(models&&(models->DrawItem(pickup,visual)||models->DrawOption(pickup,visual)))continue;
             const float height=visual.worldHeight*pickup.heightScale;
             if(IsTextureValid(visual.texture))DrawSprite(camera,screenUp,Spec(visual,height,pickup.animation),
                                                        pickup.position,{255,255,255,pickup.alpha});

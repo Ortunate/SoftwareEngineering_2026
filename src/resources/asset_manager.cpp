@@ -362,7 +362,7 @@ bool AssetManager::AdvanceStageLoad() {
 
 float AssetManager::StageLoadProgress() const {
     if (!stageLoad_) return stageLoaded_ ? 1.0F : 0.0F;
-    const float modelSteps=std::filesystem::exists(projectiles::ProjectileAssetDirectory(root_))?float(ProjectileModels.size()+2):0.F;
+    const float modelSteps=std::filesystem::exists(projectiles::ProjectileAssetDirectory(root_))?float(ProjectileAssets::LoadSteps):0.F;
     const float modelDone=projectileAssets_?projectileAssets_->LoadProgress()*modelSteps:0.F;
     return (stageLoad_->uploaded+modelDone)/(stageLoad_->items.size()+1+modelSteps);
 }

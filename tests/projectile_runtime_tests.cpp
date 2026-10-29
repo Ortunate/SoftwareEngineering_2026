@@ -3,15 +3,30 @@
 #include "resources/asset_manager.hpp"
 #include "gameplay/collision/projectile_collision.hpp"
 #include "render/combat_renderer.hpp"
+#include "gameplay/items/drop_system.hpp"
+#include "rlgl.h"
+#include <source_location>
 #include <iostream>
 #include <fstream>
 #include "resources/projectile_paths.hpp"
 using namespace koumakyou;
-void Require(bool v){if(!v)throw std::runtime_error("Projectile runtime integration failed");}
+void Require(bool v,std::source_location at=std::source_location::current()){if(!v)throw std::runtime_error("Projectile runtime integration failed at line "+std::to_string(at.line()));}
 int main(int argc,char**argv){try{
  if(argc<2)throw std::runtime_error("Asset root required");SetConfigFlags(FLAG_WINDOW_HIDDEN);InitWindow(1280,800,"Projectile runtime integration");
  for(int cycle=0;cycle<2;cycle++){
   ProjectileAssets assets(argv[1]);for(const auto&d:ProjectileModels)Require(assets.Get(d.name).layers[0].meshCount>0);
+  // DropSystem 模拟年龄决定旋转，相同模拟时间不依赖帧率；零步长冻结，池复用恢复零角。
+  DropSystem drops(7);drops.SpawnFixedPower({0,0,0},1);drops.Update(1,{0,-9,-8});
+  drops.ForEachActive([](const Pickup&p){Require(std::abs(p.RotationRadians()-PI/2)<1e-5F);Require(p.NativeItemType()==0);});
+  drops.Update(0,{0,-9,-8});drops.ForEachActive([](const Pickup&p){Require(std::abs(p.RotationRadians()-PI/2)<1e-5F);});
+  drops.Clear();drops.SpawnFixedPower({0,0,0},8);drops.ForEachActive([](const Pickup&p){Require(p.RotationRadians()==0&&p.NativeItemType()==2);});
+  Camera3D itemCamera{{0,0,8},{0,0,0},{0,1,0},4,CAMERA_ORTHOGRAPHIC};
+  CombatRenderer itemRenderer;BulletSystem empty;itemRenderer.Prepare(&assets,empty,{},itemCamera,1,0);
+  auto itemTarget=LoadRenderTexture(1024,640);BeginTextureMode(itemTarget);ClearBackground(BLACK);BeginMode3D(itemCamera);
+  for(int item=0;item<7;item++){Require(assets.Item(item).meshCount>0);VisualResource visual{};visual.animation=battle::Item(item);visual.worldHeight=.8F;PickupSprite sprite;sprite.position={(item%4-1.5F)*1.3F,(.5F-item/4)*1.5F,0};sprite.itemRotation=.5F;Require(itemRenderer.DrawItem(sprite,visual));}
+  EndMode3D();rlEnableDepthMask();rlEnableBackfaceCulling();EndTextureMode();auto itemImage=LoadImageFromTexture(itemTarget.texture);ImageFlipVertical(&itemImage);
+  auto pixels=LoadImageColors(itemImage);int itemVisible=0;for(int i=0;i<itemImage.width*itemImage.height;i++)if(pixels[i].r+pixels[i].g+pixels[i].b>30)itemVisible++;Require(itemVisible>1000);UnloadImageColors(pixels);
+  if(argc>2&&cycle==0){std::filesystem::create_directories(argv[2]);ExportImage(itemImage,(std::filesystem::path(argv[2])/"items-runtime.png").string().c_str());}UnloadImage(itemImage);UnloadRenderTexture(itemTarget);
   BulletSystem bullets;std::array<VisualResource,10> visuals{};ProjectileCollision collision;
   for(int type=0;type<10;type++){
    visuals[type].animation=battle::EnemyBullet(type,2);auto b=bullets.Spawn(BulletOwner::Enemy,{(type%5-2)*1.2F,(.5F-type/5)*1.4F,0},{0,1,0},.32F,WHITE,type);Require(b);b->nativeType=type;b->nativeColor=2;

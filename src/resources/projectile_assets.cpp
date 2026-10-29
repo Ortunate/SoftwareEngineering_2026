@@ -42,7 +42,7 @@ void ProjectileAssets::LoadModelResource(std::size_t i){
 }
 bool ProjectileAssets::AdvanceLoad(){
  if(failed_)throw std::logic_error("Failed projectile load must be restarted");
- if(loadStep_==ProjectileModels.size()+2)return true;
+ if(loadStep_==LoadSteps)return true;
  try{
   if(loadStep_==0){auto shaders=projectiles::ProjectileShaderDirectory(root_);marisa_=Load(shaders,"marisa");bomb_=Load(shaders,"bombs");needle_=Load(shaders,"reimu_cone");
    // 副机外辉光复用一张柔边纹理，不加载原精灵，也不为左右实例重复创建纹理。
@@ -51,16 +51,25 @@ bool ProjectileAssets::AdvanceLoad(){
    optionHalo_=LoadTextureFromImage(halo);UnloadImage(halo);if(!IsTextureValid(optionHalo_))throw std::runtime_error("Option halo texture failed");SetTextureFilter(optionHalo_,TEXTURE_FILTER_BILINEAR);
   }
   else if(loadStep_<=ProjectileModels.size())LoadModelResource(loadStep_-1);
+  else if(loadStep_<=ProjectileModels.size()+7){
+   constexpr const char*names[]={"power_small","point","power_large","bomb","full_power","life","star"};
+   const auto index=loadStep_-ProjectileModels.size()-1;
+   auto base=projectiles::ProjectileAssetDirectory(root_).parent_path()/"items";
+   auto file=base/names[index]/(std::string(names[index])+".gltf");
+   ValidateModel(file);items_[index]=LoadModel(file.string().c_str());ValidateGeometry(items_[index]);
+  }
   else{collection_=std::make_unique<projectiles::CollectionRenderer>(root_,8192);lasers_=std::make_unique<projectiles::LaserRenderer>(root_,8192);}
-  ++loadStep_;return loadStep_==ProjectileModels.size()+2;
+  ++loadStep_;return loadStep_==LoadSteps;
  }catch(...){failed_=true;Release();throw;}
 }
 ProjectileAssets::~ProjectileAssets(){Release();}
 void ProjectileAssets::Release(){
  collection_.reset();lasers_.reset();if(optionHalo_.id)UnloadTexture(optionHalo_);optionHalo_={};std::unordered_set<unsigned int> textures;
  for(auto&r:resources_)for(auto&m:r.layers)if(m.meshCount){for(int i=0;i<m.materialCount;i++)for(int j=0;j<12;j++){auto t=m.materials[i].maps[j].texture;if(t.id>1&&textures.insert(t.id).second)UnloadTexture(t);}UnloadModel(m);m={};}
+ for(auto&m:items_)if(m.meshCount){for(int i=0;i<m.materialCount;i++)for(int j=0;j<12;j++){auto t=m.materials[i].maps[j].texture;if(t.id>1&&textures.insert(t.id).second)UnloadTexture(t);}UnloadModel(m);m={};}
  if(marisa_.id)UnloadShader(marisa_);if(bomb_.id)UnloadShader(bomb_);if(needle_.id)UnloadShader(needle_);marisa_={};bomb_={};needle_={};for(auto&r:resources_)r.collision.reset();
 }
+const Model& ProjectileAssets::Item(int type)const{if(!Ready())throw std::logic_error("Items are still loading");if(type<0||type>6)throw std::invalid_argument("Invalid Item type");return items_[type];}
 const ProjectileModelResource& ProjectileAssets::Get(std::string_view name)const{return Get(DescribeProjectileModel(name).id);}
 const ProjectileModelResource& ProjectileAssets::Get(ProjectileAssetId id)const{if(!Ready())throw std::logic_error("Projectile assets are still loading");auto index=static_cast<std::size_t>(id);if(index>=resources_.size())throw std::invalid_argument("Unknown projectile resource ID");return resources_[index];}
 }

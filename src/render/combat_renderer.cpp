@@ -46,6 +46,14 @@ bool CombatRenderer::DrawBeam(const Bullet&b,const VisualResource&v,float from,f
  if(b.owner==BulletOwner::Enemy){projectiles::LaserInstance item;item.origin=b.position;item.direction=b.Direction();item.length=b.beamLength;item.radius=b.radius;item.visualScaleOverride=b.BeamVisualScale();item.dangerOverride=b.Dangerous()?1:0;item.color=std::clamp(binding.color,0,15);item.variant=binding.id==ProjectileAssetId::LaserRound?1:0;item.useColorOverride=v.animation.atlas!=battle::Atlas::BeamBullets;item.tintOverride=b.color;item.warning=0;item.growEnd=0;item.dangerEnd=10;item.end=11;item.age=1;item.fadeSeconds=0;if(item.radius>0&&item.length>0)assets_->Lasers().Draw(std::span(&item,1),camera_,aspect_,0,true,from,to);return true;}
  auto&r=assets_->Get(binding.id);auto pose=ProjectileFrameBuilder::Pose(b,binding,*assets_);pose.scale=1;pose.position=b.position;Shader s=assets_->Marisa();projectiles::MarisaInstance native;native.kind=2;native.tier=binding.tier;native.age=b.age;native.fadeAt=b.laserFadeAt>0?b.laserFadeAt:std::max(0.F,b.maxAge-.5F);auto state=projectiles::SampleMarisa(native);Int(s,"kind",2);Int(s,"clipEnabled",1);Real(s,"clipFrom",from);Real(s,"clipTo",to);Int(s,"clay",0);Real(s,"beamLength",b.beamLength);Real(s,"radius",b.radius*b.BeamVisualScale());Real(s,"phase",b.age);Real(s,"growth",1);Real(s,"trailLengthScale",1);Real(s,"trailWidthScale",1);Real(s,"opacity",b.color.a/255.F*state.nativeOpacity);Real(s,"strength",.8F);Vec(s,"eye",camera_.position);Vec(s,"tintMultiplier",{b.color.r/255.F,b.color.g/255.F,b.color.b/255.F});BeginBlendMode(BLEND_ADDITIVE);rlDrawRenderBatchActive();rlDisableDepthMask();Int(s,"effect",0);DrawLayer(r.layers[0],s,pose);Int(s,"effect",1);Real(s,"radius",b.radius*b.BeamVisualScale()*state.haloScale);DrawLayer(r.layers[1],s,pose);EndBlendMode();return true;
 }
+bool CombatRenderer::DrawItem(const PickupSprite&p,const VisualResource&v){
+ if(!assets_||v.animation.atlas!=battle::Atlas::Bullets||v.animation.script<21||v.animation.script>27)return false;
+ if(p.animation&&!p.animation->visible)return true;
+ ProjectilePose pose;pose.position=p.position;pose.scale=v.worldHeight*p.heightScale;pose.rotation=QuaternionFromAxisAngle({0,1,0},p.itemRotation);
+ // 正背面与侧壁沿世界固定长轴转动，不作公告板朝向；只读共享材质，不改变拾取体积。
+ Color tint=p.animation?p.animation->color:WHITE;tint.a=static_cast<unsigned char>(int(tint.a)*p.alpha/255);
+ BeginBlendMode(BLEND_ALPHA);rlDrawRenderBatchActive();rlDisableDepthMask();rlEnableBackfaceCulling();DrawLayer(assets_->Item(v.animation.script-21),{},pose,tint);rlDisableBackfaceCulling();EndBlendMode();return true;
+}
 bool CombatRenderer::DrawOption(const PickupSprite&p,const VisualResource&v){return OptionRenderer::Draw(assets_,camera_,p,v);}
 bool CombatRenderer::DrawBomb(const BombVolumeSprite&item,const VisualResource&v,float from,float to){return BombRenderer::Draw(assets_,camera_,item,v,from,to);}
 }

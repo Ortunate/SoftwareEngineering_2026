@@ -3003,7 +3003,8 @@ struct GameLifecycleProbe {
             const auto& bg=assets.GetVisual(stage_extra::kBackground);assert(IsTextureValid(bg.texture)&&bg.texture.width==1024&&bg.texture.height==1024);
             for(int pose:{0,2,3}) {
                 const auto& v=assets.GetVisual(stage_extra::kFlandrePortraits[pose]);
-                assert(IsTextureValid(v.texture)&&v.texture.width==1400&&v.texture.height==2020&&v.dialogueCrop.height<=.60F&&v.dialogueCrop.width<1);
+                // 现代重绘保留全身透明构图；取景仍按 Alpha 求上部，不沿用原图图集留白尺寸。
+                assert(IsTextureValid(v.texture)&&v.texture.width==1024&&v.texture.height==1536&&v.dialogueCrop.height<=.60F&&v.dialogueCrop.width<1);
             }
             assert(assets.GetVisual(stage_extra::kFlandrePortraits[0]).texture.id==assets.GetVisual(stage_extra::kFlandrePortraits[1]).texture.id);
             assert(stage_extra::PatchouliMidbossConfig().visual==stage_extra::kPatchouli);

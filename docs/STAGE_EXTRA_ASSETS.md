@@ -4,7 +4,9 @@
 
 ## 立绘与背景
 
-从th06ST.dat提取`face12a/b/c.anm`及各自`_4k.dds`，使用项目现有`export_portrait_sprites`按ANM逻辑裁图与DDS/ANM比例导出，三张PNG均为1400×2020。保留原Alpha与完整人物，不重绘或按高清纹理倍增世界尺寸。已检查图像及透明角点，原图有Alpha 0/1的透明留白；沿用加载器`FindDialogueContent`的Alpha>16取景规则，不能把近透明白色留白视为不透明背景而重新抠图。三姿态窗口边缘已验证；真实MSG对白播放验证另行记录。
+原始参考从th06ST.dat的`face12a/b/c.anm`及各自`_4k.dds`按ANM逻辑裁图导出，尺寸为1400×2020。当前三张运行时立绘经内置 `image_gen` 重绘为1024×1536透明RGBA，保留各自动作、神态、服饰与角色装饰，重新塑造面部及双手，统一项目现代立绘画风；闭眼差分保留汗滴、战损和绷带。完整提示词、原图身份和成品校验见 `assets/source/portraits/flandre/`。加载器继续沿用`FindDialogueContent`的Alpha>16取景规则，不按纹理分辨率倍增世界尺寸；原始导出时的边缘验证记录与当前重绘成品的验证应分别理解。
+
+重绘后三张已重新通过 `--extra-assets-only` 图形专项：同步/异步加载、1100×760、1280×720、390×844取景锚点、共享纹理和卸载所有权检查。横屏睁眼及竖屏闭眼截图已目视核验，透明区域无图集底色。
 
 背景直接保留`stg7bg_4k.dds`及`stg7bg.anm`为background.dds/anm，未改变字节。源stage7.std仅留参考侧，SHA-256为`f4c418656897cb29f67c4792e523912bd5e7910f9e2de526d042f0017775d617`；生产不能读取STD并据其生成编排，三维场景须另行明确适配。
 
@@ -16,7 +18,7 @@ stage7.std的656/784/912字节处分别绑定`th06_14.opus`、`th06_15.opus`、`
 
 ## 运行素材校验
 
-复制后逐文件与临时转码/导出产物比较SHA-256，八个文件全部一致。以下是当前仓库文件的大小与哈希，不能替代正式manifest加载和整关视觉/音频验收。
+初次接入时八个文件与临时转码/导出产物的SHA-256一致。当前三张立绘已替换为现代重绘；下表同步列出当前运行时文件的大小与哈希，不能替代正式manifest加载和整关视觉/音频验收。
 
 | 路径 | 字节 | SHA-256 |
 |---|---:|---|
@@ -24,9 +26,9 @@ stage7.std的656/784/912字节处分别绑定`th06_14.opus`、`th06_15.opus`、`
 | `stages/stage_extra/background.dds` | 1048724 | `a3663c629e9605bf535edc2bd0bb27895b233e0517712e5463d98dee9ec01025` |
 | `stages/stage_extra/boss_theme.mp3` | 4343037 | `5871f62611bfe22c2c1af58943e85ff18ca3c4b7ceeacc273dd3f37f7cb51642` |
 | `stages/stage_extra/event_theme.mp3` | 3117285 | `fcc9d158d0da4acdc1a0fb2b1e2171bc004e7984c02a1353403b4c4d312f752b` |
-| `stages/stage_extra/portraits/flandre/face12a_0.png` | 1709227 | `cd7abba71560fb12c81a27b7ac2371acf9e46298fcba5e773a60a0fc6bfeedae` |
-| `stages/stage_extra/portraits/flandre/face12b_0.png` | 1710450 | `f0be5f8eeec749f1fc4955bd4b169417794ab998fd4ca9bfd5489b51e1993cb8` |
-| `stages/stage_extra/portraits/flandre/face12c_0.png` | 1818891 | `2bc463f2fa3d33c412965f69a831600e373bc092e449f87b10e648aeaa8a1e21` |
+| `stages/stage_extra/portraits/flandre/face12a_0.png` | 2031809 | `10ae92fd9e5d846919a62e6b0f150ca0d4e883ff7de6ea930c14a12970ae8325` |
+| `stages/stage_extra/portraits/flandre/face12b_0.png` | 2067919 | `c111e0140e6635932e547ea20b367357e1449b770873177068738a503dca94cb` |
+| `stages/stage_extra/portraits/flandre/face12c_0.png` | 2088680 | `b11a6da1430ee7c383f3dcaf1dca053bef873d421e3fbeedc705bf470e741bc0` |
 | `stages/stage_extra/stage_theme.mp3` | 4286253 | `3358044ee801ddad92c0bea24f4f80be6819ac84b3485983d7ae556dd6bacbc4` |
 
 ## 提取及转码输入身份
@@ -51,7 +53,7 @@ stage7.std的656/784/912字节处分别绑定`th06_14.opus`、`th06_15.opus`、`
 
 StageAssetManifest新增可选eventBgm，旧清单默认空值。AssetManager独占Event流并与Stage/Boss流一起加载、音量调整、更新、暂停和卸载；PlayStageTrack接受0/1/2，-1停止，其他索引拒绝且保留正在播放的曲目。同槽重复选择不重启；空槽请求停止旧曲，不沿用上一关流。旧PlayStageMusic/PlayBossMusic接口保留。
 
-`--extra-assets-only`已在真实图形/音频上下文（强制静音）通过同步及异步加载、异步取消、三个独立音乐解码器/真实播放/重复选择/暂停恢复/停止、卸载清空、旧关卡空第三槽隔离。原生背景1024×1024纹理、两个独立Boss档案、全部Flandre姿态有效；三张1400×2020立绘在1100×760、1280×720、390×844下均无超过2像素的侧边/底边锚点空隙，0/1槽正确共享c纹理。弱引用随卸载释放，不重复销毁共享纹理。
+`--extra-assets-only`已在真实图形/音频上下文（强制静音）通过同步及异步加载、异步取消、三个独立音乐解码器/真实播放/重复选择/暂停恢复/停止、卸载清空、旧关卡空第三槽隔离。原生背景1024×1024纹理、两个独立Boss档案、全部Flandre姿态有效；原始三张1400×2020立绘在1100×760、1280×720、390×844下均无超过2像素的侧边/底边锚点空隙，0/1槽正确共享c纹理。弱引用随卸载释放，不重复销毁共享纹理。
 
 这些验证确认资源和流式接口可用，未把背景纹理当作已实现的三维关卡，也未把合成立绘边缘测试视作真实MSG对话验收。正式清单下四机体×击破/超时的8条完整道中，以及首机体主战20技能/10符与后继5技能/3符的两条连续遭遇均通过；峰值与旧隔离清单一致。GPU透明遮挡、旧Bomb音频与公共资源生命周期回归也已通过。
 

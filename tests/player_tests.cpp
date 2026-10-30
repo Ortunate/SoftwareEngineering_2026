@@ -474,6 +474,8 @@ void RunPlayerTests() {
         assert(!ResolvePlayerAim(origin,forward,targets,false).assisted);
         const auto assisted=ResolvePlayerAim(origin,forward,targets,true);
         assert(assisted.assisted && assisted.forward.x>0);
+        assert(game_math::DistanceSquared(assisted.targetPosition,targets[0].position)<0.000001F);
+        assert(assisted.targetRadius==targets[0].radius);
         assert(std::acos(assisted.forward.z)<=6*DEG2RAD+0.00001F);
         targets[0].eligible=false;
         assert(!ResolvePlayerAim(origin,forward,targets,true).assisted);

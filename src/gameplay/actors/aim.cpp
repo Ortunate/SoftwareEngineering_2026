@@ -62,6 +62,7 @@ PlayerAimResult ResolvePlayerAim(Vector3 position,Vector3 forward,std::span<cons
         const float projection=v.x*result.forward.x+v.y*result.forward.y+v.z*result.forward.z;
         result.point=game_math::Add(position,game_math::Scale(result.forward,projection));
         result.depth=std::max(0.05F,projection*std::cos(turn));result.assisted=true;
+        result.targetPosition=t.position;result.targetRadius=t.radius;
     }
     return result;
 }

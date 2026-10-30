@@ -19,6 +19,36 @@ constexpr Color kGold{210, 173, 116, 255};
 constexpr Color kRose{243, 163, 183, 255};
 constexpr Color kGreen{169, 221, 178, 255};
 
+/// @brief 围绕目标球投影绘制四个朝内的锁定箭头；age 使用玩家游戏秒数，暂停时不会漂移。
+/// 世界球半径映射为屏幕尺寸，再留出精灵外缘与浮动间距；不移动中央准星或保存敌方指针。
+void DrawAimLock(const Camera3D& camera,const PlayerAimResult& aim,double age,float scale) {
+    if(!aim.assisted || aim.targetRadius<=0)return;
+    const auto view=Vector3{camera.target.x-camera.position.x,camera.target.y-camera.position.y,camera.target.z-camera.position.z};
+    const auto relative=Vector3{aim.targetPosition.x-camera.position.x,aim.targetPosition.y-camera.position.y,aim.targetPosition.z-camera.position.z};
+    if(view.x*relative.x+view.y*relative.y+view.z*relative.z<=0)return;
+    const auto center=GetWorldToScreen(aim.targetPosition,camera);
+    if(center.x<0 || center.x>GetScreenWidth() || center.y<0 || center.y>GetScreenHeight())return;
+    const auto top=GetWorldToScreen({aim.targetPosition.x,aim.targetPosition.y+aim.targetRadius,aim.targetPosition.z},camera);
+    const float projectedRadius=std::hypot(top.x-center.x,top.y-center.y);
+    const float gap=std::clamp(projectedRadius*1.8F,18*scale,140*scale)+9*scale;
+    // 四箭头同步向内外浮动，保持朝向和目标中心一致，不能旋转成方向含糊的装饰环。
+    const float floating=4*scale*std::sin(static_cast<float>(age)*2*PI*1.2F);
+    constexpr std::array<Vector2,4> directions{{{0,-1},{1,0},{0,1},{-1,0}}};
+    for(const auto direction:directions) {
+        const Vector2 side{-direction.y,direction.x};
+        const auto point=[&](float radial,float lateral) {
+            return Vector2{center.x+direction.x*radial+side.x*lateral,center.y+direction.y*radial+side.y*lateral};
+        };
+        const float tip=gap+floating;
+        const auto a=point(tip,0),b=point(tip+11*scale,-5*scale),c=point(tip+11*scale,5*scale);
+        // raylib 的三角形顶点使用逆时针顺序；深色描边在红雾和明亮精灵前都保持可辨识。
+        DrawTriangle(a,c,b,Color{255,221,143,235});
+        DrawLineEx(a,b,1.3F*scale,Color{52,22,31,220});
+        DrawLineEx(b,c,1.3F*scale,Color{52,22,31,220});
+        DrawLineEx(c,a,1.3F*scale,Color{52,22,31,220});
+    }
+}
+
 /// @brief 以逻辑像素绘制半透明卡片；opacity 只影响显示，不能拦截鼠标或改变底下的视口。
 void Panel(Rectangle rect, float scale, float opacity = 1) {
     DrawRectangleRounded(rect, 0.08F, 12, ui::WithOpacity(Color{18, 10, 23, 182}, opacity));
@@ -191,10 +221,7 @@ void Game::DrawHud() const {
             if (bullet.owner == BulletOwner::Enemy && bullet.Dangerous() &&
                 bullet.DistanceSquaredTo(position) < 1.15F * 1.15F) danger = true;
         });
-        if(player_.Aim().assisted) {
-            const auto point=GetWorldToScreen(player_.Aim().point,camera_);
-            DrawCircleLines(static_cast<int>(point.x),static_cast<int>(point.y),3*s,Color{169,221,178,150});
-        }
+        DrawAimLock(camera_,player_.Aim(),player_.VisualAge(),s);
         const float aimScale = std::clamp(s, 0.75F, 1.5F);
         const Color warning{255,90,110,255};
         ui::AimReticle({l.width/2,l.height/2},aimScale,danger?warning:kGold,danger?warning:kInk,

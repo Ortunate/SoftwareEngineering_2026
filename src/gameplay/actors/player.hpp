@@ -3,6 +3,7 @@
 #pragma once
 
 #include "gameplay/bullets/system.hpp"
+#include "gameplay/actors/aim.hpp"
 #include "gameplay/data/native_combat.hpp"
 
 #include <span>
@@ -24,6 +25,7 @@ struct PlayerInput {
     bool focus = false;
     bool fire = false;
     bool bomb = false;
+    bool aimAssistEnabled = false; // 正式游戏由持久化设置传入，独立调用默认保留原行为。
 };
 
 /// @brief 玩家与一颗敌弹接触后的结果；擦弹只对同一颗弹幕报告一次。
@@ -35,13 +37,6 @@ struct PlayerShotVisuals {
     VisualId primary=kInvalidVisualId;
     std::array<VisualId,4> secondary{kInvalidVisualId,kInvalidVisualId,kInvalidVisualId,kInvalidVisualId};
     std::array<VisualId,4> impact{kInvalidVisualId,kInvalidVisualId,kInvalidVisualId,kInvalidVisualId};
-};
-
-/// @brief 本帧可瞄准的球形判定体快照；position/radius 为世界坐标/世界单位，radius 须为正。
-/// 仅用于确定准星射线的汇聚深度，不会将弹道吸附到偏离准星的目标中心。
-struct PlayerAimTarget {
-    Vector3 position{};
-    float radius = 0.0F;
 };
 
 /// @brief 持有玩家位置、视角、判定、资源及计时状态，并执行移动、射击和受击规则。
@@ -75,8 +70,8 @@ public:
     /// @param bulletVisual 当前关卡中央主符卡的外观 ID。
     /// @param secondaryVisual 当前机体副弹外观 ID，由关卡选择追踪符卡或直射针素材。
     /// @param allowFire 对话期间为 false；Bomb 不受此参数影响。
-    /// @param aimTargets 本次调用期间借用的活动敌人/Boss 判定体；移动和转向后求准星射线交点。
-    /// 射线未指向目标时在前方 20 世界单位汇聚，已发出的直射弹不再随准星改变方向。
+    /// @param aimTargets 本次调用期间借用的活动敌人/Boss 判定体；移动和转向后求准星射线交点及可选辅助落点。
+    /// 射线与辅助均未选中目标时在前方 20 世界单位汇聚，已发出的直射弹不再随准星改变方向。
     /// 四机体主副弹按原作 60 Hz、30 帧射击窗口分批生成；松开射击后完成当前窗口，allowFire=false 则取消。
     /// @return 成功消耗 Bomb 时返回 true，调用方据此处理清弹和范围伤害。
     bool Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
@@ -130,7 +125,11 @@ public:
     [[nodiscard]] float InvulnerabilitySeconds() const { return invulnerableTimer_; }
     [[nodiscard]] double VisualAge() const { return visualAge_; }
 
+    /// @brief 借用本帧解析结果，仅用于 HUD，不拥有目标对象。
+    [[nodiscard]] const PlayerAimResult& Aim() const { return aim_; }
+
 private:
+    PlayerAimResult aim_{};
     /// @brief 当前视线的单位前向向量。
     [[nodiscard]] Vector3 Forward() const;
     /// @brief 与当前水平朝向垂直的单位右向量。

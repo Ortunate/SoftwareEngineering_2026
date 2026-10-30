@@ -16,7 +16,7 @@ struct Header {
     std::uint32_t seed=1, shot=0, lives=2, bombs=3, phase=2;
     bool practice=false, spell=false, challenge=false;
 };
-/// @brief 一次逻辑更新；dt 单位秒，范围 (0,0.05]，不包含暂停或加载时间；confirm 合并键盘和鼠标确认。
+/// @brief 一次逻辑更新；dt 单位秒，范围 (0,0.05]，不包含暂停或加载时间；confirm 合并键盘和鼠标确认，player.aimAssistEnabled 固定本步弹道辅助设置。
 struct Frame { float dt=0; PlayerInput player{}; bool confirm=false, fast=false; };
 /// @brief 终局摘要在结束步骤全部执行后采样，不含退场动画；score 非负。
 struct Result {

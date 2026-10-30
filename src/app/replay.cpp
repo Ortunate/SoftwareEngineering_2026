@@ -104,7 +104,7 @@ replay::Frame Game::ReadRunInput(float dt) const {
         .forward=BindingDown(bindings_.forward),.backward=BindingDown(bindings_.backward),
         .moveLeft=BindingDown(bindings_.moveLeft),.moveRight=BindingDown(bindings_.moveRight),
         .ascend=BindingDown(bindings_.ascend),.descend=BindingDown(bindings_.descend),
-        .focus=BindingDown(bindings_.focus),.fire=BindingDown(bindings_.fire),.bomb=BindingPressed(bindings_.bomb)};
+        .focus=BindingDown(bindings_.focus),.fire=BindingDown(bindings_.fire),.bomb=BindingPressed(bindings_.bomb),.aimAssistEnabled=aimAssistEnabled_};
     return f;
 }
 void Game::Update(float dt,float playbackElapsed) {

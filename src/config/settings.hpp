@@ -67,6 +67,7 @@ struct GameSettings {
     StageHighScores stageHighScores{};
     spell::Selection spellSelection{}; // 独立保存符卡练习的角色、关卡、符卡组和难度；进入时重置为关卡页。
     spell::Records spellRecords{};
+    bool aimAssistEnabled = true; // 开启最多六度的弹道辅助，不修改镜头。
 };
 
 /// @brief 读取本地配置；缺失或无效的配置会使用默认值。
@@ -74,7 +75,7 @@ struct GameSettings {
 /// @return 可用于本局游戏的设置。
 [[nodiscard]] GameSettings LoadOrCreateSettings(
     const std::filesystem::path& path);
-/// @brief 将全部设置保存为 version=8 文本配置；旧版本缺失角色字段时使用灵梦。
+/// @brief 将全部设置保存为 version=9 文本配置；旧版本缺失角色字段时使用灵梦。
 /// @param path 配置文件路径。
 /// @param settings 待保存的设置。
 /// @return 成功写入返回 true，否则返回 false。

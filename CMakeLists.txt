@@ -51,6 +51,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
     src/gameplay/actors/player.cpp
+    src/gameplay/actors/aim.cpp
     src/gameplay/data/native_combat.cpp
     src/gameplay/bullets/system.cpp
     src/gameplay/combat/combat.cpp
@@ -128,6 +129,17 @@ add_dependencies(koumakyou copy_assets)
 add_executable(native_asset_preview EXCLUDE_FROM_ALL tools/native_asset_preview.cpp)
 target_link_libraries(native_asset_preview PRIVATE koumakyou_engine)
 add_dependencies(native_asset_preview copy_assets)
+
+# 锁定提示验收复用真实世界/HUD 渲染；输出 PNG 供 GIF 编码，断言在 Release 中也启用。
+add_executable(aim_lock_preview EXCLUDE_FROM_ALL tools/aim_lock_preview.cpp)
+target_link_libraries(aim_lock_preview PRIVATE koumakyou_engine)
+add_dependencies(aim_lock_preview copy_assets)
+if(MSVC)
+    target_compile_options(aim_lock_preview PRIVATE /UNDEBUG /utf-8)
+else()
+    target_compile_options(aim_lock_preview PRIVATE -UNDEBUG)
+endif()
+
 
 if(MSVC)
     target_compile_options(koumakyou_ui PRIVATE /W4 /permissive- /utf-8)

@@ -17,10 +17,10 @@ inline Canvas PageCanvas(int width,int height) {
     return Canvas::Full(width,ui::CommandBar::ContentHeight(width,height),compact?760:1100,compact?1100:760);
 }
 
-inline constexpr int kOptionsCount = 8;
-inline constexpr int kNumericOptions = 6;
-inline constexpr int kBindingsIndex = 6;
-inline constexpr int kResetIndex = 7;
+inline constexpr int kOptionsCount = 9;
+inline constexpr int kNumericOptions = 7;
+inline constexpr int kBindingsIndex = 7;
+inline constexpr int kResetIndex = 8;
 /// @brief 暂停菜单的局部顺序；输入导航、鼠标命中与绘制必须使用相同项数。
 inline constexpr int kPauseCount = 3;
 inline constexpr std::array<const char*,kPauseCount> kPauseLabels{
@@ -42,17 +42,16 @@ inline constexpr std::array<const char*,3> kSpellResultLabels{"返回符卡选�
 inline constexpr std::array<bool,3> kSpellResultAvailable{true,true,true};
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
-    "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
-    "按键设置", "恢复默认设置"};
-/// @brief 第 index 行的屏幕矩形；index 为 0～7，返回只通过返回键处理，不加入选项列表。
+    "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "AIM ASSIST", "SE Vol", "Player", "Bomb", "按键设置", "恢复默认设置"};
+/// @brief 第 index 行的屏幕矩形；index 为 0～8，返回只通过返回键处理，不加入选项列表。
 inline Rectangle OptionRow(const Canvas& canvas, int index) {
-    return canvas.width<1000 ? canvas.Rect(48,220+index*76,664,64)
-                             : canvas.Rect(310,160+index*48,625,42);
+    return canvas.width<1000 ? canvas.Rect(48,220+index*64,664,64)
+                             : canvas.Rect(310,160+index*46,625,42);
 }
-/// @brief 数值行的屏幕箭头矩形；index 为 0～5，direction 为 -1（减小）或 1（增大）。
+/// @brief 数值行的屏幕箭头矩形；index 为 0～6，direction 为 -1（减小）或 1（增大）。
 inline Rectangle OptionArrow(const Canvas& canvas, int index, int direction) {
-    return canvas.width<1000 ? canvas.Rect(direction<0?420:664,230+index*76,40,40)
-                             : canvas.Rect(direction<0?670:886,165+index*48,32,32);
+    return canvas.width<1000 ? canvas.Rect(direction<0?420:664,230+index*64,40,40)
+                             : canvas.Rect(direction<0?670:886,165+index*46,32,32);
 }
 
 /// @brief 开局、音乐、成绩和制作信息的响应式布局；构造参数为窗口逻辑像素。

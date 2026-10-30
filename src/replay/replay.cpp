@@ -67,7 +67,7 @@ Codec Encode(const Data& d) {
     const auto& r=d.result;c.Put(static_cast<std::uint32_t>(r.score));c.Put(static_cast<std::uint32_t>(r.score>>32));for(auto v:{r.lives,r.power,r.misses,r.bombs,std::uint32_t(r.won)})c.Put(v);
     for(const auto& f:d.frames) {
         c.Float(f.dt);c.Float(f.player.mouseDelta.x);c.Float(f.player.mouseDelta.y);c.Float(f.player.mouseSensitivityScale);
-        const auto& p=f.player;c.Put(p.forward|(p.backward<<1)|(p.moveLeft<<2)|(p.moveRight<<3)|(p.ascend<<4)|(p.descend<<5)|(p.focus<<6)|(p.fire<<7)|(p.bomb<<8)|(f.confirm<<9)|(f.fast<<10));
+        const auto& p=f.player;c.Put(p.forward|(p.backward<<1)|(p.moveLeft<<2)|(p.moveRight<<3)|(p.ascend<<4)|(p.descend<<5)|(p.focus<<6)|(p.fire<<7)|(p.bomb<<8)|(f.confirm<<9)|(f.fast<<10)|(p.aimAssistEnabled<<11));
     }
     c.Put(Hash(c.bytes,c.bytes.size()));return c;
 }
@@ -109,7 +109,7 @@ bool Load(const std::filesystem::path& file,Data& out,std::string& error) {
         auto& h=d.header;h.seed=c.Get();h.shot=c.Get();h.lives=c.Get();h.bombs=c.Get();h.phase=c.Get();auto flags=c.Get();Require(flags<8,"录像模式无效");h.practice=flags&1;h.spell=flags&2;h.challenge=flags&4;
         const auto count=c.Get();Require(count>0 && count<=kMaxFrames,"录像步数无效");auto& r=d.result;const auto low=c.Get();r.score=low|(std::uint64_t(c.Get())<<32);r.lives=c.Get();r.power=c.Get();r.misses=c.Get();r.bombs=c.Get();const auto won=c.Get();Require(won<2,"录像结果无效");r.won=won;
         Require(c.offset+std::size_t(count)*20+4==c.bytes.size(),"录像步数与文件长度不符");d.frames.resize(count);
-        for(auto& f:d.frames) { f.dt=c.Float();f.player.mouseDelta.x=c.Float();f.player.mouseDelta.y=c.Float();f.player.mouseSensitivityScale=c.Float();flags=c.Get();Require(flags<2048,"录像输入标志无效");auto& p=f.player;p.forward=flags&1;p.backward=flags&2;p.moveLeft=flags&4;p.moveRight=flags&8;p.ascend=flags&16;p.descend=flags&32;p.focus=flags&64;p.fire=flags&128;p.bomb=flags&256;f.confirm=flags&512;f.fast=flags&1024; }
+        for(auto& f:d.frames) { f.dt=c.Float();f.player.mouseDelta.x=c.Float();f.player.mouseDelta.y=c.Float();f.player.mouseSensitivityScale=c.Float();flags=c.Get();Require(flags<4096,"录像输入标志无效");auto& p=f.player;p.forward=flags&1;p.backward=flags&2;p.moveLeft=flags&4;p.moveRight=flags&8;p.ascend=flags&16;p.descend=flags&32;p.focus=flags&64;p.fire=flags&128;p.bomb=flags&256;f.confirm=flags&512;f.fast=flags&1024;p.aimAssistEnabled=flags&2048; }
         Validate(d);out=std::move(d);error.clear();return true;
     } catch(const std::exception& e) { error=e.what();return false; }
 }

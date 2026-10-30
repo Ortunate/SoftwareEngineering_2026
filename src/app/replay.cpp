@@ -72,18 +72,22 @@ void Game::Update(float dt,float playbackElapsed) {
     if(replayMode_==replay::Mode::Playback && state_!=RunState::Loading) {
         if(IsKeyPressed(KEY_ESCAPE)) { replayStatus_="已退出回放";OpenReplayList();return; }
         const float elapsed=std::isfinite(playbackElapsed) && playbackElapsed>=0?playbackElapsed:dt;
-        if(IsKeyPressed(KEY_V)) { replayView_=(replayView_+1)%3;observer_=camera_; }
-        if(IsKeyPressed(KEY_R)) { observer_=camera_;orbitYaw_=0;orbitPitch_=0.2F;orbitDistance_=3; }
-        if(IsKeyPressed(KEY_SPACE) && !replayFinished_) { replayPaused_=!replayPaused_;replayBudget_=0; }
-        if(IsKeyPressed(KEY_LEFT_BRACKET))replaySpeed_=std::max(0,replaySpeed_-1);
-        if(IsKeyPressed(KEY_RIGHT_BRACKET))replaySpeed_=std::min(4,replaySpeed_+1);
-        if(IsKeyPressed(KEY_ONE))replaySpeed_=2;
-        double target=replayTimes_[replaySeeking_?replayTarget_:replayCursor_];
-        const float jump=IsKeyDown(KEY_LEFT_SHIFT)||IsKeyDown(KEY_RIGHT_SHIFT)?30:5;
-        if(IsKeyPressed(KEY_LEFT))SeekReplay(target-jump);
-        if(IsKeyPressed(KEY_RIGHT))SeekReplay(target+jump);
-        if(IsKeyPressed(KEY_HOME))SeekReplay(0);
-        if(IsKeyPressed(KEY_END))SeekReplay(replayTimes_.back());
+        // 回放暂停沿用本机 Bomb 绑定，键盘和鼠标统一按首次按下触发；同帧优先于其他观战快捷键。
+        const bool pausePressed=BindingPressed(bindings_.bomb);
+        if(pausePressed && !replayFinished_) { replayPaused_=!replayPaused_;replayBudget_=0; }
+        if(!pausePressed) {
+            if(IsKeyPressed(KEY_V)) { replayView_=(replayView_+1)%3;observer_=camera_; }
+            if(IsKeyPressed(KEY_R)) { observer_=camera_;orbitYaw_=0;orbitPitch_=0.2F;orbitDistance_=3; }
+            if(IsKeyPressed(KEY_LEFT_BRACKET))replaySpeed_=std::max(0,replaySpeed_-1);
+            if(IsKeyPressed(KEY_RIGHT_BRACKET))replaySpeed_=std::min(4,replaySpeed_+1);
+            if(IsKeyPressed(KEY_ONE))replaySpeed_=2;
+            double target=replayTimes_[replaySeeking_?replayTarget_:replayCursor_];
+            const float jump=IsKeyDown(KEY_LEFT_SHIFT)||IsKeyDown(KEY_RIGHT_SHIFT)?30:5;
+            if(IsKeyPressed(KEY_LEFT))SeekReplay(target-jump);
+            if(IsKeyPressed(KEY_RIGHT))SeekReplay(target+jump);
+            if(IsKeyPressed(KEY_HOME))SeekReplay(0);
+            if(IsKeyPressed(KEY_END))SeekReplay(replayTimes_.back());
+        }
         const bool muted=replaySeeking_ || replayPaused_ || replayFinished_ || replaySpeed_!=2;
         if(!muted && replayAudioMuted_)assets_.SeekMusic(static_cast<float>(replayTimes_[replayCursor_]-replayMusicSince_));
         replayAudioMuted_=muted;

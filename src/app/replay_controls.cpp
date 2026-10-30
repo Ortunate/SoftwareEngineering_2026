@@ -168,6 +168,7 @@ void Game::DrawReplayBar() const {
     const auto text=std::string(state)+"  "+std::to_string(int(current))+" / "+std::to_string(int(duration))+" s  "+std::array<const char*,5>{"0.25x","0.5x","1x","2x","4x"}[replaySpeed_]+"  "+std::array<const char*,3>{"第一人称","第三人称","自由视角"}[replayView_];
     ui::Label{{12,top+15,w-24,25},20}.Draw(context,text.c_str(),context.theme.text);
     ui::Label{{12,top+40,w-24,24},16}.Draw(context,replayStatus_.c_str(),context.theme.accent);
-    const std::array<ui::KeyHint,6> hints{{{"Space","暂停"},{"←/→ · Shift","定位 5/30秒"},{"Home / End","首尾"},{"[ / ] / 1","倍速"},{"V / R · 移动绑定","视角"},{"Esc","退出"}}};bar.Draw(context,hints);
+    const auto pauseKey=KeyLabel(bindings_.bomb);
+    const std::array<ui::KeyHint,6> hints{{{pauseKey.c_str(),replayPaused_?"继续回放":"暂停回放"},{"←/→ · Shift","定位 5/30秒"},{"Home / End","首尾"},{"[ / ] / 1","倍速"},{"V / R · 移动绑定","视角"},{"Esc","退出"}}};bar.Draw(context,hints);
 }
 }

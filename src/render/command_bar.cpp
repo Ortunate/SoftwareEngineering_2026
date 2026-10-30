@@ -20,7 +20,7 @@ void Game::DrawCommandBar() const {
         add("Z / Space / 左键",confirm,enabled);add("X / Esc / 右键",back,enabled);
     };
     if(replayMode_==replay::Mode::Playback) {
-        add("Space",replayPaused_?"继续回放":"暂停回放");add("Esc","返回录像列表");
+        add(KeyLabel(bindings_.bomb),replayPaused_?"继续回放":"暂停回放");add("Esc","返回录像列表");
     } else switch(state_) {
         case RunState::ReplayList:menu("播放");break;
         case RunState::MainMenu:menu("确认","选择退出",titleEntrance_.Finished());break;

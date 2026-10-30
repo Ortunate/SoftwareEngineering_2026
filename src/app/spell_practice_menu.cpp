@@ -123,6 +123,7 @@ void Game::ReturnToSpellPractice() {
 }
 
 void Game::BeginSpellRecord() {
+    if(replayMode_==replay::Mode::Playback)return;
     if(spellAttemptOpen_ || previewMode_ || dialogueActive_ || !boss_ || !boss_->active || !boss_->SpellName())return;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if(shotTestActive_)return;
@@ -136,6 +137,7 @@ void Game::BeginSpellRecord() {
 }
 
 void Game::FinishSpellRecord(bool capture) {
+    if(replayMode_==replay::Mode::Playback)return;
     if(!spellAttemptOpen_)return;
     spellRecords_.Finish(spellAttemptCharacter_,spellAttemptNumber_,spellAttemptPractice_,capture,score_);
     spellAttemptOpen_=false;

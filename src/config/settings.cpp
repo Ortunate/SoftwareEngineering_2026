@@ -138,10 +138,13 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
 
         if (name == "version") {
             version = *value;
-            shouldRewrite = shouldRewrite || version != 8;
+            shouldRewrite = shouldRewrite || version != 9;
         } else if (name == "music_volume") {
             if (*value >= 0 && *value <= 100) settings.musicVolume = *value;
             else shouldRewrite = true;
+        } else if (name == "aim_assist") {
+            if (*value==0 || *value==1) settings.aimAssistEnabled=*value==1;
+            else shouldRewrite=true;
         } else if (name == "mouse_sensitivity") {
             if (*value >= kMinMouseSensitivity && *value <= kMaxMouseSensitivity)
                 settings.mouseSensitivity = *value;
@@ -245,7 +248,8 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     if (!output) return false;
 
     output << "# koumakyou local settings\n";
-    output << "version=8\n";
+    output << "version=9\n";
+    output << "aim_assist=" << (settings.aimAssistEnabled ? 1 : 0) << '\n';
     output << "fps_limit=" << settings.fpsLimit << '\n';
     output << "music_volume=" << settings.musicVolume << '\n';
     output << "mouse_sensitivity=" << settings.mouseSensitivity << '\n';

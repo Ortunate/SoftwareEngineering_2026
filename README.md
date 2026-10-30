@@ -10,6 +10,10 @@
 
 一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Normal 一面开场至一面结算。流程依据用户提供的 187 秒本地录像重排；事件时间与弹幕参数仍是近似值，尚未完成逐帧校准，因此当前版本不能称为 1:1 复刻。
 
+## Replay
+
+普通开局、一面练习与符卡练习结束后可询问保存并命名录像，从主菜单 Replay 选择播放；支持暂停、定位、倍速和三种观察视角。文件保存在启动目录的 `replays/`，仅支持相同构建。实现边界与验证方式见 [Replay 说明](docs/REPLAY.md)。
+
 ## 已实现
 
 - 尺寸 20×20×23（X×Y×Z）的全三维长方体战场，Z 为长轴
@@ -148,7 +152,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 若 GitHub 下载失败，配置命令末尾追加 `-DFETCHCONTENT_SOURCE_DIR_RAYLIB="D:/Libraries/raylib-5.5"`（改为实际 raylib 源码目录，不是游戏项目）。
 
-Windows/MSVC 构建自动嵌入 UTF-8 应用清单，保留中文音乐名；无需修改系统全局 UTF-8 设置，也无需每次手工修补 exe。
+Windows 的 MSVC 与 MinGW 构建均自动嵌入 UTF-8 应用清单，保留中文音乐名；无需修改系统全局 UTF-8 设置，也无需每次手工修补 exe。MinGW 使用 `windres` 编译 `src/windows_utf8.rc`，该工具应随编译器一起安装。
 
 也可以使用 CMake GUI 打开项目根目录并选择对应的 Visual Studio 生成器。
 
@@ -160,6 +164,25 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 .\build\koumakyou.exe
 ```
+
+有可用音频设备时，可额外静音验证标题和一面共 3 首 BGM 的文件加载、MP3 解码及播放推进；此测试不创建窗口，也不修改玩家设置：
+
+```powershell
+cmake --build build --target koumakyou_music_tests
+.\build\koumakyou_music_tests.exe
+```
+
+辅助瞄准默认开启，Option 的 AIM ASSIST 可关闭并即时保存。目标判定球边缘距准星最多 6°时修正弹道，被辅助瞄准的敌机周围显示四个朝内浮动的锁定箭头；镜头仍由鼠标控制，已发出的普通弹不再修正。
+
+锁定提示动画可通过真实游戏渲染路径复现（需要图形会话，GIF 编码需要 Pillow）：
+
+```powershell
+cmake --build build/release --target aim_lock_preview
+./build/release/aim_lock_preview.exe output/aim-lock/frames
+python tools/render_aim_lock_gif.py output/aim-lock/frames output/aim-lock/aim-lock.gif
+```
+
+导出 6 秒、24 FPS：开头与结尾关闭辅助，中间四秒展示移动敌机的四向锁定箭头。预览使用独立设置目录，不修改玩家记录。
 
 ## 操作
 

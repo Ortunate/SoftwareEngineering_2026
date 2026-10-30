@@ -89,6 +89,9 @@ public:
     /// @brief 播放当前关卡的 Boss BGM。
     void PlayBossMusic();
     /// @brief 游戏暂停时暂停当前 BGM。
+    /// @brief 观战定位使用当前音乐身份与秒偏移；不加载或切换素材，未知/无音频时无副作用。
+    int MusicIdentity() const { return static_cast<int>(activeMusic_); }
+    void SeekMusic(float seconds);
     void PauseMusic();
     /// @brief 游戏继续时恢复当前 BGM。
     void ResumeMusic();

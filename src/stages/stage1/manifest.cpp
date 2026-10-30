@@ -89,6 +89,8 @@ const std::vector<VisualDefinition> kVisuals=[] {
             visuals.push_back({.id=static_cast<VisualId>(first+layer),.worldHeight=1,
                                .animation={bomb.atlas,bomb.firstScript+layer}});
     }
+    for(int character=0;character<2;++character)for(int action=0;action<5;++action)
+        visuals.push_back({.id=static_cast<VisualId>(kPlayerBody+character*5+action),.mode=VisualMode::Character,.worldHeight=0.85F,.animation=battle::Player(character?battle::Atlas::Marisa:battle::Atlas::Reimu,action)});
     return visuals;
 }();
 constexpr std::array<SoundDefinition, 0> kSounds{};

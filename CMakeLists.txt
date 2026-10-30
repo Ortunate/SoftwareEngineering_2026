@@ -4,6 +4,11 @@ cmake_minimum_required(VERSION 3.20)
 # 根工程显式启用 C，供原生桥接与 raylib 共用完整的语言配置。
 project(koumakyou VERSION 0.1.0 LANGUAGES C CXX)
 
+# MinGW 通过资源脚本嵌入进程清单，不能只把 .manifest 列为源码。
+if(WIN32 AND NOT MSVC)
+    enable_language(RC)
+endif()
+
 # macOS 原生输入桥接和 raylib 后端包含 Objective-C 源码，显式启用对应语言。
 if(APPLE)
     enable_language(OBJC)
@@ -34,6 +39,9 @@ target_link_libraries(koumakyou_ui PUBLIC raylib)
 # 游戏实现只编译一次，所有目标共用同一份实现。
 add_library(koumakyou_engine STATIC
     src/app/game.cpp
+    src/app/replay.cpp
+    src/app/replay_controls.cpp
+    src/replay/replay.cpp
     src/app/input.cpp
     src/app/start_setup.cpp
     src/app/spell_practice.cpp
@@ -43,6 +51,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
     src/gameplay/actors/player.cpp
+    src/gameplay/actors/aim.cpp
     src/gameplay/data/native_combat.cpp
     src/gameplay/bullets/system.cpp
     src/gameplay/combat/combat.cpp
@@ -107,14 +116,6 @@ target_include_directories(koumakyou_engine PRIVATE "${raylib_SOURCE_DIR}/src")
 
 add_executable(koumakyou src/main.cpp)
 target_link_libraries(koumakyou PRIVATE koumakyou_engine)
-# Windows 每次构建均嵌入 UTF-8 清单，避免重新编译后中文音乐路径再次闪退。
-if(MSVC)
-    target_sources(koumakyou PRIVATE src/windows_utf8.manifest)
-elseif(MINGW)
-    enable_language(RC)
-    configure_file(src/windows_utf8.rc.in "${CMAKE_CURRENT_BINARY_DIR}/windows_utf8.rc" @ONLY)
-    target_sources(koumakyou PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/windows_utf8.rc")
-endif()
 
 # Rebuild the six-face strip only when its source artwork needs changing.
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
@@ -142,6 +143,17 @@ add_dependencies(koumakyou copy_assets)
 add_executable(native_asset_preview EXCLUDE_FROM_ALL tools/native_asset_preview.cpp)
 target_link_libraries(native_asset_preview PRIVATE koumakyou_engine)
 add_dependencies(native_asset_preview copy_assets)
+
+# 锁定提示验收复用真实世界/HUD 渲染；输出 PNG 供 GIF 编码，断言在 Release 中也启用。
+add_executable(aim_lock_preview EXCLUDE_FROM_ALL tools/aim_lock_preview.cpp)
+target_link_libraries(aim_lock_preview PRIVATE koumakyou_engine)
+add_dependencies(aim_lock_preview copy_assets)
+if(MSVC)
+    target_compile_options(aim_lock_preview PRIVATE /UNDEBUG /utf-8)
+else()
+    target_compile_options(aim_lock_preview PRIVATE -UNDEBUG)
+endif()
+
 
 if(MSVC)
     target_compile_options(koumakyou_ui PRIVATE /W4 /permissive- /utf-8)
@@ -182,7 +194,6 @@ if(BUILD_TESTING)
     add_executable(koumakyou_lifecycle_tests EXCLUDE_FROM_ALL tests/lifecycle_tests.cpp)
     target_link_libraries(koumakyou_lifecycle_tests PRIVATE koumakyou_engine)
     if(MSVC)
-        target_sources(koumakyou_lifecycle_tests PRIVATE src/windows_utf8.manifest)
         target_compile_options(koumakyou_lifecycle_tests PRIVATE /UNDEBUG /utf-8)
     else()
         target_compile_options(koumakyou_lifecycle_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
@@ -193,7 +204,6 @@ if(BUILD_TESTING)
     target_link_libraries(koumakyou_loading_tests PRIVATE koumakyou_engine)
     add_dependencies(koumakyou_loading_tests copy_assets)
     if(MSVC)
-        target_sources(koumakyou_loading_tests PRIVATE src/windows_utf8.manifest)
         target_compile_options(koumakyou_loading_tests PRIVATE /W4 /permissive- /utf-8)
     else()
         target_compile_options(koumakyou_loading_tests PRIVATE -Wall -Wextra -Wpedantic)
@@ -202,13 +212,9 @@ if(BUILD_TESTING)
     add_executable(koumakyou_sprite_overlap_tests EXCLUDE_FROM_ALL tests/sprite_overlap_tests.cpp)
     target_link_libraries(koumakyou_sprite_overlap_tests PRIVATE koumakyou_engine)
     if(MSVC)
-        target_sources(koumakyou_sprite_overlap_tests PRIVATE src/windows_utf8.manifest)
         target_compile_options(koumakyou_sprite_overlap_tests PRIVATE /W4 /permissive- /utf-8)
     else()
         target_compile_options(koumakyou_sprite_overlap_tests PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-    if(MSVC)
-        target_sources(koumakyou_tests PRIVATE src/windows_utf8.manifest)
     endif()
     # assert 在 Release 中仍需执行，否则测试主体会被 NDEBUG 跳过。
     if(MSVC)
@@ -226,7 +232,6 @@ if(BUILD_TESTING)
     add_dependencies(koumakyou_settings_ui_tests copy_assets)
     if(MSVC)
         target_compile_options(koumakyou_settings_ui_tests PRIVATE /utf-8)
-        target_sources(koumakyou_settings_ui_tests PRIVATE src/windows_utf8.manifest)
     endif()
 endif()
 
@@ -241,7 +246,6 @@ if(BUILD_TESTING AND (APPLE OR WIN32))
     endif()
     if(MSVC)
         target_compile_options(koumakyou_window_input_tests PRIVATE /utf-8)
-        target_sources(koumakyou_window_input_tests PRIVATE src/windows_utf8.manifest)
     endif()
 endif()
 
@@ -257,3 +261,56 @@ if(BUILD_TESTING)
     add_executable(projectile_runtime_tests EXCLUDE_FROM_ALL tests/projectile_runtime_tests.cpp)
     target_link_libraries(projectile_runtime_tests PRIVATE koumakyou_engine)
 endif()
+
+# 真实音频设备回归按需运行；静音验证中文文件名和 MP3 流，不依赖图形窗口。
+if(BUILD_TESTING)
+    add_executable(koumakyou_music_tests EXCLUDE_FROM_ALL tests/music_tests.cpp)
+    target_link_libraries(koumakyou_music_tests PRIVATE raylib)
+    add_dependencies(koumakyou_music_tests copy_assets)
+    if(MSVC)
+        target_compile_options(koumakyou_music_tests PRIVATE /utf-8)
+    endif()
+endif()
+
+# 所有本目录的 Windows 程序均使用 UTF-8，包括工具与测试；第三方库不受影响。
+# MSVC 由链接器合并清单，MinGW 则必须编译 RT_MANIFEST 资源，否则中文 BGM 会静默缺失。
+if(WIN32)
+    get_property(koumakyou_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(koumakyou_target IN LISTS koumakyou_targets)
+        get_target_property(koumakyou_target_type ${koumakyou_target} TYPE)
+        if(koumakyou_target_type STREQUAL "EXECUTABLE")
+            if(MSVC)
+                target_sources(${koumakyou_target} PRIVATE src/windows_utf8.manifest)
+            else()
+                target_sources(${koumakyou_target} PRIVATE src/windows_utf8.rc)
+                target_include_directories(${koumakyou_target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+            endif()
+        endif()
+    endforeach()
+endif()
+
+# 兼容标识覆盖所有运行时代码和资源；任何源码改动触发重新配置，不允许旧录像静默使用新逻辑。
+file(GLOB_RECURSE REPLAY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*" "${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime/*")
+set(REPLAY_SIGNATURE "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_CXX_FLAGS}-${CMAKE_CXX_FLAGS_RELEASE}-${CMAKE_CXX_FLAGS_DEBUG}")
+foreach(REPLAY_SOURCE IN LISTS REPLAY_SOURCES)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${REPLAY_SOURCE}")
+    file(SHA256 "${REPLAY_SOURCE}" REPLAY_SOURCE_HASH)
+    string(APPEND REPLAY_SIGNATURE "${REPLAY_SOURCE_HASH}")
+endforeach()
+string(SHA256 REPLAY_BUILD_HASH "${REPLAY_SIGNATURE}")
+target_compile_definitions(koumakyou_engine PRIVATE KOUMAKYOU_REPLAY_BUILD="${REPLAY_BUILD_HASH}-$<CONFIG>")
+# 模拟兼容版本不依赖观战控件和渲染代码；内容清单单独签名，构建标识仅展示。
+set(REPLAY_SIM_SIGNATURE "v2-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_CXX_FLAGS}")
+set(REPLAY_CONTENT_SIGNATURE "v2")
+foreach(REPLAY_SOURCE IN LISTS REPLAY_SOURCES)
+    file(SHA256 "${REPLAY_SOURCE}" REPLAY_SOURCE_HASH)
+    if(REPLAY_SOURCE MATCHES "/(gameplay|stage|stages)/" OR REPLAY_SOURCE MATCHES "/app/(game|input|replay)[.](cpp|hpp)$" OR REPLAY_SOURCE MATCHES "/resources/(animation|battle_catalog)[.](cpp|hpp)$")
+        string(APPEND REPLAY_SIM_SIGNATURE "${REPLAY_SOURCE_HASH}")
+    endif()
+    if(REPLAY_SOURCE MATCHES "/assets/runtime/")
+        string(APPEND REPLAY_CONTENT_SIGNATURE "${REPLAY_SOURCE_HASH}")
+    endif()
+endforeach()
+string(SHA256 REPLAY_SIM_HASH "${REPLAY_SIM_SIGNATURE}")
+string(SHA256 REPLAY_CONTENT_HASH "${REPLAY_CONTENT_SIGNATURE}")
+target_compile_definitions(koumakyou_engine PRIVATE KOUMAKYOU_REPLAY_SIMULATION="${REPLAY_SIM_HASH}-$<CONFIG>" KOUMAKYOU_REPLAY_CONTENT="${REPLAY_CONTENT_HASH}")

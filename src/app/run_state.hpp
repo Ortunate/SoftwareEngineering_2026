@@ -10,6 +10,7 @@ namespace koumakyou {
 /// @brief 游戏的菜单、战斗及结算状态。
 enum class RunState : std::uint8_t {
     MainMenu,
+    ReplayList, // 本地录像目录，不加载关卡素材。
     Options,
     StartSetup,
     MusicRoom,

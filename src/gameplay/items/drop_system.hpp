@@ -8,6 +8,7 @@
 
 #include "raylib.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -33,6 +34,10 @@ struct Pickup {
     int value = 1;
     float velocityZ = 0.0F;
     float age = 0.0F; // 视觉秒数，与运动/追踪时钟独立；暂停时不推进。
+    /// @brief 出生后按 90 度/秒绕竖直长轴旋转；只由模拟 age 决定，暂停冻结，返回弧度。
+    float RotationRadians() const { return std::fmod(age,4.F)*1.57079632679F; }
+    /// @brief 当前道具对应的原始 Item 编号；大 P 按 Power 增量至少 8 区分。
+    int NativeItemType() const { return kind==PickupKind::Star?6:kind==PickupKind::Score?1:value>=8?2:0; }
     battle::Cursor animation;
 };
 

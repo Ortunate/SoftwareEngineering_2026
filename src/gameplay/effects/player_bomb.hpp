@@ -30,7 +30,7 @@ struct PlayerBombAttack { BombVolume volume; int region=0,damage=0; };
 struct PlayerBombSprite {
     enum class Shape { Sphere, Slab, Star, Beam } shape=Shape::Sphere;
     int layer=0;
-    Vector3 position{},end{};
+    Vector3 position{},end{}; // 模型外观锚点；光炮炮口可偏移，攻击判定始终使用独立 volume。
     float height=1,width=0,ageSeconds=0;
     bool trail=false; // 拖影仅绘制光晕，不重复生成实体星芒或伤害。
     BombVolume volume{};

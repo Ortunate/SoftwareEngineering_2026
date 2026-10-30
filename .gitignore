@@ -1,6 +1,14 @@
 # Microsoft Office temporary lock files
 ~$*
 
+# 项目内建模工具链、依赖及用户状态；可编辑资产不在这些目录内。
+/.tools/
+/.deps/
+/.cache/
+/.local/
+/output/projectile-review/
+*.blend1
+
 # Local build products and editor metadata
 .DS_Store
 .vscode/

@@ -35,7 +35,7 @@ void TestNativeSchedules() {
                         ++lasers;assert(bullet.beamLength==32 && bullet.damagePerSecond>0);
                     } else {
                         ++main;assert(bullet.visual==stage1::kMarisaPrimary);
-                        assert(std::abs(BulletSystem::Length(bullet.velocity)-20)<0.0001F);
+                        assert(std::abs(BulletSystem::Length(bullet.Velocity())-20)<0.0001F);
                     }
                 });
                 pool->Reset();
@@ -56,7 +56,7 @@ void TestMissileMotionAndImpact() {
         player.Update(0,{.fire=true},*pool,visuals,true);
         Bullet* missile=nullptr;
         pool->Pool().ForEachActive([&](Bullet& bullet){if(bullet.playerShotKind==PlayerShotKind::Missile)missile=&bullet;else bullet.active=false;});
-        assert(missile);const auto start=missile->position,velocity=missile->velocity;
+        assert(missile);const auto start=missile->position,velocity=missile->Velocity();
         for(int frame=0;frame<fps/2;++frame)pool->Update(1.0F/fps);
         const auto moved=game_math::Subtract(missile->position,start);
         assert(std::abs(moved.z-(velocity.z*0.5F+0.5F*30*0.5F*(0.5F+1.0F/60)))<0.0001F);
@@ -104,7 +104,7 @@ void TestAnchoredLasers() {
     count=0;
     pool->Pool().ForEachActive([&](const Bullet& bullet){if(bullet.playerShotKind==PlayerShotKind::Laser) {
         ++count;assert(game_math::DistanceSquared(bullet.position,player.OptionPositions()[bullet.playerSlot])<0.000001F);
-        assert(bullet.beamDirection.x>0 && bullet.beamDirection.y>0);
+        assert(bullet.Direction().x>0 && bullet.Direction().y>0);
     }});
     assert(count==2); // 多帧按住射击不能堆叠更多光束。
     player.Update(0,{},*pool,visuals,false);

@@ -1,6 +1,8 @@
 // 本文件负责实现通用与关卡素材的加载、音频播放和资源卸载。
 
 #include "resources/asset_manager.hpp"
+#include "resources/projectile_assets.hpp"
+#include "resources/projectile_paths.hpp"
 #include "resources/dds_image.hpp"
 #include "resources/dialogue_crop.hpp"
 
@@ -18,6 +20,14 @@
 
 namespace koumakyou {
 namespace {
+// 已登记的原生弹种必须随包分发模型；缺包属于加载失败，不能悄悄退回旧外观。
+bool NeedsProjectileModels(const StageAssetManifest&manifest){
+ for(const auto&v:manifest.visuals){auto a=v.animation.atlas;int script=v.animation.script;
+  if(a==battle::Atlas::BeamBullets||(a==battle::Atlas::Bullets&&script>=0&&script<10))return true;
+  if(a==battle::Atlas::Reimu&&((script>=64&&script<=66)||(script>=128&&script<=129)||(script>=133&&script<=136)))return true;
+  if(a==battle::Atlas::Marisa&&((script>=5&&script<=11)||(script>=64&&script<=71)||(script>=97&&script<=100)||(script>=128&&script<=129)))return true;
+ }return false;
+}
 
 /// @brief 音效清单项，资源路径相对 assets 根目录。
 constexpr std::array<SoundDefinition, 19> kCommonSounds{{
@@ -276,6 +286,8 @@ void AssetManager::LoadCommon() {
     SetSoundVolumePercent(soundVolumePercent_);
 }
 
+const ProjectileAssets* AssetManager::Projectiles()const{return projectileAssets_&&projectileAssets_->Ready()?projectileAssets_.get():nullptr;}
+
 void AssetManager::LoadStage(const StageAssetManifest& manifest) {
     UnloadStage();
     FinishStageLoad(manifest);
@@ -283,6 +295,7 @@ void AssetManager::LoadStage(const StageAssetManifest& manifest) {
 
 void AssetManager::BeginStageLoad(const StageAssetManifest& manifest) {
     UnloadStage();
+    if(NeedsProjectileModels(manifest)&&!std::filesystem::exists(projectiles::ProjectileAssetDirectory(root_)))throw std::runtime_error("Projectile model pack is missing");
     stageLoad_ = std::make_unique<StageLoad>();
     stageLoad_->manifest = manifest;
     std::unordered_set<std::string> paths;
@@ -317,10 +330,14 @@ bool AssetManager::AdvanceStageLoad() {
             battleAtlases_.emplace(item.atlas, BattleAtlasResource{texture, std::move(decoded->archive)});
         }
         ++load.uploaded;
-        // 包括最后一张纹理在内，上传后先返还一帧；音频/着色器绑定留到下一帧。
+        // 包括最后一张纹理在内，上传后先返还一帧；模型、音频及其余着色器绑定留到后续加载步骤。
         return false;
     }
     if (load.uploaded == load.items.size()) {
+        if(std::filesystem::exists(projectiles::ProjectileAssetDirectory(root_))){
+            if(!projectileAssets_)projectileAssets_=std::make_unique<ProjectileAssets>(root_,false);
+            if(!projectileAssets_->AdvanceLoad())return false;
+        }
         FinishStageLoad(load.manifest);
         stageLoad_.reset();
         return true;
@@ -346,10 +363,14 @@ bool AssetManager::AdvanceStageLoad() {
 
 float AssetManager::StageLoadProgress() const {
     if (!stageLoad_) return stageLoaded_ ? 1.0F : 0.0F;
-    return static_cast<float>(stageLoad_->uploaded) / (stageLoad_->items.size() + 1);
+    const float modelSteps=std::filesystem::exists(projectiles::ProjectileAssetDirectory(root_))?float(ProjectileAssets::LoadSteps):0.F;
+    const float modelDone=projectileAssets_?projectileAssets_->LoadProgress()*modelSteps:0.F;
+    return (stageLoad_->uploaded+modelDone)/(stageLoad_->items.size()+1+modelSteps);
 }
 
 void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
+    if(NeedsProjectileModels(manifest)&&!std::filesystem::exists(projectiles::ProjectileAssetDirectory(root_)))throw std::runtime_error("Projectile model pack is missing");
+    if(!projectileAssets_&&std::filesystem::exists(projectiles::ProjectileAssetDirectory(root_)))projectileAssets_=std::make_unique<ProjectileAssets>(root_);
     for (const VisualDefinition& definition : manifest.visuals) {
         if (definition.id == kInvalidVisualId) continue;
         if (stage_.visuals.size() <= definition.id)
@@ -412,6 +433,7 @@ const BattleAtlasResource& AssetManager::LoadBattleAtlas(battle::Atlas id) {
 }
 
 void AssetManager::UnloadStage() {
+    projectileAssets_.reset();
     // 等待唯一的在途 CPU 解码；随后才能释放清单字符串或销毁图形上下文。
     stageLoad_.reset();
     if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss) {

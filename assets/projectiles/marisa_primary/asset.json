@@ -1,0 +1,98 @@
+{
+  "asset": "marisa_primary",
+  "kind": 0,
+  "triangles": 64,
+  "glowTriangles": 144,
+  "triangleHardLimit": 320,
+  "axis": "+Y",
+  "humanAcceptance": "approved",
+  "variants": [
+    {
+      "script": 64,
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "alpha": 192,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            192
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            64
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 26,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 20000,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    }
+  ],
+  "collision": {
+    "shape": "closed mesh union",
+    "file": "collision.bin"
+  },
+  "glowCollides": false,
+  "displayTrianglesWithGlow": 208,
+  "trail": {
+    "direction": "-Y",
+    "lengthScaleDefault": 1,
+    "widthScaleDefault": 1,
+    "periodSeconds": 0.6,
+    "brightnessModulation": 0.1,
+    "collides": false
+  },
+  "acceptanceFingerprint": "14d2abcb60127fc1fe071d206a775f0e802fbdf80ea38bb0ddff8fda4ece5b8d",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

@@ -20,10 +20,10 @@ namespace {
 Vector3 ShotPlanePoint(const koumakyou::Bullet& bullet, Vector3 position, Vector3 forward, float depth = 20.0F) {
     const auto relative = koumakyou::game_math::Subtract(bullet.position, position);
     const float originDepth = relative.x * forward.x + relative.y * forward.y + relative.z * forward.z;
-    const float speed = bullet.velocity.x * forward.x + bullet.velocity.y * forward.y + bullet.velocity.z * forward.z;
+    const float speed = bullet.Velocity().x * forward.x + bullet.Velocity().y * forward.y + bullet.Velocity().z * forward.z;
     assert(speed > 0);
     return koumakyou::game_math::Add(relative,
-        koumakyou::game_math::Scale(bullet.velocity, (depth - originDepth) / speed));
+        koumakyou::game_math::Scale(bullet.Velocity(), (depth - originDepth) / speed));
 }
 
 /// @brief 返回默认汇聚平面的散射角（弧度）；此处仅用于默认朝向的测试。
@@ -64,9 +64,9 @@ void TestShotSpread() {
                 bullets.Pool().ForEachActive([&](const Bullet& bullet) {
                     const bool cyan = bullet.visual == koumakyou::stage1::kPlayerCyanCard;
                     const float speed = cyan ? 20.0F*10/12 : 20.0F;
-                    assert(std::abs(BulletSystem::Length(bullet.velocity) - speed) < 0.0001F);
-                    const float lateral = dot(bullet.velocity, right);
-                    const float forwardSpeed = dot(bullet.velocity, forward);
+                    assert(std::abs(BulletSystem::Length(bullet.Velocity()) - speed) < 0.0001F);
+                    const float lateral = dot(bullet.Velocity(), right);
+                    const float forwardSpeed = dot(bullet.Velocity(), forward);
                     assert(forwardSpeed > 0.0F);
                     const auto point = ShotPlanePoint(bullet, player.Position(), forward);
                     assert(std::abs(dot(point, up)) < 0.0001F);
@@ -110,7 +110,7 @@ void TestShotSpread() {
             float goldRoundSum = 0.0F;
             bullets.Pool().ForEachActive([&](const Bullet& bullet) {
                 if (bullet.visual == koumakyou::stage1::kPlayerGoldCard)
-                    goldRoundSum += bullet.velocity.x;
+                    goldRoundSum += bullet.Velocity().x;
             });
             assert(std::abs(goldRoundSum) < 0.0001F);
         }
@@ -118,9 +118,9 @@ void TestShotSpread() {
         float cyanSum = 0.0F;
         bullets.Pool().ForEachActive([&](const Bullet& bullet) {
             if (bullet.visual == koumakyou::stage1::kPlayerGoldCard)
-                goldSum += bullet.velocity.x;
+                goldSum += bullet.Velocity().x;
             else
-                cyanSum += bullet.velocity.x;
+                cyanSum += bullet.Velocity().x;
         });
         assert(std::abs(goldSum) < 0.0001F && std::abs(cyanSum) < 0.0001F);
     }
@@ -134,8 +134,8 @@ void TestShotSpread() {
     bullets.Update(0.1F, target);
     bullets.Pool().ForEachActive([](const Bullet& bullet) {
         if (bullet.visual == koumakyou::stage1::kPlayerCyanCard) {
-            assert(bullet.position.x * bullet.velocity.x < 0.0F);
-            assert(std::abs(BulletSystem::Length(bullet.velocity) - 20.0F*10/12) < 0.0001F);
+            assert(bullet.position.x * bullet.Velocity().x < 0.0F);
+            assert(std::abs(BulletSystem::Length(bullet.Velocity()) - 20.0F*10/12) < 0.0001F);
         }
     });
 }
@@ -175,7 +175,7 @@ void TestShotAim() {
                     const auto impact = ShotPlanePoint(bullet, player.Position(), forward, depth);
                     assert(std::abs(dot(impact, up)) < 0.0001F);
                     assert(std::abs(dot(impact, forward)-depth) < 0.0001F);
-                    assert(std::abs(BulletSystem::Length(bullet.velocity) -
+                    assert(std::abs(BulletSystem::Length(bullet.Velocity()) -
                         (bullet.homingTurnRate > 0 ? 20.0F*10/12 : bullet.visual == stage1::kPlayerNeedle ? 20.0F*22/12 : 20.0F)) < 0.0001F);
                     if (bullet.visual != stage1::kPlayerGoldCard) return;
                     goldLateralSum += dot(impact, right);
@@ -231,9 +231,9 @@ void TestHomingSchedule() {
         bullets->Pool().ForEachActive([&](const Bullet& bullet) {
             if (bullet.homingTurnRate <= 0) return;
             ++count;
-            lateralSum += bullet.velocity.x;
+            lateralSum += bullet.Velocity().x;
             assert(std::abs(bullet.position.x) >= 0.26F-0.0001F && std::abs(bullet.position.x) <= 0.78F+0.0001F);
-            assert(bullet.position.x*bullet.velocity.x > 0);
+            assert(bullet.position.x*bullet.Velocity().x > 0);
             if (bullet.position.x > 0)
                 events.emplace_back(frame, static_cast<int>(std::lround(DefaultShotAngle(bullet)*180/std::numbers::pi_v<float>)));
         });
@@ -412,7 +412,7 @@ void TestNeedleSchedule() {
                     if(bullet.visual!=stage1::kPlayerNeedle)return;
                     ++count;
                     assert(bullet.homingTurnRate==0 && bullet.color.a==Player::kShotAlpha);
-                    assert(std::abs(BulletSystem::Length(bullet.velocity)-20.0F*22/12)<0.0001F);
+                    assert(std::abs(BulletSystem::Length(bullet.Velocity())-20.0F*22/12)<0.0001F);
                     const int side=DistanceSquared(bullet.position,centers[0])<DistanceSquared(bullet.position,centers[1]) ? 0 : 1;
                     assert(std::abs(bullet.position.y-centers[side].y-16*unit)<0.0001F);
                     assert(std::abs(bullet.position.z-centers[side].z)<0.0001F);
@@ -442,10 +442,10 @@ void TestNeedleSchedule() {
     assert(remainingNeedles==46 && remainingMain==25); // 尾窗保留 46 颗针及后续五轮、每轮五颗的主弹。
     const std::array<Vector3,1> target{{{8,0,4}}};
     std::vector<Vector3> before;
-    bullets->Pool().ForEachActive([&](const Bullet& bullet){before.push_back(bullet.velocity);});
+    bullets->Pool().ForEachActive([&](const Bullet& bullet){before.push_back(bullet.Velocity());});
     bullets->Update(0.1F,target);
     std::size_t index=0;
-    bullets->Pool().ForEachActive([&](const Bullet& bullet){assert(DistanceSquared(bullet.velocity,before[index++])<0.000001F);});
+    bullets->Pool().ForEachActive([&](const Bullet& bullet){assert(DistanceSquared(bullet.Velocity(),before[index++])<0.000001F);});
     bullets->Reset();
     player.Update(1,{},*bullets,0,1,true);assert(bullets->Pool().ActiveCount()==0);
     player.Update(0,{.fire=true},*bullets,0,1,true);bullets->Reset();
@@ -522,11 +522,11 @@ void RunPlayerTests() {
         Camera3D camera{};player.SyncCamera(camera);
         assert(std::abs(camera.target.x-camera.position.x)<0.00001F);
         std::vector<Vector3> velocities;
-        pool->Pool().ForEachActive([&](const Bullet& b){if(b.playerShotKind!=PlayerShotKind::Laser)velocities.push_back(b.velocity);});
+        pool->Pool().ForEachActive([&](const Bullet& b){if(b.playerShotKind!=PlayerShotKind::Laser)velocities.push_back(b.Velocity());});
         player.SetView(0.5F,0);
         player.Update(0,{},*pool,0,1,true,targets);
         std::size_t index=0;
-        pool->Pool().ForEachActive([&](const Bullet& b){if(b.playerShotKind!=PlayerShotKind::Laser)assert(game_math::DistanceSquared(b.velocity,velocities[index++])<0.000001F);});
+        pool->Pool().ForEachActive([&](const Bullet& b){if(b.playerShotKind!=PlayerShotKind::Laser)assert(game_math::DistanceSquared(b.Velocity(),velocities[index++])<0.000001F);});
         player.Update(0,{.aimAssistEnabled=true},*pool,0,1,false,targets);
         assert(!player.Aim().assisted);
         player.ResetPose();assert(!player.Aim().assisted);
@@ -642,7 +642,7 @@ void RunPlayerTests() {
         assert(cyan ? std::abs(std::abs(bullet.position.x) - 0.78F) < 0.0001F
                     : bullet.position.x == 0.0F);
         assert(std::abs(bullet.position.z + 5.3F) < 0.0001F);
-        assert(cyan ? bullet.velocity.x != 0.0F : std::abs(bullet.velocity.x)<0.00001F);
+        assert(cyan ? bullet.Velocity().x != 0.0F : std::abs(bullet.Velocity().x)<0.00001F);
         const float angle = DefaultShotAngle(bullet);
         assert(std::abs(angle - (cyan ? 30.0F : 0.0F) * std::numbers::pi_v<float> / 180.0F) < 0.0001F);
     });
@@ -719,8 +719,8 @@ void RunPlayerTests() {
     guided->homingTurnRate = 4.0F;
     const std::array<Vector3, 1> target{{{8.0F, 0.0F, 8.0F}}};
     tracking.Update(0.2F, target);
-    assert(guided->velocity.x > 0.0F);
-    assert(std::abs(BulletSystem::Length(guided->velocity) - 10.0F) < 0.0001F);
+    assert(guided->Velocity().x > 0.0F);
+    assert(std::abs(BulletSystem::Length(guided->Velocity()) - 10.0F) < 0.0001F);
 
     player.Reset();
     assert(player.RemainingLives() == 4);

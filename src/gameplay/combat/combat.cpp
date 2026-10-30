@@ -49,7 +49,8 @@ void Game::ResolveCollisions() {
     bool playerWasHit = false;
     // 敌弹、普通敌人和 Boss 本体共同标记受击，所有接触都采样后只结算一次，避免复活位置影响同帧结果。
     bullets_.Pool().ForEachActive([this, &playerWasHit](Bullet& bullet) {
-        switch (player_.ContactEnemyBullet(bullet)) {
+        if(bullet.owner!=BulletOwner::Enemy||!bullet.Dangerous())return;
+        switch (player_.ContactEnemyBullet(bullet,projectileCollision_.DistanceSquared(assets_.Projectiles(),bullet,assets_.GetVisual(bullet.visual),player_.Position(),Player::GrazeRadius()))) {
             case PlayerContact::Hit: {
                 playerWasHit = true;
                 break;
@@ -89,14 +90,14 @@ void Game::ResolveCollisions() {
         else if(bullet.playerShotKind==PlayerShotKind::Projectile)bullet.active=false;
         else if(bullet.playerShotKind==PlayerShotKind::Explosion)
             // 原作爆破每个持续接触的逻辑帧继续减半速度；按经过秒数换算，避免低 FPS 减速变弱。
-            bullet.velocity=Scale(bullet.velocity,std::pow(0.5F,bullet.damageSeconds*60));
+            bullet.SetVelocity(Scale(bullet.Velocity(),std::pow(0.5F,bullet.damageSeconds*60)));
     };
     enemies_.ForEachActive([this,&applyShotImpact,&shotDamage](Enemy& enemy) {
-        bullets_.Pool().ForEachActive([&enemy,&applyShotImpact,&shotDamage](Bullet& bullet) {
+        bullets_.Pool().ForEachActive([this,&enemy,&applyShotImpact,&shotDamage](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + enemy.hitRadius;
-            if (bullet.DistanceSquaredTo(enemy.position) <=
-                collisionDistance * collisionDistance) {
+            const float modelDistance=projectileCollision_.DistanceSquared(assets_.Projectiles(),bullet,assets_.GetVisual(bullet.visual),enemy.position,enemy.hitRadius);
+            if (modelDistance>=0?modelDistance<=enemy.hitRadius*enemy.hitRadius:bullet.DistanceSquaredTo(enemy.position)<=collisionDistance*collisionDistance) {
                 enemy.health -= shotDamage(bullet,DamageTarget::Enemy,&enemy,enemy.CanTakeDamage(),false);
                 applyShotImpact(bullet);
             }
@@ -122,8 +123,8 @@ void Game::ResolveCollisions() {
         bullets_.Pool().ForEachActive([this,&applyShotImpact,&shotDamage](Bullet& bullet) {
             if (bullet.owner != BulletOwner::Player || !bullet.Dangerous() || bullet.ContactDamage()<=0) return;
             const float collisionDistance = bullet.radius + boss_->hitRadius;
-            if (bullet.DistanceSquaredTo(boss_->position) <=
-                collisionDistance * collisionDistance) {
+            const float modelDistance=projectileCollision_.DistanceSquared(assets_.Projectiles(),bullet,assets_.GetVisual(bullet.visual),boss_->position,boss_->hitRadius);
+            if (modelDistance>=0?modelDistance<=boss_->hitRadius*boss_->hitRadius:bullet.DistanceSquaredTo(boss_->position)<=collisionDistance*collisionDistance) {
                 boss_->health -= shotDamage(bullet,DamageTarget::Boss,boss_.get(),boss_->CanTakeDamage(),boss_->SpellName()!=nullptr);
                 if(bullet.damagePerSecond>0) {
                     const double points=bullet.hitScoreRemainder+600.0*bullet.damageSeconds;

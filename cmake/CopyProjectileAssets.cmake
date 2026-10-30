@@ -1,0 +1,23 @@
+# 本文件仅复制正式模型导出和碰撞数据，不分发 Blender 源文件、缓存或审阅输出。
+file(GLOB PROJECTILE_FOLDERS "${PROJECT_ROOT}/assets/projectiles/*")
+foreach(FOLDER IN LISTS PROJECTILE_FOLDERS)
+ if(IS_DIRECTORY "${FOLDER}" AND EXISTS "${FOLDER}/asset.json")
+  get_filename_component(NAME "${FOLDER}" NAME)
+  file(GLOB FILES "${FOLDER}/*.gltf" "${FOLDER}/*.bin" "${FOLDER}/*.png" "${FOLDER}/asset.json")
+  if(FILES)
+   file(MAKE_DIRECTORY "${OUTPUT_ROOT}/projectiles/${NAME}")
+   file(COPY ${FILES} DESTINATION "${OUTPUT_ROOT}/projectiles/${NAME}")
+  endif()
+ endif()
+endforeach()
+
+# 道具仅打包运行时导出，不包含源文件与验收记录。
+file(GLOB ITEM_FOLDERS "${PROJECT_ROOT}/assets/items/*")
+foreach(FOLDER IN LISTS ITEM_FOLDERS)
+ if(IS_DIRECTORY "${FOLDER}" AND EXISTS "${FOLDER}/asset.json")
+  get_filename_component(NAME "${FOLDER}" NAME)
+  file(GLOB FILES "${FOLDER}/*.gltf" "${FOLDER}/*.bin" "${FOLDER}/*.png" "${FOLDER}/asset.json")
+  file(MAKE_DIRECTORY "${OUTPUT_ROOT}/items/${NAME}")
+  file(COPY ${FILES} DESTINATION "${OUTPUT_ROOT}/items/${NAME}")
+ endif()
+endforeach()

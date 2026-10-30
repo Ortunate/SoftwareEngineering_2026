@@ -1,0 +1,52 @@
+{
+  "asset": "pellet_classic",
+  "nativeType": 0,
+  "effectiveColors": 16,
+  "representativeColor": 2,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "小型圆珠、明亮中心、较清楚的外边界",
+  "collisionSemantics": "闭合圆珠实体",
+  "humanAcceptance": "approved",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 160,
+  "revision": 2,
+  "vertexChannels": {
+    "r": "fixed highlight mask",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "SolidPellet",
+      "role": 0,
+      "collision": true,
+      "triangles": 120
+    }
+  ],
+  "triangles": 120,
+  "collisionTriangles": 120,
+  "humanAcceptanceBy": [
+    "user"
+  ],
+  "humanAcceptanceDate": "2026-10-28",
+  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision.",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "platform": "windows-x64",
+  "blender": {
+    "version": "4.5.3",
+    "file": "blender-4.5.3-windows-x64.zip",
+    "url": "https://download.blender.org/release/Blender4.5/blender-4.5.3-windows-x64.zip",
+    "mirror": "https://mirrors.ocf.berkeley.edu/blender/release/Blender4.5/blender-4.5.3-windows-x64.zip",
+    "sha256": "6b657c8bdd3a7b65b07b9e1ae17eb4be7dd4aa23121da7f3d3354fc2551330a7",
+    "directory": ".tools/blender-4.5.3-windows-x64"
+  },
+  "cmake": {
+    "version": "3.31.5",
+    "file": "cmake-3.31.5-windows-x86_64.zip",
+    "url": "https://github.com/Kitware/CMake/releases/download/v3.31.5/cmake-3.31.5-windows-x86_64.zip",
+    "sha256": "d4d2d4b9ccd68dae975a066fcd42ea9807ef40f79ee6971923fd3788e7917585",
+    "directory": ".tools/cmake",
+    "binarySha256": "8893e3f7647e2d1e0b18af84e53f136a976cefbfd2c15aaddc4b934936a3637f"
+  },
+  "mingw": {
+    "version": "16.2.0-rt_v14-rev1",
+    "file": "x86_64-16.2.0-release-posix-seh-ucrt-rt_v14-rev1.7z",
+    "url": "https://github.com/niXman/mingw-builds-binaries/releases/download/16.2.0-rt_v14-rev1/x86_64-16.2.0-release-posix-seh-ucrt-rt_v14-rev1.7z",
+    "sha256": "26788998d615856a915e1eeacb0854fce87bc608fa9a0c16f96bcbfdcf3415c0",
+    "directory": ".tools/mingw",
+    "binarySha256": "f30e75e33ebd89596542ae5b353dcf403fe4873f5be8e00f273f5fc665729776"
+  },
+  "raylib": {
+    "version": "5.5",
+    "file": "raylib-5.5.zip",
+    "url": "https://codeload.github.com/raysan5/raylib/zip/refs/tags/5.5",
+    "sha256": "00e8a7c85f7a5221e56ee8e4e1c6642b773eae73d29379a91c8ac5149e803f42",
+    "directory": ".deps/raylib-5.5"
+  }
+}

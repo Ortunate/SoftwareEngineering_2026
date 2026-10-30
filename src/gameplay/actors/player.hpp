@@ -49,6 +49,8 @@ public:
     static constexpr int kMaxPower = 128;
     /// @brief 自机弹和副机共用的不透明度（0～255），与贴图及原生动画 Alpha 相乘。
     static constexpr unsigned char kShotAlpha = 51;
+    /// @brief 世界单位的最大擦弹半径，供模型碰撞粗筛复用，命中半径仍由角色接触逻辑管理。
+    static float GrazeRadius();
     /// @brief 两角色副机未缩放的世界高度；原始直径均为 36 逻辑像素，弹束偏移和外观清单共用该换算。
     static constexpr float kOptionWorldHeight = 0.42F;
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
@@ -91,7 +93,8 @@ public:
     /// @brief 处理活动敌弹/光束的命中与擦弹；预警无害，命中只清除普通弹，光束保持到结束。
     /// @param bullet 由弹幕池持有的敌弹，玩家只修改 active 或 grazed。
     /// @return 无接触、首次擦弹或可造成伤害的命中；无敌时命中返回 None。
-    PlayerContact ContactEnemyBullet(Bullet& bullet) const;
+    /// modelDistanceSquared>=0 为模型实体外距离平方；负值沿用旧中心/束轴距离约定。
+    PlayerContact ContactEnemyBullet(Bullet& bullet,float modelDistanceSquared=-1) const;
     /// @brief 查询玩家命中球与敌方本体球是否接触；position/radius 为世界坐标/世界半径，半径须正且有限。
     /// 复活或 Bomb 无敌时、半径无效时返回 false；不修改敌人，不产生擦弹，受击结算由 Game 统一合并。
     [[nodiscard]] bool ContactEnemyBody(Vector3 position,float radius) const;

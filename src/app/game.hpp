@@ -19,6 +19,8 @@
 #include "stage/content.hpp"
 #include "stage/catalog.hpp"
 #include "render/sprite_renderer.hpp"
+#include "render/combat_renderer.hpp"
+#include "gameplay/collision/projectile_collision.hpp"
 #include "ui/motion.hpp"
 #include "render/start_setup_motion.hpp"
 #include "render/dialogue_motion.hpp"
@@ -382,6 +384,8 @@ private:
     std::optional<StageEventId> bossEventId_;
     std::optional<StageEventId> dialogueEventId_;
     SpriteRenderer spriteRenderer_{};
+    mutable CombatRenderer combatRenderer_{};
+    ProjectileCollision projectileCollision_{};
     // 道具与自机太极圈共用公告板缓冲；星点可超过普通道具池容量，不能改成固定长度数组。
     mutable std::vector<PickupSprite> pickupSprites_;
     mutable std::vector<BombVolumeSprite> playerBombVolumes_; // 本帧借用攻击几何快照，下一帧重建。

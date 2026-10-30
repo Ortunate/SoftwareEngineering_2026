@@ -101,6 +101,19 @@ target_compile_definitions(koumakyou_engine PUBLIC
     $<$<CONFIG:Debug>:KOUMAKYOU_DEBUG_FEATURES>
 )
 
+
+target_sources(koumakyou_engine PRIVATE
+ src/render/projectiles/option_renderer.cpp
+ src/render/projectiles/bomb_renderer.cpp
+ src/render/combat_renderer.cpp
+ src/resources/projectile_assets.cpp
+ src/gameplay/collision/collision.cpp
+ src/render/projectiles/classic_renderer.cpp
+ src/render/projectiles/collection_renderer.cpp
+ src/render/projectiles/laser_renderer.cpp
+ src/render/projectiles/spawn_renderer.cpp)
+target_include_directories(koumakyou_engine PRIVATE "${raylib_SOURCE_DIR}/src")
+
 add_executable(koumakyou src/main.cpp)
 target_link_libraries(koumakyou PRIVATE koumakyou_engine)
 
@@ -121,6 +134,7 @@ add_custom_target(copy_assets
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime
             $<TARGET_FILE_DIR:koumakyou>/assets
+    COMMAND ${CMAKE_COMMAND} -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR} -DOUTPUT_ROOT=$<TARGET_FILE_DIR:koumakyou>/assets -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CopyProjectileAssets.cmake
     VERBATIM
 )
 add_dependencies(koumakyou copy_assets)
@@ -233,6 +247,19 @@ if(BUILD_TESTING AND (APPLE OR WIN32))
     if(MSVC)
         target_compile_options(koumakyou_window_input_tests PRIVATE /utf-8)
     endif()
+endif()
+
+if(BUILD_TESTING)
+    add_executable(projectile_direction_tests tests/projectile_direction_tests.cpp)
+    target_include_directories(projectile_direction_tests PRIVATE src)
+    target_link_libraries(projectile_direction_tests PRIVATE koumakyou_engine)
+    add_test(NAME projectile_direction_tests COMMAND projectile_direction_tests)
+endif()
+
+if(BUILD_TESTING)
+    # 需要图形上下文，仅手动运行功能集成检查，不执行性能测量。
+    add_executable(projectile_runtime_tests EXCLUDE_FROM_ALL tests/projectile_runtime_tests.cpp)
+    target_link_libraries(projectile_runtime_tests PRIVATE koumakyou_engine)
 endif()
 
 # 真实音频设备回归按需运行；静音验证中文文件名和 MP3 流，不依赖图形窗口。

@@ -146,7 +146,7 @@ void Game::DrawWorld() const {
                 visual = stageContent_->StarPickupVisual();
             const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
-            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample()});
+            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),255,pickup.RotationRadians()});
         });
         if (player_.OptionsVisible()) {
             const auto positions = player_.OptionPositions();
@@ -171,14 +171,15 @@ void Game::DrawWorld() const {
        (player_.InvulnerabilitySeconds()<=0 || static_cast<int>(player_.VisualAge()*12)%2==0))
         pickupSprites_.push_back({player_.Position(),static_cast<VisualId>(stage1::kPlayerBody+(player_.IsMarisa()?5:0)+playerBodyAction_),1,&playerBodyAnimation_.player.Sample()});
     DrawPlayerBombBackdrop(viewport.width,viewport.height);
+    combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,drawCamera,viewport.width/viewport.height,stage_.Elapsed());
     spriteRenderer_.Draw(drawCamera, bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
-                         actorEffects_,playerBombVolumes_);
+                         actorEffects_,playerBombVolumes_,&combatRenderer_);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
-                                          player_.Position());
+                                          player_.Position(),assets_.Projectiles(),assets_.Stage().visuals);
     }
 #endif
 

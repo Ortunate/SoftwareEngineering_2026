@@ -1,0 +1,266 @@
+{
+  "asset": "marisa_missile",
+  "kind": 1,
+  "triangles": 112,
+  "glowTriangles": 72,
+  "triangleHardLimit": 640,
+  "axis": "+Y",
+  "humanAcceptance": "approved",
+  "variants": [
+    {
+      "script": 65,
+      "scale": [
+        0.6499999761581421,
+        0.6499999761581421
+      ],
+      "alpha": 128,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.6499999761581421,
+            0.6499999761581421
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            65
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 20000,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 66,
+      "scale": [
+        0.75,
+        0.75
+      ],
+      "alpha": 128,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.75,
+            0.75
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            65
+          ]
+        },
+        {
+          "frame": 20000,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 67,
+      "scale": [
+        0.8999999761581421,
+        0.8999999761581421
+      ],
+      "alpha": 128,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.8999999761581421,
+            0.8999999761581421
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            65
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 20000,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 68,
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "alpha": 128,
+      "color": [
+        255,
+        255,
+        255
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            65
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 20000,
+          "opcode": 15,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    }
+  ],
+  "collision": {
+    "shape": "closed mesh union",
+    "file": "collision.bin"
+  },
+  "glowCollides": false,
+  "displayTrianglesWithGlow": 184,
+  "trail": {
+    "direction": "-Y",
+    "lengthScaleDefault": 1,
+    "widthScaleDefault": 1,
+    "periodSeconds": 0.6,
+    "brightnessModulation": 0.1,
+    "collides": false
+  },
+  "acceptanceFingerprint": "c880438c5bd496b4ab836bb23ba511136aa5294ceb0d9213520ca8b7184cf0c5",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

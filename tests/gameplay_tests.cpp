@@ -108,8 +108,8 @@ void TestDarkFairyBehavior() {
         assert(bullet.owner == BulletOwner::Enemy && bullet.visual == koumakyou::stage1::kRedBullet);
         assert(bullet.position.x == turn.x && bullet.position.y == turn.y);
         assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
-        assert(std::abs(BulletSystem::Length(bullet.velocity) - 3.5F) < 0.0001F);
-        const Vector3 direction = koumakyou::pattern::Normalize(bullet.velocity);
+        assert(std::abs(BulletSystem::Length(bullet.Velocity()) - 3.5F) < 0.0001F);
+        const Vector3 direction = koumakyou::pattern::Normalize(bullet.Velocity());
         // 图中疏散环的三维扩展须无重叠方向，不能退化为平面环或密集同向弹束。
         for (Vector3 previous : directions) {
             const float dot = direction.x * previous.x + direction.y * previous.y +
@@ -118,7 +118,7 @@ void TestDarkFairyBehavior() {
         }
         directions.push_back(direction);
         if (std::abs(direction.z) < 0.0001F) ++planarDirections;
-        velocitySum = koumakyou::pattern::Add(velocitySum, bullet.velocity);
+        velocitySum = koumakyou::pattern::Add(velocitySum, bullet.Velocity());
         if (direction.x > 0.1F) axisSigns[0] = true;
         if (direction.x < -0.1F) axisSigns[1] = true;
         if (direction.y > 0.1F) axisSigns[2] = true;
@@ -149,7 +149,7 @@ void TestDarkFairyBehavior() {
     std::size_t directionIndex = 0;
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
-        const Vector3 direction = koumakyou::pattern::Normalize(bullet.velocity);
+        const Vector3 direction = koumakyou::pattern::Normalize(bullet.Velocity());
         const Vector3 expected = directions[directionIndex++];
         assert(std::abs(direction.x - expected.x) < 0.0001F);
         assert(std::abs(direction.y - expected.y) < 0.0001F);
@@ -291,13 +291,13 @@ void RunGameplayTests() {
     bool hasNegativeZ = false;
     bullets.Pool().ForEachActive([&](const koumakyou::Bullet& bullet) {
         assert(bullet.visual == koumakyou::stage1::kRedBullet);
-        assert(std::abs(BulletSystem::Length(bullet.velocity) - 2.5F) < 0.0002F);
-        hasPositiveX = hasPositiveX || bullet.velocity.x > 0.2F;
-        hasNegativeX = hasNegativeX || bullet.velocity.x < -0.2F;
-        hasPositiveY = hasPositiveY || bullet.velocity.y > 0.2F;
-        hasNegativeY = hasNegativeY || bullet.velocity.y < -0.2F;
-        hasPositiveZ = hasPositiveZ || bullet.velocity.z > 0.2F;
-        hasNegativeZ = hasNegativeZ || bullet.velocity.z < -0.2F;
+        assert(std::abs(BulletSystem::Length(bullet.Velocity()) - 2.5F) < 0.0002F);
+        hasPositiveX = hasPositiveX || bullet.Velocity().x > 0.2F;
+        hasNegativeX = hasNegativeX || bullet.Velocity().x < -0.2F;
+        hasPositiveY = hasPositiveY || bullet.Velocity().y > 0.2F;
+        hasNegativeY = hasNegativeY || bullet.Velocity().y < -0.2F;
+        hasPositiveZ = hasPositiveZ || bullet.Velocity().z > 0.2F;
+        hasNegativeZ = hasNegativeZ || bullet.Velocity().z < -0.2F;
     });
     assert(hasPositiveX && hasNegativeX && hasPositiveY && hasNegativeY &&
            hasPositiveZ && hasNegativeZ);
@@ -427,10 +427,10 @@ void RunGameplayTests() {
     int aimedCenters=0;
     bullets.Pool().ForEachActive([&](const koumakyou::Bullet& b) {
         assert(!b.Dangerous() && std::abs(b.spawnVisualSeconds-10.0F/60)<0.0001F);
-        assert(b.position.y==0 && b.velocity.y>0);
+        assert(b.position.y==0 && b.Velocity().y>0);
         assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
         const Vector3 toPlayer=koumakyou::BulletSystem::DirectionTo(b.position,raisedPlayer);
-        const Vector3 direction=koumakyou::pattern::Normalize(b.velocity);
+        const Vector3 direction=koumakyou::pattern::Normalize(b.Velocity());
         const float alignment=direction.x*toPlayer.x+direction.y*toPlayer.y+direction.z*toPlayer.z;
         if(alignment>0.99999F)++aimedCenters;
     });
@@ -473,10 +473,10 @@ void RunGameplayTests() {
         if(b.beamLength<=0)return;
         ++beams;
         const Vector3 expected=koumakyou::BulletSystem::DirectionTo(b.position,raisedPlayer);
-        assert(b.beamDirection.y>0 && b.beamDirection.z<0);
-        assert(std::abs(b.beamDirection.x-expected.x)<0.0001F);
-        assert(std::abs(b.beamDirection.y-expected.y)<0.0001F);
-        assert(std::abs(b.beamDirection.z-expected.z)<0.0001F);
+        assert(b.Direction().y>0 && b.Direction().z<0);
+        assert(std::abs(b.Direction().x-expected.x)<0.0001F);
+        assert(std::abs(b.Direction().y-expected.y)<0.0001F);
+        assert(std::abs(b.Direction().z-expected.z)<0.0001F);
     });
     assert(beams==6 && std::abs(boss.TimeLimit()-30)<0.001F);
     assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="暗符「Demarcation」");
@@ -494,7 +494,7 @@ void RunGameplayTests() {
     bullets.Pool().ForEachActive([](const koumakyou::Bullet& b){
         assert(b.turnApplied && !b.turnAimed);
         const Vector3 before=koumakyou::pattern::Normalize(b.baseVelocity);
-        const Vector3 after=koumakyou::pattern::Normalize(b.velocity);
+        const Vector3 after=koumakyou::pattern::Normalize(b.Velocity());
         assert(std::abs(before.y-after.y)<0.0001F);
         assert(std::abs(before.x*after.x+before.z*after.z)<0.0001F);
         assert((before.z*after.x-before.x*after.z)*b.turnAngle>0);

@@ -157,19 +157,21 @@ bool Player::AdjustPower(int delta) {
     return previousPower < kMaxPower && power_ == kMaxPower;
 }
 
-PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
+float Player::GrazeRadius(){return kGrazeRadius;}
+
+PlayerContact Player::ContactEnemyBullet(Bullet& bullet,float modelDistanceSquared) const {
     if (!bullet.Dangerous() || bullet.owner != BulletOwner::Enemy)
         return PlayerContact::None;
-    const float distanceSquared = bullet.DistanceSquaredTo(position_);
-    // 使用距离平方比较，命中优先于擦弹；球心或轴线段由 Bullet 统一计算。
-    const float hitDistance = bullet.radius + kHitRadius;
+    const float distanceSquared = modelDistanceSquared>=0?modelDistanceSquared:bullet.DistanceSquaredTo(position_);
+    // 模型查询返回实体外距离；旧球/胶囊返回中心距离，只有旧路径需要再加弹体半径。
+    const float hitDistance = (modelDistanceSquared>=0?0:bullet.radius) + kHitRadius;
     if (distanceSquared <= hitDistance * hitDistance) {
         // 光束持续到其寿命结束，不能因无敌玩家站在轴线上而吞掉整束光；普通弹仍消失。
         if (bullet.beamLength == 0) bullet.active = false;
         return invulnerableTimer_ <= 0.0F ? PlayerContact::Hit
                                           : PlayerContact::None;
     }
-    const float grazeDistance = bullet.radius + kGrazeRadius;
+    const float grazeDistance = (modelDistanceSquared>=0?0:bullet.radius) + kGrazeRadius;
     if (!bullet.grazed && distanceSquared <= grazeDistance * grazeDistance) {
         bullet.grazed = true;
         return PlayerContact::Graze;
@@ -237,7 +239,7 @@ void Player::UpdateLasers(bool allowFire, BulletSystem& bullets,
         if(!allowFire || !IsMarisa() || bullet.weaponEpoch!=weaponEpoch_ || bullet.playerSlot<0 || bullet.playerSlot>1) {bullet.active=false;return;}
         bullet.position=centers[bullet.playerSlot];
         const float depth=BulletSystem::Length(game_math::Subtract(aim_.point,position_));
-        bullet.beamDirection=ConvergingShotDirection(bullet.position,position_,aim_.forward,Right(),depth,0);
+        bullet.SetBeamDirection(ConvergingShotDirection(bullet.position,position_,aim_.forward,Right(),depth,0));
     });
 }
 
@@ -273,7 +275,7 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
             if(auto* beam=bullets.Spawn(BulletOwner::Player,origin,{},shot.width*pixelUnit*0.5F,
                                        Color{255,255,255,kShotAlpha},visuals.secondary[shot.script-1125])) {
                 beam->sourceShotRva=shot.sourceRva;beam->playerShotKind=PlayerShotKind::Laser;beam->playerSlot=slot;beam->weaponEpoch=weaponEpoch_;
-                beam->beamDirection=ConvergingShotDirection(origin,position_,forward,shotRight,depth,0);
+                beam->SetBeamDirection(ConvergingShotDirection(origin,position_,forward,shotRight,depth,0));
                 beam->beamLength=32;beam->damage=0;beam->damagePerSecond=shot.damage*60;
                 // 原动画在剩余 70 帧收到标签 1，再淡出 30 帧；槽冷却仍持续至表中 period 结束。
                 beam->laserFadeAt=(shot.period-70)/60.0F;beam->maxAge=(shot.period-40)/60.0F;
@@ -288,7 +290,7 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
                                                                  game_math::Scale(up,shot.y*pixelUnit)));
         const auto direction=ConvergingShotDirection(origin,position_,forward,shotRight,depth,shot.angle*180/std::numbers::pi_v<float>+90);
         const auto visual=shot.module==0 ? visuals.primary : IsMarisa() ? visuals.secondary[shot.script-1121] : visuals.secondary[0];
-        // 普通弹的原始矩形判定仍由目录保留，三维适配沿用既有球形半径；追踪弹维持 0.10。
+        // 保留原表半径作为兼容尺度；正式模型用外观高度换算实体与碰撞，未加载模型时仍用旧球形判定。
         if(auto* bullet=bullets.Spawn(BulletOwner::Player,origin,game_math::Scale(direction,shot.speed*20/12),
                                      shot.kind==1 ? 0.10F : 0.09F,Color{255,255,255,kShotAlpha},visual)) {
             bullet->damage=shot.damage;bullet->sourceShotRva=shot.sourceRva;

@@ -70,9 +70,9 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
             std::max({0.0F,bullet.warningSeconds-oldAge,bullet.spawnVisualSeconds-oldAge}));
         if(bullet.playerShotKind==PlayerShotKind::Missile) {
             // 原作每帧先增加 0.3 的前向速度再移动；此积分在 60 Hz 与原序列一致，其他帧率保持相同轨迹。
-            bullet.position=Add(bullet.position,Add(Scale(bullet.velocity,deltaTime),
+            bullet.position=Add(bullet.position,Add(Scale(bullet.Velocity(),deltaTime),
                 Scale(bullet.acceleration,0.5F*deltaTime*(deltaTime+1.0F/60))));
-            bullet.velocity=Add(bullet.velocity,Scale(bullet.acceleration,deltaTime));
+            bullet.SetVelocity(Add(bullet.Velocity(),Scale(bullet.acceleration,deltaTime)));
             if(bullet.age>bullet.maxAge || std::abs(bullet.position.x)>kArenaHalfExtents.x+3 ||
                std::abs(bullet.position.y)>kArenaHalfExtents.y+3 || std::abs(bullet.position.z)>kArenaHalfExtents.z+3)
                 bullet.active=false;
@@ -86,21 +86,21 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
         if (bullet.launchBoostSeconds > 0 && motionAge <= bullet.launchBoostSeconds) {
             const float speed = Length(bullet.baseVelocity) + bullet.launchBoost *
                 (1 - motionAge / bullet.launchBoostSeconds);
-            bullet.velocity = Scale(Normalize(bullet.baseVelocity), speed);
-        } else bullet.velocity = Add(bullet.velocity, Scale(bullet.acceleration, motionDelta));
+            bullet.SetVelocity(Scale(Normalize(bullet.baseVelocity), speed));
+        } else bullet.SetVelocity(Add(bullet.Velocity(), Scale(bullet.acceleration, motionDelta)));
         if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
             if (motionAge >= bullet.turnDelaySeconds) {
                 const Vector3 direction = bullet.turnAimed
                     ? DirectionTo(bullet.position, enemyAimTarget) : Normalize(bullet.baseVelocity);
-                bullet.velocity = Scale(RotateAroundAxis(direction, bullet.rotationAxis,
-                    bullet.turnAngle), bullet.turnSpeed);
+                bullet.SetVelocity(Scale(RotateAroundAxis(direction, bullet.rotationAxis,
+                    bullet.turnAngle), bullet.turnSpeed));
                 bullet.turnApplied = true;
-            } else bullet.velocity = Scale(bullet.baseVelocity, 1 - motionAge / bullet.turnDelaySeconds);
+            } else bullet.SetVelocity(Scale(bullet.baseVelocity, 1 - motionAge / bullet.turnDelaySeconds));
         }
         if (bullet.angularVelocity != 0.0F) {
-            bullet.velocity = RotateAroundAxis(
-                bullet.velocity, bullet.rotationAxis,
-                bullet.angularVelocity * motionDelta);
+            bullet.SetVelocity(RotateAroundAxis(
+                bullet.Velocity(), bullet.rotationAxis,
+                bullet.angularVelocity * motionDelta));
         }
         if (bullet.homingTurnRate > 0.0F && !targets.empty()) {
             const Vector3* nearest = nullptr;
@@ -116,9 +116,9 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
                 }
             }
             if (nearest && nearestDistanceSquared > 0.0001F) {
-                const float speed = Length(bullet.velocity);
+                const float speed = Length(bullet.Velocity());
                 if (speed > 0.0001F) {
-                    const Vector3 current = Scale(bullet.velocity, 1.0F / speed);
+                    const Vector3 current = Scale(bullet.Velocity(), 1.0F / speed);
                     const Vector3 desired = DirectionTo(bullet.position, *nearest);
                     const float angle = std::acos(std::clamp(Dot(current, desired),
                                                               -1.0F, 1.0F));
@@ -132,13 +132,13 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
                         }
                         const float turn = std::min(angle,
                             bullet.homingTurnRate * motionDelta);
-                        bullet.velocity = Scale(RotateAroundAxis(current, axis,
-                                                                   turn), speed);
+                        bullet.SetVelocity(Scale(RotateAroundAxis(current, axis,
+                                                                   turn), speed));
                     }
                 }
             }
         }
-        bullet.position = Add(bullet.position, Scale(bullet.velocity, motionDelta));
+        bullet.position = Add(bullet.position, Scale(bullet.Velocity(), motionDelta));
 
         constexpr float margin = 3.0F;
         if (bullet.age > bullet.maxAge && bullet.damagePerSecond>0 && bullet.damageSeconds>0) {
@@ -159,7 +159,7 @@ void BulletSystem::ExplodePlayerMissile(Bullet& bullet) {
     bullet.playerShotKind=PlayerShotKind::Explosion;
     bullet.visual=bullet.impactVisual;bullet.animation={};
     bullet.radius=bullet.explosionRadius;
-    bullet.velocity=Scale(bullet.velocity,0.5F);bullet.acceleration={};
+    bullet.SetVelocity(Scale(bullet.Velocity(),0.5F));bullet.acceleration={};
     // 原作按整数取四分之一且至少 1 点；生命、单发及持续伤害均采用原始点数。
     bullet.damagePerSecond=std::max(1.0F,std::floor(bullet.damage/4))*60;
     bullet.damage=0;bullet.damageSeconds=0;
@@ -169,6 +169,7 @@ void BulletSystem::ExplodePlayerMissile(Bullet& bullet) {
 Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
                             Vector3 velocity, float radius, Color color,
                             VisualId visual, Vector3 acceleration) {
+    if(!std::isfinite(velocity.x)||!std::isfinite(velocity.y)||!std::isfinite(velocity.z))return nullptr;
     Bullet* bullet = bullets_->Acquire();
     if (bullet == nullptr) {
         return nullptr;
@@ -176,7 +177,7 @@ Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
     bullet->owner = owner;
     bullet->visual = visual;
     bullet->position = position;
-    bullet->velocity = velocity;
+    bullet->SetVelocity(velocity);
     bullet->acceleration = acceleration;
     bullet->radius = radius;
     bullet->color = color;
@@ -190,10 +191,11 @@ Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
         !std::isfinite(duration) || !std::isfinite(warning + duration) ||
         !std::isfinite(origin.x + origin.y + origin.z) ||
         !std::isfinite(direction.x + direction.y + direction.z) ||
+        std::hypot(double(direction.x),double(direction.y),double(direction.z))==0 ||
         length <= 0 || radius <= 0 || warning < 0 || duration <= 0) return nullptr;
     Bullet* beam = Spawn(BulletOwner::Enemy, origin, {}, radius, color, kInvalidVisualId);
     if (!beam) return nullptr;
-    beam->beamDirection = Normalize(direction);
+    beam->SetBeamDirection(Normalize(direction));
     beam->beamLength = length;
     beam->warningSeconds = warning;
     beam->maxAge = warning + duration;

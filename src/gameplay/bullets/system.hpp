@@ -30,11 +30,11 @@ public:
     /// @param owner 弹幕所属阵营。
     /// @param position 初始判定中心。
     /// @param velocity 初始速度。
-    /// @param radius 球形判定半径，单位为世界坐标。
+    /// @param radius 旧球形判定或模型兼容参考半径，单位为世界长度；模型窄相读取实际危险几何。
     /// @param color 渲染颜色。
     /// @param visual 当前关卡素材表中的外观 ID。
     /// @param acceleration 加速度，默认零向量。
-    /// @return 系统持有的新弹幕指针；容量耗尽时返回 nullptr，指针仅在槽位复用或 Reset 前有效。
+    /// @return 系统持有的新弹幕指针；容量耗尽或速度非有限时返回 nullptr，指针仅在槽位复用或 Reset 前有效。
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
                   float radius, Color color, VisualId visual,
                   Vector3 acceleration = {});
@@ -44,7 +44,7 @@ public:
     void ExplodePlayerMissile(Bullet& bullet);
 
     /// @brief 生成固定三维敌方光束；方向在生成时锁定，预警后才有胶囊碰撞。
-    /// direction 自动归一化；length/radius 为正世界单位，warning/duration 为非负/正秒数。
+    /// direction 必须非零且有限并自动归一化；length/radius 为正世界单位，warning/duration 为非负/正秒数。
     /// @return 池持有的光束；容量不足、尺寸或时间非法时返回 nullptr；生命期与 Spawn 一致。
     Bullet* SpawnBeam(Vector3 origin, Vector3 direction, float length, float radius,
                       float warning, float duration, Color color);

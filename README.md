@@ -1,4 +1,12 @@
+三维弹体已接入正式游戏。双击 `Run-Model-Game.cmd` 使用项目内工具构建并运行；资源、模块结构、碰撞约定和验收截图见[运行时接入说明](docs/PROJECTILE_RUNTIME.md)。独立审阅工具继续保留，并复用正式实现。
+
 # koumakyou
+
+敌方激光两套模型使用 `Review-Lasers.cmd` 独立审阅，`Stress-Lasers.cmd` 压测；长宽、时序、碰撞与资源说明见[敌方激光](docs/PROJECTILE_LASERS.md)。两套均已人工验收通过。
+
+弹体独立建模首件（Type 4 苦无）通过根目录 `Review-Kunai.cmd` 查看原版风格低面数模型、16 色/光效参数及真实碰撞体；`Stress-Kunai.cmd` 运行 8192 发压力测试。工具与依赖隔离在项目目录，不启动游戏；首次准备工具运行 `Setup-Projectile-Tools.cmd`。新版操作、性能范围及 raylib 接口见 [原版风格苦无验收卡](assets/projectiles/kunai_classic/REVIEW.md)，新版已由用户与 leader 人工验收通过。
+
+敌方普通弹体整组（Type 0–9）可通过根目录 `Review-Projectiles.cmd` 独立查看模型、色表、球壳/火焰及精确碰撞；`Stress-Projectiles.cmd` 统一测试 8192 发与混合弹种。新增九类已制作，其中八类已人工通过，泡弹待最终复验，操作与接口见 [全组交付说明](docs/PROJECTILE_COLLECTION_REVIEW.md)。
 
 一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Normal 一面开场至一面结算。流程依据用户提供的 187 秒本地录像重排；事件时间与弹幕参数仍是近似值，尚未完成逐帧校准，因此当前版本不能称为 1:1 复刻。
 
@@ -269,3 +277,12 @@ macOS 和 Windows 启动游戏后会在游戏窗口内禁用输入法文字合�
 ./build/koumakyou --capture-stage 6 side_view.png 90 20
 ./build/macos-debug/koumakyou --capture-stage 8 hitbox_capture.png 0 0 --debug-render
 ```
+
+灵梦三款自机弹体使用 `Review-Reimu.cmd` 独立审阅，见 [建模说明](docs/PROJECTILE_REIMU.md)。
+
+魔理沙四类、十二档自机弹体使用 `Review-Marisa.cmd` 独立审阅，见 [模型与验收说明](docs/PROJECTILE_MARISA.md)。
+
+三种 Bomb 模型（梦想封印、星群、Master Spark）使用 `Review-Bombs.cmd` 独立审阅，见 [模型与体积对照说明](docs/PROJECTILE_BOMBS.md)，三款均已人工验收通过。
+# 掉落物模型验收
+
+七款薄板道具：运行 `Review-Items.cmd`，旋转 GIF 和制作方式见 [掉落物模型](docs/ITEM_MODELS.md)。

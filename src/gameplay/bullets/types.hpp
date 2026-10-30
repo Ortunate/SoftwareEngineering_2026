@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace koumakyou {
@@ -18,12 +19,13 @@ enum class BulletOwner : std::uint8_t { Player, Enemy };
 enum class PlayerShotKind : std::uint8_t { Projectile, Missile, Laser, Explosion };
 /// @brief 对象池中的单颗弹幕；位置和半径采用世界单位，速度为世界单位/秒，加速度为世界单位/秒²。
 /// 普通弹 position 为模型原点或旧球形判定中心；光束 position 为起点，Direction() 为单位束轴。
-/// beamLength > 0 时采用线段胶囊判定，预警期不造成接触；active=false 后槽位可复用。
+/// IsBeam() 时采用线段胶囊判定，预警期不造成接触；active=false 后槽位可复用。
 /// age 和 maxAge 为秒；rotationAxis 是旋转轴，angularVelocity 为弧度/秒。
 /// homingTurnRate 为追踪转向上限（弧度/秒），零表示不追踪；damage 是原始 HP 单位的单次命中基准。
 struct Bullet {
     bool active = false;
-    bool grazed = false;
+    std::uint64_t generation=0; // BulletSystem 每次复用分配新代号；仅系统写入，清池不重置系统代号序列。
+    bool grazed = false; // 普通弹已消费唯一擦弹；光束仅记录是否曾擦弹，不阻止后续周期。
     BulletOwner owner = BulletOwner::Enemy;
     VisualId visual = kInvalidVisualId;
     battle::Cursor animation; // 对象池复用时重置，借用当前关卡 CPU 档案。
@@ -59,11 +61,22 @@ private:
     Vector3 direction_{0,0,1}; // 静止出生默认 +Z；对象池重置时恢复，不继承旧槽方向。
 public:
     Vector3 acceleration{};
+    double accelerationSeconds=1.0e9; // 加速度剩余秒数；用双精度避免2000内容帧累减后多加速一步，重启时不重置视觉年龄。
     Vector3 rotationAxis{0.0F, 1.0F, 0.0F};
-    float radius = 0.16F; // 世界参考半径：光束为实际胶囊半径；普通模型按外观/碰撞参考尺寸换算缩放。
+    float radius = 0.16F;
+    float visualScale = 1; // 原生显示的额外等比缩放；不从判定半径反推贴图大小。
     float age = 0.0F;
+    double beamAge = 0; // 光束独立累计秒数，再投影到age；外部改写age时在下次更新同步，避免长寿命光束累加float提早一帧消失。
+    // 碰撞在弹池更新后执行，擦弹节拍却采样更新前时钟；不能由更新后的age反推首帧。
+    double beamContactAge = 0; // 本次更新前的光束年龄，秒；停时不推进。
+    float beamGrazeStartSeconds = 0; // 展开转持续的年龄，秒；独立于可配置的预警时窗。
+    std::int64_t lastBeamGrazeFrame = -1; // 持续阶段0起算的60Hz内容帧，槽复用时重置。
     float maxAge = 12.0F;
     float angularVelocity = 0.0F;
+    float angularSeconds=1.0e9F; // 旋转速度剩余有效秒数；独立于视觉年龄和显现期。
+    float speedAcceleration=0; // 极坐标速度的增量，世界单位/秒²；仅 polarMotion 使用。
+    bool polarMotion=false,sampleMotionAtStart=false;
+    double motionClock=0; // 显现结束后独立累计的秒数，避免以动画年龄或更新次数推导运动时序。
     float homingTurnRate = 0.0F;
     float damage = 2.0F;
     std::uint32_t sourceShotRva = 0; // 原生火力通道的来源 RVA，仅在对应 EXE 哈希下有效；手工生成弹为零。
@@ -80,7 +93,13 @@ public:
     bool laserFadeStarted = false;
     /// @brief 返回本次碰撞结算的伤害；持续伤害需由 BulletSystem::Update 先写入有效秒数。
     float ContactDamage() const { return damagePerSecond>0 ? damagePerSecond*damageSeconds : damage; }
-    float beamLength = 0.0F; // 世界单位；零表示普通球形弹，正值表示固定光束。
+    float beamLength = 0.0F; // 当前线段长度，世界单位；伸长型光束刚生成时可以为零。
+    float beamLengthLimit=0,beamTravelSpeed=0,beamEndDistance=0; // 非零上限启用伸长型光束；末端距基点的世界距离独立累计。
+    /// @brief 伸长型光束的零长度初始态仍是光束，不能作为球形弹参与清弹或选择动画。
+    bool IsBeam() const {return beamLength>0||beamLengthLimit>0;}
+    Vector3 beamAnchor{}; // 可控光束的世界基点；position=beamAnchor+Direction()*beamStartOffset。
+    float beamStartOffset=0; // 世界单位；旋转时保留基点与起始空隙，不以 position 本身作为轴心。
+    int beamAnimationScript=-1; // 当前光束图集内的可选动画脚本；负值沿用素材清单，不影响自机激光。
     float warningSeconds = 0.0F; // 光束预警秒数；maxAge 包含预警和生效两段。
     /// @brief 光束的世界终点；普通弹返回其位置。
     Vector3 BeamEnd() const {
@@ -104,7 +123,15 @@ public:
     // 新典延迟转向采用先减速、到点后瞬时旋转/重新瞄准；秒和世界单位/秒。
     float turnDelaySeconds = 0, turnAngle = 0, turnSpeed = 0;
     bool turnAimed = false, turnApplied = false;
+    bool turnAbsolute=false;
+    int turnCount=1,turnCompleted=0;
+    Vector3 turnFixedDirection{}; // 绝对转向的世界单位方向；空间模式保留原高度带，不压回 X/Z 平面。
+    int bouncesRemaining=0;
+    float bounceSpeed=0; // 生成时保存的反弹后速率，不从之后的启动加速速度反推。
+    bool reflectLowerZ=true;
+    Vector3 bounceLower{},bounceUpper{},bounceHalfExtents{}; // 世界边界和逻辑半尺寸，与球形碰撞半径无关。
     Vector3 baseVelocity{};
+    Vector3 launchDirection{}; // 三维发射的单位方向；零表示旧模式从 baseVelocity 推导，避免零初速弹丢失发射方向。
     float launchBoost = 0, launchBoostSeconds = 0, spawnVisualSeconds = 0;
     float spawnMoveScale = 1; // 10/16/32 帧显现期按原作 1/2、1/2.5、1/3 的速度移动，不参与接触。
     // turnDelaySeconds 与 launchBoostSeconds 从显现结束起算；age 仍从生成起算。
@@ -118,6 +145,28 @@ public:
         if(beamFadeSeconds>0 && age>maxAge-beamFadeSeconds)
             return std::clamp((maxAge-age)/beamFadeSeconds,0.0F,1.0F);
         return 1;
+    }
+    /// @brief 在调用方确认危险时窗、未命中且位于擦弹范围后，消费一次擦弹资格。
+    /// 普通弹只消费一次；光束在持续阶段每12内容帧可消费一次，重复调用和120Hz半帧不会重复结算。
+    bool ConsumeGraze() {
+        if (!IsBeam()) {
+            if (grazed) return false;
+        } else {
+            // 与Update的外部改龄契约一致；出生后未更新的光束可直接检查第0帧。
+            const double sample = age != static_cast<float>(beamAge) ? age : beamContactAge;
+            double frame = (sample - beamGrazeStartSeconds) * 60;
+            // 秒数接口及固定步长为float；仅消除整帧附近的表示误差，不把真实半帧提前到下一帧。
+            const double nearest = std::round(frame);
+            const double rounding = 4 * std::numeric_limits<float>::epsilon() *
+                (std::abs(sample * 60) + std::abs(beamGrazeStartSeconds * 60) + 1);
+            if (std::abs(frame - nearest) <= rounding) frame = nearest;
+            if (!std::isfinite(frame) || frame < 0 || frame >= static_cast<double>(INT64_MAX)) return false;
+            const auto contentFrame = static_cast<std::int64_t>(std::floor(frame));
+            if (contentFrame % 12 != 0 || contentFrame == lastBeamGrazeFrame) return false;
+            lastBeamGrazeFrame = contentFrame;
+        }
+        grazed = true;
+        return true;
     }
     Color color = WHITE;
 };

@@ -7,6 +7,7 @@
 #include "render/menu_layout.hpp"
 #include "config/settings.hpp"
 #include "stages/stage1/ids.hpp"
+#include "gameplay/combat/rank.hpp"
 
 #include "rlgl.h"
 
@@ -19,24 +20,6 @@
 #include <utility>
 
 namespace koumakyou {
-#ifdef KOUMAKYOU_DEBUG_FEATURES
-namespace {
-/// @brief 射击调试场地中的固定靶怪；不移动、不攻击，由 Game 在血量耗尽时复原。
-class ShotTestEnemy final : public Enemy {
-public:
-    ShotTestEnemy() : Enemy(stage1::kDarkFairy, {0.0F, 0.0F, 4.0F}, {}) {
-        health = maxHealth = 240.0F;
-        hitRadius = 1.0F;
-        scoreValue = 0;
-    }
-
-private:
-    void Move(float) override {}
-    void UpdateSkills(float, Vector3, BulletSystem&) override {}
-};
-}  // namespace
-#endif
-
 Game::Game()
     : assets_(std::filesystem::path(GetApplicationDirectory()) / "assets") {
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -56,20 +39,29 @@ void Game::Reset() {
     EnterMainMenu();
 }
 
-void Game::Start(bool captureCursor) {
+void Game::Start(bool captureCursor,native_combat::Difficulty difficulty) {
+    if(!SupportsDifficulty(difficulty,StageEntry::Campaign))throw std::invalid_argument("Unsupported campaign difficulty");
     practiceMode_ = spellPractice_ = challengeMode_ = false;
+    selectedDifficulty_=native_combat::DifficultyIndex(difficulty);
     stageId_ = StageId::Stage1;
     StartRun(captureCursor);
 }
 
-void Game::StartStage(StageId id, bool captureCursor) {
-    practiceMode_ = spellPractice_ = challengeMode_ = false;
+void Game::StartStage(StageId id,bool captureCursor,native_combat::Difficulty difficulty,StageEntry entry) {
+    if(entry==StageEntry::SpellPractice||!SupportsStage(id,difficulty,entry))
+        throw std::invalid_argument("Unsupported direct stage entry or difficulty");
+    // 入口身份同时决定结束与成绩流程，不能只用于绕过目录校验后继续按主线运行。
+    practiceMode_=entry==StageEntry::Practice;
+    spellPractice_=challengeMode_=false;
+    if(entry!=StageEntry::Extra)selectedDifficulty_=native_combat::DifficultyIndex(difficulty);
     stageId_ = id;
     StartRun(captureCursor);
 }
 
 void Game::StartPreview() {
     practiceMode_ = spellPractice_ = challengeMode_ = false;
+    if(stageId_==StageId::Extra)stageId_=StageId::Stage1;
+    selectedDifficulty_=1;
     StartRun(false, true);
     previewMode_ = true;
     player_.SetInvulnerability(1000.0F);
@@ -104,13 +96,14 @@ void Game::LoadSettings() {
     initialBombs_ = settings.initialBombs;
     bestScore_ = settings.bestScore;
     stageHighScores_ = settings.stageHighScores;
+    scoreProfile_=score::Load(score::kFilename);
     lastSelection_ = settings.lastSelection;
     spellSelection_=settings.spellSelection;
     spellRecords_=settings.spellRecords;
     selectedShot_ = lastSelection_.shot;
     selectedCharacter_ = lastSelection_.character;
     challengeMode_ = lastSelection_.challenge;
-    practicePhase_ = lastSelection_.practicePhase;
+    practiceAttack_ = lastSelection_.practicePhase;
     assets_.SetMusicVolumePercent(musicVolume_);
     assets_.SetSoundVolumePercent(soundVolume_);
 
@@ -133,17 +126,32 @@ void Game::SaveSettings() const {
     }
 }
 
-void Game::StartRun(bool captureCursor, bool synchronous) {
+void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
+    if(spellPractice_) {
+        const auto* card=spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty);
+        if(!spell::Playable(card,spellSelection_.character))throw std::invalid_argument("Unsupported spell practice selection");
+        stageId_=*SpellPracticeStage(card->stage);practiceAttack_=card->phase;
+    }
+    const auto requestedDifficulty=stageId_==StageId::Extra ? std::optional{native_combat::Difficulty::Normal} : continuingStage ? std::optional{runDifficulty_} :
+        native_combat::DifficultyFromIndex(spellPractice_?spellSelection_.difficulty:selectedDifficulty_);
+    const auto entry=spellPractice_ ? StageEntry::SpellPractice : practiceMode_ ? StageEntry::Practice :
+        stageId_==StageId::Extra ? StageEntry::Extra : StageEntry::Campaign;
+    if(!requestedDifficulty||!SupportsStage(stageId_,*requestedDifficulty,entry))
+        throw std::invalid_argument("Unsupported run identity");
     if(replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear(); replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
     replayEnded_=false;
     playerBodyAnimation_={};playerBodyAction_=0;playerBodySince_=0;
     FinishSpellRecord(false);
     spellCaptured_=false;
     previewMode_ = false;
+    continuingStage_=continuingStage;
+    if(!continuingStage){clearedMainlineStages_=0;runContinues_=0;}
+    pendingEnding_.reset();endingPlayer_=ending::Player{};assets_.SetMusicGain(1);
+    scoreSaveError_.clear();
     // 先移除所有借用旧关卡资源的对象，再取消旧任务并释放纹理及清单。
-    actorEffects_.Clear();
+    actorEffects_.Clear();externalEffects_.Clear();
     bullets_.Reset();
-    enemies_.Clear();
+    actors_.Clear();
     drops_.Clear();
     boss_.reset();
     playerOptionAnimations_ = {};
@@ -151,8 +159,10 @@ void Game::StartRun(bool captureCursor, bool synchronous) {
     assets_.UnloadStage();
     captureCursor_ = captureCursor;
     stage_ = StageDirector{};
-    stageContent_ = CreateStageContent(stageId_);
+    runDifficulty_=*requestedDifficulty;
+    stageContent_ = CreateStageContent(stageId_,runDifficulty_,entry);
     stage_ = StageDirector(stageContent_->Events());
+    scenerySeconds_=0;
     loadingSeconds_ = 0;
     loadingStarted_ = loadingFailed_ = false;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -176,47 +186,67 @@ void Game::UpdateLoading(float deltaTime) {
     }
     try {
         if (!loadingStarted_) {
-            assets_.BeginStageLoad(stageContent_->Assets());
+            assets_.BeginStageLoad(pendingEnding_?ending::Assets(*pendingEnding_):stageContent_->Assets());
             loadingStarted_ = true;
         }
-        if (assets_.AdvanceStageLoad()) CompleteStartRun();
+        if (assets_.AdvanceStageLoad()) {
+            if(pendingEnding_) {
+                const auto id=*pendingEnding_;
+                endingPlayer_.Start(id,scoreProfile_.endingsSeen[static_cast<std::size_t>(id)]);
+                assets_.PlayStageMusic();state_=RunState::Ending;
+            } else CompleteStartRun();
+        }
     } catch (const std::exception& error) {
         TraceLog(LOG_WARNING, "STAGE: %s", error.what());
         playerOptionAnimations_ = {};
         ClearPlayerBomb();
-        assets_.UnloadStage();
+        externalEffects_.Clear();assets_.UnloadStage();
         loadingFailed_ = true;
     }
 }
 
 void Game::CompleteStartRun() {
+    const auto& particle=assets_.GetVisual(stage_assets::kExternalParticle);
+    if(particle.archive)externalEffects_.Bind(*particle.archive,stage_assets::kExternalParticle);
     PrepareReplay();
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
     playerOptionAnimations_ = {};
-    player_.Reset();
-    player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,
-                         static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
-    missCount_ = bombCount_ = 0;
+    if(!continuingStage_) {
+        player_.Reset();
+        runInitialLives_=initialLives_;
+        player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
+        missCount_=bombCount_=0;score_=0;graze_=pointItems_=0;
+        const auto* combat=stageContent_->CombatData();
+        referenceRank_=rank::Initial(combat?combat->stage:StageNumber(stageId_),runDifficulty_);
+    } else {
+        // 自机不借用关卡素材；只重置姿态和射击周期，库存、火力与机体继续沿用这一局。
+        player_.ResetPose();player_.SetInvulnerability(1.5F);
+    }
     spellStartMisses_=spellStartBombs_=0;
     shotSoundTimer_ = 0.0F;
     boss_.reset();
     bullets_.Reset();
-    enemies_.Clear();
+    actors_.Clear();
+    drops_.Clear();
     stage_.Reset();
-    score_ = 0;
-    graze_ = pointItems_ = 0;
-    referenceRank_=16; referenceSubrank_=0; rankTime_=0;
+    battleTicks_=0;pendingPlayerInput_={};pendingDialogueConfirm_=false;
+    stageGraze_=stagePointItems_=0;
+    continuingStage_=false;
     screenFlashTimer_ = 0.0F;
     spellCutInTimer_ = 0.0F;
     spellBonusTimer_=0; spellBonus_=stageBonus_=0;
     stageClearSummary_={}; stageClearSeconds_=0; stageClearShown_=false;
+    stageSpellCaptures_=0;dialogueFlow_={};
     dialogueTimer_ = 0.0F;
     dialogueAfterBattle_ = dialogueBossMusic_ = false;
+    dialogueMusicCursor_=0;
+    dialogueScene_=DialogueScene::FinalBoss;
     dialogueActive_ = false;
     dialogueMotion_.Clear();
     bossEventId_.reset();
     dialogueEventId_.reset();
+    dialogueSignalWait_.reset();dialogueSignalsSeen_=0;
     shouldQuit_ = false;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     shotTestActive_ = false;
@@ -226,8 +256,14 @@ void Game::CompleteStartRun() {
     messageTimer_=0;
     if (spellPractice_) {
         stage_ = StageDirector{};
-        BeginStageBoss(true, 3);
-        while (boss_->phase < practicePhase_) boss_->AdvancePhase();
+        const auto* card=spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty);
+        BeginStageBoss(stageContent_->PracticeBoss(card->number), 3);
+        // 符卡练习直接进入战斗；带独立对白入场的遭遇先放行，再按遭遇内展开编号定位技能。
+        if(boss_->attack==0)boss_->ResumeCombat();
+        // 目录编号属于选定遭遇；有限推进避免配置变动后绕回前一技能而永久卡在加载完成处。
+        for(int skipped=1;skipped<practiceAttack_;++skipped)
+            if(!boss_->AdvanceSkill())throw std::logic_error("Spell practice attack is unreachable");
+        if(boss_->attack!=practiceAttack_)throw std::logic_error("Spell practice attack does not match catalog");
         player_.AdjustPower(Player::kMaxPower);
         spellCutInTimer_ = kSpellCutInDuration;
     }
@@ -235,7 +271,11 @@ void Game::CompleteStartRun() {
     if (loadingShotTest_) {
         // 调试场景也等待同一加载流程完成，避免将固定靶清除或触发普通关卡事件。
         stage_ = StageDirector{};
-        enemies_.Add(std::make_unique<ShotTestEnemy>());
+        behavior::Spawn target;
+        target.position={0,0,4};target.pattern.movement.speed=0;target.pattern.initialAnimation=3;target.pattern.endFrame=2147483647;
+        target.sourceHealth=240;target.sourceScore=0;target.sourceItem=-2;
+        target.visual=stage1::kDarkFairy;target.hitRadius=1;target.retireOutside=false;
+        actors_.Spawn(target);
         shotTestActive_ = true;
         loadingShotTest_ = false;
         SetMessage("SHOT TEST  F5: POWER -8  F6: POWER +8", 3.0F);
@@ -244,6 +284,9 @@ void Game::CompleteStartRun() {
 }
 
 void Game::EnterMainMenu() {
+    continuingStage_=false;
+    pendingEnding_.reset();endingPlayer_=ending::Player{};clearedMainlineStages_=0;runContinues_=0;
+    scorePageFromRun_=false;scoreHighlight_=-1;
     replaySaveState_=ReplaySaveState::None;replayName_.clear();replayAfterSave_=ReplayAction::Stay;
     (void)DisableWindowInputMethods(GetWindowHandle());
     RefreshReplayAvailability(0,true);
@@ -251,9 +294,9 @@ void Game::EnterMainMenu() {
     RestoreReplaySettings();
     replayMode_=replay::Mode::Idle; replayData_={};
     dialogueMotion_.Clear();
-    actorEffects_.Clear();
+    actorEffects_.Clear();externalEffects_.Clear();
     bullets_.Reset();
-    enemies_.Clear();
+    actors_.Clear();
     drops_.Clear();
     boss_.reset();
     playerOptionAnimations_ = {};
@@ -261,6 +304,7 @@ void Game::EnterMainMenu() {
     assets_.UnloadStage();
     stage_ = StageDirector{};
     stageContent_.reset();
+    assets_.SetMusicGain(1);
     assets_.PlayMenuMusic();
     state_ = RunState::MainMenu;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -270,6 +314,7 @@ void Game::EnterMainMenu() {
     dialogueActive_ = false;
     bossEventId_.reset();
     dialogueEventId_.reset();
+    dialogueSignalWait_.reset();dialogueSignalsSeen_=0;
     player_.ResetPose();
     player_.SyncCamera(camera_);
     // GLFW 后端的 ShowCursor 同时解除捕获，且不会像 EnableCursor 一样强制居中。
@@ -289,14 +334,23 @@ void Game::ReturnToPracticeStage() {
     startSetupMotion_.Advance(static_cast<int>(setupStep_),1);
 }
 
-void Game::BeginStageClear() {
+void Game::AwardStageClear() {
     if(stageClearShown_)return;
-    // 对话完整结束后再固定奖励；此入口可重入，但不能重复加分或重新启动倒计时。
-    stageClearSummary_={std::max(1,StageNumber(stageId_)),player_.Power(),graze_,pointItems_};
+    // 奖励快照和退出时序分开；MSG9之后仍可能保留数百内容帧，期间不能重复加分或失去对白保护。
+    const auto* combat=stageContent_->CombatData();
+    stageClearSummary_={combat?combat->stage:std::max(1,StageNumber(stageId_)),player_.Power(),stageGraze_,stagePointItems_,runDifficulty_,
+        std::max(0,player_.RemainingLives()-1),player_.Bombs(),runInitialLives_};
     stageBonus_=stageClearSummary_.Total();
     score_+=stageBonus_;
     stageClearShown_=true;
     RecordStageScore();
+}
+
+void Game::BeginStageClear() {
+    if(state_==RunState::StageClear)return;
+    AwardStageClear();
+    // 当前录像以单关内容为边界；先封存一面结果，后续连续闯关不写进一面输入流。
+    if(replayMode_!=replay::Mode::Idle)replayEnded_=true;
     bullets_.Reset(); drops_.Clear();ClearPlayerBomb();
     spellCutInTimer_=screenFlashTimer_=0;
     state_=RunState::StageClear;
@@ -306,17 +360,34 @@ void Game::BeginStageClear() {
 
 void Game::ContinueStageClear() {
     if(state_!=RunState::StageClear)return;
+    if(CanSaveReplay() && replaySaveState_!=ReplaySaveState::Declined) {RequestReplayAction(ReplayAction::ContinueStage);return;}
+    // Extra独立收尾，既不推进本篇前缀，也不选择主线结局。
+    if(stageId_==StageId::Extra){EndStage(RunState::Won);return;}
+    if(!practiceMode_&&!spellPractice_&&!previewMode_) {
+        const int number=StageNumber(stageId_);
+        // 只接纳当前完整前缀的下一关；从末关直接启动不能冒充整轮通关，重入也不会累计次数。
+        if(number>=1 && number<=6 && clearedMainlineStages_==((1U<<(number-1))-1))
+            clearedMainlineStages_|=1U<<(number-1);
+        if(!CampaignEndsAfter(stageId_,runDifficulty_)) {
+            if(const auto next=NextStage(stageId_)) {
+                stageId_=*next;StartRun(captureCursor_,false,true);return;
+            }
+        }
+    }
+    const unsigned completedMask=runDifficulty_==native_combat::Difficulty::Easy ? 0x1f : 0x3f;
+    pendingEnding_=ending::Select({static_cast<int>(player_.Shot()),native_combat::DifficultyIndex(runDifficulty_),runContinues_,missCount_,challengeMode_,
+        !practiceMode_&&!spellPractice_&&!previewMode_ && clearedMainlineStages_==completedMask});
     EndStage(RunState::Won);
 }
 
 void Game::RecordStageScore() {
     if(replayMode_==replay::Mode::Playback)return;
     // 分模式记录包含通关与失败的整关尝试；预览和符卡练习的计分口径不同，不能混入。
-    bool recordStage=!previewMode_ && !spellPractice_;
+    bool recordStage=!previewMode_ && !spellPractice_ && stageId_!=StageId::Extra;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     recordStage=recordStage && !shotTestActive_;
 #endif
-    if(recordStage && stageHighScores_.Record(challengeMode_,StageNumber(stageId_),score_))
+    if(recordStage && stageHighScores_.Record(challengeMode_,StageNumber(stageId_),score_,native_combat::DifficultyIndex(runDifficulty_)))
         SaveSettings();
 }
 
@@ -326,13 +397,13 @@ void Game::EndStage(RunState result) {
     RecordStageScore();
     if (result == RunState::Won) {
         assets_.PlaySoundEffect("clear");
-        if (replayMode_!=replay::Mode::Playback && !practiceMode_ && !challengeMode_ && !previewMode_ && score_ > bestScore_) {
+        if (replayMode_!=replay::Mode::Playback && !pendingEnding_ && !practiceMode_ && !challengeMode_ && !previewMode_ && stageId_!=StageId::Extra && runDifficulty_==native_combat::Difficulty::Normal && score_ > bestScore_) {
             bestScore_ = static_cast<int>(std::min(score_, 2000000000LL));
             SaveSettings();
         }
     }
     bullets_.Reset();
-    ClearEnemiesWithEffects();
+    ClearActorsWithEffects();
     drops_.Clear();
     if (boss_ && boss_->active) {
         actorEffects_.Spawn(boss_->visual, boss_->position, boss_->hitRadius,
@@ -342,22 +413,24 @@ void Game::EndStage(RunState result) {
     boss_.reset();
     dialogueActive_ = false;
     spellCutInTimer_ = messageTimer_ = 0.0F;
+    dialogueSignalWait_.reset();dialogueSignalsSeen_=0;
     selectedResultItem_ = spellPractice_?2:0;
     ClearPlayerBomb();
     finishResult_ = result;
     state_ = RunState::Finishing;
 }
 
-void Game::ClearEnemiesWithEffects() {
-    enemies_.ForEachActive([this](Enemy& enemy) {
-        actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
+void Game::ClearActorsWithEffects() {
+    actors_.ForEachActive([this](behavior::Actor& enemy) {
+        if(enemy.visible)actorEffects_.Spawn(enemy.visual, enemy.position, enemy.hitRadius,
                             enemy.presentation, ActorExitReason::StageClear, &enemy.animation.player.Sample());
         enemy.active = false;
     });
-    enemies_.Clear();
+    actors_.Clear();
 }
 
 void Game::TogglePause() {
+    pendingPlayerInput_={};pendingDialogueConfirm_=false;
     if (state_ == RunState::Playing || state_ == RunState::StageClear || state_ == RunState::Finishing) {
         selectedPauseItem_ = 0;
         assets_.PlaySoundEffect("menu_cancel");
@@ -381,11 +454,17 @@ void Game::StepRun(float deltaTime) {
 }
 
 void Game::UpdateBattleAnimations() {
-    const auto sync=[&](battle::Cursor& cursor,VisualId id,double age,int script=-1,std::uint32_t serial=0) {
+    const auto syncAuxiliary=[&](std::span<behavior::AuxiliaryAnimation> animations,VisualId body) {
+        for(auto& animation:animations)if(animation.script>=0) {
+            const auto& visual=assets_.GetVisual(animation.visual==kInvalidVisualId?body:animation.visual);
+            if(visual.archive)animation.Sync(*visual.archive,visual.animation);
+        }
+    };
+    const auto sync=[&](battle::Cursor& cursor,VisualId id,double age,int script=-1,std::uint32_t serial=0,const battle::AnimationInterrupt* interrupt=nullptr) {
         const auto& visual=assets_.GetVisual(id);
         if(!visual.archive)return;
         auto selected=visual.animation;if(script>=0)selected.script=script;
-        cursor.Sync(*visual.archive,selected,std::max(0.0,age),serial);
+        cursor.Sync(*visual.archive,selected,std::max(0.0,age),serial,interrupt);
     };
     actorEffects_.ForEachActive([&](ActorExitEffect& effect) {
         if(!effect.nativeDefeat)return;
@@ -403,19 +482,23 @@ void Game::UpdateBattleAnimations() {
     if(stageContent_ && replayMode_==replay::Mode::Playback) {
         int action=runInput_.player.moveLeft?1:runInput_.player.moveRight?2:playerBodyAction_==1?3:playerBodyAction_==2?4:playerBodyAction_;
         if(action!=playerBodyAction_) {playerBodyAction_=action;playerBodySince_=player_.VisualAge();}
-        const auto visual=static_cast<VisualId>(stage1::kPlayerBody+(player_.IsMarisa()?5:0)+action);
+        const auto visual=static_cast<VisualId>(stage_assets::kPlayerBody+(player_.IsMarisa()?5:0)+action);
         sync(playerBodyAnimation_,visual,player_.VisualAge()-playerBodySince_);
     }
-    enemies_.ForEachActive([&](Enemy& enemy) {
+    actors_.ForEachActive([&](behavior::Actor& enemy) {
         sync(enemy.animation,enemy.visual,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,
-             enemy.animationScript,enemy.animationRevision);
+             enemy.animationScript,enemy.animationRevision,enemy.animationInterrupt ? &*enemy.animationInterrupt : nullptr);
+        syncAuxiliary(enemy.auxiliaryAnimations,enemy.visual);
     });
-    if(boss_ && boss_->active)
-        sync(boss_->animation,boss_->visual,boss_->animationAge,boss_->animationScript,boss_->animationRevision);
+    if(boss_ && boss_->active) {
+        sync(boss_->animation,boss_->visual,boss_->animationAge,boss_->animationScript,boss_->animationRevision,boss_->AnimationInterrupt());
+        syncAuxiliary(boss_->AuxiliaryAnimations(),boss_->visual);
+    }
     bullets_.Pool().ForEachActive([&](Bullet& bullet) {
         const auto& visual=assets_.GetVisual(bullet.visual);
         if(!visual.archive)return;
         auto selected=visual.animation;
+        if(bullet.IsBeam()&&bullet.beamAnimationScript>=0)selected.script=bullet.beamAnimationScript;
         double age=bullet.age;
         if(bullet.nativeType>=0 && bullet.age<bullet.spawnVisualSeconds) {
             selected=battle::BulletSpawn(bullet.nativeType,bullet.nativeColor,static_cast<int>(std::round(bullet.spawnVisualSeconds*60)));
@@ -429,11 +512,19 @@ void Game::UpdateBattleAnimations() {
         bullet.animation.Sync(*atlas.archive,selected,age);
     });
     drops_.ForEachActive([&](Pickup& pickup) {
-        const auto id=pickup.kind==PickupKind::Star ? stageContent_->StarPickupVisual() :
-            pickup.kind==PickupKind::Score ? stageContent_->ScorePickupVisual() :
-            pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
-        sync(pickup.animation,id,pickup.age);
+        sync(pickup.animation,PickupVisual(pickup),pickup.age);
     });
+}
+VisualId Game::PickupVisual(const Pickup& pickup) const {
+    switch(pickup.kind) {
+        case PickupKind::Power:return pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
+        case PickupKind::Score:return stageContent_->ScorePickupVisual();
+        case PickupKind::Star:return stageContent_->StarPickupVisual();
+        case PickupKind::Bomb:return stageContent_->ItemVisual(3);
+        case PickupKind::FullPower:return stageContent_->ItemVisual(4);
+        case PickupKind::Life:return stageContent_->ItemVisual(5);
+    }
+    return kInvalidVisualId;
 }
 
 void Game::UpdateUiMotion(float deltaTime) {
@@ -443,7 +534,7 @@ void Game::UpdateUiMotion(float deltaTime) {
         const auto lines = CurrentDialogue();
         if (!lines.empty()) {
             const auto& line = lines[DialogueIndex()];
-            const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
+            const auto cues=stageContent_->SceneDialogueCues(dialogueScene_,dialogueAfterBattle_,player_.Shot());
             if(cues.empty())dialogueMotion_.Advance(line.bossSpeaking, line.showBoss, deltaTime);
             else dialogueMotion_.Seek(cues,dialogueTimer_);
         }
@@ -459,7 +550,7 @@ void Game::UpdateUiMotion(float deltaTime) {
     } else if (state_ == RunState::StartSetup) {
         detail = static_cast<int>(setupStep_);
         selection = setupStep_ == StartSetupStep::Shot ? selectedShot_ : setupStep_ == StartSetupStep::Mode ? static_cast<int>(challengeMode_)
-            : setupStep_ == StartSetupStep::Difficulty ? 1 : setupStep_ == StartSetupStep::Stage ? selectedPracticeStage_ : 0;
+            : setupStep_ == StartSetupStep::Difficulty ? selectedDifficulty_ : setupStep_ == StartSetupStep::Stage ? selectedPracticeStage_ : 0;
         if(spellPractice_) {
             detail=spellSelection_.page==spell::Page::Stage?8:9;
             selection=spellSelection_.page==spell::Page::Stage?spellSelection_.stage:
@@ -488,6 +579,9 @@ void Game::UpdateUiMotion(float deltaTime) {
 }
 
 void Game::UpdateState(float deltaTime) {
+    if(state_==RunState::Ending){UpdateEnding(deltaTime);return;}
+    if(state_==RunState::ScoreSave){UpdateScoreSave();return;}
+    if(state_==RunState::ScoreName){UpdateScoreName();return;}
     if(state_==RunState::ReplayList) { UpdateReplayList(); return; }
     if (state_ == RunState::Loading) {
         UpdateLoading(deltaTime);
@@ -516,7 +610,7 @@ void Game::UpdateState(float deltaTime) {
             TogglePause(); return;
         }
         stageClearSeconds_=std::min(kStageClearSeconds,stageClearSeconds_+std::max(0.0F,deltaTime));
-        actorEffects_.Update(std::max(0.0F,deltaTime));
+        actorEffects_.Update(std::max(0.0F,deltaTime));externalEffects_.Update(std::max(0.0F,deltaTime));
         if(runInput_.confirm || stageClearSeconds_>=kStageClearSeconds)ContinueStageClear();
         return; // 确认只关闭本层，下一帧才推进收尾，避免操作穿透到后续菜单。
     }
@@ -540,10 +634,11 @@ void Game::UpdateState(float deltaTime) {
             return;
         }
         if (input.back) {
-            if(practiceMode_ && !spellPractice_)RequestReplayAction(ReplayAction::StageSelection); else RequestReplayAction(ReplayAction::Menu);
+            if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
+            else if(practiceMode_ && !spellPractice_)ReturnToPracticeStage(); else EnterMainMenu();
             return;
         }
-        if(IsKeyPressed(KEY_M)) { RequestReplayAction(ReplayAction::Menu); return; }
+        if(IsKeyPressed(KEY_M)) {if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();else EnterMainMenu();return;}
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         std::array<ui::Item,menu::kResultCount> items{};
         for (int index = 0; index < menu::kResultCount; ++index)
@@ -556,8 +651,9 @@ void Game::UpdateState(float deltaTime) {
             assets_.PlaySoundEffect("menu_confirm");
             if(selectedResultItem_==2)RequestReplayAction(ReplayAction::Stay);
             else if (selectedResultItem_ == 0) RequestReplayAction(ReplayAction::Retry);
-            else if(practiceMode_ && !spellPractice_)RequestReplayAction(ReplayAction::StageSelection);
-            else RequestReplayAction(ReplayAction::Menu);
+            else if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
+            else if(practiceMode_ && !spellPractice_)ReturnToPracticeStage();
+            else EnterMainMenu();
         }
         return;
     }
@@ -598,16 +694,22 @@ void Game::UpdateState(float deltaTime) {
     }
     if (state_ == RunState::Finishing) {
         screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
-        actorEffects_.Update(deltaTime);
+        actorEffects_.Update(deltaTime);externalEffects_.Update(deltaTime);
         // ANM 删除指令也会结束效果，必须先执行再判断清空，保证本帧完成结算。
         UpdateBattleAnimations();
-        if (actorEffects_.Pool().ActiveCount() == 0) {
+        if (actorEffects_.Pool().ActiveCount() == 0 && externalEffects_.ActiveCount()==0) {
             actorEffects_.Clear();
+            externalEffects_.Clear();
             playerOptionAnimations_ = {};
             ClearPlayerBomb();
             assets_.UnloadStage();
-            state_ = finishResult_; EnableCursor();
-            if(!practiceMode_)RequestReplayAction(ReplayAction::Stay);
+            if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
+            else if(finishResult_==RunState::Won && pendingEnding_)BeginEnding();
+            else if(finishResult_==RunState::Won && stageId_==StageId::Extra && !previewMode_ && !spellPractice_)BeginScoreSave();
+            else {
+                state_ = finishResult_; EnableCursor();
+                if(!practiceMode_ && CanSaveReplay())RequestReplayAction(ReplayAction::Stay);
+            }
         }
         return;
     }
@@ -623,6 +725,25 @@ void Game::UpdateState(float deltaTime) {
     if (replayMode_!=replay::Mode::Playback && IsKeyPressed(KEY_F6)) AdjustPlayerPower(8);
 #endif
 
+    // 发弹、弹池推进和碰撞共享固定步，低 FPS 补发的弹只推进各自实际经过的逻辑步。
+    const PlayerInput latest=runInput_.player;
+    const Vector2 accumulatedMouse{pendingPlayerInput_.mouseDelta.x+latest.mouseDelta.x,
+                                   pendingPlayerInput_.mouseDelta.y+latest.mouseDelta.y};
+    const bool bomb=pendingPlayerInput_.bomb||latest.bomb;
+    pendingPlayerInput_=latest;pendingPlayerInput_.mouseDelta=accumulatedMouse;pendingPlayerInput_.bomb=bomb;
+    pendingDialogueConfirm_=pendingDialogueConfirm_||runInput_.confirm;
+    const bool fastForward=runInput_.fast;
+    battleTicks_+=static_cast<double>(deltaTime)*120;
+    while(battleTicks_+0.00001>=1&&state_==RunState::Playing) {
+        battleTicks_-=1;
+        const PlayerInput stepInput=pendingPlayerInput_;
+        const bool confirm=std::exchange(pendingDialogueConfirm_,false);
+        pendingPlayerInput_.mouseDelta={};pendingPlayerInput_.bomb=false;
+        UpdateBattleStep(1.0F/120,stepInput,confirm,fastForward);
+    }
+}
+
+void Game::UpdateBattleStep(float deltaTime,const PlayerInput& input,bool dialogueConfirm,bool fastForward) {
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
     screenFlashTimer_ = std::max(0.0F, screenFlashTimer_ - deltaTime);
     spellCutInTimer_ = std::max(0.0F, spellCutInTimer_ - deltaTime);
@@ -637,50 +758,56 @@ void Game::UpdateState(float deltaTime) {
                       return HandleStageEvent(event);
                   });
     if(state_!=RunState::Playing)return; // 事件改变状态时不能再推进本帧战斗。
-    // 本帧由时间轴刚启动的对话从下一帧计时，避免第一句少显示一个 deltaTime。
+    // 本步刚启动的对话从下一逻辑步计时，避免首句少显示一个固定步。
     if (dialogueWasActive && dialogueActive_) {
         dialogueTimer_ += deltaTime;
         float lineStart=0;
         const auto lines=CurrentDialogue();
-        const auto& line=lines[DialogueIndex(&lineStart)];
-        const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
-        const bool fastForward=runInput_.fast;
-        const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
-            (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
-        if (inputAllowed && (runInput_.confirm || fastForward))
-            dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
-                line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
-        if (!dialogueAfterBattle_ && DialogueFlagAt(cues,DialogueCueKind::BossMusic,dialogueTimer_) && !dialogueBossMusic_) {
-            assets_.PlayBossMusic(); dialogueBossMusic_=true;
+        const auto cues=stageContent_->SceneDialogueCues(dialogueScene_,dialogueAfterBattle_,player_.Shot());
+        // 无台词的 MSG 收尾只推进自身时长，不构造占位台词，也不允许确认键越过锁定的演出。
+        if(!lines.empty()) {
+            const auto& line=lines[DialogueIndex(&lineStart)];
+            const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
+                (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
+            if (inputAllowed && (dialogueConfirm || fastForward))
+                dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
+                    line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
         }
+        ApplyDialogueMusic(cues);
+        if(dialogueFlow_.awardFrame>=0&&dialogueTimer_*60+0.001F>=dialogueFlow_.awardFrame)AwardStageClear();
         if (dialogueTimer_+0.00001F>=DialogueDuration()) {
             dialogueActive_=false;
             if (dialogueEventId_) { stage_.EndEvent(*dialogueEventId_); dialogueEventId_.reset(); }
-            if (dialogueAfterBattle_) { BeginStageClear(); return; }
         }
-        // UpdateUiMotion 在战斗更新之前运行；原生演出需在计时与跳句后重新采样，避免低 FPS 多滞后一帧。
+        for(const auto& cue:cues)if(cue.kind==DialogueCueKind::StageSignal&&cue.frame<=dialogueTimer_*60+0.00001F)
+            dialogueSignalsSeen_=std::max(dialogueSignalsSeen_,cue.value);
+        if(dialogueSignalWait_&&(dialogueSignalWait_->second==0 ? !dialogueActive_ : dialogueSignalsSeen_>=dialogueSignalWait_->second)) {
+            stage_.EndEvent(dialogueSignalWait_->first);dialogueSignalWait_.reset();
+        }
+        if(!dialogueActive_&&dialogueFlow_.finishStage) { BeginStageClear(); return; }
+        // 对话计时或跳句后立即重采样；绘制只读取完成后的状态，不推进逻辑时钟。
         if(dialogueActive_ && !cues.empty())dialogueMotion_.Seek(cues,dialogueTimer_);
     }
-    if(!dialogueActive_) {
-        rankTime_+=deltaTime;
-        const float period=std::max(4.0F,40.0F-std::max(0,player_.RemainingLives()-1)*4.0F);
-        while(rankTime_>=period) { rankTime_-=period; AdjustReferenceRank(100); }
-    }
-    UpdatePlayer(deltaTime);
-    UpdateEnemies(deltaTime);
+    // 原生管理回调推进的是独立帧计数，未见按残机数量定期加rank的规则；不再模拟该兼容计时器。
+    const bool latePlayer=boss_&&boss_->active&&boss_->ControlsWorldTime();
+    if(!latePlayer)UpdatePlayer(deltaTime,input);
+    UpdateActors(deltaTime);
     UpdateBoss(deltaTime);
+    externalEffects_.Update(deltaTime); // 演员先交付本步请求，新粒子随后执行内容帧0；与显示更新频率无关。
     if (state_ != RunState::Playing) return;
-    std::array<Vector3, kEnemyCapacity + 1> targets{};
+    if(latePlayer&&!WorldTimeStopped())UpdatePlayer(deltaTime,input);
+    if(!WorldTimeStopped())scenerySeconds_+=deltaTime;
+    std::array<Vector3, kActorCapacity + 1> targets{};
     std::size_t targetCount = 0;
-    enemies_.ForEachActive([&](const Enemy& enemy) {
-        targets[targetCount++] = enemy.position;
+    actors_.ForEachActive([&](const behavior::Actor& enemy) {
+        if(enemy.CanBeTargeted())targets[targetCount++] = enemy.position;
     });
-    if (boss_ && boss_->active) targets[targetCount++] = boss_->position;
-    bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position());
+    if (boss_ && boss_->CanBeTargeted()) targets[targetCount++] = boss_->position;
+    bullets_.Update(deltaTime, {targets.data(), targetCount}, player_.Position(),WorldTimeStopped());
     UpdateBattleAnimations(); // 本帧击破快照读取已推进的动作，而不是上一帧的动画。
     UpdatePlayerBomb(deltaTime); // 先让 Bomb 清除接触实体的敌弹，再检查玩家命中和普通弹伤害。
     ResolveCollisions();
-    if (state_ == RunState::Playing) UpdatePickups(deltaTime);
+    if (state_ == RunState::Playing&&!WorldTimeStopped()) UpdatePickups(deltaTime);
 }
 
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -695,46 +822,67 @@ bool Game::HandleStageEvent(const StageEvent& event) {
     return stageContent_->HandleEvent(event, *this);
 }
 
-void Game::SpawnStageEnemy(const EnemySpec& spec) {
+void Game::SpawnStageActor(const behavior::Spawn& spec) {
     // 新典道中 Boss 存在时，出生请求被跳过，但时间轴仍继续计时。
     if (boss_ && boss_->active) return;
-    if (auto enemy = stageContent_->CreateEnemy(spec))
-        enemies_.Add(std::move(enemy));
+    actors_.Spawn(spec);
 }
 
-void Game::BeginStageBoss(bool final, StageEventId id) {
+void Game::BeginStageBoss(const bosses::Battle& battle, StageEventId id) {
     // 只停止旧批次的后续出怪；现存小怪和弹幕继续更新，不能在 Boss 入场时清场。
     stage_.CancelEnemySpawns();
     bossEventId_ = id;
-    boss_ = stageContent_->CreateBoss(final);
-    if (final && !dialogueBossMusic_) assets_.PlayBossMusic();
+    boss_ = stageContent_->CreateBoss(battle,player_.Shot());
+    if(boss_->SpellCardNumber()>0)OnSpellDeclared();
+    if (boss_->MusicOnEntrance() && !dialogueBossMusic_) assets_.PlayBossMusic();
     messageTimer_=0;
 }
 
-void Game::BeginStageDialogue(StageEventId id, bool afterBattle) {
-    if(afterBattle && stageClearShown_)return;
+void Game::BeginStageDialogue(StageEventId id, bool afterBattle,DialogueScene scene,DialogueClearPolicy clearPolicy) {
+    dialogueFlow_=stageContent_->ResolveDialogueFlow(scene,afterBattle,player_.Shot(),{stageSpellCaptures_,challengeMode_,player_.NetMisses()});
+    if(dialogueFlow_.awardFrame < -1 || dialogueFlow_.endFrame < -1 || (dialogueFlow_.skip&&dialogueFlow_.finishStage)||
+       (dialogueFlow_.endFrame>=0&&dialogueFlow_.awardFrame>dialogueFlow_.endFrame))
+        throw std::logic_error("Invalid dialogue flow");
+    if(dialogueFlow_.skip) {
+        // MSG条件在任何立绘、音乐或清场之前短路；事件仍报告完成，使显式后继按实际时刻继续。
+        dialogueActive_=false;dialogueEventId_.reset();dialogueSignalWait_.reset();dialogueSignalsSeen_=0;
+        stage_.EndEvent(id);return;
+    }
     dialogueAfterBattle_=afterBattle;
+    dialogueSignalsSeen_=0;dialogueSignalWait_.reset();
+    dialogueScene_=scene;
     dialogueBossMusic_=false;
+    dialogueMusicCursor_=0;
     stage_.CancelEnemySpawns();
-    ClearEnemiesWithEffects();
-    bullets_.ClearEnemyBullets();
+    if(clearPolicy==DialogueClearPolicy::ClearEnemiesAndBullets) {
+        ClearActorsWithEffects();bullets_.ClearEnemyBullets();
+    }
     dialogueActive_ = true;
     dialogueTimer_ = 0.0F;
     dialogueEventId_ = id;
     const auto lines = CurrentDialogue();
     if (!lines.empty()) dialogueMotion_.Reset(lines.front().bossSpeaking, lines.front().showBoss);
-    const auto cues=stageContent_->DialogueCues(afterBattle,player_.Shot());
+    const auto cues=stageContent_->SceneDialogueCues(scene,afterBattle,player_.Shot());
+    ApplyDialogueMusic(cues);
+    if(dialogueFlow_.awardFrame==0)AwardStageClear();
     if(!cues.empty())dialogueMotion_.Seek(cues,0);
     messageTimer_ = 0.0F;
 }
 
-void Game::AdjustReferenceRank(int subrank) {
-    referenceSubrank_+=subrank;
-    while(referenceSubrank_>=100) { ++referenceRank_; referenceSubrank_-=100; }
-    while(referenceSubrank_<0) { --referenceRank_; referenceSubrank_+=100; }
-    referenceRank_=std::clamp(referenceRank_,10,32);
+void Game::ResumeStageBoss() {
+    if(!boss_||!boss_->active)throw std::logic_error("No active boss to resume");
+    const int previous=boss_->SpellCardNumber();
+    boss_->ResumeCombat();
+    if(previous==0&&boss_->SpellCardNumber()>0)OnSpellDeclared();
 }
-std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->Dialogue(dialogueAfterBattle_,player_.Shot()); }
+bool Game::AwaitStageDialogueSignal(StageEventId id,int signal) {
+    if(signal<0)throw std::invalid_argument("Negative dialogue signal");
+    if(signal==0 ? !dialogueActive_ : dialogueSignalsSeen_>=signal)return true;
+    if(dialogueSignalWait_)throw std::logic_error("Another dialogue signal wait is pending");
+    dialogueSignalWait_=std::pair{id,signal};return false;
+}
+
+std::span<const DialogueLine> Game::CurrentDialogue() const { return stageContent_->SceneDialogue(dialogueScene_,dialogueAfterBattle_,player_.Shot()); }
 int Game::DialogueIndex(float* lineStart) const {
     float start=0; const auto lines=CurrentDialogue();
     for (int index=0;index<static_cast<int>(lines.size());++index) {
@@ -746,9 +894,24 @@ int Game::DialogueIndex(float* lineStart) const {
     }
     return 0;
 }
-float Game::DialogueDuration() const {
+void Game::ApplyDialogueMusic(std::span<const DialogueCue> cues) {
+    while(dialogueMusicCursor_<cues.size() && cues[dialogueMusicCursor_].frame<=dialogueTimer_*60+0.00001) {
+        const auto& cue=cues[dialogueMusicCursor_];
+        if(cue.kind==DialogueCueKind::StageMusic) {
+            assets_.PlayStageTrack(cue.value);
+            dialogueBossMusic_=cue.value==1;
+        } else if(cue.kind==DialogueCueKind::BossMusic && cue.value!=0) {
+            assets_.PlayBossMusic();dialogueBossMusic_=true;
+        }
+        // 调用成功才消费指令；非法音乐槽仍由 AssetManager 拒绝并保留原有播放状态。
+        ++dialogueMusicCursor_;
+    }
+}
+
+double Game::DialogueDuration() const {
+    if(dialogueFlow_.endFrame>=0)return dialogueFlow_.endFrame/60.0;
     float duration=0; for(const auto& line:CurrentDialogue()) duration+=line.duration>0 ? line.duration : stageContent_->DialogueLineDuration();
-    return duration;
+    return std::max(duration,stageContent_->DialogueMinimumDuration(dialogueScene_,dialogueAfterBattle_,player_.Shot()));
 }
 void Game::StageMessage(std::string_view message, float duration) {
     SetMessage(std::string(message), duration);

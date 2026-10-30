@@ -15,7 +15,8 @@ namespace {
 std::array<int,4> MeasureWorldFootprint(Texture2D texture,const koumakyou::anm::Archive& archive,
                                       const std::filesystem::path& path,Shader boundsShader) {
     koumakyou::anm::Frame frame;
-    frame.sprite=archive.sprites.front().id;frame.source=archive.sprites.front().source;frame.visible=true;
+    frame.sprite=archive.sprites.front().id;frame.source=archive.sprites.front().source;
+    frame.displaySize=archive.sprites.front().displaySize;frame.visible=true;
     constexpr Color background{17,31,47,255};
     const Camera3D camera{{0,0,-10},{0,0,0},{0,1,0},45,CAMERA_PERSPECTIVE};
     auto target=LoadRenderTexture(256,256);
@@ -90,15 +91,15 @@ int main(int argc,char** argv) {
                     animation.Start(*atlas.archive,script.id,0,atlas.archive->sprites.front().id);
                     animation.Advance(at/60.0);
                     const auto& frame=animation.Sample();
-                    const float width=frame.source.width*std::max(0.01F,std::abs(frame.scale.x));
-                    const float height=frame.source.height*std::max(0.01F,std::abs(frame.scale.y));
+                    const float width=frame.LogicalSize().x*std::max(0.01F,std::abs(frame.scale.x));
+                    const float height=frame.LogicalSize().y*std::max(0.01F,std::abs(frame.scale.y));
                     const float scale=std::min(112/width,112/height);
                     const float x=(index%columns)*cell+cell/2,y=(index/columns)*cell+80;
                     // 背景脚本的绝对原场地坐标只决定放置；审阅时居中，仍保留局部位移和原锚点。
                     Vector2 origin{x-frame.position.x*scale,y-frame.position.y*scale};
                     if(frame.topLeft) {
-                        origin.x-=frame.source.width*scale*frame.scale.x/2;
-                        origin.y-=frame.source.height*scale*frame.scale.y/2;
+                        origin.x-=frame.LogicalSize().x*scale*frame.scale.x/2;
+                        origin.y-=frame.LogicalSize().y*scale*frame.scale.y/2;
                     }
                     koumakyou::DrawAnimatedSprite2D(atlas.texture,*atlas.archive,frame,origin,scale);
                     DrawText(TextFormat("script %d",script.id),x-62,(index/columns)*cell+8,16,RAYWHITE);

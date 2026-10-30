@@ -1,4 +1,4 @@
-// 本文件负责让 macOS 游戏视图退出文字合成，同时保留 GLFW 原有的物理按键处理。
+// 本文件禁用 macOS 游戏视图的输入法合成，保留 GLFW 物理按键，并为成绩命名转交可打印 ASCII。
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
@@ -11,11 +11,20 @@ static id NoInputContext(id self, SEL selector) {
     return nil;
 }
 
-/// @brief GLFW keyDown: 已先报告物理按键，阻断其随后调用的文字合成入口。
-static void IgnoreTextInterpretation(id self, SEL selector, NSArray* events) {
-    (void)self;
+/// @brief GLFW keyDown: 已先报告物理按键；不启动 IME，只把可打印 ASCII 交回原 insertText: 回调。
+/// 这样 WASD 仍不会弹出候选窗，成绩页也能通过 GetCharPressed 读取字母、数字和标点。
+static void ForwardAsciiText(id self, SEL selector, NSArray* events) {
     (void)selector;
-    (void)events;
+    for (NSEvent* event in events) {
+        if ([event modifierFlags] & (NSEventModifierFlagControl | NSEventModifierFlagCommand)) continue;
+        NSString* characters = [event charactersIgnoringModifiers];
+        NSMutableString* ascii = [NSMutableString string];
+        for (NSUInteger i=0;i<[characters length];++i) {
+            const unichar character=[characters characterAtIndex:i];
+            if (character>=32 && character<=126) [ascii appendFormat:@"%C",character];
+        }
+        if ([ascii length]) [(id<NSTextInputClient>)self insertText:ascii replacementRange:NSMakeRange(NSNotFound,0)];
+    }
 }
 
 /// @brief 仅借用本窗口，主线程重复调用安全；成功后策略持续到视图销毁。
@@ -41,7 +50,7 @@ bool KoumakyouDisableCocoaInputMethods(void* nativeWindow) {
         if (!inputContext || !interpretation ||
             !class_addMethod(rawKeyClass, @selector(inputContext), (IMP)NoInputContext,
                              method_getTypeEncoding(inputContext)) ||
-            !class_addMethod(rawKeyClass, @selector(interpretKeyEvents:), (IMP)IgnoreTextInterpretation,
+            !class_addMethod(rawKeyClass, @selector(interpretKeyEvents:), (IMP)ForwardAsciiText,
                              method_getTypeEncoding(interpretation))) {
             objc_disposeClassPair(rawKeyClass);
             return false;

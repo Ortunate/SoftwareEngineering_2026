@@ -1,6 +1,7 @@
 // 本文件负责敌人掉落和清弹星点生成，并统一处理道具移动和拾取。
 
 #include "gameplay/items/drop_system.hpp"
+#include "gameplay/data/native_sizes.hpp"
 
 #include "gameplay/arena.hpp"
 #include "gameplay/bullets/system.hpp"
@@ -10,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <numbers>
+#include <stdexcept>
 
 namespace koumakyou {
 namespace {
@@ -20,7 +22,7 @@ constexpr float kFallAcceleration = 8.0F;
 constexpr float kFallSpeed = 2.5F;
 constexpr float kAutoCollectSpeed = 20.0F;
 // 所有道具共用以自机判定中心为球心的拾取半径，单位为世界单位。
-constexpr float kCollectDistance = 1.2F;
+constexpr float kCollectDistance = native_sizes::kItemCollectRadius;
 // 战场 Z 范围为 [-kArenaHalfExtents.z, +kArenaHalfExtents.z]，前端 2/5 从 +0.2 倍半长开始。
 constexpr float kAutoCollectZ = kArenaHalfExtents.z * 0.2F;
 constexpr float kSpiralAngle = 2.3999632F;
@@ -110,6 +112,8 @@ void DropSystem::SpawnReferenceDrop(Vector3 position, int item, bool fullPower) 
         if(referenceDropIndex_++%3!=0)return;
         item=items[referenceItemIndex_++%items.size()];
     }
+    // 原生演员的非负掉落字节直接交给统一道具入口；Extra尾波的5是残机，不得丢弃或在满P时转分数。
+    if(item>=3&&item<=6) {SpawnNativeItem(position,item,fullPower);return;}
     if(item<0 || item>2)return;
     const bool score=item==1 || fullPower;
     Spawn(score ? PickupKind::Score : PickupKind::Power,position,
@@ -124,6 +128,14 @@ void DropSystem::SpawnReferenceBurst(Vector3 position, int count, bool fullPower
         Spawn(fullPower ? PickupKind::Score : PickupKind::Power,scattered,
               fullPower ? kScorePointValue : index==0 ? 8 : 1);
     }
+}
+void DropSystem::SpawnNativeItem(Vector3 position,int item,bool fullPower) {
+    if(item<0||item>6)throw std::invalid_argument("Invalid native item id");
+    if(item<=2) { SpawnReferenceDrop(position,item,fullPower);return; }
+    if(item==3)Spawn(PickupKind::Bomb,position,1);
+    else if(item==4)Spawn(PickupKind::FullPower,position,128);
+    else if(item==5)Spawn(PickupKind::Life,position,1);
+    else Spawn(PickupKind::Star,position,kStarPointValue);
 }
 
 void DropSystem::ConvertEnemyBulletsToStars(BulletSystem& bullets) {
@@ -185,8 +197,10 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
         const float dy = playerPosition.y - pickup.position.y;
         const float dz = playerPosition.z - pickup.position.z;
         if (dx * dx + dy * dy + dz * dz < kCollectDistance * kCollectDistance) {
-            if (pickup.kind == PickupKind::Power)
+            if (pickup.kind == PickupKind::Power || pickup.kind == PickupKind::FullPower)
                 reward.power += pickup.value;
+            else if(pickup.kind==PickupKind::Bomb)reward.bombs+=pickup.value;
+            else if(pickup.kind==PickupKind::Life)reward.lives+=pickup.value;
             else
                 reward.score += pickup.value;
             if (pickup.kind == PickupKind::Score) ++reward.pointItems;

@@ -20,7 +20,7 @@ namespace koumakyou {
 class BulletSystem;
 
 /// @brief 道具种类；P 点增加 Power，分数点与清弹星点增加分数。
-enum class PickupKind : std::uint8_t { Power, Score, Star };
+enum class PickupKind : std::uint8_t { Power, Score, Star, Bomb, Life, FullPower };
 
 /// @brief 系统持有的道具；position 为世界坐标。
 /// velocityZ 为非追踪运动的世界 Z 轴速度（单位/秒），正值上抛、负值下落；追踪时忽略。
@@ -37,7 +37,7 @@ struct Pickup {
     /// @brief 出生后按 90 度/秒绕竖直长轴旋转；只由模拟 age 决定，暂停冻结，返回弧度。
     float RotationRadians() const { return std::fmod(age,4.F)*1.57079632679F; }
     /// @brief 当前道具对应的原始 Item 编号；大 P 按 Power 增量至少 8 区分。
-    int NativeItemType() const { return kind==PickupKind::Star?6:kind==PickupKind::Score?1:value>=8?2:0; }
+    int NativeItemType() const { return kind==PickupKind::Bomb?3:kind==PickupKind::FullPower?4:kind==PickupKind::Life?5:kind==PickupKind::Star?6:kind==PickupKind::Score?1:value>=8?2:0; }
     battle::Cursor animation;
 };
 
@@ -46,6 +46,7 @@ struct PickupReward {
     int pointItems = 0; // 本次拾取的普通蓝色点数道具数量，不包含清弹星点。
     int power = 0;
     long long score = 0;
+    int bombs=0,lives=0; // 本次拾取的 Bomb 与额外残机数量，由玩家库存接口钳制上限。
 };
 
 /// @brief 生成敌人掉落物和清弹星点，持有道具并处理运动、自动吸取与拾取。
@@ -79,12 +80,15 @@ public:
     /// @param position 退场位置，使用世界坐标。
     /// @param power 增加的 Power 点数；非正值不生成。
     void SpawnFixedPower(Vector3 position, int power);
-    /// @brief 原作敌人掉落；item=0 固定小 P，-1 每三次击破按 32 项表轮换；其他值不生成。
-    /// 满 Power 时生成点数；计数属于整关，Clear 随机初始化两个表偏移。
+    /// @brief 原作敌人掉落；-1每三次击破按32项表轮换，0…6与SpawnNativeItem编号相同；其他值不生成。
+    /// 仅小/大P在满Power时转分数；固定道具不推进整关轮换计数，Clear随机初始化两个表偏移。
     void SpawnReferenceDrop(Vector3 position, int item, bool fullPower);
     /// @brief 执行 ins_119；count 限制在 0…32，未满 Power 时首个大 P（8），其余小 P（1）。
     /// 散落范围为 X/Z 各 ±72 原作像素，Y 保持敌人高度，满 Power 时全部转为点数。
     void SpawnReferenceBurst(Vector3 position, int count, bool fullPower);
+    /// @brief 生成脚本指定的一件原生道具：0/1/2 为小P/分数/大P，3/4/5/6 为 Bomb/满P/残机/星点。
+    /// 仅小/大 P 在 fullPower 时转分数；非法编号抛 invalid_argument，池满丢弃该件。
+    void SpawnNativeItem(Vector3 position,int item,bool fullPower);
     /// @brief 将当前全部活动敌弹在原位置转成立即追踪玩家的星点，保留玩家弹。
     /// @param bullets 借用的弹幕系统；转换的敌弹失活，不再参与碰撞。
     /// @note 不受普通道具池容量限制，已有星点也会继续追踪。

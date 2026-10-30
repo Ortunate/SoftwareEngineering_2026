@@ -18,6 +18,7 @@ struct VisualResource {
     battle::Selection animation{};
     VisualId defeatVisual = kInvalidVisualId; // 当前关卡的击破动画编号。
     std::shared_ptr<const anm::Archive> archive; // 借用 GPU 纹理，共享只读 CPU 指令，不拥有图集纹理。
+    float worldUnitsPerPixel = 0; // 原生战斗使用统一世界/逻辑像素比例；零保留手工/旧外观的指定高度。
 };
 
 /// @brief 按需加载的战斗图集；GPU 纹理由 AssetManager 独占，所有引用在 UnloadStage 后失效。

@@ -50,7 +50,7 @@ void Game::RefreshReplayAvailability(float seconds,bool force) {
     }
     if(error){replayAvailable_=false;replayStatus_="无法读取录像目录";}
 }
-bool Game::MainMenuItemAvailable(int index) const { return index!=1 && (index!=4 || replayAvailable_); }
+bool Game::MainMenuItemAvailable(int index) const { return index!=4 || replayAvailable_; }
 void Game::RequestReplayAction(ReplayAction action) {
     replayAfterSave_=action;
     if(CanSaveReplay() && (replaySaveState_!=ReplaySaveState::Declined || action==ReplayAction::Stay)) {
@@ -67,6 +67,7 @@ void Game::FinishReplayAction() {
     case ReplayAction::Menu:EnterMainMenu();break;
     case ReplayAction::StageSelection:ReturnToPracticeStage();break;
     case ReplayAction::SpellSelection:ReturnToSpellPractice();break;
+    case ReplayAction::ContinueStage:ContinueStageClear();break;
     case ReplayAction::Stay:break;
     }
 }

@@ -15,8 +15,17 @@ namespace koumakyou {
 /// 构造时一次性分配固定池，内存不足抛 bad_alloc；不允许复制，生成/更新不分配槽位内存。
 class BulletSystem {
 public:
-    /// @brief 弹幕池可容纳的最大活动弹幕数。
-    static constexpr std::size_t kCapacity = 8192;
+    /// @brief 不拥有弹幕的槽位句柄；只在所属 BulletSystem 生命周期内有效，复用/清弹后解析为空。
+    /// 句柄不借用动画资源，不能通过缓存旧 Bullet* 绕过代号检查。
+    class Handle {
+        friend class BulletSystem;
+        const BulletSystem* owner_=nullptr;
+        Bullet* slot_=nullptr;
+        std::uint64_t generation_=0;
+    };
+    /// @brief 最大同时活动弹数；满池仍丢弃该次请求，并由 DroppedSpawns 暴露。
+    /// 四面 Lunatic 无攻击整关在 168.117 秒的普通波已超过旧 8192 槽，三维采样不缩减源弹数来适配容量。
+    static constexpr std::size_t kCapacity = 16384;
 
     /// @brief 清空弹幕池及丢弃计数。
     void Reset();
@@ -24,7 +33,8 @@ public:
     /// @param deltaTime 本帧经过的秒数。
     /// @param targets 当前可攻击目标的世界坐标；仅在本次调用期间借用。
     /// @param enemyAimTarget 敌弹延迟重新瞄准时的玩家世界坐标，普通弹不使用。
-    void Update(float deltaTime, std::span<const Vector3> targets = {}, Vector3 enemyAimTarget = {});
+    /// @param timeStopped 冻结运动、年龄和显现；既有自机持续弹仍提供本步伤害秒数，敌弹接触由总控关闭。
+    void Update(float deltaTime, std::span<const Vector3> targets = {}, Vector3 enemyAimTarget = {},bool timeStopped=false);
 
     /// @brief 从定长池申请并初始化单颗弹幕。
     /// @param owner 弹幕所属阵营。
@@ -38,6 +48,11 @@ public:
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
                   float radius, Color color, VisualId visual,
                   Vector3 acceleration = {});
+    /// @brief 为本系统 Spawn/SpawnBeam 返回的指针建立非拥有句柄；nullptr 返回空句柄。
+    [[nodiscard]] Handle MakeHandle(Bullet* bullet) const;
+    /// @brief 即时借用仍属于该代的活动槽；清弹/复用或其他系统的句柄返回 nullptr。
+    /// 返回指针不能跨清池、槽位复用或系统销毁保留。
+    [[nodiscard]] Bullet* Resolve(Handle handle);
     /// @brief 将活动自机导弹切为 20/60 秒爆破：保留对象槽，速度减半，切换原生爆破外观。
     /// 每个 60 Hz 接触帧伤害为 max(1,floor(原始单发伤害/4))，按有效秒数累计，可命中多个目标。
     /// 无命中外观或并非导弹时仅令弹幕失活；调用后动画游标重置，不继续借用旧动画。
@@ -45,6 +60,7 @@ public:
 
     /// @brief 生成固定三维敌方光束；方向在生成时锁定，预警后才有胶囊碰撞。
     /// direction 必须非零且有限并自动归一化；length/radius 为正世界单位，warning/duration 为非负/正秒数。
+    /// warning同时初始化展开结束的擦弹时钟起点；技能可另改warningSeconds，但不得移动该起点。
     /// @return 池持有的光束；容量不足、尺寸或时间非法时返回 nullptr；生命期与 Spawn 一致。
     Bullet* SpawnBeam(Vector3 origin, Vector3 direction, float length, float radius,
                       float warning, float duration, Color color);
@@ -80,6 +96,7 @@ public:
     static float Length(Vector3 vector);
 
 private:
+    std::uint64_t nextGeneration_=1; // Reset 只清活动标记，不重置序列，避免旧激光句柄误指向新生弹。
     // 独立 ANM 实例增大了单弹状态；固定池放在堆上，避免 Windows 默认线程栈溢出。
     std::unique_ptr<FixedPool<Bullet, kCapacity>> bullets_ =
         std::make_unique<FixedPool<Bullet, kCapacity>>();

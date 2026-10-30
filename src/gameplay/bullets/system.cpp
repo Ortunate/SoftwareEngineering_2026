@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace koumakyou {
 namespace {
@@ -56,15 +57,82 @@ Vector3 Normalize(Vector3 vector) {
     return Scale(vector, 1.0F / length);
 }
 
+/// @brief 以显现结束的零时刻更新新弹道；运动参数的有效期包含启动加速及取消该选项的等待帧。
+/// 延迟转向独立于启动加速执行，重复转向以最初时钟的整数倍触发，不能每次累加浮点截止时刻。
+void UpdateStartSampledMotion(Bullet& bullet,float delta,float age,Vector3 target) {
+    constexpr float epsilon=1.0e-6F;
+    const bool boosted=bullet.launchBoostSeconds>0&&age<=bullet.launchBoostSeconds+epsilon;
+    const bool removingBoost=bullet.launchBoostSeconds>0&&age<bullet.launchBoostSeconds+2.0F/60-epsilon;
+    if(boosted) {
+        const float speed=BulletSystem::Length(bullet.baseVelocity)+bullet.launchBoost*
+            std::max(0.0F,1-age/bullet.launchBoostSeconds);
+        bullet.SetVelocity(Scale(Normalize(BulletSystem::Length(bullet.launchDirection)>0 ? bullet.launchDirection : bullet.baseVelocity),speed));
+    } else if(!removingBoost) {
+        if(bullet.polarMotion) {
+            const float elapsed=std::min(delta,std::max(0.0F,bullet.angularSeconds));
+            const float speed=BulletSystem::Length(bullet.baseVelocity)+bullet.speedAcceleration*elapsed;
+            const auto direction=BulletSystem::RotateAroundAxis(Normalize(bullet.baseVelocity),bullet.rotationAxis,bullet.angularVelocity*elapsed);
+            bullet.baseVelocity=Scale(direction,speed);bullet.SetVelocity(bullet.baseVelocity);
+        } else {
+            const float elapsed=std::min(delta,static_cast<float>(std::max(0.0,bullet.accelerationSeconds)));
+            bullet.SetVelocity(Add(bullet.Velocity(),Scale(bullet.acceleration,elapsed)));
+        }
+    }
+    bullet.angularSeconds=std::max(0.0F,bullet.angularSeconds-delta);
+    bullet.accelerationSeconds=std::max(0.0,bullet.accelerationSeconds-delta);
+    if(bullet.turnDelaySeconds>0&&!bullet.turnApplied) {
+        bool turned=false;
+        while(bullet.turnCompleted<bullet.turnCount&&age+epsilon>=bullet.turnDelaySeconds*(bullet.turnCompleted+1)) {
+            const auto direction=bullet.turnAbsolute ? bullet.turnFixedDirection :
+                BulletSystem::RotateAroundAxis(bullet.turnAimed ? BulletSystem::DirectionTo(bullet.position,target) : Normalize(bullet.baseVelocity),
+                    bullet.rotationAxis,bullet.turnAngle);
+            bullet.baseVelocity=Scale(direction,bullet.turnSpeed);++bullet.turnCompleted;turned=true;
+        }
+        bullet.turnApplied=bullet.turnCompleted==bullet.turnCount;
+        const float progress=age-bullet.turnDelaySeconds*bullet.turnCompleted;
+        bullet.SetVelocity(Scale(bullet.baseVelocity,turned||bullet.turnApplied ? 1 : std::max(0.0F,1-progress/bullet.turnDelaySeconds)));
+    }
+}
+/// @brief 完全越出可见边界后才反弹；同一角落反射多轴仍只消费一次次数，末端离场也消费次数。
+void Bounce(Bullet& bullet) {
+    const auto p=bullet.position,lo=bullet.bounceLower,hi=bullet.bounceUpper,h=bullet.bounceHalfExtents;
+    if(p.x>=lo.x-h.x&&p.x<=hi.x+h.x&&p.y>=lo.y-h.y&&p.y<=hi.y+h.y&&p.z>=lo.z-h.z&&p.z<=hi.z+h.z)return;
+    auto direction=Normalize(BulletSystem::Length(bullet.Velocity())>0 ? bullet.Velocity() : bullet.launchDirection);
+    if(p.x<lo.x||p.x>=hi.x)direction.x=-direction.x;
+    if(p.y<lo.y||p.y>=hi.y)direction.y=-direction.y;
+    if(p.z>hi.z||(bullet.reflectLowerZ&&p.z<=lo.z))direction.z=-direction.z;
+    bullet.SetVelocity(Scale(direction,bullet.bounceSpeed));bullet.baseVelocity=bullet.Velocity();bullet.launchDirection=direction;
+    --bullet.bouncesRemaining;
+}
+
 }  // namespace
 
 void BulletSystem::Reset() { bullets_->Clear(); }
+BulletSystem::Handle BulletSystem::MakeHandle(Bullet* bullet) const {
+    Handle handle;
+    if(bullet) {handle.owner_=this;handle.slot_=bullet;handle.generation_=bullet->generation;}
+    return handle;
+}
+Bullet* BulletSystem::Resolve(Handle handle) {
+    return handle.owner_==this&&handle.slot_&&handle.slot_->active&&handle.slot_->generation==handle.generation_ ? handle.slot_ : nullptr;
+}
 
-void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget) {
-    bullets_->ForEachActive([deltaTime, targets, enemyAimTarget](Bullet& bullet) {
+void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget,bool timeStopped) {
+    bullets_->ForEachActive([deltaTime, targets, enemyAimTarget,timeStopped](Bullet& bullet) {
         if(bullet.pendingExpiration) {bullet.active=false;return;}
+        if(timeStopped) {
+            bullet.damageSeconds=bullet.owner==BulletOwner::Player&&bullet.damagePerSecond>0&&bullet.Dangerous() ? deltaTime : 0;
+            return;
+        }
         const float oldAge=bullet.age;
-        bullet.age += deltaTime;
+        if(bullet.IsBeam()) {
+            if(bullet.age!=static_cast<float>(bullet.beamAge))bullet.beamAge=bullet.age;
+            bullet.beamContactAge=bullet.beamAge;
+            bullet.beamAge+=deltaTime;bullet.age=static_cast<float>(bullet.beamAge);
+        } else bullet.age += deltaTime;
+        // 光束截止值可能由两个float秒数相加得到；只包容该次表示的一ULP，真实跨过下一逻辑步仍立即回收。
+        // 原生淡出末帧在演员逻辑中仍可见，之后的弹幕更新才释放，不能以累计float误差吞掉这帧。
+        const bool expired=bullet.age>(bullet.IsBeam()?std::nextafter(bullet.maxAge,std::numeric_limits<float>::infinity()):bullet.maxAge);
         // 在本帧内裁剪有效区间，避免两个累计年龄相减产生精度损失，进而漏算伤害及整数得分。
         bullet.damageSeconds=std::max(0.0F,std::min({deltaTime,bullet.maxAge-oldAge,bullet.dangerEndSeconds-oldAge})-
             std::max({0.0F,bullet.warningSeconds-oldAge,bullet.spawnVisualSeconds-oldAge}));
@@ -73,35 +141,61 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
             bullet.position=Add(bullet.position,Add(Scale(bullet.Velocity(),deltaTime),
                 Scale(bullet.acceleration,0.5F*deltaTime*(deltaTime+1.0F/60))));
             bullet.SetVelocity(Add(bullet.Velocity(),Scale(bullet.acceleration,deltaTime)));
-            if(bullet.age>bullet.maxAge || std::abs(bullet.position.x)>kArenaHalfExtents.x+3 ||
+            if(expired || std::abs(bullet.position.x)>kArenaHalfExtents.x+3 ||
                std::abs(bullet.position.y)>kArenaHalfExtents.y+3 || std::abs(bullet.position.z)>kArenaHalfExtents.z+3)
                 bullet.active=false;
             return;
         }
-        const float spawnDelta=std::clamp(bullet.spawnVisualSeconds-(bullet.age-deltaTime),0.0F,deltaTime);
+        // age的float累计在整帧边界可能留下数个ULP；仅消除表示残余，不吞掉真实跨界时间。
+        const auto remainingStep=[&](float end) {
+            float value=std::clamp(end-oldAge,0.0F,deltaTime);
+            const float rounding=4*std::numeric_limits<float>::epsilon()*(std::abs(end)+oldAge+deltaTime);
+            if(value<=rounding)return 0.0F;
+            if(deltaTime-value<=rounding)return deltaTime;
+            return value;
+        };
+        const float spawnDelta=remainingStep(bullet.spawnVisualSeconds);
         bullet.position=Add(bullet.position,Scale(bullet.baseVelocity,spawnDelta*bullet.spawnMoveScale));
-        const float motionDelta=deltaTime-spawnDelta;
+        // 原生ANM在创建时执行第0帧；结束更新先做显现位移，再落入零时钟运动。
+        // 步首采样路径保留最后一个60Hz内容帧的重叠，120Hz拆成两个半步；旧路径保持既有采样契约。
+        const float motionStart=bullet.sampleMotionAtStart&&bullet.spawnVisualSeconds>0 ?
+            bullet.spawnVisualSeconds-1.0F/60 : bullet.spawnVisualSeconds;
+        const float motionDelta=deltaTime-remainingStep(motionStart);
         const float motionAge=std::max(0.0F,bullet.age-bullet.spawnVisualSeconds);
+        const float startAge=static_cast<float>(bullet.motionClock);bullet.motionClock+=motionDelta;
+        const bool turning=bullet.turnDelaySeconds>0&&!bullet.turnApplied;
         // 先更新速度，再按新速度推进位置；角速度使弹道在三维空间转弯。
-        if (bullet.launchBoostSeconds > 0 && motionAge <= bullet.launchBoostSeconds) {
-            const float speed = Length(bullet.baseVelocity) + bullet.launchBoost *
-                (1 - motionAge / bullet.launchBoostSeconds);
-            bullet.SetVelocity(Scale(Normalize(bullet.baseVelocity), speed));
-        } else bullet.SetVelocity(Add(bullet.Velocity(), Scale(bullet.acceleration, motionDelta)));
-        if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
-            if (motionAge >= bullet.turnDelaySeconds) {
-                const Vector3 direction = bullet.turnAimed
-                    ? DirectionTo(bullet.position, enemyAimTarget) : Normalize(bullet.baseVelocity);
-                bullet.SetVelocity(Scale(RotateAroundAxis(direction, bullet.rotationAxis,
-                    bullet.turnAngle), bullet.turnSpeed));
-                bullet.turnApplied = true;
-            } else bullet.SetVelocity(Scale(bullet.baseVelocity, 1 - motionAge / bullet.turnDelaySeconds));
+        const bool extendedMotion=bullet.sampleMotionAtStart||bullet.turnCount>1||bullet.turnAbsolute||bullet.speedAcceleration!=0;
+        if(extendedMotion&&motionDelta>0)UpdateStartSampledMotion(bullet,motionDelta,bullet.sampleMotionAtStart ? startAge : motionAge,enemyAimTarget);
+        else if (!extendedMotion) {
+        // 旧关卡保留已验证的步末采样和一次转向路径。
+            if (bullet.launchBoostSeconds > 0 && motionAge <= bullet.launchBoostSeconds) {
+                const float speed = Length(bullet.baseVelocity) + bullet.launchBoost *
+                    (1 - motionAge / bullet.launchBoostSeconds);
+                bullet.SetVelocity(Scale(Normalize(Length(bullet.launchDirection)>0 ? bullet.launchDirection : bullet.baseVelocity), speed));
+            } else {
+                const float accelerationDelta=std::min(motionDelta,static_cast<float>(std::max(0.0,bullet.accelerationSeconds)));
+                bullet.SetVelocity(Add(bullet.Velocity(),Scale(bullet.acceleration,accelerationDelta)));
+                bullet.accelerationSeconds=std::max(0.0,bullet.accelerationSeconds-accelerationDelta);
+            }
+            if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
+                if (motionAge >= bullet.turnDelaySeconds) {
+                    const Vector3 direction = bullet.turnAimed
+                        ? DirectionTo(bullet.position, enemyAimTarget) : Normalize(bullet.baseVelocity);
+                    bullet.SetVelocity(Scale(RotateAroundAxis(direction, bullet.rotationAxis,
+                        bullet.turnAngle), bullet.turnSpeed));
+                    bullet.turnApplied = true;
+                } else bullet.SetVelocity(Scale(bullet.baseVelocity, 1 - motionAge / bullet.turnDelaySeconds));
+            }
+            if (bullet.angularVelocity != 0.0F) {
+                const float angularDelta=std::min(motionDelta,std::max(0.0F,bullet.angularSeconds));
+                bullet.SetVelocity(RotateAroundAxis(
+                    bullet.Velocity(), bullet.rotationAxis,
+                    bullet.angularVelocity * angularDelta));
+                bullet.angularSeconds=std::max(0.0F,bullet.angularSeconds-angularDelta);
+            }
         }
-        if (bullet.angularVelocity != 0.0F) {
-            bullet.SetVelocity(RotateAroundAxis(
-                bullet.Velocity(), bullet.rotationAxis,
-                bullet.angularVelocity * motionDelta));
-        }
+        if(bullet.bouncesRemaining>0&&!turning&&motionDelta>0)Bounce(bullet);
         if (bullet.homingTurnRate > 0.0F && !targets.empty()) {
             const Vector3* nearest = nullptr;
             float nearestDistanceSquared = 0.0F;
@@ -139,11 +233,19 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
             }
         }
         bullet.position = Add(bullet.position, Scale(bullet.Velocity(), motionDelta));
+        if(bullet.IsBeam())bullet.beamAnchor=Add(bullet.beamAnchor,Scale(bullet.Velocity(),motionDelta));
+        if(bullet.beamLengthLimit>0) {
+            // 原作先推进末端，超出长度上限后才推进起点；基点不随光束移动。
+            bullet.beamEndDistance+=bullet.beamTravelSpeed*motionDelta;
+            bullet.beamStartOffset=std::max(bullet.beamStartOffset,bullet.beamEndDistance-bullet.beamLengthLimit);
+            bullet.beamLength=bullet.beamEndDistance-bullet.beamStartOffset;
+            bullet.position=Add(bullet.beamAnchor,Scale(bullet.Direction(),bullet.beamStartOffset));
+        }
 
         constexpr float margin = 3.0F;
-        if (bullet.age > bullet.maxAge && bullet.damagePerSecond>0 && bullet.damageSeconds>0) {
+        if (expired && bullet.damagePerSecond>0 && bullet.damageSeconds>0) {
             bullet.pendingExpiration=true;
-        } else if (bullet.age > bullet.maxAge ||
+        } else if (expired ||
             std::abs(bullet.position.x) > kArenaHalfExtents.x + margin ||
             std::abs(bullet.position.y) > kArenaHalfExtents.y + margin ||
             std::abs(bullet.position.z) > kArenaHalfExtents.z + margin) {
@@ -174,6 +276,7 @@ Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
     if (bullet == nullptr) {
         return nullptr;
     }
+    bullet->generation=nextGeneration_++;
     bullet->owner = owner;
     bullet->visual = visual;
     bullet->position = position;
@@ -196,8 +299,10 @@ Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
     Bullet* beam = Spawn(BulletOwner::Enemy, origin, {}, radius, color, kInvalidVisualId);
     if (!beam) return nullptr;
     beam->SetBeamDirection(Normalize(direction));
+    beam->beamAnchor=origin;
     beam->beamLength = length;
     beam->warningSeconds = warning;
+    beam->beamGrazeStartSeconds = warning;
     beam->maxAge = warning + duration;
     return beam;
 }

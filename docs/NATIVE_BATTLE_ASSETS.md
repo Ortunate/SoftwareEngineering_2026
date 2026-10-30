@@ -10,7 +10,7 @@
 
 `resolution_manifest.json` 记录每张纹理的标准/高清尺寸、原 `_4k` 文件名及两版 SHA-256；`checksums.sha256` 校验当前全部 50 个 DDS/ANM。构建将整个目录复制到可执行文件旁的 `assets/battle/native/`，运行时不依赖本机游戏安装目录、解包工具或 Python。
 
-升级仅增加纹理采样分辨率。ANM 的图集逻辑尺寸、精灵矩形、动画时序和关卡的 `worldHeight`、`pivot`、`bulletDiameterScale` 均保持不变，原 UV 比例自动落到高清图集；世界高度、弹幕直径、道具大小和激光宽度不随纹理尺寸放大。
+升级仅增加纹理采样分辨率。ANM 的图集逻辑尺寸、精灵矩形和动画时序保持不变；当前原生外观按 [新典战斗尺寸](NATIVE_SIZES.md) 的显式显示尺寸与统一比例绘制，原 UV 比例自动落到高清图集；世界高度、弹幕直径、道具大小和激光宽度不随纹理尺寸放大。
 
 | 图集文件名（省略扩展名） | 目录编号 / 内容 |
 |---|---|
@@ -27,7 +27,7 @@
 | stg7enm / stg7enm2 | ExtraEnemies / Flandre |
 | eff01…eff07 | Stage1Effects…ExtraEffects：各关卡背景/符卡演出 |
 
-目录包含 1084 个精灵定义和 347 个有效脚本。`stg7enm.anm` 的编号 71 有重复项，按原加载规则由后一项覆盖前一项。图集中的未使用角色、自机、道具与特效均已登记并可加载、播放、绘制；这不意味着当前已经实现二面以后的关卡或魔理沙玩法。
+目录包含 1084 个精灵定义和 347 个有效脚本。`stg7enm.anm` 的编号 71 有重复项，按原加载规则由后一项覆盖前一项。图集中的未使用角色、自机、道具与特效均已登记并可加载、播放、绘制；素材登记本身不等于玩法接入。当前一至六面已接通适用主线难度与四机体，Extra已开放正式关卡、独立成绩和119～131符卡练习；原生动态rank与完整外部粒子尚未完成。逐关覆盖见[全难度接入记录](DIFFICULTY_INTEGRATION.md)及[Extra记录](STAGE_EXTRA_REFERENCE.md)。
 
 解包工具为 [thdat-nc](https://github.com/Renko6626/thdat-nc)。ANM 指令与特效编号参照 [th06 动画管理器](https://github.com/GensokyoClub/th06/blob/master/src/AnmManager.cpp)、[特效管理器](https://github.com/GensokyoClub/th06/blob/master/src/EffectManager.cpp)核对；项目自行实现解析、播放和绘制。BC7 解码使用 MIT 许可的 [bcdec](https://github.com/iOrange/bcdec)，许可说明见 `third_party/bcdec/README.md`。游戏素材沿用原作品素材，bcdec 许可不适用于游戏素材。
 
@@ -41,7 +41,7 @@
 
 ANM 坐标采用自身逻辑像素，与 DDS 实际分辨率分别处理，UV 由逻辑尺寸计算。角度是弧度，时间采用固定 60 Hz；`Advance(seconds)` 接收非负有限秒数并保留不足一帧的余量。原脚本编号、精灵编号、颜色偏移和关卡 `VisualId` 属于不同编号空间。
 
-每个演员/弹幕拥有自己的 `battle::Cursor`。弹幕固定池在系统构造时一次性分配到堆，防止新增动画状态占满 Windows 默认线程栈；运行期生成不新增槽位内存。`Sync(archive, selection, age, revision)` 的 age 是本次动作开始后的秒数；选择改变、年龄回退或 revision 改变时重启，同龄重复同步不会推进。暂停时不推进年龄。`position` 与 `positionOffset` 是独立的原像素通道，绘制器将它们作为外部锚点的局部偏移；3D 通过 `height/source.height` 换算世界单位。
+每个演员/弹幕拥有自己的 `battle::Cursor`。弹幕固定池在系统构造时一次性分配到堆，防止新增动画状态占满 Windows 默认线程栈；运行期生成不新增槽位内存。`Sync(archive, selection, age, revision)` 的 age 是本次动作开始后的秒数；选择改变、年龄回退或 revision 改变时重启，同龄重复同步不会推进。暂停时不推进年龄。`position` 与 `positionOffset` 是独立的原像素通道，绘制器将它们作为外部锚点的局部偏移；3D 通过 `height/Frame::LogicalSize().y` 换算世界单位。
 
 `LoadBattleAtlas` 返回借用引用，在 `LoadStage`、`UnloadStage` 或管理器销毁后不得再使用。动画实例借用档案，切换关卡时必须先清空演员、弹幕和效果。`DrawAnimatedBillboard` / `DrawAnimatedBeam` 关闭背面剔除，调用方应在整批提交后恢复；`SpriteRenderer` 已统一处理透明排序、不写深度和状态恢复；掉落物、角色、弹幕、退场效果、激光与光晕必须在同次 Draw 中提交。排序使用相机前向深度，包含 ANM 的局部位移与实际公告板变换；同深度保持插入顺序。长激光在精灵深度平面处分段并保留连续 UV，避免整束按中点排序产生前后遮挡错误。
 
@@ -70,6 +70,8 @@ DrawAnimatedSprite2D(atlas.texture, *atlas.archive, animation.Sample(), {320, 24
 
 击破通过清单 `defeatVisual` 或演员覆盖值选择独立 ANM，删除指令结束效果，错误的长循环绑定最多保留 1 秒；自然离场和关卡清场保持原演员最后一帧的淡出快照。战斗贴图以连续 Alpha 绘制，按视线深度合并排序；全部贴图禁止深度写入，避免透明外框裁掉后方物体。不透明球体与场景仍参与深度遮挡，辅助网格不写深度。第一人称视角没有镜头前的玩家身体，自机图集的身体动画提供给未来玩法及预览接口；当前使用其中的射击动画。三维射击、碰撞、拾取、Bomb 规则及演员入场/退场淡出仍沿用项目设计，ANM 负责图像与局部动画，不代替完整原作场景或所有外部粒子运动回调。
 
+演员与ConfiguredBoss各持有八个辅助ANM槽，独立保存脚本、年龄、revision、中断和游标。辅助槽默认复用本体外观，也可显式借用当前关卡的另一VisualId，其档案、材质和几何由该外观决定。Game按120 Hz逻辑年龄同步，ANM仍按60 Hz播放；本体和辅助帧进入同一透明排序队列。Extra已恢复帕秋莉的script17、使魔/固定发射体的script16，以及芙兰朵露借用ExtraEnemies外观的script18（Flandre本体图集没有18），128与129中断分别交给本体和辅助槽。清池/重开先销毁这些借用者再卸载图集，Actor复用会清空全部辅助槽；辅助动画结束不提前结束演员协程。真实Extra ANM的独立播放、同编号重启、显示FPS和复用检查通过，Extra图形、透明遮挡和通用生命周期回归通过；不表示其他关卡的全部外部辅助槽都已逐一还原。
+
 ## 检查与审阅
 
 ```bash
@@ -95,22 +97,24 @@ cmake --build --preset macos-debug --target koumakyou_sprite_overlap_tests
 
 ## 自机太极圈
 
-灵梦两侧太极圈复用 `player00.anm` 的 128/129 脚本及 sprite 128（36×36 逻辑像素），Z 角速度分别为 +0.1/−0.1 弧度/60 Hz 帧，由既有 ANM 播放器推进，不以程序绘制圆形替代。清单追加左右两个外观，借用同一 Reimu DDS/ANM，保持既有弹幕与立绘编号不变。
+灵梦两侧太极圈复用 `player00.anm` 的 128/129 脚本及 sprite 128（裁图 36×36，原生显示 16×16 逻辑像素），Z 角速度分别为 +0.1/−0.1 弧度/60 Hz 帧，由既有 ANM 播放器推进，不以程序绘制圆形替代。清单追加左右两个外观，借用同一 Reimu DDS/ANM，保持既有弹幕与立绘编号不变。
 
 太极圈与 gold/cyan 符卡弹共用 `Player::kShotAlpha`，不透明度为 20%（Alpha 51），渲染时与贴图及原生动画 Alpha 相乘。太极圈通过独立的公告板透明度传入，不修改借用的 ANM 帧；普通道具仍使用默认 Alpha 255。
 
-本机新典的 Focus 位置分支使用 8 帧过渡，原始横向偏移由 24 像素缩到 8 像素。三维布局保留该时长与三分之一比例，用可逆 smoothstep 只改变屏幕侧距，不照搬二维垂直位移；常态侧距 0.78、Focus 侧距 0.26 世界单位。Power 8 起显示，圈世界高度 0.42，近目标时随出生位置等比缩小以保持屏幕尺寸。
+本机新典的 Focus 位置分支使用 8 帧过渡，原始横向偏移由 24 像素缩到 8 像素。三维布局保留该时长与三分之一比例，用可逆 smoothstep 只改变屏幕侧距，不照搬二维垂直位移；常态侧距 0.78、Focus 侧距 0.26 世界单位。Power 8 起显示，圈世界高度约 0.714285714，近目标时随出生位置等比缩小以保持屏幕尺寸。
 
 圈中心与 cyan 副弹出生点由 Player 的同一接口给出，动画年龄使用游戏时间。双圈与弹幕共用透明排序，属于无碰撞的绘制数据；暂停冻结、复活重启，开局与卸载关卡时清理动画游标。`koumakyou_lifecycle_tests <截图前缀> --player-options-only` 可隔离验证原始圈贴图、收拢前后像素、暂停及卸载，并导出 normal/focus 截图。
 
-梦之御札侧针追加独立外观，使用 `player00.anm` 脚本 66、sprite 68（32×104 逻辑像素）。针束按原始像素偏移从圈内上部射出，保留原生 Alpha 160、运动方向旋转及贴图比例，额外不透明度共用 Alpha 51。`--player-shots-only` 同时导出追踪弹与各 Power 档针弹的隔离截图；发射表及三维换算见 [梦之御札侧针对照](REIMU_NEEDLE_REFERENCE.md)。
+梦之御札侧针追加独立外观，使用 `player00.anm` 脚本 66、sprite 68（裁图 32×104，显示 14×46 逻辑像素）。针束保留第一视角模块的局部偏移适配，从圈中心叠加通道偏移射出；显示和判定尺寸使用统一的 20/448 比例，保留原生 Alpha 160、运动方向旋转及贴图比例，额外不透明度共用 Alpha 51。`--player-shots-only` 同时导出追踪弹与各 Power 档针弹的隔离截图；发射表及三维换算见 [梦之御札侧针对照](REIMU_NEEDLE_REFERENCE.md)。
 
 ## 魔理沙主副弹与物件
 
-魔／恋机体使用 `player01` 脚本 64 的主弹、65～68 的四档导弹、69～71 的三级激光、97～100 的爆破和 128/129 的星形副机。副机 sprite 128 为 36×36 逻辑像素，两侧均顺时向旋转，不能复用灵梦左右反向的 player00 游标。激光保留原生缩放、颜色、透明度与标签 1 淡出；渲染器按胶囊线段绘制，参与已有透明深度排序和分段，额外 Alpha 与其他自机弹一致。
+魔／恋机体使用 `player01` 脚本 64 的主弹、65～68 的四档导弹、69～71 的三级激光、97～100 的爆破和 128/129 的星形副机。副机 sprite 128 的裁图为 36×36，原生显示为 16×16 逻辑像素，两侧均顺时向旋转，不能复用灵梦左右反向的 player00 游标。激光保留原生缩放、颜色、透明度与标签 1 淡出；渲染器按胶囊线段绘制，参与已有透明深度排序和分段，额外 Alpha 与其他自机弹一致。
 
 一面对话增加魔理沙六种表情，引用已有 `common/portraits/marisa` PNG，由 Stage 管理借用和卸载；选人页通用后景仍由 Common 独立持有。`--marisa-only` 会隔离主弹，直接核对导弹/激光的真实像素，并导出两种御札的常态与 Focus 视图。原始表值和生命周期见 [魔理沙御札对照](MARISA_SHOTS_REFERENCE.md)。
 
 ## 四种 Bomb
 
 梦想封印绑定 `player00` 的 133～136，封魔阵绑定 137～140；Stardust Reverie 绑定 `player01` 的 5～7，Master Spark 绑定 8～11。复用原始高清图集和 ANM 颜色、Alpha、中断及淡出，将贴图包覆在三维球、星、法阵和圆台网格上。Bomb 实例独立于弹池，攻击和渲染共用世界实体，并加入统一透明排序。`--bomb-only` 验证真实扣血、清弹、掉落、符卡保护及四种主/侧视角画面；`--bomb-audio-only` 静音核对长音效暂停及退出。来源、帧数与三维适配见 [四 Bomb 对照](PLAYER_BOMBS_REFERENCE.md)。
+
+Extra现有独立生产素材清单，将Flandre与ExtraEnemies的道中帕秋莉绑定到不同VisualId，并提供face12三组立绘、背景原纹理及第三音乐流。同步/异步加载、立绘边缘、三音乐流播放/暂停/卸载已验证；资源身份与接入边界见[Extra素材记录](STAGE_EXTRA_ASSETS.md)。正式背景三维适配、MSG与入口仍未完成，目录保持DataOnly。

@@ -95,11 +95,11 @@ struct GameLifecycleProbe {
 
         // 从已有战斗重开，旧纹理借用须先清理；符卡练习在加载结束后才建 Boss。
         game.practiceMode_ = game.spellPractice_ = true;
-        game.practicePhase_ = 4;
+        game.practiceAttack_ = 4;
         game.StartRun(false);
         Check(game.IsLoading() && !game.boss_, "Practice started before assets were ready");
         Finish(game);
-        Check(game.boss_ && game.boss_->phase == 4 && game.player_.Power() == Player::kMaxPower,
+        Check(game.boss_ && game.boss_->attack == 4 && game.player_.Power() == Player::kMaxPower,
               "Practice setup was lost during loading");
 
         game.Start(false);
@@ -120,11 +120,11 @@ struct GameLifecycleProbe {
         game.captureCursor_ = false;
         Finish(game);
         int targets = 0;
-        game.enemies_.ForEachActive([&](const Enemy&) { ++targets; });
+        game.actors_.ForEachActive([&](const behavior::Actor&) { ++targets; });
         Check(game.shotTestActive_ && targets == 1, "Shot test target lost during loading");
         for (int frame = 0; frame < 20 * 60; ++frame) game.Update(1.0F / 60.0F);
         targets = 0;
-        game.enemies_.ForEachActive([&](const Enemy&) { ++targets; });
+        game.actors_.ForEachActive([&](const behavior::Actor&) { ++targets; });
         Check(targets == 1 && !game.boss_ && !game.dialogueActive_,
               "Shot test started the normal stage events");
         game.Reset();

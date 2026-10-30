@@ -299,7 +299,9 @@ void TestStarVolumeCoverage() {
                           v.origin.z+std::abs(center.z-v.origin.z)+step.z/2};
         if(v.IntersectsSphere(far,0))++covered;
     }
-    assert(static_cast<double>(covered)/(n*n*n)>0.8);
+    // 统一为 20/448 后，原生 64 像素半径为 20/7；独立网格计算的完整小盒数为 1,216,000。
+    // 不为维持旧 20/384 尺度的 80% 指标而放大原作攻击半径。
+    assert(covered==1216000);
     // 从所有八个角落释放并转动视角，仍抵达相同攻击位置，因此覆盖保证不依赖初始视野/自机深度。
     for(float x:{-9.65F,9.65F})for(float y:{-9.65F,9.65F})for(float z:{-11.15F,11.15F}) {
         auto camera=kCamera;camera.position={x,y,z};camera.target=game_math::Add(camera.position,{1,2,3});

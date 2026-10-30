@@ -54,7 +54,7 @@ private:
     float boundaryDeparture_ = 0.0F;
 };
 
-/// @brief 值快照，不持有 Enemy/Boss 指针或纹理；VisualId 仅在当前关卡资源存活时有效。
+/// @brief 值快照，不持有行为演员/Boss 指针或纹理；VisualId 仅在当前关卡资源存活时有效。
 struct ActorExitEffect {
     bool active = false;
     VisualId visual = kInvalidVisualId;

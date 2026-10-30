@@ -137,9 +137,10 @@ void Game::DrawHud() const {
         const auto info = stageContent_->DisplayInfo();
         const float x = stage.x + 16 * s, w = stage.width - 32 * s;
         StageTitle(font, info, stage, s, emphasis);
-        const char* mode = spellPractice_ ? "NORMAL / 符卡练习" : practiceMode_ ? "NORMAL / 关卡练习"
-            : challengeMode_ ? "NORMAL / 挑战模式" : "NORMAL";
-        Label(font, mode, {x, stage.y + (l.compact ? 118 : 124) * s}, 16 * s, w,
+        constexpr std::array<const char*,5> difficultyNames{"EASY","NORMAL","HARD","LUNATIC","EXTRA"};
+        const auto mode=std::string(difficultyNames[ScoreDifficultyIndex()])+
+            (spellPractice_ ? " / 符卡练习" : practiceMode_ ? " / 关卡练习" : challengeMode_ ? " / 挑战模式" : "");
+        Label(font, mode.c_str(), {x, stage.y + (l.compact ? 118 : 124) * s}, 16 * s, w,
                kRose, emphasis);
     }
 
@@ -158,7 +159,11 @@ void Game::DrawHud() const {
     if (!l.compact)
         Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
     row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
-    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practicePhase_==2?3:7).bestScore:bestScore_;
+    const auto& namedScores=scoreProfile_.Get(challengeMode_,static_cast<int>(player_.Shot()),ScoreDifficultyIndex());
+    // 展开技能编号只在各自工厂内有效；读取全局Card编号，保证单符工厂的attack=1不会串到一面成绩。
+    const auto* practiceCard=spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty);
+    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practiceCard?practiceCard->number:0).bestScore:
+        namedScores[0]?namedScores[0]->value:challengeMode_||stageId_==StageId::Extra||runDifficulty_!=native_combat::Difficulty::Normal?0:bestScore_;
     row("最高得分", TextFormat("%09lld", displayedBest), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
         DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,
@@ -193,19 +198,10 @@ void Game::DrawHud() const {
         const Rectangle panel = l.BossPanel();
         const ui::BossHudLayout row(panel, s);
         Panel(panel, s);
-        Label(font, TextFormat("Enemy %d", bossHealth.remainingBars),
+        Label(font, WorldTimeStopped() ? "TIME STOP" : TextFormat("Enemy %d", bossHealth.remainingBars),
                {row.enemy.x, row.enemy.y + (row.enemy.height - 21 * s) / 2}, 21 * s, row.enemy.width, kGold);
-        DrawRectangleRec(row.bar, Color{64, 35, 50, 160});
-        float offset = 0;
-        for (std::size_t index = 0; index < bossHealth.count; ++index) {
-            const auto segment = bossHealth.segments[index];
-            // 累加固定容量而非剩余量：后续符卡始终留在左端，非符从右侧消耗，切换时不跳成满条。
-            if (segment.remaining > 0)
-                DrawRectangleRec({row.bar.x + offset * row.bar.width, row.bar.y,
-                                  segment.remaining * row.bar.width, row.bar.height}, ui::BossHealthColor(segment.kind));
-            offset += segment.capacity;
-        }
-        const int seconds = ui::BossSeconds(boss_->TimeLimit(), boss_->phaseTimer);
+        boss_->DrawHealthBar(row.bar);
+        const int seconds = ui::BossSeconds(boss_->TimeLimit(), boss_->skillTimer);
         Label(font, seconds < 0 ? "--" : TextFormat("%02d", seconds),
                {row.timer.x + row.timer.width, row.timer.y + (row.timer.height - 27 * s) / 2},
                27 * s, row.timer.width, ui::BossTimerColor(seconds), 1, true);
@@ -243,11 +239,14 @@ void Game::DrawDialogue() const {
     if (!dialogueActive_ || !stageContent_) return;
     const GameplayLayout l(GetScreenWidth(), GetScreenHeight());
     const auto lines = CurrentDialogue();
+    if(lines.empty())return;
     float start = 0;
     const int lineIndex = DialogueIndex(&start);
     const DialogueLine& line = lines[lineIndex];
     const float elapsed = dialogueTimer_ - start;
-    const auto expressions = DialogueExpressionsAt(lines, lineIndex, elapsed);
+    const auto expressions = DialogueCueExpressionsAt(
+        stageContent_->SceneDialogueCues(dialogueScene_,dialogueAfterBattle_,player_.Shot()),dialogueTimer_,
+        DialogueExpressionsAt(lines,lineIndex,elapsed));
     const auto portrait = [&](VisualId id, bool right) {
         const auto& visual = assets_.GetVisual(id);
         const Texture2D texture = visual.texture;
@@ -264,7 +263,7 @@ void Game::DrawDialogue() const {
     };
     // 先画未发言者，避免灵梦展开的手臂覆盖正在说话的角色；裁剪仍取自各差分的元数据。
     const auto hero = stageContent_->HeroPortraitVisual(expressions[0],player_.Shot());
-    const auto boss = stageContent_->BossPortraitVisual(expressions[1]);
+    const auto boss = stageContent_->SceneBossPortraitVisual(dialogueScene_,expressions[1]);
     if (line.bossSpeaking) {
         portrait(hero, false);
         if (line.showBoss) portrait(boss, true);
@@ -287,7 +286,7 @@ void Game::DrawDialogue() const {
         if (secondVisible && !line.secondLineReplacesFirst)
             Label(font, line.secondLine, {x, panel.y + 89 * l.scale}, size, w, kInk);
     }
-    if (line.introduce) {
+    if (line.introduce&&elapsed>=line.introduceDelay) {
         const float w = std::min(l.width * 0.42F, 250 * l.scale);
         float y = panel.y - 120 * l.scale;
         // 竖屏角色靠近底角后，名牌需放在头部上方；跟随同一强调采样移动，不能盖住淡出的脸。
@@ -305,8 +304,9 @@ void Game::DrawDialogue() const {
         const Rectangle nameplate{l.width - l.margin - w, std::max(l.margin, y), w, 100 * l.scale};
         Panel(nameplate, l.scale);
         const float x = nameplate.x + 14 * l.scale, textWidth = w - 28 * l.scale;
-        Label(font, "宵暗的妖怪", {x, nameplate.y + 12 * l.scale}, 19 * l.scale, textWidth, kMuted);
-        Label(font, "露米娅", {x, nameplate.y + 46 * l.scale}, 32 * l.scale, textWidth, kInk);
+        const auto introduction=stageContent_->BossIntroduction();
+        Label(font,introduction[0],{x,nameplate.y+12*l.scale},19*l.scale,textWidth,kMuted);
+        Label(font,introduction[1],{x,nameplate.y+46*l.scale},32*l.scale,textWidth,kInk);
     }
 
 }
@@ -316,7 +316,7 @@ void Game::DrawSpellCutIn() const {
     const GameplayLayout l(GetScreenWidth(), GetScreenHeight());
     const float elapsed = kSpellCutInDuration - spellCutInTimer_;
     const float opacity = std::clamp(std::min(elapsed / 0.2F, spellCutInTimer_ / 0.4F), 0.0F, 1.0F);
-    const Texture2D texture = assets_.GetVisual(stageContent_->SpellPortraitVisual()).texture;
+    const Texture2D texture = assets_.GetVisual(stageContent_->SpellPortraitVisual(boss_->SpellCardNumber())).texture;
     if (texture.id && texture.height > 0) {
         // 只以窗口边缘裁掉滑入阶段的离屏部分；完整全身差分保持宽高比和原有淡入淡出时序。
         BeginScissorMode(0, 0, GetScreenWidth(), GetScreenHeight());

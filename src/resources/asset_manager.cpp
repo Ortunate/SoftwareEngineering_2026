@@ -1,6 +1,7 @@
 // 本文件负责实现通用与关卡素材的加载、音频播放和资源卸载。
 
 #include "resources/asset_manager.hpp"
+#include "gameplay/data/native_sizes.hpp"
 #include "resources/projectile_assets.hpp"
 #include "resources/projectile_paths.hpp"
 #include "resources/dds_image.hpp"
@@ -348,7 +349,8 @@ bool AssetManager::AdvanceStageLoad() {
     load.pending = std::async(std::launch::async, [root, item, manifest] {
         auto decoded = std::make_unique<StageLoad::Decoded>();
         if (item.atlas == battle::Atlas::None) {
-            decoded->image = LoadImage((root / item.path).string().c_str());
+            const auto path=root/item.path;
+            decoded->image = path.extension()==".dds" ? LoadOriginalDds(path) : LoadImage(path.string().c_str());
             decoded->dialogueCrops = DialogueCrops(decoded->image, item.path, manifest);
         } else {
             const auto& entry = battle::Describe(item.atlas);
@@ -381,7 +383,9 @@ void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
             // 多个外观可以共用一张贴图，实际所有权由路径缓存统一管理。
             auto [it, inserted] = stageTextures_.try_emplace(path);
             if (inserted) {
-                Image image = LoadImage((root_ / path).string().c_str());
+                const auto source=root_/path;
+                // 结局背景也直接保留原生高清 DDS；DX10/BC7 必须走与战斗图集一致的解码器。
+                Image image = source.extension()==".dds" ? LoadOriginalDds(source) : LoadImage(source.string().c_str());
                 it->second = LoadTextureFromImage(image);
                 const auto crops = DialogueCrops(image, path, manifest);
                 stageDialogueCrops_.insert(crops.begin(), crops.end());
@@ -400,6 +404,9 @@ void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
             visual.texture=atlas.texture;visual.archive=atlas.archive;visual.animation=definition.animation;
             if(!visual.archive->FindScript(visual.animation.script))
                 throw std::runtime_error("Visual references missing native animation");
+            anm::Player initial;initial.Start(*visual.archive,visual.animation.script,visual.animation.spriteOffset,visual.animation.initialSprite);
+            visual.worldUnitsPerPixel=native_sizes::kWorldPerPixel;
+            visual.worldHeight=initial.Sample().LogicalSize().y*visual.worldUnitsPerPixel;
         }
     }
     const std::filesystem::path shaders = root_ / "common/shaders";
@@ -409,6 +416,8 @@ void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
         stageMusic_ = LoadMusicAsset(root_ / std::string(manifest.stageBgm));
     if (!manifest.bossBgm.empty())
         bossMusic_ = LoadMusicAsset(root_ / std::string(manifest.bossBgm));
+    if (!manifest.eventBgm.empty())
+        eventMusic_ = LoadMusicAsset(root_ / std::string(manifest.eventBgm));
     SetMusicVolumePercent(musicVolumePercent_);
     LoadSounds(stageSounds_, root_, manifest.sounds);
     SetSoundVolumePercent(soundVolumePercent_);
@@ -436,12 +445,13 @@ void AssetManager::UnloadStage() {
     projectileAssets_.reset();
     // 等待唯一的在途 CPU 解码；随后才能释放清单字符串或销毁图形上下文。
     stageLoad_.reset();
-    if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss) {
+    if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss || activeMusic_ == MusicSlot::Event) {
         SwitchMusic(MusicSlot::None);
     }
     UnloadSounds(stageSounds_);
     UnloadMusicAsset(stageMusic_);
     UnloadMusicAsset(bossMusic_);
+    UnloadMusicAsset(eventMusic_);
     UnloadShaderAsset(stage_.shaders.bulletCore);
     UnloadShaderAsset(stage_.shaders.cutout);
     for (auto& [path, texture] : stageTextures_) {
@@ -487,6 +497,7 @@ Music* AssetManager::MusicFor(MusicSlot slot) {
         case MusicSlot::Menu: return &menuMusic_;
         case MusicSlot::Stage: return &stageMusic_;
         case MusicSlot::Boss: return &bossMusic_;
+        case MusicSlot::Event: return &eventMusic_;
         case MusicSlot::None: return nullptr;
     }
     return nullptr;
@@ -508,6 +519,15 @@ void AssetManager::SwitchMusic(MusicSlot slot) {
 void AssetManager::PlayMenuMusic() { SwitchMusic(MusicSlot::Menu); }
 void AssetManager::PlayStageMusic() { SwitchMusic(MusicSlot::Stage); }
 void AssetManager::PlayBossMusic() { SwitchMusic(MusicSlot::Boss); }
+void AssetManager::PlayStageTrack(int index) {
+    switch(index) {
+        case -1:SwitchMusic(MusicSlot::None);break;
+        case 0:SwitchMusic(MusicSlot::Stage);break;
+        case 1:SwitchMusic(MusicSlot::Boss);break;
+        case 2:SwitchMusic(MusicSlot::Event);break;
+        default:throw std::invalid_argument("Invalid stage music track");
+    }
+}
 
 void AssetManager::SeekMusic(float seconds) {
     if(Music* music=MusicFor(activeMusic_);music && IsMusicValid(*music)) {
@@ -530,9 +550,14 @@ void AssetManager::ResumeMusic() {
 
 void AssetManager::SetMusicVolumePercent(int percent) {
     musicVolumePercent_ = std::clamp(percent, 0, 100);
-    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_}) {
-        if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F);
+    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_, &eventMusic_}) {
+        if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F*musicGain_);
     }
+}
+
+void AssetManager::SetMusicGain(float gain) {
+    musicGain_=std::clamp(gain,0.0F,1.0F);
+    SetMusicVolumePercent(musicVolumePercent_);
 }
 
 void AssetManager::UpdateAudio() {

@@ -1,0 +1,127 @@
+{
+  "exe_sha256": "48630a42a2eb6762d0db2a7e0d151203efbe67220fef7d2f9d0d51857928ac82",
+  "witnesses": {
+    "0x2d3b7": "803d6ec95100007757",
+    "0x2d3c0": "803d4d005100007409",
+    "0x2d3c9": "833de0f65000057f45",
+    "0x2d456": "833db3ff5000000f84f7010000",
+    "0x6a22a": "ff0580284d00"
+  },
+  "bad_if": "difficulty == Easy || continues > 0 || (challenge && misses > 5)",
+  "localization_sha256": "c32732cd708d1a19961e3c8205c7f2aaadb6fa0d8f30bb46a8ea2d7376830bff",
+  "scripts": {
+    "end00": {
+      "sha256": "d90758b2d3fa0a634d69241c05ae66c90638934f30096a88f2992716657b88ba",
+      "events": 69,
+      "text_blocks": 20
+    },
+    "end01": {
+      "sha256": "b5d180ebae65a3d42587876ec949de3e101dd1977d0f5043e06ab32da2db860b",
+      "events": 78,
+      "text_blocks": 23
+    },
+    "end10": {
+      "sha256": "b84b97c8bc826939909e97460fa3b1b53b590f36653a804e70bd5a5a05272361",
+      "events": 92,
+      "text_blocks": 28
+    },
+    "end11": {
+      "sha256": "3308a6876d85c7c280fcfc0b27842e1402b5ff913ded7ec3e8c6f664cc3c8ebf",
+      "events": 94,
+      "text_blocks": 29
+    },
+    "end00b": {
+      "sha256": "d8c19b3411d712eb4ce3e6bc3401bb610878c46fa2712d1bbd1fc3398cbd19c0",
+      "events": 23,
+      "text_blocks": 5
+    },
+    "end10b": {
+      "sha256": "79530ed8656a34ee14a1fc6775aa0598de150b84863dc66308c7bca769b9686f",
+      "events": 24,
+      "text_blocks": 6
+    }
+  },
+  "backgrounds": [
+    {
+      "source": "end00b_4k.dds",
+      "runtime": "endings/native/end00b.dds",
+      "sha256": "9a8edf98a4d7bc55620049bc17db57a07fc5aa8a307552077c35c1a76dd5736a"
+    },
+    {
+      "source": "end00_4k.dds",
+      "runtime": "endings/native/end00.dds",
+      "sha256": "b50c3c326ee9b83070ee18c5f915d899e4c596371c0b379fa71b3c8dccd1efb8"
+    },
+    {
+      "source": "end01_4k.dds",
+      "runtime": "endings/native/end01.dds",
+      "sha256": "98b27079c9fec19a27f12605e6c13c3c3b99a32539acfa18a6dbd1a8506b7b26"
+    },
+    {
+      "source": "end02_4k.dds",
+      "runtime": "endings/native/end02.dds",
+      "sha256": "887e01fd5129bc7cc28bb3e47fc31d0120d1b6776629d0cde0c0c5d4d423dc87"
+    },
+    {
+      "source": "end03_4k.dds",
+      "runtime": "endings/native/end03.dds",
+      "sha256": "5e15eab3b2414f1828591fd7ea9c07b6bd0aead8afc4c83d2292c0f3246a392e"
+    },
+    {
+      "source": "end04_4k.dds",
+      "runtime": "endings/native/end04.dds",
+      "sha256": "d08871969a9498f6bad5f68e1f06d609c724ab3ce86871b0887e64ecdae995b9"
+    },
+    {
+      "source": "end05_4k.dds",
+      "runtime": "endings/native/end05.dds",
+      "sha256": "6fa11830e76da5d5c81ae67d1ec0fd752890e6538657fa1515ba13acb6666162"
+    },
+    {
+      "source": "end06_4k.dds",
+      "runtime": "endings/native/end06.dds",
+      "sha256": "961e497554e5bc97d5931e16564d15058d0e6f9d30d38e5e0a270796c39d60b0"
+    },
+    {
+      "source": "end07_4k.dds",
+      "runtime": "endings/native/end07.dds",
+      "sha256": "3a7a7d578586ada6337d7c15c8e984f12f2a6d6d34eb4f7b3efb325e14f68a0d"
+    },
+    {
+      "source": "end08_4k.dds",
+      "runtime": "endings/native/end08.dds",
+      "sha256": "5f2df95fbb57313989a054b3c56c2c2f2e39b52f8caeb1386bf927a364684b51"
+    },
+    {
+      "source": "end09_4k.dds",
+      "runtime": "endings/native/end09.dds",
+      "sha256": "4b6119837cf790fec7974223c4ee49ea2e5e2fdf8ecac2e378a5272dd0baeda2"
+    },
+    {
+      "source": "end10_4k.dds",
+      "runtime": "endings/native/end10.dds",
+      "sha256": "06e999f5b3468db262bc17172a1a1382a20bb90a6fb8c3d9d834956ae7ac426e"
+    },
+    {
+      "source": "end11_4k.dds",
+      "runtime": "endings/native/end11.dds",
+      "sha256": "c8665a3a47151304e0dc03b283e37dcc4c911fe66e7dfcadbb2c5fa9ef3629a6"
+    },
+    {
+      "source": "end12_4k.dds",
+      "runtime": "endings/native/end12.dds",
+      "sha256": "ccd88016c288add973b77136db75f679b2715ad8adf96aa6dc41d2b50170bc76"
+    },
+    {
+      "source": "end13_4k.dds",
+      "runtime": "endings/native/end13.dds",
+      "sha256": "8cd332ce052a4d6d40d1d597908d232842cfe0d03aac5684be7af2ea5334d5f6"
+    }
+  ],
+  "music": {
+    "source": "bgm/th06_17.opus",
+    "source_sha256": "3cf8c39cdd0f33bad20216d6b5b2552ff33795b129b2a28957fe6846205240e8",
+    "runtime": "endings/ending.mp3",
+    "runtime_sha256": "5625c2c5e98138c5204cc6c2d3dc47794572e927c4013c5a86450c767c135667"
+  }
+}

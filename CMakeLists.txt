@@ -39,6 +39,7 @@ target_link_libraries(koumakyou_ui PUBLIC raylib)
 # 游戏实现只编译一次，所有目标共用同一份实现。
 add_library(koumakyou_engine STATIC
     src/app/game.cpp
+    src/app/postgame.cpp
     src/app/replay.cpp
     src/app/replay_controls.cpp
     src/replay/replay.cpp
@@ -48,8 +49,44 @@ add_library(koumakyou_engine STATIC
     src/app/spell_practice_menu.cpp
     src/render/spell_practice_render.cpp
     src/config/settings.cpp
+    src/config/high_scores.cpp
+    src/narrative/ending.cpp
     src/gameplay/actors/boss.cpp
-    src/gameplay/actors/enemy.cpp
+    src/gameplay/bosses/configured_boss.cpp
+    src/gameplay/bosses/rumia_behaviors.cpp
+    src/gameplay/bosses/daiyousei_behaviors.cpp
+    src/gameplay/bosses/cirno_behaviors.cpp
+    src/gameplay/bosses/meiling_behaviors.cpp
+    src/gameplay/bosses/koakuma_behaviors.cpp
+    src/gameplay/bosses/patchouli_behaviors.cpp
+    src/gameplay/bosses/patchouli_extra_behaviors.cpp
+    src/gameplay/bosses/flandre.cpp
+    src/gameplay/bosses/flandre_behaviors.cpp
+    src/gameplay/bosses/flandre_cranberry.cpp
+    src/gameplay/bosses/flandre_laevatein.cpp
+    src/gameplay/bosses/flandre_four_of_a_kind.cpp
+    src/gameplay/bosses/flandre_kagome.cpp
+    src/gameplay/bosses/flandre_maze_of_love.cpp
+    src/gameplay/bosses/flandre_starbow_break.cpp
+    src/gameplay/bosses/flandre_catadioptric.cpp
+    src/gameplay/bosses/flandre_ripples.cpp
+    src/gameplay/bosses/flandre_danmaku_heart.cpp
+    src/gameplay/bosses/flandre_creeping_bloodstain.cpp
+    src/gameplay/bosses/flandre_fragile_wing.cpp
+    src/gameplay/bosses/flandre_encore_entrance.cpp
+    src/gameplay/bosses/flandre_and_then_will_there_be_none.cpp
+    src/gameplay/bosses/flandre_clock_of_the_past.cpp
+    src/gameplay/bosses/sakuya_behaviors.cpp
+    src/gameplay/bosses/remilia_behaviors.cpp
+    src/gameplay/bosses/sakuya_eternal_meek.cpp
+    src/gameplay/bosses/rumia.cpp
+    src/gameplay/bosses/daiyousei.cpp
+    src/gameplay/bosses/cirno.cpp
+    src/gameplay/bosses/meiling.cpp
+    src/gameplay/bosses/koakuma.cpp
+    src/gameplay/bosses/patchouli.cpp
+    src/gameplay/bosses/sakuya.cpp
+    src/gameplay/bosses/remilia.cpp
     src/gameplay/actors/player.cpp
     src/gameplay/actors/aim.cpp
     src/gameplay/data/native_combat.cpp
@@ -57,6 +94,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/combat/combat.cpp
     src/gameplay/combat/damage_rules.cpp
     src/gameplay/effects/actor_effects.cpp
+    src/gameplay/effects/external_effects.cpp
     src/gameplay/effects/player_bomb.cpp
     src/gameplay/effects/bomb_volume.cpp
     src/gameplay/items/drop_system.cpp
@@ -64,6 +102,7 @@ add_library(koumakyou_engine STATIC
     src/render/menu_render.cpp
     src/render/start_setup_render.cpp
     src/render/game_render.cpp
+    src/render/postgame_render.cpp
     src/render/command_bar.cpp
     src/render/gameplay_hud.cpp
     src/render/player_bomb_render.cpp
@@ -76,13 +115,58 @@ add_library(koumakyou_engine STATIC
     src/resources/dds_image.cpp
     src/stage/catalog.cpp
     src/stage/content.cpp
-    src/stage/enemy_spec.cpp
     src/stage/system.cpp
-    src/stages/stage1/reference_script.cpp
-    src/stages/stage1/boss.cpp
+    src/gameplay/actors/movement.cpp
+    src/gameplay/actors/skill.cpp
+    src/gameplay/actors/behavior.cpp
+    src/stages/common/assets.cpp
+    src/stages/common/content.cpp
+    src/stages/stage2/behaviors.cpp
+    src/stages/stage2/boss_config.cpp
+    src/stages/stage2/content.cpp
+    src/stages/stage2/dialogue.cpp
+    src/stages/stage2/manifest.cpp
+    src/stages/stage2/scenery.cpp
+    src/stages/stage2/timeline.cpp
+    src/stages/stage3/behaviors.cpp
+    src/stages/stage3/boss_config.cpp
+    src/stages/stage3/content.cpp
+    src/stages/stage3/dialogue.cpp
+    src/stages/stage3/manifest.cpp
+    src/stages/stage3/scenery.cpp
+    src/stages/stage3/timeline.cpp
+    src/stages/stage4/behaviors.cpp
+    src/stages/stage4/boss_config.cpp
+    src/stages/stage4/content.cpp
+    src/stages/stage4/dialogue.cpp
+    src/stages/stage4/manifest.cpp
+    src/stages/stage4/scenery.cpp
+    src/stages/stage4/timeline.cpp
+    src/stages/stage5/behaviors.cpp
+    src/stages/stage5/boss_config.cpp
+    src/stages/stage5/content.cpp
+    src/stages/stage5/scenery.cpp
+    src/stages/stage5/dialogue.cpp
+    src/stages/stage5/manifest.cpp
+    src/stages/stage5/timeline.cpp
+    src/stages/stage6/behaviors.cpp
+    src/stages/stage6/boss_config.cpp
+    src/stages/stage6/content.cpp
+    src/stages/stage6/scenery.cpp
+    src/stages/stage6/timeline.cpp
+    src/stages/stage6/dialogue.cpp
+    src/stages/stage6/manifest.cpp
+    src/stages/stage_extra/behaviors.cpp
+    src/stages/stage_extra/boss_config.cpp
+    src/stages/stage_extra/manifest.cpp
+    src/stages/stage_extra/dialogue.cpp
+    src/stages/stage_extra/timeline.cpp
+    src/stages/stage_extra/scenery.cpp
+    src/stages/stage_extra/content.cpp
+    src/stages/stage1/behaviors.cpp
+    src/stages/stage1/boss_config.cpp
     src/stages/stage1/content.cpp
     src/stages/stage1/dialogue.cpp
-    src/stages/stage1/enemies.cpp
     src/stages/stage1/scenery.cpp
     src/stages/stage1/manifest.cpp
     src/stages/stage1/timeline.cpp
@@ -121,10 +205,6 @@ target_link_libraries(koumakyou PRIVATE koumakyou_engine)
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
 target_link_libraries(generate_skybox PRIVATE raylib)
 
-add_executable(generate_sprite_assets EXCLUDE_FROM_ALL
-    tools/generate_sprite_assets.cpp)
-target_link_libraries(generate_sprite_assets PRIVATE raylib)
-
 add_executable(sprite_benchmark EXCLUDE_FROM_ALL tools/sprite_benchmark.cpp)
 target_link_libraries(sprite_benchmark PRIVATE koumakyou_engine)
 
@@ -144,6 +224,9 @@ add_executable(native_asset_preview EXCLUDE_FROM_ALL tools/native_asset_preview.
 target_link_libraries(native_asset_preview PRIVATE koumakyou_engine)
 add_dependencies(native_asset_preview copy_assets)
 
+# 立绘导入仅在变更素材时运行；使用生产 DDS/ANM 解码器，不依赖窗口或原作安装路径。
+add_executable(export_portrait_sprites EXCLUDE_FROM_ALL tools/export_portrait_sprites.cpp)
+target_link_libraries(export_portrait_sprites PRIVATE koumakyou_engine)
 # 锁定提示验收复用真实世界/HUD 渲染；输出 PNG 供 GIF 编码，断言在 Release 中也启用。
 add_executable(aim_lock_preview EXCLUDE_FROM_ALL tools/aim_lock_preview.cpp)
 target_link_libraries(aim_lock_preview PRIVATE koumakyou_engine)
@@ -167,6 +250,25 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(koumakyou_postgame_tests tests/ending_tests.cpp)
+    target_link_libraries(koumakyou_postgame_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_compile_options(koumakyou_postgame_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_postgame_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME koumakyou_postgame_tests COMMAND koumakyou_postgame_tests)
+    # 真实结局贴图及键鼠命名回归需桌面图形会话，按需执行，不加入无窗口 CTest。
+    add_executable(koumakyou_postgame_lifecycle_tests EXCLUDE_FROM_ALL tests/postgame_lifecycle_tests.cpp)
+    target_link_libraries(koumakyou_postgame_lifecycle_tests PRIVATE koumakyou_engine)
+    target_include_directories(koumakyou_postgame_lifecycle_tests PRIVATE "${raylib_SOURCE_DIR}/external/glfw/include")
+    add_dependencies(koumakyou_postgame_lifecycle_tests copy_assets)
+    if(MSVC)
+        target_compile_options(koumakyou_postgame_lifecycle_tests PRIVATE /UNDEBUG /utf-8)
+        target_sources(koumakyou_postgame_lifecycle_tests PRIVATE src/windows_utf8.manifest)
+    else()
+        target_compile_options(koumakyou_postgame_lifecycle_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
     # 模块测试仅链接 UI 与 raylib，不加载游戏、素材、音频或图形窗口。
     add_executable(koumakyou_ui_tests tests/ui_tests.cpp)
     target_link_libraries(koumakyou_ui_tests PRIVATE koumakyou_ui)
@@ -176,9 +278,15 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_ui_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME koumakyou_ui_tests COMMAND koumakyou_ui_tests)
+    # 旧 ECL 解释器只作为独立差分基准，不能重新加入生产引擎。
     add_executable(koumakyou_tests
+        tests/reference_script.cpp
+        tests/behavior_tests.cpp
+        tests/spatial_behavior_tests.cpp
         tests/core_tests.cpp
         tests/animation_tests.cpp
+        tests/external_effect_tests.cpp
+        tests/attached_effect_tests.cpp
         tests/actor_effect_tests.cpp
         tests/drop_tests.cpp
         tests/gameplay_tests.cpp
@@ -188,6 +296,9 @@ if(BUILD_TESTING)
         tests/player_bomb_tests.cpp
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
+    target_sources(koumakyou_tests PRIVATE tests/stage_extra_dialogue_tests.cpp)
+    target_sources(koumakyou_tests PRIVATE tests/stage_extra_timeline_tests.cpp)
+    target_sources(koumakyou_tests PRIVATE tests/stage2_tests.cpp tests/stage3_tests.cpp tests/stage3_spell_reference.cpp tests/stage4_tests.cpp tests/stage4_combat_reference.cpp tests/stage5_tests.cpp tests/stage5_combat_reference.cpp tests/stage6_tests.cpp tests/stage6_combat_reference.cpp tests/stage_extra_tests.cpp tests/stage_extra_patchouli_tests.cpp tests/stage_extra_flandre_tests.cpp tests/stage_extra_kagome_tests.cpp tests/stage_extra_maze_tests.cpp tests/stage_extra_starbow_tests.cpp tests/stage_extra_catadioptric_tests.cpp tests/stage_extra_clock_tests.cpp tests/stage_extra_survival_tests.cpp tests/stage_extra_ripples_tests.cpp tests/stage_extra_encore_entrance_tests.cpp tests/stage_extra_fragile_wing_tests.cpp tests/stage_extra_bloodstain_tests.cpp tests/stage_extra_heart_tests.cpp)
     target_link_libraries(koumakyou_tests PRIVATE koumakyou_engine)
     target_compile_definitions(koumakyou_tests PRIVATE KOUMAKYOU_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime")
     # 离屏生命周期测试仍需要图形会话，手动运行，避免普通无窗口测试依赖桌面服务。
@@ -223,6 +334,22 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_tests PRIVATE -UNDEBUG)
     endif()
     add_test(NAME koumakyou_core_tests COMMAND koumakyou_tests)
+    # 参考导入与结构审阅使用独立合成数据；仅测试期使用 Python，不成为游戏运行依赖。
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME koumakyou_reference_tool_tests
+            COMMAND ${Python3_EXECUTABLE} -B -m unittest
+                tests/test_native_combat_data.py
+                tests/test_native_difficulty.py
+                tests/test_native_rank_events.py
+                tests/test_native_effects.py
+                tests/test_extra_flow.py
+                tests/test_extra_dialogue.py
+                tests/test_stage_script_inspection.py
+                tests/test_stage1_reference_import.py)
+        set_tests_properties(koumakyou_reference_tool_tests PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
 endif()
 
 # 隐藏窗口交互测试需 OpenGL/音频环境，按需构建，不影响无图形环境的核心测试。
@@ -254,6 +381,15 @@ if(BUILD_TESTING)
     target_include_directories(projectile_direction_tests PRIVATE src)
     target_link_libraries(projectile_direction_tests PRIVATE koumakyou_engine)
     add_test(NAME projectile_direction_tests COMMAND projectile_direction_tests)
+    # 录像的纯 CPU 格式与可播放范围单独验证，不依赖图形窗口或本机录像目录。
+    add_executable(koumakyou_replay_tests tests/replay_tests.cpp)
+    target_link_libraries(koumakyou_replay_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_compile_options(koumakyou_replay_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_replay_tests PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME koumakyou_replay_tests COMMAND koumakyou_replay_tests)
 endif()
 
 if(BUILD_TESTING)
@@ -291,6 +427,15 @@ endif()
 
 # 兼容标识覆盖所有运行时代码和资源；任何源码改动触发重新配置，不允许旧录像静默使用新逻辑。
 file(GLOB_RECURSE REPLAY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*" "${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime/*")
+# 模型实体已参与碰撞，导出几何和配置也属于录像内容；编辑器工程及审阅输出不参与签名。
+file(GLOB_RECURSE REPLAY_MODEL_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/projectiles/*.gltf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/projectiles/*.bin"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/projectiles/*.json"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/items/*.gltf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/items/*.bin"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/items/*.json")
+list(APPEND REPLAY_SOURCES ${REPLAY_MODEL_SOURCES})
 set(REPLAY_SIGNATURE "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_CXX_FLAGS}-${CMAKE_CXX_FLAGS_RELEASE}-${CMAKE_CXX_FLAGS_DEBUG}")
 foreach(REPLAY_SOURCE IN LISTS REPLAY_SOURCES)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${REPLAY_SOURCE}")
@@ -307,7 +452,7 @@ foreach(REPLAY_SOURCE IN LISTS REPLAY_SOURCES)
     if(REPLAY_SOURCE MATCHES "/(gameplay|stage|stages)/" OR REPLAY_SOURCE MATCHES "/app/(game|input|replay)[.](cpp|hpp)$" OR REPLAY_SOURCE MATCHES "/resources/(animation|battle_catalog)[.](cpp|hpp)$")
         string(APPEND REPLAY_SIM_SIGNATURE "${REPLAY_SOURCE_HASH}")
     endif()
-    if(REPLAY_SOURCE MATCHES "/assets/runtime/")
+    if(REPLAY_SOURCE MATCHES "/assets/(runtime|projectiles|items)/")
         string(APPEND REPLAY_CONTENT_SIGNATURE "${REPLAY_SOURCE_HASH}")
     endif()
 endforeach()

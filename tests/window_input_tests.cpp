@@ -24,7 +24,11 @@ void RunWindowTest() {
     while (GetCharPressed() != 0) {}
     KoumakyouSendNativeKeyEvent(window, true);
     Check(IsKeyDown(KEY_W), "native key press no longer reaches raylib");
-    Check(GetCharPressed() == 0, "text character delivered after disabling input methods");
+#if defined(__APPLE__)
+    Check(GetCharPressed() == 'w', "raw ASCII name input did not reach raylib");
+#else
+    Check(GetCharPressed() == 0, "unexpected character without a character message");
+#endif
     KoumakyouSendNativeKeyEvent(window, false);
     Check(IsKeyUp(KEY_W), "native key release no longer reaches raylib");
     SetWindowSize(520, 360);

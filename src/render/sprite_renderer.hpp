@@ -4,7 +4,7 @@
 
 #include "gameplay/actors/boss.hpp"
 #include "gameplay/bullets/system.hpp"
-#include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/behavior.hpp"
 #include "resources/loaded_assets.hpp"
 #include "gameplay/effects/player_bomb.hpp"
 
@@ -49,13 +49,17 @@ public:
     /// @param shaders 兼容旧清单的借用参数；透明绘制使用默认着色器，不再按阈值裁剪柔边。
     /// @param effects 本关卡退场快照；调用期间须保留对应外观资源。
     /// @param bombVolumes 借用战斗模拟的世界实体；光束按轴向和精灵深度切分，其余实体按中心排序。
+    /// @param models 可选的本帧三维模型渲染器；资源借用期仅本次 Draw。
+    /// @param external 可选的独立粒子池；与演员/弹幕进入同一透明队列，借用期仅本次Draw。
     void Draw(const Camera3D& camera, const BulletSystem& bullets,
-              std::span<const Enemy*> enemies, const Boss* boss,
+              std::span<const behavior::Actor*> enemies, const Boss* boss,
               std::span<const PickupSprite> pickups,
               std::span<const VisualResource> visuals,
               const SpriteShaders& shaders,
               const ActorEffectSystem& effects,
-              std::span<const BombVolumeSprite> bombVolumes={},CombatRenderer* models=nullptr) const;
+              std::span<const BombVolumeSprite> bombVolumes={},const effects::ExternalEffectSystem* external=nullptr,CombatRenderer* models=nullptr) const;
+    /// @brief 最近一次 Draw 排入的普通激光片段数，含预警、不含 Bomb；用于定位随弹量放大的渲染开销。
+    [[nodiscard]] std::size_t LastBeamSegmentCount() const { return beamSegmentCount_; }
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     /// @brief 在 Debug 构建中叠加判定球与发弹点。
     /// @param bullets 全部活动弹幕。
@@ -63,7 +67,7 @@ public:
     /// @param boss 当前 Boss 状态。
     /// @param playerPosition 计算发弹点所需的玩家位置。
     void DrawDebugGeometry(const BulletSystem& bullets,
-                           std::span<const Enemy*> enemies,
+                           std::span<const behavior::Actor*> enemies,
                            const Boss* boss, Vector3 playerPosition,const ProjectileAssets* models=nullptr,std::span<const VisualResource> visuals={}) const;
 #endif
 private:
@@ -88,9 +92,19 @@ private:
     };
     mutable std::vector<TransparentDraw> transparentDraws_;
     mutable std::vector<std::size_t> modelCommands_;
-    // 缓冲逐帧复用；光束在精灵的深度平面处分段，避免一条长激光被整体排到演员前面或后面。
+    /// @brief 精灵沿相机前向的世界深度及投影包围框；透视坐标为相机 X/Z、Y/Z，正交坐标为 X、Y。
+    /// bounds.width < 0 表示无法安全界定（如跨越相机平面），必须保留该深度处的激光切分。
+    struct SpritePlane {
+        float depth;
+        Rectangle bounds{0,0,-1,-1};
+        // 实际四角覆盖的相机深度区间；倾斜公告板不能只用中心平面排除光束交集。
+        float nearDepth=0,farDepth=0;
+    };
+    // 缓冲逐帧复用；仅在投影可能重叠的精灵深度处分段，保留跨越演员前后的遮挡及连续 UV。
     mutable std::vector<const Bullet*> beams_;
-    mutable std::vector<float> spriteDepths_,bombActorDepths_,beamCuts_;
+    mutable std::vector<SpritePlane> spritePlanes_;
+    mutable std::vector<float> bombActorDepths_,beamCuts_;
+    mutable std::size_t beamSegmentCount_=0;
     mutable std::vector<int> glowCounts_;
 };
 

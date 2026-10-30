@@ -4,6 +4,8 @@
 
 范围以 [一面战斗素材清单](../src/stages/stage1/manifest.cpp)、[原生素材映射](../src/resources/battle_catalog.cpp) 和 [Bomb 定义](../src/gameplay/effects/player_bomb.cpp) 为准。名称中的“小玉”“米弹”“针形弹”等按素材外形描述；代码以编号识别弹种，没有对应的中文名称枚举。素材已登记不表示每一种颜色都会在当前关卡中实际发射。
 
+原作显示尺寸、碰撞半径及统一世界比例见 [新典战斗尺寸](NATIVE_SIZES.md)。
+
 ## 阅读约定
 
 - `Type` 是普通敌弹的 `nativeType`，`C` 是有效颜色索引，`ANM` 是动画脚本编号，`S` 是图集内的精灵编号；各自属于不同编号空间。

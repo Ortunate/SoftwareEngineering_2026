@@ -22,7 +22,7 @@ Color Tint(Color a,Color b) {
     return {static_cast<unsigned char>(a.r*b.r/255),static_cast<unsigned char>(a.g*b.g/255),
             static_cast<unsigned char>(a.b*b.b/255),static_cast<unsigned char>(a.a*b.a/255)};
 }
-/// @brief quad 按左上、右上、右下、左下排序，UV 以 ANM 逻辑尺寸换算，不依赖 DDS 分辨率。
+/// @brief quad 按左上、右上、右下、左下排序，UV 以 ANM 逻辑尺寸换算；保留 ANM 混合模式，由调用方恢复。
 void Quad(Texture2D texture,const anm::Archive& archive,const anm::Frame& frame,
           const std::array<Vector3,4>& points,Color tint,bool screenSpace=false,bool mirrored=false) {
     if(!IsTextureValid(texture) || !frame.visible || frame.sprite<0)return;
@@ -40,7 +40,7 @@ void Quad(Texture2D texture,const anm::Archive& archive,const anm::Frame& frame,
         if(screenSpace)rlVertex2f(points[i].x,points[i].y);
         else rlVertex3f(points[i].x,points[i].y,points[i].z);
     }
-    rlEnd();rlSetTexture(0);EndBlendMode();
+    rlEnd();rlSetTexture(0);
 }
 }
 std::array<Vector3,4> AnimatedBillboardVertices(const Camera3D& camera,const anm::Frame& frame,
@@ -49,8 +49,9 @@ std::array<Vector3,4> AnimatedBillboardVertices(const Camera3D& camera,const anm
     const Vector3 forward=Vector3Normalize(Vector3Subtract(camera.target,camera.position));
     const Vector3 right=Vector3Normalize(Vector3CrossProduct(forward,camera.up));
     const Vector3 up=Vector3Normalize(Vector3CrossProduct(right,forward));
-    const float unit=height/frame.source.height;
-    const float w=unit*frame.source.width*frame.scale.x,h=height*frame.scale.y;
+    const auto logical=frame.LogicalSize();
+    const float unit=height/logical.y;
+    const float w=unit*logical.x*frame.scale.x,h=height*frame.scale.y;
     float angle=frame.rotation.z;
     if(frame.autoRotate && Vector3LengthSqr(motion)>1e-8F)
         angle+=std::atan2(-Vector3DotProduct(motion,up),Vector3DotProduct(motion,right))+PI/2;
@@ -72,11 +73,12 @@ void DrawAnimatedBillboard(const Camera3D& camera,Texture2D texture,const anm::A
     if(frame.source.height<=0)return;
     const auto points=AnimatedBillboardVertices(camera,frame,position,height,pivot,motion);
     // 镜像后的顶点绕序可能反转；公告板两面均可见，调用方统一恢复剔除状态。
-    rlDisableBackfaceCulling();Quad(texture,archive,frame,points,tint);
+    rlDisableBackfaceCulling();Quad(texture,archive,frame,points,tint);EndBlendMode();
 }
 void DrawAnimatedSprite2D(Texture2D texture,const anm::Archive& archive,const anm::Frame& frame,
                           Vector2 position,float scale,Color tint) {
-    const float width=frame.source.width*scale*frame.scale.x,height=frame.source.height*scale*frame.scale.y;
+    const auto logical=frame.LogicalSize();
+    const float width=logical.x*scale*frame.scale.x,height=logical.y*scale*frame.scale.y;
     const float x=frame.topLeft ? 0 : -width/2,y=frame.topLeft ? 0 : -height/2;
     const std::array<Vector2,4> local{{{x,y},{x+width,y},{x+width,y+height},{x,y+height}}};
     std::array<Vector3,4> points{};
@@ -86,16 +88,19 @@ void DrawAnimatedSprite2D(Texture2D texture,const anm::Archive& archive,const an
         points[i]={position.x+offset.x*scale+p.x,position.y+offset.y*scale+p.y,0};
     }
     const float winding=(points[1].x-points[0].x)*(points[3].y-points[0].y)-(points[1].y-points[0].y)*(points[3].x-points[0].x);
-    Quad(texture,archive,frame,points,tint,true,winding<0);
+    Quad(texture,archive,frame,points,tint,true,winding<0);EndBlendMode();
 }
-void DrawAnimatedBeam(const Camera3D& camera,Texture2D texture,const anm::Archive& archive,
-                      const anm::Frame& frame,Vector3 origin,Vector3 end,float width,Color tint) {
+std::array<Vector3,4> AnimatedBeamVertices(const Camera3D& camera,Vector3 origin,Vector3 end,float width) {
     const auto axis=Vector3Normalize(Vector3Subtract(end,origin));
     Vector3 side=Vector3CrossProduct(axis,Vector3Subtract(camera.position,origin));
     if(Vector3LengthSqr(side)<1e-8F)side=Vector3CrossProduct(axis,camera.up);
     side=Vector3Scale(Vector3Normalize(side),width*0.5F);
-    const std::array<Vector3,4> points{{Vector3Subtract(end,side),Vector3Add(end,side),
-                                     Vector3Add(origin,side),Vector3Subtract(origin,side)}};
+    return {{Vector3Subtract(end,side),Vector3Add(end,side),
+             Vector3Add(origin,side),Vector3Subtract(origin,side)}};
+}
+void DrawAnimatedBeam(const Camera3D& camera,Texture2D texture,const anm::Archive& archive,
+                      const anm::Frame& frame,Vector3 origin,Vector3 end,float width,Color tint) {
+    const auto points=AnimatedBeamVertices(camera,origin,end,width);
     rlDisableBackfaceCulling();Quad(texture,archive,frame,points,tint);
 }
 } // namespace koumakyou

@@ -2,7 +2,8 @@
 
 #pragma once
 
-#include "stage/enemy_spec.hpp"
+#include "gameplay/actors/behavior.hpp"
+#include "gameplay/bosses/config.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -18,25 +19,32 @@ namespace koumakyou {
 /// @brief 关卡事件的稳定标识；编号只在单张事件表内有效，仅需要被引用或报告结束的事件必须设置。
 using StageEventId = std::uint32_t;
 
-/// @brief 连续请求生成相同配置的小怪；第一只在事件开始时立即生成。
+/// @brief 连续请求生成相同配置的行为演员；第一只在事件开始时立即生成。
 /// count 至少为 1；interval 为非负有限秒数，零表示同帧生成全部；总间隔时长须有限。
 /// 最后一次生成请求发出后事件结束，与敌人存活时间和池满丢弃无关。
-struct SpawnEnemies {
-    EnemySpec enemy;
+struct SpawnActors {
+    behavior::Spawn actor;
     int count = 1;
     float interval = 0.5F;
 };
 
-/// @brief 当前关卡的 Boss 遭遇类型。
-enum class BossEncounter { Midboss, Final };
-
-/// @brief 开始 Boss 遭遇；所属 StageEvent 必须带 id，战斗结束时报告完成。
+/// @brief 按命名启动配置创建 Boss；所属 StageEvent 必须带 id，完整退场结束才报告完成。
 struct StartBoss {
-    BossEncounter encounter = BossEncounter::Midboss;
+    const bosses::Battle* battle = nullptr; // 借用静态战斗定义，必须覆盖调度器生命周期。
 };
 
+/// @brief 对话所属命名遭遇；是否结束本关由内容的DialogueFlow决定，追加战不混用主战对白。
+enum class DialogueScene { FinalBoss, Midboss, EncoreBoss };
+/// @brief 对白开始时的清场策略；PreserveWorld 保留旧演员/弹幕，由内容在真实开战或退场时处理。
+enum class DialogueClearPolicy { ClearEnemiesAndBullets, PreserveWorld };
 /// @brief 开始当前关卡对话；所属 StageEvent 必须带 id，对话结束时报告完成。
-struct StartDialogue { bool afterBattle = false; };
+struct StartDialogue { bool afterBattle = false; DialogueScene scene=DialogueScene::FinalBoss;
+    DialogueClearPolicy clearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets; };
+/// @brief 在对话实际完成后通知现存 Boss 开战；同步动作，不替换入场演员或重置其位置/随机流。
+struct ResumeBoss {};
+/// @brief 等待当前对白的放行序号；signal>=1 对应 MSG 的第几次时间轴放行，0 表示整段结束。
+/// 必须带事件 id；等待本身不暂停对白或关卡时钟，后续事件用 afterEndOf 依赖其实际完成。
+struct WaitDialogueSignal {int signal=0;};
 
 /// @brief 显示提示；duration 为非负有限秒数，text 的存储须覆盖事件表生命周期。
 struct ShowMessage {
@@ -45,7 +53,7 @@ struct ShowMessage {
 };
 
 /// @brief 带参事件动作；新增分支须同步扩展校验与执行访问器。
-using StageAction = std::variant<SpawnEnemies, StartBoss, StartDialogue, ShowMessage>;
+using StageAction = std::variant<SpawnActors, StartBoss, StartDialogue, ShowMessage, ResumeBoss, WaitDialogueSignal>;
 
 /// @brief 一条时间轴事件：调度信息独立于带参动作，事件表本身不保存执行进度。
 struct StageEvent {
@@ -97,8 +105,8 @@ public:
 private:
     /// @brief 单条事件的实际时刻，以及构造时解析出的前序事件索引。
     struct EventState {
-        std::optional<float> startedAt;
-        std::optional<float> endedAt;
+        std::optional<double> startedAt;
+        std::optional<double> endedAt;
         std::optional<std::size_t> dependencyIndex;
         int spawned = 0;
     };
@@ -113,7 +121,7 @@ private:
 
     std::span<const StageEvent> events_;
     std::vector<EventState> states_;
-    float elapsed_ = 0.0F;
+    double elapsed_ = 0; // 长关和等待后的相对事件使用双精度，避免单精度累计把整帧间隔逐项推迟一帧。
     std::size_t nextEvent_ = 0;
 };
 

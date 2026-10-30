@@ -43,7 +43,15 @@ void Game::DrawCommandBar() const {
             } else menu();
             break;
         case RunState::MusicRoom:menu("播放");break;
-        case RunState::Score:add("X / Esc / 右键","返回");break;
+        case RunState::Score:
+            add("W / S / ↑↓","切换模式");add("A / D / ←→","切换御札");add("X / Esc / 右键","返回");break;
+        case RunState::ScoreSave:menu("确认","选择放弃");break;
+        case RunState::ScoreName:
+            add("键盘字符","输入名字");add("Enter","保存");add("Ctrl+A","重新输入");
+            add("Backspace","删除");add("Esc / 右键","返回选存");break;
+        case RunState::Ending:
+            add("Z / Space / 左键","继续");add("Ctrl","快进",endingPlayer_.SeenBefore());
+            add("X / Esc / 右键","跳过",endingPlayer_.SeenBefore());break;
         case RunState::Credit:add("Z / Space","返回");add("X / Esc / 右键","返回");break;
         case RunState::Loading:
             if(loadingFailed_) {add("Z / Space / 左键","返回主菜单");add("X / Esc / 右键","返回主菜单");}
@@ -51,7 +59,8 @@ void Game::DrawCommandBar() const {
             break;
         case RunState::Paused:menu("确认","继续");add("M","返回主菜单");break;
         case RunState::Won: case RunState::GameOver:
-            menu();add("R","重试");add("M","返回主菜单");break;
+            menu("确认",stageId_==StageId::Extra&&!previewMode_?"成绩选存":"返回");
+            add("R","重试");add("M",stageId_==StageId::Extra&&!previewMode_?"成绩选存":"返回主菜单");break;
         case RunState::StageClear:
             add("Z / Space / 左键","继续");add("X / Esc / 右键","暂停");add("10s","自动继续");break;
         case RunState::Finishing:add("","等待",false);add("Esc / "+KeyLabel(bindings_.pause),"暂停");break;

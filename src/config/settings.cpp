@@ -112,9 +112,10 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
             std::istringstream row{std::string(trimmed.substr(separator+1))};
             int character=0,number=0; spell::Record record; std::string trailing;
             if(row>>character>>number>>record.bestScore>>record.attempts>>record.captured>>record.mainAttempts>>record.mainCaptured &&
-               !(row>>trailing) && character>=0 && character<spell::kCharacterCount && number>=1 && number<=spell::kSpellCount &&
+               !(row>>trailing) && character>=0 && character<spell::kCharacterCount && number>=1 && number<=spell::kRecordCount &&
                name=="spell_record_"+std::to_string(character)+"_"+std::to_string(number) &&
                record.bestScore>=0 && record.attempts>=0 && record.attempts<=2000000000 && record.captured>=0 && record.captured<=record.attempts &&
+               (number<=spell::kSpellCount || (record.bestScore==0&&record.attempts==0&&record.captured==0)) &&
                record.mainAttempts>=0 && record.mainAttempts<=2000000000 && record.mainCaptured>=0 && record.mainCaptured<=record.mainAttempts)
                 settings.spellRecords.values[character][number-1]=record;
             else shouldRewrite=true;
@@ -126,6 +127,15 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
             if(name!=key)continue;
             const auto score=ParseInteger<long long>(trimmed.substr(separator+1));
             if(score && *score>=0)settings.stageHighScores.scores[mode][stage-1]=*score;
+            else shouldRewrite=true;
+            stageField=true;
+        }
+        for(int difficulty:{0,2,3})for(int mode=0;mode<2;++mode)for(int stage=1;stage<=kStageScoreCount;++stage) {
+            const std::string key="stage_best_"+std::to_string(difficulty)+"_"+
+                (mode?"challenge_":"standard_")+std::to_string(stage);
+            if(name!=key)continue;
+            const auto score=ParseInteger<long long>(trimmed.substr(separator+1));
+            if(score && *score>=0)settings.stageHighScores.difficultyScores[difficulty][mode][stage-1]=*score;
             else shouldRewrite=true;
             stageField=true;
         }
@@ -166,6 +176,9 @@ GameSettings LoadOrCreateSettings(const std::filesystem::path& path) {
             else shouldRewrite = true;
         } else if (name == "last_character") {
             if (*value == 0 || *value == 1) settings.lastSelection.character = *value;
+            else shouldRewrite = true;
+        } else if (name == "last_difficulty") {
+            if (*value >= 0 && *value < 4) settings.lastSelection.difficulty = *value;
             else shouldRewrite = true;
         } else if (name == "last_challenge") {
             if (*value == 0 || *value == 1) settings.lastSelection.challenge = *value == 1;
@@ -259,17 +272,21 @@ bool SaveSettingsFile(const std::filesystem::path& path,
     output << "best_score=" << settings.bestScore << '\n';
     output << "last_shot=" << settings.lastSelection.shot << '\n';
     output << "last_character=" << settings.lastSelection.character << '\n';
+    output << "last_difficulty=" << settings.lastSelection.difficulty << '\n';
     output << "last_challenge=" << settings.lastSelection.challenge << '\n';
     output << "last_practice_phase=" << settings.lastSelection.practicePhase << '\n';
     output << "last_practice_stage=" << settings.lastSelection.practiceStage << '\n';
     for(int mode=0;mode<2;++mode) for(int stage=1;stage<=kStageScoreCount;++stage)
         output << (mode?"stage_best_challenge_":"stage_best_standard_") << stage << '='
                << settings.stageHighScores.scores[mode][stage-1] << '\n';
+    for(int difficulty:{0,2,3})for(int mode=0;mode<2;++mode)for(int stage=1;stage<=kStageScoreCount;++stage)
+        output << "stage_best_" << difficulty << '_' << (mode?"challenge_":"standard_") << stage << '='
+               << settings.stageHighScores.difficultyScores[difficulty][mode][stage-1] << '\n';
     output << "last_spell_character=" << settings.spellSelection.character << '\n';
     output << "last_spell_stage=" << settings.spellSelection.stage << '\n';
     output << "last_spell_group=" << settings.spellSelection.group << '\n';
     output << "last_spell_difficulty=" << settings.spellSelection.difficulty << '\n';
-    for(int character=0;character<spell::kCharacterCount;++character)for(int number=1;number<=spell::kSpellCount;++number) {
+    for(int character=0;character<spell::kCharacterCount;++character)for(int number=1;number<=spell::kRecordCount;++number) {
         const auto& record=settings.spellRecords.Get(character,number);
         if(record.bestScore==0 && record.attempts==0 && record.mainAttempts==0)continue;
         output << "spell_record_" << character << '_' << number << '=' << character << ' ' << number << ' '

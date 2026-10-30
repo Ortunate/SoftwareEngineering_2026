@@ -1,11 +1,10 @@
 // 本文件负责全窗口三维世界、加载页、设置页面与暂停/结算叠加层的绘制。
 
 #include "app/game.hpp"
+#include "stages/common/ids.hpp"
 #include "app/constants.hpp"
 #include "app/math.hpp"
 #include "config/settings.hpp"
-#include "stages/stage1/scenery.hpp"
-#include "stages/stage1/ids.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/menu_layout.hpp"
 #include "ui/page.hpp"
@@ -28,7 +27,13 @@ void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
     if(state_==RunState::ReplayList) { DrawReplayList(); }
-    else if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
+    else if(state_==RunState::Ending) {
+        DrawEnding();
+    } else if(state_==RunState::ScoreSave || state_==RunState::ScoreName) {
+        DrawScoreEntry();
+    } else if(state_==RunState::Score) {
+        DrawScorePage();
+    } else if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
         DrawStartSetup();
     } else if (state_ == RunState::Loading) {
         DrawLoading();
@@ -36,8 +41,7 @@ void Game::Draw() const {
         DrawMainMenu();
     } else if (state_ == RunState::Options) {
         DrawOptions();
-    } else if (state_ == RunState::StartSetup || state_ == RunState::MusicRoom ||
-               state_ == RunState::Score || state_ == RunState::Credit) {
+    } else if (state_ == RunState::MusicRoom || state_ == RunState::Credit) {
         DrawMenuPage();
     } else {
         DrawWorld();
@@ -127,23 +131,20 @@ void Game::DrawWorld() const {
         rlEnableDepthMask();
         rlEnableBackfaceCulling();
     }
-    if (stageId_ == StageId::Stage1) stage1::DrawScenery(stage_.Elapsed());
+    // 离屏尺寸/副机对照允许暂时移出内容接口；此时仍可独立绘制场地与其他已加载图层。
+    if(stageContent_)stageContent_->DrawScenery(static_cast<float>(scenerySeconds_),assets_);
     DrawArena();
-    std::array<const Enemy*, kEnemyCapacity> visibleEnemies{};
+    std::array<const behavior::Actor*, kActorCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
-    enemies_.ForEachActive([&](const Enemy& enemy) {
-        visibleEnemies[visibleCount++] = &enemy;
+    actors_.ForEachActive([&](const behavior::Actor& enemy) {
+        if(enemy.visible)visibleEnemies[visibleCount++] = &enemy;
     });
-    const std::span<const Enemy*> visible(visibleEnemies.data(), visibleCount);
+    const std::span<const behavior::Actor*> visible(visibleEnemies.data(), visibleCount);
     pickupSprites_.clear();
     playerBombVolumes_.clear();
     if (stageContent_) {
         drops_.ForEachActive([&](const Pickup& pickup) {
-            VisualId visual = stageContent_->ScorePickupVisual();
-            if (pickup.kind == PickupKind::Power)
-                visual = pickup.value>=8 ? stageContent_->LargePowerPickupVisual() : stageContent_->PowerPickupVisual();
-            else if (pickup.kind == PickupKind::Star)
-                visual = stageContent_->StarPickupVisual();
+            const VisualId visual=PickupVisual(pickup);
             const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
             pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),255,pickup.RotationRadians()});
@@ -169,13 +170,13 @@ void Game::DrawWorld() const {
     }
     if(replayMode_==replay::Mode::Playback && replayView_!=0 && player_.RemainingLives()>0 &&
        (player_.InvulnerabilitySeconds()<=0 || static_cast<int>(player_.VisualAge()*12)%2==0))
-        pickupSprites_.push_back({player_.Position(),static_cast<VisualId>(stage1::kPlayerBody+(player_.IsMarisa()?5:0)+playerBodyAction_),1,&playerBodyAnimation_.player.Sample()});
+        pickupSprites_.push_back({player_.Position(),static_cast<VisualId>(stage_assets::kPlayerBody+(player_.IsMarisa()?5:0)+playerBodyAction_),1,&playerBodyAnimation_.player.Sample()});
     DrawPlayerBombBackdrop(viewport.width,viewport.height);
     combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,drawCamera,viewport.width/viewport.height,stage_.Elapsed());
     spriteRenderer_.Draw(drawCamera, bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
-                         actorEffects_,playerBombVolumes_,&combatRenderer_);
+                         actorEffects_,playerBombVolumes_,&externalEffects_,&combatRenderer_);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
@@ -288,11 +289,13 @@ void Game::DrawOverlay() const {
         // 统计拆成两行，最大分数/擦弹数也不会挤出窄窗口或与重试提示重叠。
         centered(TextFormat("SCORE %09lld",score_),295,26,RAYWHITE);
         centered(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),337,22,RAYWHITE);
-        centered(practiceMode_?"STAGE PRACTICE":challengeMode_?"CHALLENGE":"NORMAL",382,18,GOLD);
+        const auto mode=std::string(std::array<const char*,5>{"EASY","NORMAL","HARD","LUNATIC","EXTRA"}[ScoreDifficultyIndex()])+
+            (practiceMode_?" / STAGE PRACTICE":challengeMode_?" / CHALLENGE":"");
+        centered(mode.c_str(),382,18,GOLD);
         for(int index=0;index<menu::kResultCount;++index) {
             const auto row=layout.ResultRow(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            ui::Button{row,index!=2 || CanSaveReplay()}.Draw({font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()},index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],{weight,reveal});
+            ui::Button{row,index!=2 || CanSaveReplay()}.Draw({font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()},index==1 && stageId_==StageId::Extra?"保存成绩并返回":index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],{weight,reveal});
         }
     }
 
@@ -328,7 +331,16 @@ void Game::DrawStageClear() const {
     row("Power * 100 =",TextFormat("%lld",stageClearSummary_.PowerPoints()),251,ivory);
     row("Graze * 10 =",TextFormat("%lld",stageClearSummary_.GrazePoints()),288,ivory);
     row("* Point Item",TextFormat("%d",stageClearSummary_.pointItems),325,rose);
-    row("Normal Rank","* 1.0",380,rose,24);
+    if(stageClearSummary_.stage>=6) {
+        row("Lives / Bomb",TextFormat("%d / %d",stageClearSummary_.extraLives,stageClearSummary_.bombs),350,ivory,16);
+    }
+    constexpr std::array<const char*,4> rankNames{"Easy Rank","Normal Rank","Hard Rank","Lunatic Rank"};
+    constexpr std::array<const char*,4> rankFactors{"* 0.5","* 1.0","* 1.2","* 1.5"};
+    const int rankIndex=native_combat::DifficultyIndex(stageClearSummary_.difficulty);
+    row(rankNames[rankIndex],rankFactors[rankIndex],380,rose,24);
+    if(stageClearSummary_.startingLives==3 || stageClearSummary_.startingLives==4)
+        ui::DrawText(font,stageClearSummary_.startingLives==3?"初始残机倍率 ×0.5":"初始残机倍率 ×0.2",
+            canvas.Point(120,405),14*s,rose);
     const auto left=canvas.Point(120,416),right=canvas.Point(640,416);
     DrawLineEx(left,right,s,Fade(gold,0.6F));
     row("Total =",TextFormat("%lld",stageClearSummary_.Total()),431,gold,32);

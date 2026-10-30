@@ -175,7 +175,7 @@ void PlayerBombEffect::Sample(const Camera3D& camera) {
             const auto volume=Sphere(positions_[orb],(burst ? 128 : 24)*kBombWorldPixel);
             if(!burst || frame_==orbBurst_[orb])attack(volume,orb,burst ? 200 : 8);
             if(!burst || frame_-orbBurst_[orb]<29)for(int layer=0;layer<4;++layer)
-                emit(orb*4+layer,layer,volume,PlayerBombSprite::Shape::Sphere,280*0.012F);
+                emit(orb*4+layer,layer,volume,PlayerBombSprite::Shape::Sphere,62*kBombWorldPixel);
         }
     } else if(shot_==ShotType::Needle) {
         // 蓄力 60 帧不伤害/清弹；以施放点为中心长出六面法阵，向场地边界扩展。
@@ -199,9 +199,9 @@ void PlayerBombEffect::Sample(const Camera3D& camera) {
         for(int i=0;i<kBombStarCount;++i) {
             const auto volume=Sphere(positions_[i],64*kBombWorldPixel);
             if(frame_>0 && frame_%3!=0)attack(volume,i%8,8);
-            emit(i,i%3,volume,PlayerBombSprite::Shape::Star,3.6F);
+            emit(i,i%3,volume,PlayerBombSprite::Shape::Star,animations_[i].Sample().LogicalSize().y*kBombWorldPixel);
             auto trail=volume;trail.origin=Subtract(volume.origin,Scale(velocities_[i],6));
-            emit(i,i%3,trail,PlayerBombSprite::Shape::Star,1.8F,true);
+            emit(i,i%3,trail,PlayerBombSprite::Shape::Star,animations_[i].Sample().LogicalSize().y*kBombWorldPixel*0.5F,true);
         }
     } else {
         const auto view=View(camera);

@@ -74,22 +74,24 @@ std::string ReplayLabel(const std::filesystem::path& path) {
 }
 
 replay::Header Game::ReplayHeader() const {
-    return {1,static_cast<unsigned>(selectedCharacter_*2+selectedShot_),static_cast<unsigned>(initialLives_),static_cast<unsigned>(initialBombs_),static_cast<unsigned>(practicePhase_),practiceMode_,spellPractice_,challengeMode_};
+    return {1,static_cast<unsigned>(selectedCharacter_*2+selectedShot_),static_cast<unsigned>(initialLives_),static_cast<unsigned>(initialBombs_),static_cast<unsigned>(spellPractice_?practiceAttack_:2),practiceMode_,spellPractice_,challengeMode_};
 }
 replay::Result Game::ReplayResult() const {
-    return {static_cast<std::uint64_t>(std::max(0LL,score_)),static_cast<unsigned>(std::max(0,player_.RemainingLives())),static_cast<unsigned>(player_.Power()),static_cast<unsigned>(missCount_),static_cast<unsigned>(bombCount_),finishResult_==RunState::Won};
+    return {static_cast<std::uint64_t>(std::max(0LL,score_)),static_cast<unsigned>(std::max(0,player_.RemainingLives())),static_cast<unsigned>(player_.Power()),static_cast<unsigned>(missCount_),static_cast<unsigned>(bombCount_),(state_==RunState::StageClear || finishResult_==RunState::Won)};
 }
 void Game::PrepareReplay() {
     if(replayMode_!=replay::Mode::Playback) {
         auto header=ReplayHeader();header.seed=std::random_device{}();replay::BeginSession(replayData_,header);
         replayData_.route=spellPractice_?"spell-practice":practiceMode_?"stage-practice":"stage1-prototype";
         replay::Segment segment;
-        // 当前运行内容仅开放 Normal；显式从已加载关卡取得稳定身份，后续难度接入须替换此实际配置来源。
-        switch(stageId_) {case StageId::Stage1:segment.stage="stage1";break;}
-        segment.difficulty=replay::Difficulty::Normal;
-        segment.seed=header.seed;segment.lives=header.lives;segment.bombs=header.bombs;segment.power=spellPractice_?128:8;segment.entry=spellPractice_?"spell":"stage";segment.target=spellPractice_?(practicePhase_==2?"rumia-night-bird":"rumia-demarcation"):"";replay::BeginStage(replayData_,segment);
+        // 身份始终来自当前入口；录制资格单独限制，不能将未支持的关卡伪装为一面。
+        segment.stage=stageId_==StageId::Extra?"extra":"stage"+std::to_string(StageNumber(stageId_));
+        segment.difficulty=stageId_==StageId::Extra?replay::Difficulty::Extra:static_cast<replay::Difficulty>(native_combat::DifficultyIndex(runDifficulty_));
+        segment.seed=header.seed;segment.lives=header.lives;segment.bombs=header.bombs;segment.power=spellPractice_?128:8;segment.entry=spellPractice_?"spell":"stage";segment.target=spellPractice_?(practiceAttack_==2?"rumia-night-bird":"rumia-demarcation"):"";replay::BeginStage(replayData_,segment);
         replaySaveState_=ReplaySaveState::None;
-        bool eligible=captureCursor_ && !previewMode_;
+        // 录像解析器尚只支持一面 Normal；其他正式关卡继续可玩，但不能生成身份不实的录像。
+        bool eligible=captureCursor_ && !previewMode_ && stageId_==StageId::Stage1 &&
+            runDifficulty_==native_combat::Difficulty::Normal && (!spellPractice_ || practiceAttack_==2 || practiceAttack_==4);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
         eligible=eligible && !debugInvincible_ && !loadingShotTest_;
 #endif
@@ -183,18 +185,21 @@ void Game::Update(float dt,float playbackElapsed) {
 void Game::RestoreReplaySettings() {
     if(!replayOriginal_)return;
     const auto h=*replayOriginal_;initialLives_=static_cast<int>(h.lives);initialBombs_=static_cast<int>(h.bombs);
-    selectedCharacter_=static_cast<int>(h.shot/2);selectedShot_=static_cast<int>(h.shot%2);practicePhase_=static_cast<int>(h.phase);
-    practiceMode_=h.practice;spellPractice_=h.spell;challengeMode_=h.challenge;replayOriginal_.reset();
+    selectedCharacter_=static_cast<int>(h.shot/2);selectedShot_=static_cast<int>(h.shot%2);practiceAttack_=static_cast<int>(h.phase);
+    practiceMode_=h.practice;spellPractice_=h.spell;challengeMode_=h.challenge;
+    stageId_=replayOriginalStage_;selectedDifficulty_=replayOriginalDifficulty_;spellSelection_=replayOriginalSpell_;replayOriginal_.reset();
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     debugInvincible_=replayOriginalDebug_;
 #endif
 }
 void Game::PlayReplay(replay::Data data) {
     std::string error;if(!replay::CanPlay(data,error)){replayStatus_=error;return;}
-    FinishSpellRecord(false);replayOriginal_=ReplayHeader();replayData_=std::move(data);
+    FinishSpellRecord(false);replayOriginal_=ReplayHeader();
+    replayOriginalStage_=stageId_;replayOriginalDifficulty_=selectedDifficulty_;replayOriginalSpell_=spellSelection_;replayData_=std::move(data);
     const auto h=replayData_.header;selectedCharacter_=static_cast<int>(h.shot/2);selectedShot_=static_cast<int>(h.shot%2);
-    initialLives_=static_cast<int>(h.lives);initialBombs_=static_cast<int>(h.bombs);practicePhase_=static_cast<int>(h.phase);
+    initialLives_=static_cast<int>(h.lives);initialBombs_=static_cast<int>(h.bombs);practiceAttack_=static_cast<int>(h.phase);
     practiceMode_=h.practice;spellPractice_=h.spell;challengeMode_=h.challenge;stageId_=StageId::Stage1;
+    selectedDifficulty_=1;spellSelection_={.stage=0,.group=h.phase==2?1:2,.difficulty=1,.character=static_cast<int>(h.shot)};
     replayMode_=replay::Mode::Playback;replayCursor_=0;replayBudget_=0;replayPaused_=false;replayStatus_.clear();
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     replayOriginalDebug_=debugInvincible_;debugInvincible_=false;

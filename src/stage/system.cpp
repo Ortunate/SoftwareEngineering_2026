@@ -20,20 +20,25 @@ StageDirector::StageDirector(std::span<const StageEvent> events)
         }
         std::visit([&event](const auto& action) {
             using Action = std::decay_t<decltype(action)>;
-            if constexpr (std::is_same_v<Action, SpawnEnemies>) {
+            if constexpr (std::is_same_v<Action, SpawnActors>) {
                 if (action.count < 1 || !std::isfinite(action.interval) ||
                     action.interval < 0.0F ||
                     !std::isfinite((action.count - 1) * action.interval) ||
-                    !IsValidEnemySpec(action.enemy)) {
-                    throw std::invalid_argument("Invalid SpawnEnemies parameters");
+                    !behavior::Valid(action.actor)) {
+                    throw std::invalid_argument("Invalid SpawnActors parameters");
                 }
             } else if constexpr (std::is_same_v<Action, StartBoss>) {
-                if (!event.id || (action.encounter != BossEncounter::Midboss &&
-                                  action.encounter != BossEncounter::Final)) {
-                    throw std::invalid_argument("StartBoss requires an id and valid encounter");
+                if (!event.id || (!action.battle || !action.battle->create)) {
+                    throw std::invalid_argument("StartBoss requires an id and valid battle definition");
                 }
             } else if constexpr (std::is_same_v<Action, StartDialogue>) {
-                if (!event.id) throw std::invalid_argument("StartDialogue requires an id");
+                if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss&&action.scene!=DialogueScene::EncoreBoss)||
+                    (action.clearPolicy!=DialogueClearPolicy::ClearEnemiesAndBullets&&action.clearPolicy!=DialogueClearPolicy::PreserveWorld))
+                    throw std::invalid_argument("StartDialogue requires an id and valid scene");
+            } else if constexpr (std::is_same_v<Action, ResumeBoss>) {
+                // 此动作是否拥有可恢复的 Boss，由接收方按当前遭遇生命周期校验。
+            } else if constexpr (std::is_same_v<Action, WaitDialogueSignal>) {
+                if(!event.id||action.signal<0)throw std::invalid_argument("Dialogue signal wait requires id and nonnegative signal");
             } else if constexpr (std::is_same_v<Action, ShowMessage>) {
                 if (!std::isfinite(action.duration) || action.duration < 0.0F) {
                     throw std::invalid_argument("Invalid ShowMessage duration");
@@ -81,13 +86,13 @@ void StageDirector::Update(float deltaTime, const EventHandler& handler) {
     // 先补发已启动批次，再检查结束依赖，使最后一次生成与其依赖可在同帧发生。
     for (std::size_t index = 0; index < nextEvent_; ++index) {
         if (!states_[index].endedAt &&
-            std::holds_alternative<SpawnEnemies>(events_[index].action)) {
+            std::holds_alternative<SpawnActors>(events_[index].action)) {
             UpdateSpawns(index, handler);
         }
     }
     while (nextEvent_ < events_.size()) {
         const StageEvent& event = events_[nextEvent_];
-        float anchor = 0.0F;
+        double anchor = 0;
         if (states_[nextEvent_].dependencyIndex) {
             const auto& dependency = states_[*states_[nextEvent_].dependencyIndex];
             if (!dependency.endedAt) break;
@@ -95,14 +100,14 @@ void StageDirector::Update(float deltaTime, const EventHandler& handler) {
         } else if (nextEvent_ > 0) {
             anchor = *states_[nextEvent_ - 1].startedAt;
         }
-        const float due = event.atFrame ? *event.atFrame / 60.0F : anchor + event.delay;
+        const double due = event.atFrame ? *event.atFrame / 60.0 : anchor + event.delay;
         if (elapsed_ + 0.00001F < due) break;
 
         // 先推进索引再执行回调；回调可以同步报告结束，也可能触发依赖后续事件。
         const std::size_t startedIndex = nextEvent_;
         states_[startedIndex].startedAt = elapsed_;
         ++nextEvent_;
-        if (std::holds_alternative<SpawnEnemies>(event.action)) {
+        if (std::holds_alternative<SpawnActors>(event.action)) {
             UpdateSpawns(startedIndex, handler);
         } else if (handler(event)) {
             states_[startedIndex].endedAt = elapsed_;
@@ -111,10 +116,10 @@ void StageDirector::Update(float deltaTime, const EventHandler& handler) {
 }
 
 void StageDirector::UpdateSpawns(std::size_t index, const EventHandler& handler) {
-    const auto& batch = std::get<SpawnEnemies>(events_[index].action);
+    const auto& batch = std::get<SpawnActors>(events_[index].action);
     EventState& state = states_[index];
     StageEvent request = events_[index];
-    std::get<SpawnEnemies>(request.action).count = 1;
+    std::get<SpawnActors>(request.action).count = 1;
     // 以批次开始时间计算每次截止时刻；不能重置为“当前时刻 + interval”，否则低帧率会漂移。
     while (!state.endedAt && state.spawned < batch.count &&
            elapsed_ >= *state.startedAt + state.spawned * batch.interval) {
@@ -127,7 +132,7 @@ void StageDirector::UpdateSpawns(std::size_t index, const EventHandler& handler)
 bool StageDirector::EndEvent(StageEventId id) {
     const auto index = FindEvent(id);
     if (!index || !states_[*index].startedAt || states_[*index].endedAt ||
-        std::holds_alternative<SpawnEnemies>(events_[*index].action)) {
+        std::holds_alternative<SpawnActors>(events_[*index].action)) {
         return false;
     }
     states_[*index].endedAt = elapsed_;
@@ -137,7 +142,7 @@ bool StageDirector::EndEvent(StageEventId id) {
 void StageDirector::CancelEnemySpawns() {
     for (std::size_t index = 0; index < nextEvent_; ++index) {
         if (!states_[index].endedAt &&
-            std::holds_alternative<SpawnEnemies>(events_[index].action)) {
+            std::holds_alternative<SpawnActors>(events_[index].action)) {
             states_[index].endedAt = elapsed_;
         }
     }

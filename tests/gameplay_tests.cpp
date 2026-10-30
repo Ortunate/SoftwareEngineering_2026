@@ -1,17 +1,20 @@
 // 本文件负责验证弹幕方向、敌人行动和 Boss 阶段行为。
 
+#include "actor_fixture.hpp"
 #include "gameplay/bullets/system.hpp"
 #include "gameplay/bullets/patterns.hpp"
 #include "gameplay/actors/boss.hpp"
-#include "gameplay/actors/enemy.hpp"
+#include "gameplay/actors/behavior.hpp"
 #include "gameplay/actors/player.hpp"
 #include "gameplay/arena.hpp"
 #include "config/settings.hpp"
 #include "stage/system.hpp"
 #include "stage/catalog.hpp"
 #include "stages/stage1/content.hpp"
-#include "stages/stage1/enemies.hpp"
-#include "stages/stage1/boss.hpp"
+#include "stages/stage1/behaviors.hpp"
+#include "stages/stage1/boss_config.hpp"
+#include "gameplay/bosses/rumia.hpp"
+#include "reference_script.hpp"
 
 #include <cassert>
 #include <array>
@@ -26,145 +29,80 @@
 #include <vector>
 
 namespace {
+/// @brief 独立验证Standard库存及Challenge有符号净Miss；奖励不抵扣用于符卡取得的总Miss。
+void TestChallengeLifeCredits() {
+    using namespace koumakyou;
+    for(bool challenge:{false,true}) {
+        Player player;player.Reset();player.ConfigureRun(2,1,challenge,ShotType::HomingAmulet);
+        assert(player.NetMisses()==0&&player.RemainingLives()==3);
+        player.CollectResources(1,1);
+        assert(player.NetMisses()==(challenge?-1:0)&&player.RemainingLives()==(challenge?3:4)&&player.Bombs()==2);
+        assert(player.TakeHit());assert(player.NetMisses()==(challenge?0:1));
+        assert(player.RemainingLives()==3);
+        player.CollectResources(2,0);assert(player.NetMisses()==(challenge?-2:1));
+        const auto count=player.NetMisses();const auto lives=player.RemainingLives();
+        player.ResetPose();assert(player.NetMisses()==count&&player.RemainingLives()==lives);
+        for(const auto reward:{std::array{-1,1},std::array{1,-1}}) {
+            bool rejected=false;try {player.CollectResources(reward[0],reward[1]);}catch(const std::invalid_argument&) {rejected=true;}
+            assert(rejected&&player.NetMisses()==count&&player.RemainingLives()==lives&&player.Bombs()==2);
+        }
+        player.CollectResources(20,20);
+        assert(player.NetMisses()==(challenge?-22:1)&&player.RemainingLives()==(challenge?3:9)&&player.Bombs()==8);
+        player.ConfigureRun(2,1,challenge,ShotType::Needle);assert(player.NetMisses()==0);
+        player.CollectResources(1,0);player.Reset();assert(player.NetMisses()==0);
+    }
+}
+
 /// @brief 非符与符卡共享固定血量区间；击破、超时、下一组和退场均不能把符卡段错误铺满。
 void TestBossHealthGroups() {
-    using koumakyou::stage1::kReferenceHealthUnit;
-    using koumakyou::BossHealthKind;
     auto bullets=std::make_unique<koumakyou::BulletSystem>();
-    koumakyou::stage1::RumiaBoss boss;
+    koumakyou::bosses::RumiaBoss boss;
     assert(boss.HealthBar().count==0);
-    boss.StartMidboss();
+    boss.StartBoss(koumakyou::stage1::RumiaMidbossConfig());
     auto bar=boss.HealthBar();
-    assert(bar.count==1 && bar.remainingBars==0 && bar.segments[0].kind==BossHealthKind::NonSpell);
+    assert(bar.count==1 && bar.remainingBars==0 && ColorToInt(bar.segments[0].color)==ColorToInt(WHITE));
     boss.health=boss.maxHealth/2;
     assert(std::abs(boss.HealthBar().segments[0].remaining-0.5F)<0.00001F);
-    boss.StartFinalBoss();
+    boss.StartBoss(koumakyou::stage1::RumiaFinalConfig());
     bar=boss.HealthBar();
     assert(bar.count==2 && bar.remainingBars==1);
-    assert(bar.segments[0].kind==BossHealthKind::Spell && bar.segments[1].kind==BossHealthKind::NonSpell);
+    assert(ColorToInt(bar.segments[0].color)==ColorToInt(Color{239,138,152,255}) && ColorToInt(bar.segments[1].color)==ColorToInt(WHITE));
     assert(std::abs(bar.segments[0].capacity-900.0F/7000)<0.00001F);
     assert(std::abs(bar.segments[1].capacity-6100.0F/7000)<0.00001F);
     assert(bar.segments[0].remaining==bar.segments[0].capacity && bar.segments[1].remaining==bar.segments[1].capacity);
-    boss.health=(900+6100.0F/2)/kReferenceHealthUnit;
+    boss.health=(900+6100.0F/2);
     bar=boss.HealthBar();
     assert(bar.segments[0].remaining==bar.segments[0].capacity);
     assert(std::abs(bar.segments[1].remaining-3050.0F/7000)<0.00001F);
-    boss.health=900/kReferenceHealthUnit;
+    boss.health=900;
     const float spellWidth=boss.HealthBar().segments[0].remaining;
-    assert(boss.AdvancePhase() && boss.phase==2);
+    assert(boss.AdvanceSkill() && boss.attack==2);
     bar=boss.HealthBar();
     assert(bar.segments[0].remaining==spellWidth && bar.segments[1].remaining==0);
-    boss.health=450/kReferenceHealthUnit;
+    boss.health=450;
     assert(std::abs(boss.HealthBar().segments[0].remaining-450.0F/7000)<0.00001F);
     boss.health=0;
-    assert(boss.AdvancePhase() && boss.phase==3);
-    // 真实主循环在 UpdateBoss 后还会执行碰撞；下一 60 Hz 帧前必须已交接新生命，且准备期不能再次推进。
-    assert(boss.health==7500/kReferenceHealthUnit && boss.maxHealth==7500/kReferenceHealthUnit);
+    assert(boss.AdvanceSkill() && boss.attack==3);
+    // 真实主循环在 UpdateBoss 后还会执行碰撞；下一 120 Hz 更新步前必须已交接新生命，且准备期不能再次推进。
+    assert(boss.health==7500 && boss.maxHealth==7500);
     assert(!boss.ShouldAdvanceFromDamage());
     boss.Update(1.0F/60,{},*bullets); // Sub19 首帧与交接时保持同一组总生命。
     bar=boss.HealthBar();
     assert(bar.remainingBars==0);
     assert(std::abs(bar.segments[0].capacity-800.0F/7500)<0.00001F);
     assert(std::abs(bar.segments[1].remaining-6700.0F/7500)<0.00001F);
-    boss.health=800/kReferenceHealthUnit;
-    assert(boss.AdvancePhase() && boss.phase==4);
+    boss.health=800;
+    assert(boss.AdvanceSkill() && boss.attack==4);
     bar=boss.HealthBar();
     assert(std::abs(bar.segments[0].remaining-800.0F/7500)<0.00001F && bar.segments[1].remaining==0);
     boss.health=0;
-    assert(boss.AdvancePhase() && boss.HealthBar().count==0);
-    boss.StartFinalBoss();
+    assert(boss.AdvanceSkill() && boss.HealthBar().count==0);
+    boss.StartBoss(koumakyou::stage1::RumiaFinalConfig());
     assert(boss.Update(35.1F,{},*bullets));
-    assert(boss.AdvancePhase() && boss.phase==2);
+    assert(boss.AdvanceSkill() && boss.attack==2);
     assert(std::abs(boss.HealthBar().segments[0].remaining-900.0F/7000)<0.00001F);
 }
 
-/// @brief 验证暗色妖精的 Z 轴往返、单次稀疏球面散射以及跨帧阶段切换。
-void TestDarkFairyBehavior() {
-    using koumakyou::Bullet;
-    using koumakyou::BulletOwner;
-    using koumakyou::BulletSystem;
-    using koumakyou::stage1::DarkFairyEnemy;
-    const Vector3 start{2.0F, -1.0F, 8.0F};
-    const float travelDistance = koumakyou::kArenaHalfExtents.z * 2.0F / 5.0F;
-    const float approachTime = travelDistance / 1.7F;
-    const Vector3 turn{start.x, start.y, start.z - travelDistance};
-    auto storage = std::make_unique<BulletSystem>();
-    BulletSystem& bullets = *storage;
-    DarkFairyEnemy fairy({start});
-
-    fairy.Update(approachTime - 0.01F, {}, bullets);
-    assert(fairy.active && fairy.position.x == start.x && fairy.position.y == start.y);
-    assert(fairy.position.z > turn.z && fairy.position.z < start.z);
-    assert(bullets.Pool().ActiveCount() == 0);
-    fairy.Update(0.02F, {}, bullets);
-    assert(fairy.active && std::abs(fairy.position.z - turn.z) < 0.0001F);
-    assert(bullets.Pool().ActiveCount() == 18);
-
-    std::vector<Vector3> directions;
-    Vector3 velocitySum{};
-    std::array<bool, 6> axisSigns{};
-    int planarDirections = 0;
-    bullets.Pool().ForEachActive([&](const Bullet& bullet) {
-        assert(bullet.owner == BulletOwner::Enemy && bullet.visual == koumakyou::stage1::kRedBullet);
-        assert(bullet.position.x == turn.x && bullet.position.y == turn.y);
-        assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
-        assert(std::abs(BulletSystem::Length(bullet.Velocity()) - 3.5F) < 0.0001F);
-        const Vector3 direction = koumakyou::pattern::Normalize(bullet.Velocity());
-        // 图中疏散环的三维扩展须无重叠方向，不能退化为平面环或密集同向弹束。
-        for (Vector3 previous : directions) {
-            const float dot = direction.x * previous.x + direction.y * previous.y +
-                              direction.z * previous.z;
-            assert(dot <= std::cos(std::numbers::pi_v<float> / 4.0F) + 0.0001F);
-        }
-        directions.push_back(direction);
-        if (std::abs(direction.z) < 0.0001F) ++planarDirections;
-        velocitySum = koumakyou::pattern::Add(velocitySum, bullet.Velocity());
-        if (direction.x > 0.1F) axisSigns[0] = true;
-        if (direction.x < -0.1F) axisSigns[1] = true;
-        if (direction.y > 0.1F) axisSigns[2] = true;
-        if (direction.y < -0.1F) axisSigns[3] = true;
-        if (direction.z > 0.1F) axisSigns[4] = true;
-        if (direction.z < -0.1F) axisSigns[5] = true;
-    });
-    for (bool populated : axisSigns) assert(populated);
-    assert(planarDirections == 8);
-    assert(BulletSystem::Length(velocitySum) < 0.0001F);
-
-    fairy.Update(0.5F, {}, bullets);
-    assert(fairy.position.z == turn.z && fairy.active);
-    fairy.Update(0.5F, {}, bullets);
-    assert(fairy.position.z > turn.z && fairy.position.z < start.z);
-    assert(fairy.position.x == start.x && fairy.position.y == start.y);
-    assert(bullets.Pool().ActiveCount() == 18);
-    fairy.Update(approachTime, {}, bullets);
-    assert(!fairy.active && fairy.position.x == start.x && fairy.position.y == start.y);
-    assert(fairy.position.z == start.z && bullets.Pool().ActiveCount() == 18);
-
-    // 单帧跨过前进、停留和返回时仍只发射一次，发弹点不能错误地落在已返回的位置。
-    bullets.Reset();
-    DarkFairyEnemy coarse({start});
-    coarse.Update(approachTime * 2.0F + 2.0F, {9.0F, 9.0F, 9.0F}, bullets);
-    assert(!coarse.active && coarse.position.z == start.z);
-    assert(bullets.Pool().ActiveCount() == 18);
-    std::size_t directionIndex = 0;
-    bullets.Pool().ForEachActive([&](const Bullet& bullet) {
-        assert(std::abs(bullet.position.z - turn.z) < 0.0001F);
-        const Vector3 direction = koumakyou::pattern::Normalize(bullet.Velocity());
-        const Vector3 expected = directions[directionIndex++];
-        assert(std::abs(direction.x - expected.x) < 0.0001F);
-        assert(std::abs(direction.y - expected.y) < 0.0001F);
-        assert(std::abs(direction.z - expected.z) < 0.0001F);
-    });
-
-    // 等待时间属于实例配置，零等待仍在转折点发射一次，然后立即开始返回。
-    bullets.Reset();
-    DarkFairyEnemy immediate({start, 0.0F});
-    immediate.Update(approachTime + 0.5F, {}, bullets);
-    assert(immediate.active && immediate.position.z > turn.z);
-    assert(bullets.Pool().ActiveCount() == 18);
-    immediate.Update(approachTime, {}, bullets);
-    assert(!immediate.active && bullets.Pool().ActiveCount() == 18);
-}
 /// @brief 验证预警不伤人、光束中段与端点胶囊碰撞、持续擦弹及清除，不依赖图形窗口。
 void TestBeamContacts() {
     using namespace koumakyou;
@@ -182,6 +120,8 @@ void TestBeamContacts() {
     player.SetInvulnerability(2);
     assert(player.ContactEnemyBullet(*beam) == PlayerContact::None && beam->active);
     beam->position.y += 0.6F;
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::None); // 更新前仍处于预警阶段。
+    pool->Update(1.0F/120);
     assert(player.ContactEnemyBullet(*beam) == PlayerContact::Graze);
     assert(player.ContactEnemyBullet(*beam) == PlayerContact::None);
     assert(std::abs(beam->DistanceSquaredTo({target.x + 4.3F, target.y + 0.6F, target.z}) - 0.09F) < 0.0001F);
@@ -208,15 +148,80 @@ void TestBeamContacts() {
     }
 }
 
+/// @brief 原生淡出末帧保持可访问，下一逻辑步回收；独立验证长寿命累计、强制淡出、外部改龄和暂停。
+void TestBeamLifetimeBoundary() {
+    using namespace koumakyou;
+    auto pool=std::make_unique<BulletSystem>();
+    for(int factor:{1,2})for(int fadeStart:{270,750}) {
+        pool->Reset();auto* beam=pool->SpawnBeam({}, {1,0,0},4,0.1F,1,14,WHITE);assert(beam);
+        const float step=1.0F/(60*factor);
+        for(int tick=0;tick<fadeStart*factor;++tick)pool->Update(step);
+        assert(beam->active&&std::abs(beam->age-fadeStart/60.0F)<1e-6F);
+        beam->maxAge=beam->age+20.0F/60;beam->beamFadeSeconds=20.0F/60;
+        for(int tick=0;tick<20*factor;++tick) {pool->Update(step);assert(beam->active);}
+        const auto age=beam->age;pool->Update(1,{}, {},true);assert(beam->active&&beam->age==age);
+        pool->Update(step);assert(!beam->active);
+    }
+    pool->Reset();auto* beam=pool->SpawnBeam({}, {1,0,0},4,0.1F,0,2,WHITE);assert(beam);
+    beam->age=1;pool->Update(0.25F);assert(beam->age==1.25F&&beam->active);
+    beam->age=0;pool->Update(0.5F);assert(beam->age==0.5F&&beam->active);
+    beam->maxAge=0.5F;pool->Update(1.0e-5F);assert(!beam->active); // 真正跨界的微小更新不得被时钟修正吞掉。
+}
+
+/// @brief 用独立整数帧期望核对光束周期、展开偏移、120Hz去重、长时钟、外部改龄与槽复用。
+void TestBeamRepeatGraze() {
+    using namespace koumakyou;
+    auto pool=std::make_unique<BulletSystem>();Player player;player.SetInvulnerability(1000);
+    const auto origin=player.Position();const Vector3 near{origin.x-2,origin.y+.6F,origin.z};
+    for(int factor:{1,2})for(int grow:{0,7,120,750}) {
+        pool->Reset();auto* beam=pool->SpawnBeam(near,{1,0,0},4,.1F,grow/60.0F,160,WHITE);assert(beam);
+        // 与展开独立的warning、六帧淡出尾部及淡出不能改变周期起点。
+        beam->warningSeconds=std::max(0,grow-3)/60.0F;
+        beam->dangerEndSeconds=(grow+9002)/60.0F;beam->maxAge=(grow+9008)/60.0F;
+        int count=0;
+        for(int tick=0;tick<(grow+9008)*factor;++tick) {
+            pool->Update(1.0F/(60*factor));
+            const int local=tick/factor-grow;
+            const bool expected=local>=0 && local%12==0 && tick%factor==0 && tick+1<(grow+9002)*factor;
+            const auto result=player.ContactEnemyBullet(*beam);
+            assert((result==PlayerContact::Graze)==expected);
+            count+=result==PlayerContact::Graze;
+            assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+        }
+        assert(count==751);
+    }
+    pool->Reset();auto* beam=pool->SpawnBeam(near,{1,0,0},4,.1F,0,2,WHITE);assert(beam);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
+    for(int n=0;n<24;++n)pool->Update(1.0F/120);
+    pool->Update(1.0F/120);assert(player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
+    pool->Update(1,{}, {},true);assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+    // 离开范围不消费资格；同一内容帧的后半步进入仍只结算一次。
+    beam->age=.4F;beam->position.y=origin.y+4;pool->Update(1.0F/120);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+    beam->position.y=near.y;pool->Update(1.0F/120);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+    // 命中优先，不消费擦弹资格；另一个光束拥有独立的周期记录。
+    auto* other=pool->SpawnBeam({origin.x-2,origin.y,origin.z},{1,0,0},4,.1F,0,2,WHITE);assert(other);
+    assert(player.ContactEnemyBullet(*other)==PlayerContact::None&&!other->grazed);
+    other->position.y=near.y;assert(player.ContactEnemyBullet(*other)==PlayerContact::Graze);
+    auto* ordinary=pool->Spawn(BulletOwner::Enemy,{origin.x,near.y,origin.z},{},.1F,WHITE,0);assert(ordinary);
+    assert(player.ContactEnemyBullet(*ordinary)==PlayerContact::Graze);
+    for(int n=0;n<30;++n)pool->Update(1.0F/60);
+    assert(player.ContactEnemyBullet(*ordinary)==PlayerContact::None);
+    pool->Reset();beam=pool->SpawnBeam(near,{1,0,0},4,.1F,0,2,WHITE);assert(beam);
+    assert(beam->lastBeamGrazeFrame==-1&&!beam->grazed&&player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
+}
+
 /// @brief 本体接触使用三维命中球和统一保护期；不依赖敌方是否免伤，也不触发擦弹或自行扣残机。
 void TestEnemyBodyContacts() {
     using namespace koumakyou;
     Player player;player.Reset();const auto origin=player.Position();
     assert(!player.ContactEnemyBody(origin,0.5F)); // 开局保护覆盖本体。
     player.SetInvulnerability(0);
-    for(const Vector3 offset:{Vector3{0.679F,0,0},{0,-0.679F,0},{0,0,0.679F},{0,0,-0.679F}})
+    for(const Vector3 offset:{Vector3{0.554F,0,0},{0,-0.554F,0},{0,0,0.554F},{0,0,-0.554F}})
         assert(player.ContactEnemyBody({origin.x+offset.x,origin.y+offset.y,origin.z+offset.z},0.5F));
-    assert(!player.ContactEnemyBody({origin.x+0.681F,origin.y,origin.z},0.5F));
+    assert(!player.ContactEnemyBody({origin.x+0.557F,origin.y,origin.z},0.5F));
     assert(!player.ContactEnemyBody({origin.x+0.45F,origin.y+0.45F,origin.z+0.45F},0.5F));
     for(float invalid:{0.0F,-1.0F,std::numeric_limits<float>::infinity(),std::numeric_limits<float>::quiet_NaN()})
         assert(!player.ContactEnemyBody(origin,invalid));
@@ -232,21 +237,16 @@ void TestEnemyBodyContacts() {
     player.Update(2.81F,{},*bullets,PlayerShotVisuals{},false);
     assert(player.ContactEnemyBody(player.Position(),0.5F));
 
-    struct ImmuneEnemy final:Enemy {
-        ImmuneEnemy():Enemy(kInvalidVisualId,{},{}){}
-        bool CanTakeDamage() const override {return false;}
-        void Move(float) override {}
-        void UpdateSkills(float,Vector3,BulletSystem&) override {}
-    } enemy;
+    behavior::Actor enemy;enemy.Activate(testing::SpawnAt());enemy.damageable=false;
     assert(!enemy.CanTakeDamage() && enemy.CanContactPlayer());
     enemy.presentation.PrepareExit(0);assert(enemy.CanContactPlayer()); // 视觉淡出不能自行清除战斗本体。
     enemy.health=0;assert(!enemy.CanContactPlayer());
     enemy.health=10;enemy.active=false;assert(!enemy.CanContactPlayer());
 
-    stage1::RumiaBoss boss;assert(!boss.CanContactPlayer());
-    boss.StartMidboss();assert(!boss.CanTakeDamage() && boss.CanContactPlayer());
-    assert(boss.AdvancePhase() && boss.active && !boss.CanContactPlayer()); // 超时退场仍有演员与占位生命。
-    boss.StartFinalBoss();assert(boss.CanContactPlayer());
+    bosses::RumiaBoss boss;assert(!boss.CanContactPlayer());
+    boss.StartBoss(koumakyou::stage1::RumiaMidbossConfig());assert(!boss.CanTakeDamage() && boss.CanContactPlayer());
+    assert(boss.AdvanceSkill() && boss.active && !boss.CanContactPlayer()); // 超时退场仍有演员与占位生命。
+    boss.StartBoss(koumakyou::stage1::RumiaFinalConfig());assert(boss.CanContactPlayer());
     boss.health=0;assert(!boss.CanContactPlayer());
 }
 
@@ -254,8 +254,11 @@ void TestEnemyBodyContacts() {
 
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
+    TestChallengeLifeCredits();
     TestBossHealthGroups();
     TestBeamContacts();
+    TestBeamRepeatGraze();
+    TestBeamLifetimeBoundary();
     TestEnemyBodyContacts();
     using koumakyou::BulletOwner;
     using koumakyou::BulletSystem;
@@ -336,74 +339,21 @@ void RunGameplayTests() {
             bullets.Update(0.0F);
             assert(!edgeBullet->active);
 
-            const float enemyLimit = axis == 2 ? 13.5F : 12.0F;
-            koumakyou::stage1::FairyEnemy edgeEnemy(
-                {axisPosition(enemyLimit)});
-            edgeEnemy.Update(0.0F, {}, bullets);
-            assert(edgeEnemy.active);
-            edgeEnemy.origin = axisPosition(enemyLimit + 0.01F);
-            edgeEnemy.Update(0.0F, {}, bullets);
-            assert(!edgeEnemy.active);
             bullets.Reset();
         }
     }
-    koumakyou::stage1::FairyEnemy fairy({{0.0F, 0.0F, 5.0F}});
-    const Vector3 fairyMuzzle = fairy.MuzzlePosition({0.0F, 0.0F, 0.0F});
-    assert(std::abs(fairyMuzzle.z - (5.0F - fairy.hitRadius * 0.55F)) <
-           0.0001F);
-    fairy.Update(0.9F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 0);
-    // 覆盖旧首次攻击和后续攻击时刻，避免仅延后首发而未移除攻击。
-    for (int frame = 0; frame < 8; ++frame) fairy.Update(0.5F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 0);
-    assert(fairy.health > 0.0F && fairy.health == fairy.maxHealth);
-    // 使用真实玩家射击验证低火力直射弹与满火力追踪弹均能一发耗尽妖精血量。
-    for (int power : {koumakyou::Player::kMinPower, koumakyou::Player::kMaxPower}) {
-        koumakyou::Player player;
-        player.AdjustPower(power - player.Power());
-        player.Update(0.0F, {.fire = true}, bullets,
-                      koumakyou::stage1::kPlayerGoldCard,
-                      koumakyou::stage1::kPlayerCyanCard, true);
-        assert(bullets.Pool().ActiveCount() > 0);
-        bullets.Pool().ForEachActive([&fairy](const koumakyou::Bullet& bullet) {
-            assert(bullet.damage >= fairy.health);
-        });
-        bullets.Reset();
-    }
-    bullets.Reset();
-
-    TestDarkFairyBehavior();
-
-    koumakyou::stage1::FairyEnemy helixFairy(
-        {{0.0F, 0.0F, 5.0F}, koumakyou::stage1::FairyParams::Movement::Helix});
-    helixFairy.Update(0.9F, {}, bullets);
-    assert(helixFairy.position.x != fairy.position.x);
-    assert(bullets.Pool().ActiveCount() == 0);
-    bullets.Reset();
-    koumakyou::stage1::FairyEnemy crossingFairy(
-        {{-9.0F, 0.0F, 5.0F}, koumakyou::stage1::FairyParams::Movement::CrossFromLeft});
-    crossingFairy.Update(0.9F, {}, bullets);
-    assert(crossingFairy.position.x > -9.0F);
-    assert(crossingFairy.visual == fairy.visual);
-    assert(bullets.Pool().ActiveCount() == 0);
-    bullets.Reset();
-
-    koumakyou::stage1::OrbEnemy orb({{0.0F, 0.0F, 5.0F}});
-    orb.Update(0.9F, {}, bullets);
-    assert(bullets.Pool().ActiveCount() == 6);
-    bullets.Reset();
-
-    // 使用新典原始帧节点核对道中首发（16 向×3 速度层）与固定 24 秒上限。
-    // 入场从 +Z 场外缓冲带开始，源纵向贯穿战场深度，高度不参与二维出怪轨迹。
-    const Vector3 entry=koumakyou::stage1::ReferencePosition({192,-32,0});
+    // 使用原始帧节点核对道中首发（48 个等面积方向×3 速度层）与固定 24 秒上限。
+    // 入场从 +Z 场外缓冲带开始；普通演员保留原 X/Z 路线与固定编队高度。
+    const Vector3 entry=Vector3{0,0,11.4285717F};
     assert(entry.x==0 && entry.y==0 && entry.z>11 && entry.z<11.5F);
-    const Vector3 exit=koumakyou::stage1::ReferencePosition({192,448,0});
+    const Vector3 exit=Vector3{0,0,-10};
     assert(exit.y==0 && std::abs(exit.z+10)<0.0001F);
-    koumakyou::stage1::ReferenceEnemy entryEnemy({entry});
+    koumakyou::behavior::Actor entryEnemy;
+    auto entrySpec=koumakyou::testing::SpawnAt(entry);entrySpec.pattern=koumakyou::stage1::kTurningFairy;entryEnemy.Activate(entrySpec);
     entryEnemy.Update(2.0F/60,{},bullets);
-    assert(entryEnemy.active && entryEnemy.position.z<entry.z && entryEnemy.position.y==0);
-    // 带高度的世界出生点经过演员的逆映射后仍保留该高度，避免构造路径混用旧坐标系。
-    koumakyou::stage1::ReferenceEnemy elevatedEnemy({{entry.x,2,entry.z}});
+    assert(entryEnemy.active && entryEnemy.position.z<entry.z && std::abs(entryEnemy.position.y)<0.0001F);
+    // 出生点直接保存在世界坐标中，高度不经过二维投影或逆映射。
+    koumakyou::behavior::Actor elevatedEnemy;entrySpec.position={entry.x,2,entry.z};elevatedEnemy.Activate(entrySpec);
     assert(std::abs(elevatedEnemy.position.y-2)<0.0001F);
     // Normal 妖精镜像只反转 X 位移；直行和转弯后左右轨迹保持对称，Z 与脚本时钟一致。
     koumakyou::stage1::ReferenceScript left,mirrored,dark;
@@ -439,33 +389,38 @@ void RunGameplayTests() {
     for(int frame=0;frame<220;++frame)dark.Update(1.0F/60,{},bullets);
     assert(bullets.Pool().ActiveCount()==0); // Sub4 在 Normal 是无攻击的后段妖精。
 
-    koumakyou::stage1::RumiaBoss boss;
-    boss.StartMidboss();
+    koumakyou::bosses::RumiaBoss boss;
+    boss.StartBoss(koumakyou::stage1::RumiaMidbossConfig());
     for (int frame=0;frame<160;++frame) assert(!boss.Update(1.0F/60,{},bullets));
     assert(bullets.Pool().ActiveCount()==0);
     boss.Update(1.0F/60,{},bullets);
-    assert(bullets.Pool().ActiveCount()==48);
+    assert(bullets.Pool().ActiveCount()==144); // 48 个球面方向、3 速度层。
     assert(std::abs(boss.TimeLimit()-24)<0.001F && boss.SpellName()==nullptr);
     bullets.Reset();
     for (int frame=161;frame<1441;++frame) boss.Update(1.0F/60,{},bullets);
-    assert(boss.AdvancePhase()); // 超时后保留原作 60 帧退场。
+    assert(boss.AdvanceSkill()); // 超时后保留原作 60 帧退场。
     for (int frame=0;frame<61;++frame) boss.Update(1.0F/60,{},bullets);
-    assert(!boss.AdvancePhase() && !boss.active);
-    boss.StartFinalBoss();
+    assert(!boss.AdvanceSkill() && !boss.active);
+    boss.StartBoss(koumakyou::stage1::RumiaFinalConfig());
     bullets.Reset();
     for (int frame=0;frame<112;++frame) boss.Update(1.0F/60,{0,0,-6.5F},bullets);
     assert(bullets.Pool().ActiveCount()==0);
     boss.Update(1.0F/60,{0,0,-6.5F},bullets);
-    assert(bullets.Pool().ActiveCount()==10); // 首次红弹为十个速度层，而非环/锥。
+    assert(bullets.Pool().ActiveCount()==10); // 首次红弹保持十个速度层和真实玩家中心瞄准。
+    bullets.Pool().ForEachActive([](const koumakyou::Bullet& bullet) {
+        const Vector3 expected=koumakyou::BulletSystem::DirectionTo(bullet.position,{0,0,-6.5F});
+        const Vector3 actual=koumakyou::pattern::Normalize(bullet.Velocity());
+        assert(std::abs(expected.x-actual.x)<0.0001F&&std::abs(expected.y-actual.y)<0.0001F&&std::abs(expected.z-actual.z)<0.0001F);
+    });
     assert(std::abs(boss.TimeLimit()-35)<0.001F);
-    assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="夜符「Night Bird」");
+    assert(boss.AdvanceSkill() && std::string_view(boss.SpellName())=="夜符「Night Bird」");
     bullets.Reset();
     for (int frame=0;frame<122;++frame) boss.Update(1.0F/60,{0,3,-6.5F},bullets);
     assert(bullets.Pool().ActiveCount()==0);
     boss.Update(1.0F/60,{0,3,-6.5F},bullets);
     assert(bullets.Pool().ActiveCount()==1);
     assert(std::abs(boss.TimeLimit()-25)<0.001F);
-    assert(boss.AdvancePhase() && boss.SpellName()==nullptr);
+    assert(boss.AdvanceSkill() && boss.SpellName()==nullptr);
     bullets.Reset();
     for (int frame=0;frame<261;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
     int beams=0;
@@ -479,24 +434,25 @@ void RunGameplayTests() {
         assert(std::abs(b.Direction().z-expected.z)<0.0001F);
     });
     assert(beams==6 && std::abs(boss.TimeLimit()-30)<0.001F);
-    assert(boss.AdvancePhase() && std::string_view(boss.SpellName())=="暗符「Demarcation」");
+    assert(boss.AdvanceSkill() && std::string_view(boss.SpellName())=="暗符「Demarcation」");
     bullets.Reset();
     for (int frame=0;frame<121;++frame) boss.Update(1.0F/60,raisedPlayer,bullets);
-    assert(bullets.Pool().ActiveCount()==34); // rank=16 时原作 -3…6 的弹数修正增加 1 向。
+    assert(bullets.Pool().ActiveCount()==98); // rank=16 时每层基础 48 方向加 1，双球壳共 98 弹。
     bullets.Pool().ForEachActive([](const koumakyou::Bullet& b){
         assert(std::abs(b.turnDelaySeconds-40.0F/60)<0.0001F);
         assert(std::abs(std::abs(b.turnAngle)-std::numbers::pi_v<float>/2)<0.0001F);
-        assert(b.rotationAxis.x==0 && b.rotationAxis.y==1 && b.rotationAxis.z==0);
+        assert(std::abs(koumakyou::BulletSystem::Length(b.rotationAxis)-1)<0.0001F);
     });
-    // 实际延迟转向必须在 X/Z 内完成 90°，Y 坡度保持不变，避免只修正出生位置。
+    // 实际延迟转向绕各方向自己的切向轴完成 90°，保持球面切向运动。
     bullets.Update(1.1F,{},raisedPlayer);
-    assert(bullets.Pool().ActiveCount()==34);
+    assert(bullets.Pool().ActiveCount()==98);
     bullets.Pool().ForEachActive([](const koumakyou::Bullet& b){
         assert(b.turnApplied && !b.turnAimed);
         const Vector3 before=koumakyou::pattern::Normalize(b.baseVelocity);
         const Vector3 after=koumakyou::pattern::Normalize(b.Velocity());
-        assert(std::abs(before.y-after.y)<0.0001F);
-        assert(std::abs(before.x*after.x+before.z*after.z)<0.0001F);
-        assert((before.z*after.x-before.x*after.z)*b.turnAngle>0);
+        assert(std::abs(before.x*after.x+before.y*after.y+before.z*after.z)<0.0001F);
+        const Vector3 cross{before.y*after.z-before.z*after.y,before.z*after.x-before.x*after.z,
+                            before.x*after.y-before.y*after.x};
+        assert((cross.x*b.rotationAxis.x+cross.y*b.rotationAxis.y+cross.z*b.rotationAxis.z)*b.turnAngle>0);
     });
 }

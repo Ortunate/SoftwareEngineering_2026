@@ -1,6 +1,7 @@
 // 本文件负责运行按领域拆分的核心测试。
 #include "app/constants.hpp"
 #include "app/stage_clear.hpp"
+#include "stage/catalog.hpp"
 #include "render/spell_practice_layout.hpp"
 #include "config/settings.hpp"
 #include "ui/motion.hpp"
@@ -14,6 +15,7 @@
 #include "resources/dialogue_crop.hpp"
 #include <cassert>
 #include <cmath>
+#include <string_view>
 
 namespace {
 /// @brief 留白、近透明杂点与原裁剪外的实体均不能影响对话锚点；完全透明图片保留清单取景。
@@ -49,7 +51,11 @@ void TestSpellPracticeCatalog() {
         assert(spell::Playable(&card,0)==spell::Playable(&card,2));
         assert(spell::Playable(&card,0)==spell::Playable(&card,3));
     }
-    assert(counts==totals && playable==2);
+    assert(counts==totals && playable==131);
+    assert(!SpellPracticeStage(-1)&&!SpellPracticeStage(7)&&SpellPracticeStage(6)==StageId::Extra);
+    for(int stage=0;stage<6;++stage)assert(SpellPracticeStage(stage)==kPracticeStages[stage]);
+    auto invalidExtra=*spell::Find(6,0,4);
+    for(int difficulty=0;difficulty<4;++difficulty) {invalidExtra.difficulty=difficulty;assert(!spell::Playable(&invalidExtra,0));}
     assert(!spell::Find(0,0,0) && !spell::Find(0,0,1));
     assert(spell::Find(0,1,1)->number==3 && spell::Find(0,2,1)->number==7);
     assert(spell::Stages()[3].groups==16 && spell::Find(6,12,4)->number==131);
@@ -66,11 +72,29 @@ void TestSpellPracticeCatalog() {
     assert(!spell::Available(night,0,records) && spell::Available(night,1,records));
     assert(!records.Seen(1,4) && !records.Seen(1,0) && !records.Seen(1,132));
     records.Begin(0,4,false);
-    assert(records.Seen(0,4) && !spell::Available(spell::Find(0,1,2),0,records));
+    assert(records.Seen(0,4) && spell::Available(spell::Find(0,1,2),0,records));
     assert(!spell::Available(nullptr,0,records) && !spell::Available(night,-1,records));
     assert(records.Get(0,3).attempts==2 && records.Get(0,3).captured==1 && records.Get(0,3).bestScore==1000);
     assert(records.Get(1,3).attempts==0 && records.Get(1,7).mainCaptured==1 && records.Get(1,7).bestScore==0);
     assert(records.Get(-1,0).bestScore==0);
+    // 追加三符使用独立遭遇容量；其记录既不能越界写入，也不能凭空生成练习入口。
+    for(int character=0;character<4;++character)for(int number=132;number<=134;++number) {
+        records.Begin(character,number,true);records.Finish(character,number,true,true,1234);
+        assert(!records.Seen(character,number)&&records.Get(character,number).attempts==0&&records.Get(character,number).bestScore==0);
+        records.Begin(character,number,false);records.Finish(character,number,false,true,1234);
+        assert(records.Seen(character,number)&&records.Get(character,number).mainCaptured==1);
+        assert(records.Get(character,number).attempts==0&&records.Get(character,number).bestScore==0);
+    }
+    records.Begin(0,135,false);assert(!records.Seen(0,135)&&!spell::Find(6,13,4));
+    for(int character=0;character<4;++character) {
+        spell::Records extraRecords;
+        for(int card=119;card<=131;++card) {
+            const auto* entry=spell::Find(6,card-119,4);assert(entry&&entry->phase==1);
+            extraRecords.Begin(character,card,true);assert(!spell::Available(entry,character,extraRecords));
+            extraRecords.Begin(character,card,false);
+            for(int selected=0;selected<4;++selected)assert(spell::Available(entry,selected,extraRecords)==(selected==character));
+        }
+    }
     // 四种组合均已接通，但每一种仍必须独立遇见，不能借其他御札的记录解锁。
     for(int encountered=0;encountered<spell::kCharacterCount;++encountered) {
         spell::Records isolated;
@@ -90,6 +114,16 @@ void TestStageClearSummary() {
     assert(clear.Total()==253750);
     assert((koumakyou::StageClearSummary{6,128,1000,0}.Total()==0));
     assert((koumakyou::StageClearSummary{6,128,1000,1}.Total()==28800));
+    using D=koumakyou::native_combat::Difficulty;
+    assert((koumakyou::StageClearSummary{1,0,1,1,D::Easy}.Total()==500));
+    assert((koumakyou::StageClearSummary{1,0,1,1,D::Hard}.Total()==1210));
+    assert((koumakyou::StageClearSummary{1,0,1,1,D::Lunatic}.Total()==1510));
+    assert((koumakyou::StageClearSummary{6,0,0,0,D::Normal,2,3,2}.Total()==9000000));
+    assert((koumakyou::StageClearSummary{6,0,0,0,D::Hard,2,3,3}.Total()==5400000));
+    assert((koumakyou::StageClearSummary{1,0,1,1,D::Lunatic,0,0,4}.Total()==300));
+    assert((koumakyou::StageClearSummary{7,128,123,17,D::Normal,2,3,2}.Total()==18715020));
+    assert((koumakyou::StageClearSummary{7,128,123,17,D::Normal,2,3,3}.Total()==9357510));
+    assert((koumakyou::StageClearSummary{7,128,123,17,D::Normal,2,3,4}.Total()==3743000));
 }
 /// @brief 检查从极小窗口到超宽/竖屏的所有交互矩形及 3D 视口都在窗口内，且不会退化为零缩放。
 void TestResponsiveLayouts() {
@@ -371,7 +405,127 @@ void RunActorEffectTests();
 /// @brief 运行真实 DDS/ANM、固定帧序及全目录的兼容性验证。
 void RunAnimationTests();
 
-int main() {
+/// @brief 对比重构前解释器与带参行为的完整轨迹和技能。
+void RunBehaviorTests();
+/// @brief 一、二面的102/118源窗口和双频率时钟验收。
+void RunStage1EffectTests();
+void RunStage2EffectTests();
+/// @brief 独立验证一面的空间面积采样、三维弹道和等路程移动。
+void RunSpatialBehaviorTests();
+/// @brief 验证二面独立出生、轨迹、Boss 生命/时限、对话及新道具能力。
+void RunStage2Tests();
+void RunStage3Tests();
+/// @brief 三面效果源请求与双频率专项。
+void RunStage3EffectTests();
+void RunStage4Tests();
+void RunStage4EncounterTests();
+void RunStage5Tests();
+void RunStage5DifficultyTests();
+void RunStage5MidbossTests();
+void RunStage5FinalNonspellTests();
+void RunStage5FinalSpellTests();
+void RunStage5PracticeTests();
+void RunStage5EffectTests();
+void RunStage6Tests();
+void RunStage6DifficultyTests();
+void RunStage6MidbossTests();
+void RunStage6NonspellTests();
+void RunStage6FirstSpellTests();
+void RunStage6SpellTests();
+void RunStage6PracticeTests();
+void RunStageExtraTests();
+void RunStageExtraDialogueTests();
+void RunStageExtraTimelineTests();
+void RunStageExtraPatchouliTests();
+void RunStageExtraFlandreTests();
+void RunStageExtraKagomeTests();
+void RunStageExtraMazeTests();
+void RunStageExtraStarbowTests();
+void RunStageExtraCatadioptricTests();
+void RunStageExtraClockTests();
+void RunStageExtraSurvivalTests();
+void RunStageExtraRipplesTests();
+void RunStageExtraConfigurationTests();
+void RunStageExtraEncoreEntranceTests();
+void RunStageExtraFragileWingTests();
+void RunStageExtraBloodstainTests();
+void RunStageExtraHeartTests();
+void RunStageExtraHeartProtocolTests();
+void RunAuxiliaryAnimationTests();
+void RunNativeEffectAnimationTests();
+void RunExternalEffectTests();
+/// @brief 四面102/118及完整爆散退场的独立源请求和双频率时钟验收。
+void RunStage4EffectTests();
+
+/// @brief 默认运行全部核心回归；--stageN-only运行对应关卡，--extra-config/--extra-ordinary/--extra-patchouli/--extra-flandre/--extra-kagome/--extra-maze/--extra-starbow/--extra-catadioptric/--extra-clock/--extra-survival/--extra-ripples/--extra-encore-entrance/--extra-fragile-wing/--extra-bloodstain/--extra-heart隔离Extra已接入段，--stage6-first-spell/--stage6-nonspells/--stage6-midboss分别隔离六面对应差分，其余专用入口用于定位首次分歧。
+int main(int argc,char** argv) {
+    if(argc==2&&std::string_view(argv[1])=="--stage12-effects") {RunStage1EffectTests();RunStage2EffectTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage5-effects") {RunStage5EffectTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage1-behaviors") {RunBehaviorTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage2-only") {RunStage2Tests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage4-effects") {RunStage4EffectTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--gameplay-only") {RunGameplayTests();RunDropTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-timeline") {RunStageExtraTimelineTests();RunDropTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-dialogue") {RunStageExtraDialogueTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-heart-protocol") {RunStageExtraHeartProtocolTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-heart") {RunStageExtraHeartTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-bloodstain") {RunStageExtraBloodstainTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-fragile-wing") {RunStageExtraFragileWingTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-encore-entrance") {RunStageExtraEncoreEntranceTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-config") {RunStageExtraConfigurationTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-ripples") {RunStageExtraRipplesTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-survival") {RunStageExtraSurvivalTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-clock") {RunStageExtraClockTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-catadioptric") {RunStageExtraCatadioptricTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-starbow") {RunStageExtraStarbowTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-maze") {RunStageExtraMazeTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-kagome") {RunStageExtraKagomeTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-flandre") {RunStageExtraFlandreTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--auxiliary-animation") {RunAuxiliaryAnimationTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--native-effect-animation") {RunNativeEffectAnimationTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--external-effects") {RunNativeEffectAnimationTests();RunExternalEffectTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-patchouli") {RunStageExtraPatchouliTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--extra-ordinary") {RunStageExtraTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--difficulty-catalog") {RunNativeCombatTests();TestSpellPracticeCatalog();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage6-practice") {RunStage6PracticeTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage6-spells") {RunStage6SpellTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage6-first-spell") {RunStage6FirstSpellTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage6-nonspells") {RunStage6NonspellTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage6-midboss") {RunStage6MidbossTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage6-difficulties") {RunStage6DifficultyTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage6-only") {RunStage6Tests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage5-practice") {RunStage5PracticeTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage5-final-spells") {RunStage5FinalSpellTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage5-final-nonspells") {RunStage5FinalNonspellTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage5-midboss") {RunStage5MidbossTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage5-difficulties") {RunStage5DifficultyTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage3-effects") {RunStage3EffectTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage3-only") {RunStage3Tests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage4-encounters") {RunStage4EncounterTests();return 0;}
+    if(argc==2&&std::string_view(argv[1])=="--stage4-only") {RunStage4Tests();return 0;}
+    RunBehaviorTests();
+    RunSpatialBehaviorTests();
+    RunStage2Tests();
+    RunStage3Tests();
+    RunStage4Tests();
+    RunStage5Tests();
+    RunStage6Tests();
+    RunStageExtraTests();
+    RunStageExtraPatchouliTests();
+    RunStageExtraFlandreTests();
+    RunStageExtraEncoreEntranceTests();
+    RunStageExtraFragileWingTests();
+    RunStageExtraBloodstainTests();
+    RunStageExtraHeartTests();
+    RunStageExtraDialogueTests();
+    RunStageExtraTimelineTests();
+    RunStageExtraKagomeTests();
+    RunStageExtraMazeTests();
+    RunStageExtraStarbowTests();
+    RunStageExtraCatadioptricTests();
+    RunStageExtraClockTests();
+    RunStageExtraSurvivalTests();
+    RunStageExtraRipplesTests();
     assert(koumakyou::ui::BossSeconds(35,0)==35 && koumakyou::ui::BossSeconds(35,0.01F)==34);
     assert(koumakyou::ui::BossSeconds(25,5)==20 && koumakyou::ui::BossSeconds(25,25)==0);
     assert(koumakyou::ui::BossSeconds(25,26)==0 && koumakyou::ui::BossSeconds(-1,0)==-1);
@@ -395,5 +549,6 @@ int main() {
     RunStageTests();
     RunActorEffectTests();
     RunAnimationTests();
+    RunExternalEffectTests();
     return 0;
 }

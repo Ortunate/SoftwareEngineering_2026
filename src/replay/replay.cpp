@@ -132,6 +132,7 @@ void BeginStage(Data& data,Segment s) { if(!data.segments.empty() && data.segmen
 void EndStage(Data& data,const Result& result) { if(data.segments.empty() || data.segments.back().end!=0)throw std::invalid_argument("没有打开的片段");data.segments.back().end=static_cast<unsigned>(data.frames.size());data.segments.back().result=result; }
 void FinishSession(Data& data,const Result& result) { if(!data.segments.empty() && data.segments.back().end==0)EndStage(data,result);data.result=result; }
 bool CanPlay(const Data& d,std::string& error) {
+    try {Validate(d);}catch(const std::exception& e){error=e.what();return false;}
     if(d.simulation!=SimulationId() || d.content!=ContentId()){error="模拟或内容版本不兼容";return false;}
     if(d.segments.size()!=1 || d.segments[0].stage!="stage1" || d.segments[0].difficulty!=Difficulty::Normal || (d.route!="stage1-prototype" && d.route!="stage-practice" && d.route!="spell-practice")){error="录像内容尚未实现";return false;}
     const auto& h=d.header;const auto& segment=d.segments.front();

@@ -1,9 +1,10 @@
-#include "render/combat_renderer.hpp"
 // 本文件统一绘制角色、弹幕、道具及 Bomb 视觉精灵/光束，处理透明排序、光晕和调试图层。
 
 #include "render/sprite_renderer.hpp"
+#include "render/combat_renderer.hpp"
 #include "render/animated_sprite.hpp"
 #include "render/bomb_geometry.hpp"
+#include "gameplay/data/native_sizes.hpp"
 
 #include "rlgl.h"
 
@@ -14,8 +15,18 @@
 namespace koumakyou {
 namespace {
 
-// 恋之御札激光额外加宽以改善三维视角下的辨识度；只影响显示，不改变原生判定宽度。
-constexpr float kMarisaLaserVisualWidthScale = 1.5F;
+/// @brief 计算原生激光带的世界全宽；自机脚本缩放只改变外观，不影响碰撞半径。
+float AnimatedBeamWidth(const Bullet& beam,const anm::Frame& frame) {
+    if(beam.playerShotKind==PlayerShotKind::Laser)
+        return frame.LogicalSize().x*native_sizes::kWorldPerPixel*std::abs(frame.scale.x)*beam.visualScale*beam.BeamVisualScale();
+    return beam.radius*beam.BeamVisualScale()*2;
+}
+
+/// @brief 负宽度表示保守的无界投影；接触边界也视为重叠，不能漏掉柔边或舍入后的一个像素。
+bool MayOverlap(Rectangle a,Rectangle b) {
+    return a.width<0 || b.width<0 ||
+        (a.x<=b.x+b.width && b.x<=a.x+a.width && a.y<=b.y+b.height && b.y<=a.y+a.height);
+}
 
 /// @brief 单张精灵的贴图、世界高度与归一化锚点。
 struct SpriteSpec {
@@ -116,8 +127,18 @@ SpriteSpec Spec(const VisualResource& visual,float height,const anm::Frame* fram
             initial.Start(*visual.archive,visual.animation.script,visual.animation.spriteOffset,visual.animation.initialSprite);
             result.animation=initial.Sample();
         }
+        if(visual.worldUnitsPerPixel>0) {
+            // height/基准高度只携带入退场或副机缩放；换帧后的显示尺寸仍来自当前精灵。
+            const float scale=visual.worldHeight>0 ? height/visual.worldHeight : 1;
+            result.worldHeight=result.animation.LogicalSize().y*visual.worldUnitsPerPixel*scale;
+        }
     }
     return result;
+}
+
+/// @brief 原生弹体的基础显示独立于判定半径；visualScale 仅保留近目标出射模块的等比缩小。
+float BulletHeight(const VisualResource& visual,const Bullet& bullet) {
+    return visual.worldUnitsPerPixel>0 ? visual.worldHeight*bullet.visualScale : bullet.radius*visual.bulletDiameterScale;
 }
 
 const VisualResource& FindVisual(std::span<const VisualResource> visuals,
@@ -197,34 +218,60 @@ void DrawBeamShell(Vector3 start,Vector3 end,float radius,Color color,bool capSt
 }  // namespace
 
 void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
-                          std::span<const Enemy*> enemies, const Boss* boss,
+                          std::span<const behavior::Actor*> enemies, const Boss* boss,
                           std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
                           const SpriteShaders& shaders,
-                          const ActorEffectSystem& effects,std::span<const BombVolumeSprite> bombVolumes,CombatRenderer* models) const {
+                          const ActorEffectSystem& effects,std::span<const BombVolumeSprite> bombVolumes,const effects::ExternalEffectSystem* external,CombatRenderer* models) const {
     // 旧清单仍可持有 cutout/core shader；所有透明贴图改用连续 Alpha，不能让裁剪阈值切断柔边。
     (void)shaders;
     using Kind=TransparentDraw::Kind;
     const Vector3 forward=Normalized(Subtract(camera.target,camera.position));
     const Vector3 screenUp=ScreenUp(camera);
+    const Vector3 screenRight=Normalized(Cross(forward,screenUp));
+    transparentDraws_.clear();translucentActors_.clear();beams_.clear();spritePlanes_.clear();bombActorDepths_.clear();
+    beamSegmentCount_=0;
+    bullets.Pool().ForEachActive([&](const Bullet& bullet) {
+        if(bullet.IsBeam())beams_.push_back(&bullet);
+    });
     const auto depth=[&](Vector3 position) {
         const auto relative=Subtract(position,camera.position);
         return relative.x*forward.x+relative.y*forward.y+relative.z*forward.z;
     };
-    const auto spriteDepth=[&](const VisualResource& visual,float height,Vector3 position,
+    const auto projectBounds=[&](const std::array<Vector3,4>& points) {
+        float left=INFINITY,right=-INFINITY,bottom=INFINITY,top=-INFINITY;
+        for(const auto point:points) {
+            const auto relative=Subtract(point,camera.position);
+            const float z=depth(point);
+            // 跨过相机平面的四边形可能覆盖整个屏幕；不能用背后顶点的透视除法排除切分。
+            if(z<=1e-4F)return Rectangle{0,0,-1,-1};
+            const float divisor=camera.projection==CAMERA_PERSPECTIVE ? z : 1.0F;
+            const float x=(relative.x*screenRight.x+relative.y*screenRight.y+relative.z*screenRight.z)/divisor;
+            const float y=(relative.x*screenUp.x+relative.y*screenUp.y+relative.z*screenUp.z)/divisor;
+            left=std::min(left,x);right=std::max(right,x);bottom=std::min(bottom,y);top=std::max(top,y);
+        }
+        constexpr float margin=1e-5F;
+        return Rectangle{left-margin,bottom-margin,right-left+2*margin,top-bottom+2*margin};
+    };
+    const auto spritePlane=[&](const VisualResource& visual,float height,Vector3 position,
                                const anm::Frame* animation,Vector3 motion=Vector3{}) {
         const auto spec=Spec(visual,height,animation,motion);
-        if(!spec.archive)return depth(position);
-        const auto points=AnimatedBillboardVertices(camera,spec.animation,position,height,spec.pivotUv,motion);
+        // 旧 PNG/几何外观保留既有切分；原生公告板使用与绘制完全相同的 ANM 四角，涵盖旋转、镜像和偏移。
+        if(!spec.archive)return SpritePlane{depth(position)};
+        const auto points=AnimatedBillboardVertices(camera,spec.animation,position,spec.worldHeight,spec.pivotUv,motion);
         Vector3 center{};
-        for(const auto point:points) {center.x+=point.x/4;center.y+=point.y/4;center.z+=point.z/4;}
-        return depth(center);
+        float near=INFINITY,far=-INFINITY;
+        for(const auto point:points) {
+            center.x+=point.x/4;center.y+=point.y/4;center.z+=point.z/4;
+            if(!beams_.empty()) {const float z=depth(point);near=std::min(near,z);far=std::max(far,z);}
+        }
+        return SpritePlane{depth(center),beams_.empty() ? Rectangle{0,0,-1,-1} : projectBounds(points),near,far};
     };
-    transparentDraws_.clear();translucentActors_.clear();beams_.clear();spriteDepths_.clear();bombActorDepths_.clear();
     glowCounts_.assign(visuals.size(),0);
-    const auto queue=[&](TransparentDraw command) {
-        if(command.kind!=Kind::ModelGroup)spriteDepths_.push_back(command.depth);
-        if(command.kind==Kind::Actor)bombActorDepths_.push_back(command.depth);
+    const auto queue=[&](TransparentDraw command,SpritePlane plane) {
+        command.depth=plane.depth;
+        if(!beams_.empty()&&command.kind!=Kind::ModelGroup)spritePlanes_.push_back(plane);
+        if(command.kind==Kind::Actor)bombActorDepths_.push_back(plane.depth);
         transparentDraws_.push_back(command);
     };
     const auto addActor=[&](Vector3 position,VisualId id,float radius,ActorKind kind,
@@ -234,30 +281,41 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         const auto index=translucentActors_.size();
         translucentActors_.push_back({position,id,radius,kind,appearance,animation});
         const auto& visual=FindVisual(visuals,id);
-        queue({Kind::Actor,spriteDepth(visual,visual.worldHeight*appearance.scale,position,&animation),index});
+        queue({Kind::Actor,0,index},spritePlane(visual,visual.worldHeight*appearance.scale,position,&animation));
     };
-    for(const auto* enemy:enemies)
+    const auto addAuxiliary=[&](std::span<const behavior::AuxiliaryAnimation> animations,Vector3 position,VisualId visual,float radius,ActorKind kind,ActorAppearance appearance) {
+        // 辅助公告板与本体进入同一透明排序队列，使用自己的ANM几何；不能额外画一遍无深度排序的光圈。
+        for(const auto& animation:animations)if(animation.script>=0&&animation.cursor.player.Source()&&!animation.cursor.player.Finished())
+            addActor(position,animation.visual==kInvalidVisualId?visual:animation.visual,radius,kind,appearance,animation.cursor.player.Sample());
+    };
+    for(const auto* enemy:enemies) {
         addActor(enemy->position,enemy->visual,enemy->hitRadius,ActorKind::Enemy,
                  enemy->presentation.Sample(),enemy->animation.player.Sample());
-    if(boss && boss->active)
+        addAuxiliary(enemy->auxiliaryAnimations,enemy->position,enemy->visual,enemy->hitRadius,ActorKind::Enemy,enemy->presentation.Sample());
+    }
+    if(boss && boss->active && boss->BodyVisible()) {
         addActor(boss->position,boss->visual,boss->hitRadius,ActorKind::Boss,
                  boss->presentation.Sample(),boss->animation.player.Sample());
+        addAuxiliary(boss->AuxiliaryAnimations(),boss->position,boss->visual,boss->hitRadius,ActorKind::Boss,boss->presentation.Sample());
+    }
     effects.Pool().ForEachActive([&](const ActorExitEffect& effect) {
         addActor(effect.position,effect.visual,effect.hitRadius,effect.kind,effect.Sample(),effect.animation);
     });
+    if(external)external->ForEachActive([&](const effects::Particle& particle) {
+        addActor(particle.position,particle.visual,0,ActorKind::Enemy,{},particle.animation.Sample());
+    });
     for(std::size_t index=0;index<pickups.size();++index) {
         const auto& pickup=pickups[index];const auto& visual=FindVisual(visuals,pickup.visual);
-        queue({Kind::Pickup,spriteDepth(visual,visual.worldHeight*pickup.heightScale,pickup.position,pickup.animation),index});
+        queue({Kind::Pickup,0,index},spritePlane(visual,visual.worldHeight*pickup.heightScale,pickup.position,pickup.animation));
     }
 
-    if(models)for(int group=0;group<models->TransparentGroups();group++)queue({Kind::ModelGroup,models->GroupDepth(group),static_cast<std::size_t>(group)});
+    if(models)for(int group=0;group<models->TransparentGroups();group++)queue({Kind::ModelGroup,0,static_cast<std::size_t>(group)},SpritePlane{models->GroupDepth(group)});
     if(models)models->DrawOpaque();
     // 只让真实不透明体积写入深度。贴图即使 Alpha=0 也会写矩形深度，所以不能放在此通道。
     rlDrawRenderBatchActive();rlEnableDepthMask();rlEnableBackfaceCulling();
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         const auto& visual=FindVisual(visuals,bullet.visual);
-        if(bullet.beamLength>0) {
-            beams_.push_back(&bullet);
+        if(bullet.IsBeam()) {
             if((!models||!models->Handles(bullet,visual))&&!visual.archive && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
                 const auto end=bullet.BeamEnd();
                 const float width=bullet.radius*bullet.BeamVisualScale();
@@ -266,54 +324,89 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             return;
         }
         if(models&&models->Handles(bullet,visual)) {
-            if(ProjectileFrameBuilder::Resolve(bullet,visual).type<0)queue({Kind::Bullet,depth(bullet.position),0,&bullet});
+            if(ProjectileFrameBuilder::Resolve(bullet,visual).type<0)queue({Kind::Bullet,0,0,&bullet},SpritePlane{depth(bullet.position)});
             return;
         }
         if(visual.mode==VisualMode::Sphere && bullet.color.a==255) {
             DrawSphere(bullet.position,bullet.radius,bullet.color);return;
         }
         const float distance=DistanceSquared(bullet.position,camera.position);
-        if(bullet.visual>=visuals.size() || distance<0.7F*0.7F)return;
+        if(bullet.visual>=visuals.size() || (!visual.archive&&distance<0.7F*0.7F))return;
         if(!visual.archive && bullet.owner==BulletOwner::Enemy && distance<1.1F*1.1F)return;
-        const float d=spriteDepth(visual,bullet.radius*visual.bulletDiameterScale,bullet.position,
+        const auto plane=spritePlane(visual,BulletHeight(visual,bullet),bullet.position,
                                   &bullet.animation.player.Sample(),bullet.Direction());
         // 同深度按插入顺序稳定绘制，光晕先于自身弹体，避免光效盖住前方角色或道具。
         if(visual.glow && !visual.archive && distance<=8.0F*8.0F && glowCounts_[bullet.visual]++<2048)
-            queue({Kind::Glow,d,0,&bullet});
-        queue({Kind::Bullet,d,0,&bullet});
+            queue({Kind::Glow,0,0,&bullet},plane);
+        queue({Kind::Bullet,0,0,&bullet},plane);
     });
 
     if(!beams_.empty() || !bombVolumes.empty()) {
-        std::sort(spriteDepths_.begin(),spriteDepths_.end());
-        spriteDepths_.erase(std::unique(spriteDepths_.begin(),spriteDepths_.end()),spriteDepths_.end());
+        std::sort(spritePlanes_.begin(),spritePlanes_.end(),[](const auto& a,const auto& b){return a.depth<b.depth;});
         std::sort(bombActorDepths_.begin(),bombActorDepths_.end());
         bombActorDepths_.erase(std::unique(bombActorDepths_.begin(),bombActorDepths_.end()),bombActorDepths_.end());
     }
-    const auto queueBeam=[&](Vector3 origin,Vector3 end,Kind kind,std::size_t index,const Bullet* beam) {
+    const auto queueBeam=[&](Vector3 origin,Vector3 end,Kind kind,std::size_t index,const Bullet* beam,
+                             Rectangle bounds=Rectangle{0,0,-1,-1},const std::array<Vector3,4>* points=nullptr) {
         const float first=depth(origin),last=depth(end),difference=last-first;
         beamCuts_={0,1};
         // 立体巨束自身也需要轴向分段，侧视和沿光轴观看时均按真实前后顺序混合三个光壳。
         if(kind==Kind::BombVolume)for(int i=1;i<12;++i)beamCuts_.push_back(i/12.0F);
         // 一条光束可能同时在演员前后：在精灵平面处切开，UV 仍沿整束连续，不能整束按中点排序。
         if(std::abs(difference)>1e-5F) {
-            // 巨束按演员精确切分，小弹和小道具使用轴向区间排序；否则数千星点会把四个网格切成几万份。
-            // 普通战斗激光保留既有的逐精灵切分，Bomb 的攻击判定完全不受渲染分段数影响。
-            const auto& depths=kind==Kind::BombVolume ? bombActorDepths_ : spriteDepths_;
-            const auto begin=std::upper_bound(depths.begin(),depths.end(),std::min(first,last));
-            const auto end=std::lower_bound(depths.begin(),depths.end(),std::max(first,last));
-            for(auto it=begin;it!=end;++it) {
-                const float t=(*it-first)/difference;
+            const auto cut=[&](float d) {
+                const float t=(d-first)/difference;
                 if(t>1e-5F && t<1-1e-5F)beamCuts_.push_back(t);
+            };
+            if(kind==Kind::BombVolume) {
+                // 巨束仍只按演员精确切分，小弹/道具沿既有轴向区间排序；判定不受渲染分段数影响。
+                const auto begin=std::upper_bound(bombActorDepths_.begin(),bombActorDepths_.end(),std::min(first,last));
+                const auto finish=std::lower_bound(bombActorDepths_.begin(),bombActorDepths_.end(),std::max(first,last));
+                for(auto it=begin;it!=finish;++it)cut(*it);
+            } else {
+                const auto begin=std::upper_bound(spritePlanes_.begin(),spritePlanes_.end(),std::min(first,last),
+                                                  [](float d,const auto& plane){return d<plane.depth;});
+                const auto finish=std::lower_bound(spritePlanes_.begin(),spritePlanes_.end(),std::max(first,last),
+                                                   [](const auto& plane,float d){return plane.depth<d;});
+                const float sideDepth=points ? std::abs(depth((*points)[1])-depth((*points)[0]))*0.5F : 0;
+                for(auto it=begin;it!=finish;++it) {
+                    if(!MayOverlap(bounds,it->bounds))continue;
+                    if(points && bounds.width>=0 && it->bounds.width>=0) {
+                        // 整束投影在透视下可能包住很大空白；只检查精灵真实深度区间内的光带。
+                        // sideDepth 覆盖光带侧向的深度偏差，四角区间覆盖 ANM 倾斜，不能退化成中心点测试。
+                        const float a=(it->nearDepth-sideDepth-1e-4F-first)/difference;
+                        const float b=(it->farDepth+sideDepth+1e-4F-first)/difference;
+                        const float from=std::clamp(std::min(a,b),0.0F,1.0F),to=std::clamp(std::max(a,b),0.0F,1.0F);
+                        const auto at=[&](int corner,float t) {
+                            const auto start=(*points)[corner],finish=(*points)[corner==3 ? 0 : 1];
+                            return Vector3{start.x+(finish.x-start.x)*t,start.y+(finish.y-start.y)*t,start.z+(finish.z-start.z)*t};
+                        };
+                        const std::array<Vector3,4> slice{{at(3,to),at(2,to),at(2,from),at(3,from)}};
+                        if(!MayOverlap(projectBounds(slice),it->bounds))continue;
+                    }
+                    cut(it->depth);
+                }
             }
         }
         std::sort(beamCuts_.begin(),beamCuts_.end());
         beamCuts_.erase(std::unique(beamCuts_.begin(),beamCuts_.end()),beamCuts_.end());
+        if(kind==Kind::Beam)beamSegmentCount_+=beamCuts_.size()-1;
         for(std::size_t i=1;i<beamCuts_.size();++i) {
             const float from=beamCuts_[i-1],to=beamCuts_[i];
             transparentDraws_.push_back({kind,first+(from+to)*0.5F*difference,index,beam,from,to});
         }
     };
-    for(const Bullet* beam:beams_)queueBeam(beam->position,beam->BeamEnd(),Kind::Beam,0,beam);
+    for(const Bullet* beam:beams_) {
+        const auto& visual=FindVisual(visuals,beam->visual);
+        Rectangle bounds{0,0,-1,-1};
+        std::array<Vector3,4> points{};
+        if(visual.archive) {
+            const auto frame=Spec(visual,1,&beam->animation.player.Sample()).animation;
+            points=AnimatedBeamVertices(camera,beam->position,beam->BeamEnd(),AnimatedBeamWidth(*beam,frame));
+            bounds=projectBounds(points);
+        }
+        queueBeam(beam->position,beam->BeamEnd(),Kind::Beam,0,beam,bounds,visual.archive ? &points : nullptr);
+    }
     for(std::size_t i=0;i<bombVolumes.size();++i) {
         const auto* sprite=bombVolumes[i].sprite;
         if(!sprite)continue;
@@ -328,6 +421,8 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     BeginBlendMode(BLEND_ALPHA);
     modelCommands_.clear();
     for(const auto& command:transparentDraws_) {
+        // 原生激光保留当前混合模式，相邻加色片段可合批；其他绘制入口仍以 Alpha 为默认状态。
+        if(command.kind!=Kind::Beam)BeginBlendMode(BLEND_ALPHA);
         if(command.kind==Kind::ModelGroup){modelCommands_.push_back(command.index);continue;}
         if(!modelCommands_.empty()){models->DrawGroups(modelCommands_);modelCommands_.clear();}
         if(command.kind==Kind::Actor) {
@@ -357,7 +452,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
             if(models&&models->DrawBullet(bullet,visual))continue;
             if(visual.mode==VisualMode::Sphere)DrawSphere(bullet.position,bullet.radius,bullet.color);
-            else DrawSprite(camera,screenUp,Spec(visual,bullet.radius*visual.bulletDiameterScale,
+            else DrawSprite(camera,screenUp,Spec(visual,BulletHeight(visual,bullet),
                             &bullet.animation.player.Sample(),bullet.Direction()),bullet.position,{255,255,255,bullet.color.a});
         } else if(command.kind==Kind::Glow) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
@@ -384,7 +479,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                     // 镜头进入球体时保留实际几何和攻击，仅减弱近眼曝光，防止回旋光球把第一人称画面染成整屏白块。
                     const float distance=std::sqrt(DistanceSquared(camera.position,sample.volume.origin));
                     const float visualRadius=sample.height*0.5F*std::max(std::abs(sample.frame.scale.y),
-                        std::abs(sample.frame.scale.x)*sample.frame.source.width/std::max(1.0F,sample.frame.source.height));
+                        std::abs(sample.frame.scale.x)*sample.frame.LogicalSize().x/std::max(1.0F,sample.frame.LogicalSize().y));
                     const float radius=std::max({0.01F,sample.volume.radius,visualRadius});
                     const float near=std::clamp((distance/radius-0.35F)/1.3F,0.0F,1.0F);
                     const float minimum=sample.shape==PlayerBombSprite::Shape::Star ? 0.005F : 0.075F;
@@ -404,10 +499,9 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                 frame.source.y+=(1-command.to)*frame.source.height;
                 frame.source.height*=command.to-command.from;
                 // 自机激光三级原生脚本以 scale.x 控制横向宽度，不能只换颜色而丢失强度档位的形状。
-                const float nativeScale=beam.playerShotKind==PlayerShotKind::Laser
-                    ? std::abs(frame.scale.x)*kMarisaLaserVisualWidthScale : 1.0F;
-                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,width*2*nativeScale,{255,255,255,beam.color.a});
+                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,AnimatedBeamWidth(beam,frame),{255,255,255,beam.color.a});
             } else if(!beam.Dangerous() && beam.beamGrowSeconds<=0) {
+                BeginBlendMode(BLEND_ALPHA);
                 DrawLine3D(start,end,Fade(beam.color,0.7F));
                 DrawBeamShell(start,end,beam.radius*0.3F,Fade(beam.color,0.4F),command.from==0,command.to==1,true);
             } else {
@@ -426,7 +520,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
 
 #ifdef KOUMAKYOU_DEBUG_FEATURES
 void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
-                                       std::span<const Enemy*> enemies,
+                                       std::span<const behavior::Actor*> enemies,
                                        const Boss* boss,
                                        Vector3 playerPosition,const ProjectileAssets* models,std::span<const VisualResource> visuals) const {
     rlDisableDepthTest();
@@ -434,7 +528,7 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
     int shownBullets = 0;
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         if (shownBullets++ >= 256) return;
-        if (bullet.beamLength > 0) {
+        if (bullet.IsBeam()) {
             DrawCylinderWiresEx(bullet.position, bullet.BeamEnd(), bullet.radius, bullet.radius,
                                 10, Color{255, 230, 90, 230});
             return;
@@ -450,14 +544,14 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
         DrawSphereWires(bullet.position, bullet.radius, 7, 10,
                         Color{255, 230, 90, 230});
     });
-    for (const Enemy* enemy : enemies) {
+    for (const behavior::Actor* enemy : enemies) {
         DrawSphereWires(enemy->position, enemy->hitRadius, 9, 12,
                         Color{65, 240, 250, 240});
-        const Vector3 muzzle = enemy->MuzzlePosition(playerPosition);
+        const Vector3 muzzle = enemy->MuzzlePosition();
         DrawLine3D(enemy->position, muzzle, YELLOW);
         DrawSphere(muzzle, 0.065F, MAGENTA);
     }
-    if (boss && boss->active) {
+    if (boss && boss->active && boss->BodyVisible()) {
         DrawSphereWires(boss->position, boss->hitRadius, 12, 16,
                         Color{65, 240, 250, 240});
         const Vector3 muzzle = boss->MuzzlePosition(playerPosition);

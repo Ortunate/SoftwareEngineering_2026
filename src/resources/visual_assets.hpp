@@ -21,8 +21,8 @@ constexpr VisualId kInvalidVisualId = std::numeric_limits<VisualId>::max();
 enum class VisualMode : std::uint8_t { Character, Bullet, Sphere };
 
 /// @brief Stage 提供的外观定义；路径相对 assets 根目录，字符串由 Stage 保持有效。
-/// worldHeight 为世界单位，pivot 是贴图中判定中心的归一化坐标。
-/// bulletDiameterScale 将弹幕判定半径换算为公告板直径的倍数。
+/// worldHeight 为旧 PNG/几何外观的世界高度，pivot 是判定中心的归一化坐标。
+/// bulletDiameterScale 仅将旧弹幕半径换算为公告板直径；原生 ANM 由加载器按显示尺寸与统一比例确定几何。
 struct VisualDefinition {
     VisualId id = kInvalidVisualId;
     std::string_view path;
@@ -53,6 +53,7 @@ struct StageAssetManifest {
     std::string_view stageBgm;
     std::string_view bossBgm;
     std::span<const SoundDefinition> sounds;
+    std::string_view eventBgm{}; // 可选第三首关卡演出音乐；空值不加载，借用期同其他路径，不作为音效加载。
 };
 
 }  // namespace koumakyou

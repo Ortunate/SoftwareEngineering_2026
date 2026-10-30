@@ -17,8 +17,8 @@ namespace {
 constexpr float kSpeed = 6.5F;
 constexpr float kFocusSpeed = 2.8F;
 constexpr float kMouseSensitivity = 0.0024F;
-constexpr float kHitRadius = 0.18F;
-constexpr float kGrazeRadius = 0.72F;
+constexpr float kHitRadius = native_sizes::kPlayerHitRadius;
+constexpr float kGrazeRadius = native_sizes::kPlayerGrazeRadius;
 // 发射点使用玩家局部坐标：gold 位于前方偏下，cyan 与太极圈共用视线两侧、略偏下的位置。
 // 三个模块基准位置不随 Power 变化；梦札多束侧针仅在对应圈内叠加原始通道偏移。
 // 贴近目标时三个偏移等比缩短，保证发射点仍位于玩家与目标之间。
@@ -26,6 +26,8 @@ constexpr float kMuzzleForward = 1.2F;
 constexpr float kMuzzleDown = 0.6F;
 constexpr float kHomingSide = 0.78F;
 constexpr float kOptionDown = 0.35F;
+// 第一视角的模块局部布局保留既有投影比例，与本次原生显示/判定尺寸独立，避免针束移到视线上方。
+constexpr float kMuzzleLayoutPixel = 0.42F/36;
 // 原作横向间距由 24 像素缩至 8 像素，过渡用 8 个 60 Hz 帧；世界侧距沿用现有三维布局。
 constexpr float kFocusedHomingSide = kHomingSide / 3.0F;
 constexpr float kOptionFocusSeconds = 8.0F / 60.0F;
@@ -49,6 +51,7 @@ void Player::ConfigureRun(int extraLives, int bombs, bool challenge, ShotType sh
     bombs_ = std::clamp(bombs, 0, 3);
     challenge_ = challenge;
     shot_ = shot;
+    netMisses_ = 0;
 }
 
 void Player::ResetPose() {
@@ -167,13 +170,12 @@ PlayerContact Player::ContactEnemyBullet(Bullet& bullet,float modelDistanceSquar
     const float hitDistance = (modelDistanceSquared>=0?0:bullet.radius) + kHitRadius;
     if (distanceSquared <= hitDistance * hitDistance) {
         // 光束持续到其寿命结束，不能因无敌玩家站在轴线上而吞掉整束光；普通弹仍消失。
-        if (bullet.beamLength == 0) bullet.active = false;
+        if (!bullet.IsBeam()) bullet.active = false;
         return invulnerableTimer_ <= 0.0F ? PlayerContact::Hit
                                           : PlayerContact::None;
     }
     const float grazeDistance = (modelDistanceSquared>=0?0:bullet.radius) + kGrazeRadius;
-    if (!bullet.grazed && distanceSquared <= grazeDistance * grazeDistance) {
-        bullet.grazed = true;
+    if (distanceSquared <= grazeDistance * grazeDistance && bullet.ConsumeGraze()) {
         return PlayerContact::Graze;
     }
     return PlayerContact::None;
@@ -186,6 +188,7 @@ bool Player::ContactEnemyBody(Vector3 position,float radius) const {
 }
 
 bool Player::TakeHit() {
+    ++netMisses_;
     if (!challenge_) --lives_;
     AdjustPower(-16);
     bombs_ = std::max(bombs_, 2);
@@ -201,6 +204,13 @@ void Player::SyncCamera(Camera3D& camera) const {
 }
 
 int Player::RemainingLives() const { return std::max(0, lives_ + 1); }
+void Player::CollectResources(int extraLives,int bombs) {
+    if(extraLives<0||bombs<0)throw std::invalid_argument("Negative resource pickup");
+    // 原生Challenge用残机抵扣已确认的Miss，不能套库存上限或把负数钳至零。
+    if(challenge_)netMisses_-=extraLives;
+    else lives_=std::min(8,lives_+std::min(extraLives,8));
+    bombs_=std::min(8,bombs_+std::min(bombs,8));
+}
 
 Vector3 Player::Forward() const {
     return BulletSystem::DirectionFromYawPitch(yaw_, pitch_);
@@ -255,7 +265,7 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
     const float cosine=original.x*forward.x+original.y*forward.y+original.z*forward.z;
     const auto shotRight=game_math::Add(right,game_math::Add(cross(axis,right),game_math::Scale(cross(axis,cross(axis,right)),1/(1+cosine))));
     const float depth=BulletSystem::Length(game_math::Subtract(aim_.point,position_));
-    const float scale=OptionScale(),pixelUnit=kOptionWorldHeight/36*scale;
+    const float scale=OptionScale(),pixelUnit=kMuzzleLayoutPixel*scale;
     // 低帧率一次补发多个逻辑帧时，按各帧实际时刻检查副机槽，不能让整个显示帧提前冷却完成。
     const double fireTime=visualAge_-secondaryFractionalFrame_/60;
     const auto main=game_math::Add(position_,game_math::Subtract(
@@ -272,11 +282,11 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
             });
             if(existing)continue;
             const auto origin=centers[slot];
-            if(auto* beam=bullets.Spawn(BulletOwner::Player,origin,{},shot.width*pixelUnit*0.5F,
+            if(auto* beam=bullets.Spawn(BulletOwner::Player,origin,{},shot.width*native_sizes::kWorldPerPixel*0.5F,
                                        Color{255,255,255,kShotAlpha},visuals.secondary[shot.script-1125])) {
-                beam->sourceShotRva=shot.sourceRva;beam->playerShotKind=PlayerShotKind::Laser;beam->playerSlot=slot;beam->weaponEpoch=weaponEpoch_;
+                beam->visualScale=scale;beam->sourceShotRva=shot.sourceRva;beam->playerShotKind=PlayerShotKind::Laser;beam->playerSlot=slot;beam->weaponEpoch=weaponEpoch_;
                 beam->SetBeamDirection(ConvergingShotDirection(origin,position_,forward,shotRight,depth,0));
-                beam->beamLength=32;beam->damage=0;beam->damagePerSecond=shot.damage*60;
+                beam->beamLength=shot.height*native_sizes::kWorldPerPixel;beam->damage=0;beam->damagePerSecond=shot.damage*60;
                 // 原动画在剩余 70 帧收到标签 1，再淡出 30 帧；槽冷却仍持续至表中 period 结束。
                 beam->laserFadeAt=(shot.period-70)/60.0F;beam->maxAge=(shot.period-40)/60.0F;
                 laserReadyAt_[slot]=fireTime+shot.period/60.0;
@@ -290,17 +300,17 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
                                                                  game_math::Scale(up,shot.y*pixelUnit)));
         const auto direction=ConvergingShotDirection(origin,position_,forward,shotRight,depth,shot.angle*180/std::numbers::pi_v<float>+90);
         const auto visual=shot.module==0 ? visuals.primary : IsMarisa() ? visuals.secondary[shot.script-1121] : visuals.secondary[0];
-        // 保留原表半径作为兼容尺度；正式模型用外观高度换算实体与碰撞，未加载模型时仍用旧球形判定。
+        // 原生矩形按较短边内接为三维球，宽高是全尺寸；视觉尺寸独立读取 ANM。
         if(auto* bullet=bullets.Spawn(BulletOwner::Player,origin,game_math::Scale(direction,shot.speed*20/12),
-                                     shot.kind==1 ? 0.10F : 0.09F,Color{255,255,255,kShotAlpha},visual)) {
-            bullet->damage=shot.damage;bullet->sourceShotRva=shot.sourceRva;
+                                     std::min(shot.width,shot.height)*native_sizes::kWorldPerPixel*0.5F,Color{255,255,255,kShotAlpha},visual)) {
+            bullet->visualScale=scale;bullet->damage=shot.damage;bullet->sourceShotRva=shot.sourceRva;
             if(shot.kind==1)bullet->homingTurnRate=5.5F; // 转向仍使用三维引导；原生转向规则未导出。
             if(shot.kind==2) {
                 bullet->playerShotKind=PlayerShotKind::Missile;
                 bullet->acceleration=game_math::Scale(forward,0.3F*60*20/12);
                 bullet->impactVisual=visuals.impact[shot.script-1121];
                 const float pixels=shot.script==1121 ? 32 : shot.script==1122 ? 42 : 48;
-                bullet->explosionRadius=pixels*kOptionWorldHeight/36*0.5F;
+                bullet->explosionRadius=pixels*native_sizes::kWorldPerPixel*0.5F;
             }
         }
     }

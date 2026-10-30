@@ -1,9 +1,14 @@
 // 本文件验证全部导入目录、原始 HP 解释器映射、四机体实际伤害及未实现结算的扩展边界。
+#include "boss_fixture.hpp"
+#include "stage/catalog.hpp"
+#include "actor_fixture.hpp"
 #include "gameplay/data/native_combat.hpp"
 #include "gameplay/combat/damage_rules.hpp"
 #include "gameplay/actors/player.hpp"
 #include "stages/stage1/content.hpp"
-#include "stages/stage1/reference_program.hpp"
+#include "stages/stage_extra/boss_config.hpp"
+#include "reference_program.hpp"
+#include "gameplay/combat/rank.hpp"
 #include <array>
 #include <cassert>
 #include <cmath>
@@ -16,12 +21,24 @@ namespace {
 using namespace koumakyou;
 namespace nc=native_combat;
 void TestCatalogAndHealth() {
+    // 期望值独立抄自已校验的原生五槽表，不能由生产Initial反推。
+    constexpr std::array<int,4> initialRanks{20,32,32,32};
+    for(int stage=1;stage<=6;++stage)for(int index=0;index<4;++index)
+        assert(rank::Initial(stage,*nc::DifficultyFromIndex(index))==initialRanks[index]);
+    assert(rank::Initial(7,nc::Difficulty::Normal)==18);
+    for(const auto& [stage,difficulty]:std::array<std::pair<int,nc::Difficulty>,5>{{
+        {0,nc::Difficulty::Normal},{8,nc::Difficulty::Normal},{7,nc::Difficulty::Easy},
+        {7,nc::Difficulty::Lunatic},{1,static_cast<nc::Difficulty>(0)}}}) {
+        bool rejected=false;
+        try {(void)rank::Initial(stage,difficulty);}catch(const std::invalid_argument&) {rejected=true;}
+        assert(rejected);
+    }
     constexpr std::array<std::size_t,7> counts{289,547,570,706,364,340,782};
     assert(nc::Stages().size()==7 && !nc::Stage(0) && !nc::Stage(8));
     std::size_t total=0;
     for(const auto& stage:nc::Stages()) {
         assert(stage.health.size()==counts[stage.stage-1] && stage.sha256.size()==64);
-        assert(stage.integration==(stage.stage==1 ? nc::Integration::Playable : nc::Integration::DataOnly));
+        assert(stage.integration==nc::Integration::Playable);
         total+=stage.health.size();
     }
     assert(total==3598 && nc::ExecutableHash().size()==64);
@@ -58,18 +75,92 @@ void TestCatalogAndHealth() {
         catch(const std::logic_error&) { rejected=true; }
         assert(rejected);
     }
+    for(int index=0;index<4;++index) {
+        const auto difficulty=nc::DifficultyFromIndex(index);
+        assert(difficulty && nc::DifficultyIndex(*difficulty)==index);
+        assert(SupportsStage(StageId::Stage1,*difficulty,StageEntry::Campaign));
+        assert(SupportsDifficulty(*difficulty,StageEntry::Campaign));
+        assert(SupportsDifficulty(*difficulty,StageEntry::Practice));
+        assert(SupportsStage(StageId::Stage3,*difficulty,StageEntry::Practice));
+        assert(SupportsStage(StageId::Stage3,*difficulty,StageEntry::SpellPractice));
+        assert(SupportsStage(StageId::Stage4,*difficulty,StageEntry::Practice));
+        assert(SupportsStage(StageId::Stage4,*difficulty,StageEntry::SpellPractice));
+        assert(SupportsStage(StageId::Stage5,*difficulty,StageEntry::Practice));
+        assert(SupportsStage(StageId::Stage5,*difficulty,StageEntry::SpellPractice));
+        assert(SupportsStage(StageId::Stage6,*difficulty,StageEntry::Campaign)==(index!=0));
+        assert(SupportsStage(StageId::Stage6,*difficulty,StageEntry::Practice)==(index!=0));
+        assert(SupportsStage(StageId::Stage6,*difficulty,StageEntry::SpellPractice)==(index!=0));
+        assert(SupportsStage(StageId::Extra,*difficulty,StageEntry::Extra)==(index==1));
+        assert(SupportsDifficulty(*difficulty,StageEntry::Extra)==(index==1));
+        assert(SupportsStage(StageId::Extra,*difficulty,StageEntry::SpellPractice)==(index==1));
+        for(const auto entry:{StageEntry::Campaign,StageEntry::Practice})
+            assert(!SupportsStage(StageId::Extra,*difficulty,entry));
+        for(const auto id:kPracticeStages)assert(!SupportsStage(*id,*difficulty,StageEntry::Extra));
+    }
+    assert(StageNumber(StageId::Extra)==7&&!NextStage(StageId::Extra)&&!NextStage(StageId::Stage6));
+    const auto extra=CreateStageContent(StageId::Extra,nc::Difficulty::Normal,StageEntry::Extra);
+    assert(extra->CombatData()==nc::Stage(7)&&extra->Difficulty()==nc::Difficulty::Normal&&extra->Events().size()==353);
+    const auto extraPractice=CreateStageContent(StageId::Extra,nc::Difficulty::Normal,StageEntry::SpellPractice);
+    // 独立抄自源入口生命与时限；练习必须隔离为一个技能，不能混入前奏、非符或整场入场。
+    constexpr std::array<int,13> extraHealth{1800,1450,1100,1800,1200,1900,2400,1400,2200,1520,1800,1000,6000};
+    constexpr std::array<int,13> extraFrames{2100,2880,2400,3300,3300,3900,3900,3600,4200,4200,4200,5160,9000};
+    for(int card=119;card<=131;++card)for(int shot=0;shot<4;++shot) {
+        const auto& battle=extraPractice->PracticeBoss(card);
+        assert(&battle==&stage_extra::ExtraSpellBattle(card));
+        auto boss=extraPractice->CreateBoss(battle,static_cast<ShotType>(shot));
+        assert(boss->attack==1&&boss->phase==1&&boss->skill==1&&boss->SpellCardNumber()==card);
+        assert(boss->health==extraHealth[card-119]&&std::abs(boss->TimeLimit()*60-extraFrames[card-119])<.001F);
+        assert(boss->HealthBar().count==1&&boss->HealthBar().remainingBars==0);
+    }
+    for(int card:{-1,0,118,132,133,134,135}) {
+        bool rejected=false;try {(void)extraPractice->PracticeBoss(card);}catch(const std::invalid_argument&) {rejected=true;}assert(rejected);
+    }
+    bool wholeExtraRejected=false;try {(void)extraPractice->PracticeBoss();}catch(const std::invalid_argument&) {wholeExtraRejected=true;}assert(wholeExtraRejected);
+    for(auto difficulty:{nc::Difficulty::Easy,nc::Difficulty::Hard,nc::Difficulty::Lunatic,static_cast<nc::Difficulty>(0)}) {
+        bool rejected=false;try {(void)stage_extra::ExtraSpellBattle(119,difficulty);}catch(const std::invalid_argument&) {rejected=true;}assert(rejected);
+    }
+    for(int card:{119,122}) {
+        bool rejected=false;try {(void)extraPractice->CreateBoss(extraPractice->PracticeBoss(card),static_cast<ShotType>(4));}catch(const std::invalid_argument&) {rejected=true;}assert(rejected);
+    }
+    bool extraCampaignRejected=false;
+    try {(void)CampaignEndsAfter(StageId::Extra,nc::Difficulty::Normal);}catch(const std::invalid_argument&) {extraCampaignRejected=true;}
+    assert(extraCampaignRejected);
+    assert(!nc::DifficultyFromIndex(4) && nc::DifficultyIndex(static_cast<nc::Difficulty>(0))==-1);
+    assert(SupportsStage(StageId::Stage2,nc::Difficulty::Normal,StageEntry::SpellPractice));
+    assert(SupportsStage(StageId::Stage6,nc::Difficulty::Normal,StageEntry::SpellPractice));
+    for(int index=0;index<4;++index) {
+        const auto difficulty=*nc::DifficultyFromIndex(index);
+        assert(!CampaignEndsAfter(StageId::Stage4,difficulty));
+        assert(CampaignEndsAfter(StageId::Stage5,difficulty)==(index==0));
+        assert(CampaignEndsAfter(StageId::Stage6,difficulty));
+    }
+    bool unsupported=false;
+    try {(void)CreateStageContent(StageId::Stage6,nc::Difficulty::Easy);}catch(const std::invalid_argument&) {unsupported=true;}
+    assert(unsupported&&CreateStageContent(StageId::Stage1)->Difficulty()==nc::Difficulty::Normal);
+    assert(CreateStageContent(StageId::Stage1,nc::Difficulty::Hard)->Difficulty()==nc::Difficulty::Hard);
     stage1::Stage1Content content;
     assert(content.CombatData()==nc::Stage(1) && !content.DamageRules());
     int births=0;
-    for(const auto& event:content.Events())if(const auto* spawn=std::get_if<SpawnEnemies>(&event.action)) {
-        const auto* params=std::get_if<stage1::ReferenceEnemyParams>(&spawn->enemy);
+    for(const auto& event:content.Events())if(const auto* spawn=std::get_if<SpawnActors>(&event.action)) {
+        const auto* params=&spawn->actor;
         assert(params);
-        auto enemy=content.CreateEnemy(spawn->enemy);
+        auto enemy=testing::MakeActor(spawn->actor);
         assert(enemy && enemy->health==params->sourceHealth && enemy->maxHealth==params->sourceHealth);
         ++births;
     }
     assert(births==222);
-    auto boss=content.CreateBoss(true);
+    const auto* firstSpawn=std::get_if<SpawnActors>(&content.Events().front().action);
+    assert(firstSpawn);
+    auto configured=firstSpawn->actor;configured.difficulty=nc::Difficulty::Hard;
+    auto difficultyActor=testing::MakeActor(configured);
+    assert(difficultyActor->difficulty==nc::Difficulty::Hard);
+    difficultyActor->Reset({},1,1);
+    assert(difficultyActor->difficulty==nc::Difficulty::Normal);
+    stage1::Stage1Content hardContent(nc::Difficulty::Hard);
+    auto hardBoss=hardContent.CreateBoss(testing::BattleAt(hardContent,1));
+    assert(hardBoss->health==7000&&hardBoss->HealthBar().count==2);
+    hardBoss->health=899;assert(hardBoss->AdvanceSkill());assert(hardBoss->SpellCardNumber()==4);
+    auto boss=content.CreateBoss(testing::BattleAt(content,1));
     assert(boss->health==7000 && boss->maxHealth==7000);
 }
 

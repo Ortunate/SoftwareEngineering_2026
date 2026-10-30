@@ -179,12 +179,6 @@ void Game::DrawMenuPage() const {
             ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},canvas.scale,
                           kGold,weight*reveal,menuMotion_.Phase());
         }
-    } else if (state_ == RunState::Score) {
-        Text(canvas, font, "SCORE", canvas.width/2, 110, 50, kGold, true);
-        Text(canvas, font, "Stage 1 · Normal · 标准模式", canvas.width/2, compact?360:250, 28, kIvory, true);
-        const std::string score = TextFormat("%09d", bestScore_);
-        Text(canvas, font, score.c_str(), canvas.width/2, compact?460:345, 65, kGold, true);
-        Text(canvas, font, "最高通关分数", canvas.width/2, compact?574:444, 23, kIvory, true);
     } else {
         Text(canvas, font, "CREDIT", canvas.width/2, 110, 50, kGold, true);
         Text(canvas, font, "原作 · 东方红魔乡：新典", canvas.width/2, compact?330:260, 30, kIvory, true);

@@ -3615,12 +3615,12 @@ constexpr std::array<HealthRecord,782> kHealth7{{
 }};
 constexpr std::array<StageData,7> kStages{{
     {1,Integration::Playable,"be9e49fe6f1c9fcbca858d335773bc16b1a89ae25083b60d1cb5ab33814dd2f3",kHealth1},
-    {2,Integration::DataOnly,"9a9aa3c3608195f1c814985706189ecf22c2ade1e302780acdf61a270a6267c0",kHealth2},
-    {3,Integration::DataOnly,"378e9fab04c794fa2573bbb407e6e2cb1c54dbdd372183d6e70c885315e1f171",kHealth3},
-    {4,Integration::DataOnly,"09744169b7ec3e6525e5cd2ff6e3c1c970cbcde4c8d0d772891aa38fc654bb09",kHealth4},
-    {5,Integration::DataOnly,"09b6a12c36069ac6caa320ca400ba70897f74ab6a7f04081076442cb5abc5276",kHealth5},
-    {6,Integration::DataOnly,"bc8013a2461b1e93ecc36acca8f2a81d948e0561e82bcde4176a6268b6985dce",kHealth6},
-    {7,Integration::DataOnly,"d6eae42d8d8eb669573b8004ba130f818374edc84ec35ccd0eda39eb6627a2eb",kHealth7},
+    {2,Integration::Playable,"9a9aa3c3608195f1c814985706189ecf22c2ade1e302780acdf61a270a6267c0",kHealth2},
+    {3,Integration::Playable,"378e9fab04c794fa2573bbb407e6e2cb1c54dbdd372183d6e70c885315e1f171",kHealth3},
+    {4,Integration::Playable,"09744169b7ec3e6525e5cd2ff6e3c1c970cbcde4c8d0d772891aa38fc654bb09",kHealth4},
+    {5,Integration::Playable,"09b6a12c36069ac6caa320ca400ba70897f74ab6a7f04081076442cb5abc5276",kHealth5},
+    {6,Integration::Playable,"bc8013a2461b1e93ecc36acca8f2a81d948e0561e82bcde4176a6268b6985dce",kHealth6},
+    {7,Integration::Playable,"d6eae42d8d8eb669573b8004ba130f818374edc84ec35ccd0eda39eb6627a2eb",kHealth7},
 }};
 constexpr std::array<ShotChannel,1> kShot0Power0{{
     {5,0,0,0,1120,0,0.0F,0.0F,12.0F,12.0F,-1.57079637F,12.0F,48.0F,0x4274c8},

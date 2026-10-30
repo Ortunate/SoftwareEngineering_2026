@@ -151,7 +151,7 @@ assets/
 | CharacterDefinition | id、shotIds、movementProfile、portraitSet、dialogueRoute | 机体必须归属该角色，移动参数为有限合法值 |
 | ShotDefinition | id、powerLevels、firePattern、homingRule、bombDefinition | 火力档有序；伤害、冷却、转向等参数有单位和范围 |
 | DifficultyProfile | id、patternVariants、speedScale、countScale、rankBounds | 难度与动态 rank 分开表达；只开放有完整内容的组合 |
-| BossEncounterDefinition | id、entry、phases、exit、completionPolicy | 阶段 ID 唯一；每阶段具有击破或超时结束路径 |
+| BossBattleDefinition | id、entry、phases、exit、completionPolicy | 阶段 ID 唯一；每阶段具有击破或超时结束路径 |
 | PhaseDefinition | id、kind、hp、durationTicks、protectionTicks、pattern、cleanup、rewards | 准备期不受伤；符卡 ID、血条组和奖励规则明确 |
 | DialogueDefinition | id、lines、speakerIds、expressions、musicCues | 支持多说话人和角色路线，不假定只存在玩家与单一 Boss |
 | RuleSet | id、version、lifeRule、bombRule、scoreRule、carryRule、eligibility | 判定、奖励、继承及成绩分类的共同依据 |
@@ -280,7 +280,7 @@ stateDiagram-v2
     Completed --> [*]
 ```
 
-每次遭遇使用阶段数组表示任意数量的普通攻击、符卡和过渡；不固定为四阶段，也不依赖 `CreateBoss(bool final)` 区分全部内容。`EncounterId` 区分道中和关底等遭遇，`PhaseId` 唯一标识阶段。
+当前每场战斗由 `src/stages/stageN/boss_config.*` 的命名 `Battle` 和 `StartConfig` 定义，`StartBoss` 事件直接携带 `Battle` 引用。角色子类的 `StartBoss` 复制配方，阶段数量取 `phases.size()`，每阶段顺序组合多个技能，技能生命由角色定义。阶段 config 指定各血条段的技能索引、比例和颜色，由 Boss 解析绘制；控制跳转明确区分 Next、Exit 和 0 起算索引的 Jump。同角色共用一个类，包含跨五、六面的 `SakuyaBoss`；不再保留遭遇枚举或布尔工厂。上述表格中的通用数据格式仍属于后续内容外置设计。
 
 阶段进入时按顺序初始化生命/阈值、时限、攻击状态、受保护期和清场策略，再开放伤害。阶段完成先锁定 `PhaseResult`，随后停止旧攻击、清理旧对象、结算一次奖励并进入下一准备期，防止同 tick 的剩余伤害连续击穿多个阶段。
 
@@ -557,7 +557,7 @@ sequenceDiagram
 | `StageContent`、`StageDirector`、第一面脚本 | 保留关卡抽象和事件驱动，扩展目录、遭遇 ID、通用对话与显式完成条件 |
 | 单一关卡枚举及六槽练习数组 | 使用稳定目录和路线定义，独立表达主线、追加路线与不同练习目标 |
 | 玩家内置两种机体及关卡提供玩家弹外观 | 由角色/机体目录管理能力和共享资源，关卡提供场景与敌方内容 |
-| 敌人参数全局包含第一面类型 | 移除通用层对具体关卡参数的依赖，以注册工厂解析定制内容 |
+| 时间轴直接提交行为演员配置，通用层已无第一面敌人参数类型 | 扩展配方/协程注册与完整内容目录，继续保持关卡数据和通用运行组件的依赖边界 |
 | 弹幕池、球形/胶囊碰撞、视觉效果快照 | 增加代数句柄、扫掠判定、移动光束时窗和全内容容量预算 |
 | 配置文件同时保存设置和第一面成绩 | 拆分设置与用户进度，按范围/角色/机体/难度/规则版本分类并迁移旧数据 |
 | 关卡异步解码与主线程上传 | 增加请求身份、完整取消语义、角色共享资源和跨关事务 |

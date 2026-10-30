@@ -102,8 +102,8 @@ void Game::UpdateSpellPractice() {
         const auto* card=spell::Find(choice.stage,choice.group,choice.difficulty);
         if(!spell::Available(card,choice.character,spellRecords_)) {assets_.PlaySoundEffect("menu_cancel");return;}
         selectedCharacter_=choice.character/2;selectedShot_=choice.character%2;
-        practicePhase_=card->phase;
-        stageId_=StageId::Stage1;
+        practiceAttack_=card->phase;
+        stageId_=*SpellPracticeStage(card->stage);
         challengeMode_=false;
         SaveSettings();
         StartRun();
@@ -128,8 +128,8 @@ void Game::BeginSpellRecord() {
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if(shotTestActive_)return;
 #endif
-    const int number=boss_->phase==2?3:boss_->phase==4?7:0;
-    if(StageNumber(stageId_)!=1 || number==0)return;
+    const int number=boss_->SpellCardNumber();
+    if(number<1||number>spell::kRecordCount||(spellPractice_&&number>spell::kSpellCount))return;
     spellAttemptNumber_=number;spellAttemptCharacter_=static_cast<int>(player_.Shot());
     spellAttemptOpen_=true;spellAttemptPractice_=spellPractice_;
     spellRecords_.Begin(spellAttemptCharacter_,number,spellPractice_);

@@ -23,34 +23,50 @@ bool DialogueFlagAt(std::span<const DialogueCue> cues, DialogueCueKind kind, flo
     }
     return initial;
 }
+std::array<int,2> DialogueCueExpressionsAt(std::span<const DialogueCue> cues,float seconds,std::array<int,2> fallback) {
+    for(const auto& cue:cues) {
+        if(cue.frame>seconds*60+0.001F)break;
+        if(cue.kind==DialogueCueKind::Expression&&cue.slot>=0&&cue.slot<2)fallback[cue.slot]=cue.value;
+    }
+    return fallback;
+}
 namespace {
 // 各重载明确列出动作类型；新增 variant 分支而未补充执行器时必须编译失败。
 struct EventExecutor {
     const StageEvent& event;
     StageEventSink& sink;
+    const StageContent& content;
 
-    bool operator()(const SpawnEnemies& action) const {
+    bool operator()(const SpawnActors& action) const {
         if (action.count != 1 || !std::isfinite(action.interval) ||
-            action.interval < 0.0F || !IsValidEnemySpec(action.enemy)) {
+            action.interval < 0.0F || !behavior::Valid(action.actor)) {
             throw std::invalid_argument("Expected one valid enemy spawn request");
         }
-        sink.SpawnStageEnemy(action.enemy);
+        auto configured=content.ConfigureSpawn(action.actor);
+        if(!behavior::Valid(configured))throw std::invalid_argument("Invalid configured actor spawn");
+        sink.SpawnStageActor(configured);
         return true;
     }
 
     bool operator()(const StartBoss& action) const {
-        if (!event.id || (action.encounter != BossEncounter::Midboss &&
-                          action.encounter != BossEncounter::Final)) {
+        if (!event.id || (!action.battle || !action.battle->create)) {
             throw std::invalid_argument("Invalid StartBoss request");
         }
-        sink.BeginStageBoss(action.encounter == BossEncounter::Final, *event.id);
+        sink.BeginStageBoss(*action.battle, *event.id);
         return false;
     }
 
-    bool operator()(const StartDialogue&) const {
-        if (!event.id) throw std::invalid_argument("StartDialogue requires an id");
-        sink.BeginStageDialogue(*event.id, std::get<StartDialogue>(event.action).afterBattle);
+    bool operator()(const StartDialogue& action) const {
+        if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss&&action.scene!=DialogueScene::EncoreBoss)||
+            (action.clearPolicy!=DialogueClearPolicy::ClearEnemiesAndBullets&&action.clearPolicy!=DialogueClearPolicy::PreserveWorld))
+            throw std::invalid_argument("StartDialogue requires an id and valid scene");
+        sink.BeginStageDialogue(*event.id,action.afterBattle,action.scene,action.clearPolicy);
         return false;
+    }
+    bool operator()(const ResumeBoss&) const { sink.ResumeStageBoss();return true; }
+    bool operator()(const WaitDialogueSignal& action) const {
+        if(!event.id||action.signal<0)throw std::invalid_argument("Invalid dialogue signal wait");
+        return sink.AwaitStageDialogueSignal(*event.id,action.signal);
     }
 
     bool operator()(const ShowMessage& action) const {
@@ -64,7 +80,7 @@ struct EventExecutor {
 }  // namespace
 
 bool StageContent::HandleEvent(const StageEvent& event, StageEventSink& sink) const {
-    return std::visit(EventExecutor{event, sink}, event.action);
+    return std::visit(EventExecutor{event, sink, *this}, event.action);
 }
 
 }  // namespace koumakyou

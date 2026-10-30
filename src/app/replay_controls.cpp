@@ -16,7 +16,8 @@ constexpr const char* kNameCharacters="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
 // 同一布局定义用于输入和绘制；命名不增加通用控件，由现有按钮和标签组合。
 struct SaveLayout {
     menu::Canvas canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
-    Rectangle Ask(int index) const { return canvas.Rect(canvas.width/2-220+index*240,350,200,48); }
+    menu::OverlayLayout overlay{GetScreenWidth(),GetScreenHeight()};
+    Rectangle Ask(int index) const { return overlay.PauseRow(index); }
     Rectangle Character(int index) const { return canvas.Rect(canvas.width/2-250+(index%10)*50,300+(index/10)*48,44,42); }
     Rectangle Action(int index) const { return canvas.Rect(canvas.width/2-250+index*170,525,155,48); }
 };
@@ -103,10 +104,13 @@ void Game::DrawReplaySave() const {
     const SaveLayout layout;const auto& canvas=layout.canvas;
     const ui::DrawContext context{assets_.Common().uiFont,canvas.scale,1,replaySaveMotion_.Phase(),replaySaveMotion_.Pulse()};
     const bool ask=replaySaveState_==ReplaySaveState::Ask;
-    ui::Modal{{0,0,static_cast<float>(GetScreenWidth()),static_cast<float>(GetScreenHeight())},canvas.Rect(24,130,canvas.width-48,ask?350:530),canvas.Point(canvas.width/2,155)}.Draw(context,ask?"保存 Replay？":"录像名称",context.theme.accent);
     if(ask) {
-        for(int i=0;i<2;++i)ui::Button{layout.Ask(i)}.Draw(context,i==0?"是":"否",{replayChoice_==i?1.0F:0.0F,1});
+        // 保存询问与暂停共用 OverlayLayout、Modal 和文字按钮，输入命中亦取同一 PauseRow。
+        auto modalContext=context;modalContext.scale=layout.overlay.canvas.scale;modalContext.theme.accent=GOLD;
+        ui::Modal{{0,0,static_cast<float>(GetScreenWidth()),static_cast<float>(GetScreenHeight())},layout.overlay.PausePanel(2),layout.overlay.canvas.Point(380,200)}.Draw(modalContext,"保存 Replay？",RAYWHITE);
+        for(int i=0;i<2;++i)ui::Button{layout.Ask(i),true,ui::ButtonStyle::Text}.Draw(modalContext,i==0?"是":"否",{replaySaveMotion_.Weight(i),replaySaveMotion_.Reveal(i*0.02F)});
     } else {
+        ui::Modal{{0,0,static_cast<float>(GetScreenWidth()),static_cast<float>(GetScreenHeight())},canvas.Rect(24,130,canvas.width-48,530),canvas.Point(canvas.width/2,155)}.Draw(context,"录像名称",context.theme.accent);
         ui::Panel{canvas.Rect(48,220,canvas.width-96,56)}.Draw(context);
         ui::Label{canvas.Rect(60,220,canvas.width-120,56),26}.Draw(context,(replayName_+"_").c_str(),context.theme.text);
         for(int i=0;i<38;++i){const char label[]{kNameCharacters[i],0};ui::Button{layout.Character(i)}.Draw(context,label,{replayNameChoice_==i?1.0F:0.0F,1});}
@@ -131,7 +135,10 @@ void Game::UpdateObserver(float seconds) {
     if(replayView_==0){observer_=camera_;return;}
     if(!IsWindowHidden() && !IsCursorHidden())DisableCursor();
     const auto mouse=GetMouseDelta();
-    orbitYaw_-=mouse.x*0.003F;orbitPitch_=std::clamp(orbitPitch_-mouse.y*0.003F,-1.45F,1.45F);
+    const float sensitivity=kBaseMouseSensitivity*mouseSensitivity_/100.0F;
+    // 环绕视角移动的是玩家背后的相机：正 yaw 使相机向屏幕右侧绕行；自由视角则沿用玩家转头约定。
+    orbitYaw_+=(replayView_==1?1.0F:-1.0F)*mouse.x*sensitivity;
+    orbitPitch_=std::clamp(orbitPitch_-mouse.y*sensitivity,-1.45F,1.45F);
     const auto aim=Vector3Normalize(Vector3Subtract(camera_.target,camera_.position));
     Vector3 direction{std::sin(orbitYaw_)*std::cos(orbitPitch_),std::sin(orbitPitch_),std::cos(orbitYaw_)*std::cos(orbitPitch_)};
     observer_.up={0,1,0};observer_.fovy=72;observer_.projection=CAMERA_PERSPECTIVE;
@@ -141,10 +148,13 @@ void Game::UpdateObserver(float seconds) {
         direction={std::sin(yaw)*std::cos(orbitPitch_),-std::sin(orbitPitch_),std::cos(yaw)*std::cos(orbitPitch_)};
         observer_.position=Vector3Add(Vector3Subtract(player_.Position(),Vector3Scale(direction,orbitDistance_)),{0,1,0});observer_.target=Vector3Add(player_.Position(),aim);
     } else {
-        const auto right=Vector3Normalize(Vector3CrossProduct({0,1,0},direction));Vector3 move{};
-        move=Vector3Add(move,Vector3Scale(direction,float(IsKeyDown(KEY_W)-IsKeyDown(KEY_S))));
-        move=Vector3Add(move,Vector3Scale(right,float(IsKeyDown(KEY_D)-IsKeyDown(KEY_A))));move.y+=IsKeyDown(KEY_E)-IsKeyDown(KEY_Q);
-        observer_.position=Vector3Add(observer_.position,Vector3Scale(move,std::min(seconds,0.1F)*(IsKeyDown(KEY_LEFT_SHIFT)?12:4)));
+        // 与 Player::Right 一致：朝 +Z、世界上方 +Y 时，屏幕右侧为 -X。
+        const auto right=Vector3Normalize(Vector3CrossProduct(direction,{0,1,0}));Vector3 move{};
+        move=Vector3Add(move,Vector3Scale(direction,float(BindingDown(bindings_.forward)-BindingDown(bindings_.backward))));
+        move=Vector3Add(move,Vector3Scale(right,float(BindingDown(bindings_.moveRight)-BindingDown(bindings_.moveLeft))));move.y+=BindingDown(bindings_.ascend)-BindingDown(bindings_.descend);
+        // 观察移动复用本机移动/升降/低速绑定，归一化避免斜向移动加速；只改变观察相机。
+        move=Vector3Normalize(move);
+        observer_.position=Vector3Add(observer_.position,Vector3Scale(move,std::min(seconds,0.1F)*(BindingDown(bindings_.focus)?1.0F:4.0F)));
         observer_.target=Vector3Add(observer_.position,direction);
     }
 }
@@ -158,6 +168,6 @@ void Game::DrawReplayBar() const {
     const auto text=std::string(state)+"  "+std::to_string(int(current))+" / "+std::to_string(int(duration))+" s  "+std::array<const char*,5>{"0.25x","0.5x","1x","2x","4x"}[replaySpeed_]+"  "+std::array<const char*,3>{"第一人称","第三人称","自由视角"}[replayView_];
     ui::Label{{12,top+15,w-24,25},20}.Draw(context,text.c_str(),context.theme.text);
     ui::Label{{12,top+40,w-24,24},16}.Draw(context,replayStatus_.c_str(),context.theme.accent);
-    const std::array<ui::KeyHint,6> hints{{{"Space","暂停"},{"←/→ · Shift","定位 5/30秒"},{"Home / End","首尾"},{"[ / ] / 1","倍速"},{"V / R · WASD / QE","视角"},{"Esc","退出"}}};bar.Draw(context,hints);
+    const std::array<ui::KeyHint,6> hints{{{"Space","暂停"},{"←/→ · Shift","定位 5/30秒"},{"Home / End","首尾"},{"[ / ] / 1","倍速"},{"V / R · 移动绑定","视角"},{"Esc","退出"}}};bar.Draw(context,hints);
 }
 }

@@ -1,0 +1,36 @@
+{
+  "asset": "full_power",
+  "source": {
+    "item": 4,
+    "script": 25,
+    "sprite": 4,
+    "rect": [
+      963.0,
+      185.0,
+      36.0,
+      36.0
+    ],
+    "atlas": "etama3.dds"
+  },
+  "height": 1,
+  "thickness": 0.06,
+  "bevel": 0.01,
+  "triangles": 128,
+  "localUp": [
+    0,
+    1,
+    0
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ],
+  "rotationAxis": [
+    0,
+    1,
+    0
+  ],
+  "collision": "none; pickup radius remains gameplay-owned",
+  "humanAcceptance": "approved"
+}

@@ -157,6 +157,8 @@ void PlayerBombEffect::Sample(const Camera3D& camera) {
         auto& sprite=sprites_[spriteCount_++];sprite={};sprite.layer=layer;sprite.frame=frame;
         sprite.frame.position=sprite.frame.positionOffset={};
         sprite.shape=shape;sprite.volume=volume;sprite.position=volume.origin;sprite.end=volume.end;
+        // 模型炮口位于视点前下方；攻击圆台保持原始覆盖范围，不能用覆盖半场的判定半径撑大可见光束。
+        if(shape==PlayerBombSprite::Shape::Beam){const auto view=View(camera);sprite.position=Add(volume.origin,Add(Scale(view.forward,.9F),Scale(view.up,-.6F)));}
         sprite.height=height;sprite.width=2*volume.endRadius;sprite.ageSeconds=frame_/60.0F;
         sprite.trail=trail;
         if(shot_==ShotType::MagicMissile) {

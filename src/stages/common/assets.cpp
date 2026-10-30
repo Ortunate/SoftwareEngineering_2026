@@ -71,6 +71,9 @@ std::vector<VisualDefinition> CommonBattleVisuals() {
         for(int layer=0;layer<bomb.layers;++layer)
             visuals.push_back({.id=static_cast<VisualId>(first+layer),.animation={bomb.atlas,bomb.firstScript+layer}});
     }
+    for(int character=0;character<2;++character)for(int action=0;action<5;++action)
+        visuals.push_back({.id=static_cast<VisualId>(kPlayerBody+character*5+action),.mode=VisualMode::Character,
+                           .animation=battle::Player(character?battle::Atlas::Marisa:battle::Atlas::Reimu,action)});
     return visuals;
 }
 }

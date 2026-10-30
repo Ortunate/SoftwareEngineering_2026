@@ -8,6 +8,7 @@
 
 #include "raylib.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -33,6 +34,10 @@ struct Pickup {
     int value = 1;
     float velocityZ = 0.0F;
     float age = 0.0F; // 视觉秒数，与运动/追踪时钟独立；暂停时不推进。
+    /// @brief 出生后按 90 度/秒绕竖直长轴旋转；只由模拟 age 决定，暂停冻结，返回弧度。
+    float RotationRadians() const { return std::fmod(age,4.F)*1.57079632679F; }
+    /// @brief 当前道具对应的原始 Item 编号；大 P 按 Power 增量至少 8 区分。
+    int NativeItemType() const { return kind==PickupKind::Bomb?3:kind==PickupKind::FullPower?4:kind==PickupKind::Life?5:kind==PickupKind::Star?6:kind==PickupKind::Score?1:value>=8?2:0; }
     battle::Cursor animation;
 };
 
@@ -61,6 +66,8 @@ public:
 
     /// @brief 清除场上道具；随机序列继续推进，不因重新开始而重复。
     void Clear();
+    /// @brief 新局种子重置；清空道具并从种子初始化轮换表，后续 Clear 仍推进序列。
+    void ResetRun(std::uint32_t seed) { random_.seed(seed); Clear(); }
     /// @brief Bomb 释放时令当前所有道具立即追踪玩家；之后新生成的道具不继承这次吸取。
     void MagnetAllItems();
     /// @brief 在敌人死亡位置抽取一次结果并生成相应数量的两类道具。

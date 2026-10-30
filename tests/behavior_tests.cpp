@@ -108,7 +108,7 @@ void EqualBullets(const BulletSystem& original,const BulletSystem& replacement) 
                 if(std::none_of(other->begin(),other->end(),[&](const Bullet* v){return v->generation==bullet->generation;}))
                     std::cerr<<side<<" unmatched bullet "<<bullet->generation<<" age "<<bullet->age<<" position "
                         <<bullet->position.x<<","<<bullet->position.y<<","<<bullet->position.z<<" velocity "
-                        <<bullet->velocity.x<<","<<bullet->velocity.y<<","<<bullet->velocity.z<<'\n';
+                        <<bullet->Velocity().x<<","<<bullet->Velocity().y<<","<<bullet->Velocity().z<<'\n';
         std::abort();
     }
     assert(original.Pool().DroppedSpawns()==replacement.Pool().DroppedSpawns());
@@ -123,9 +123,9 @@ void EqualBullets(const BulletSystem& original,const BulletSystem& replacement) 
         constexpr std::array<float,10> nativeDiameters{4,6,4,6,5,4,16,11,9,32};
         if(y.nativeType>=0)Equal(y.radius,nativeDiameters.at(y.nativeType)*0.5F*(20.0F/448),"bullet.nativeRadius");
         else Equal(x.radius,y.radius,"beam.radius");
-        EqualPosition(x.position,y.position,"bullet.position");Equal(x.velocity,y.velocity,"bullet.velocity");
+        EqualPosition(x.position,y.position,"bullet.position");Equal(x.Velocity(),y.Velocity(),"bullet.velocity");
         Equal(x.baseVelocity,y.baseVelocity,"bullet.baseVelocity");Equal(x.launchDirection,y.launchDirection,"bullet.launchDirection");Equal(x.acceleration,y.acceleration,"bullet.acceleration");
-        Equal(x.rotationAxis,y.rotationAxis,"bullet.axis");Equal(x.beamDirection,y.beamDirection,"beam.direction");
+        Equal(x.rotationAxis,y.rotationAxis,"bullet.axis");Equal(x.Direction(),y.Direction(),"beam.direction");
         const float xs[]={x.age,x.maxAge,x.angularVelocity,x.homingTurnRate,x.damage,x.beamLength,x.warningSeconds,
             x.turnDelaySeconds,x.turnAngle,x.turnSpeed,x.launchBoost,x.launchBoostSeconds,x.spawnVisualSeconds,x.spawnMoveScale,
             x.beamGrowSeconds,x.beamFadeSeconds,x.dangerEndSeconds};
@@ -451,7 +451,7 @@ void TestWorldCoordinates() {
     assert(bullets->Pool().ActiveCount()==1);
     bullets->Pool().ForEachActive([](const Bullet& bullet) {
         Equal(bullet.position,{13.25F,8,-4.5F},"world.muzzleOffset");
-        Equal(bullet.velocity,{60,0,0},"world.shotSpeed");
+        Equal(bullet.Velocity(),{60,0,0},"world.shotSpeed");
     });
     bullets->Reset();
     skill.Fire(skill::Laser{.length=30,.width=2},{13,7,-4},{14,8,-4.5F},*bullets);
@@ -589,9 +589,9 @@ void TestSpawnBoundaryVelocity() {
             state.Fire({skill::Formation::FixedFan,3,2,1,1,2,0,0,0,entry.second|skill::LaunchBoost|skill::Accelerate},{},{},*bullets);
             Bullet* bullet=nullptr;bullets->Pool().ForEachActive([&](Bullet& b){bullet=&b;});assert(bullet);
             for(int tick=0;tick<(entry.first-1)*hz/60;++tick) {
-                bullets->Update(1.0F/hz);Equal(bullet->velocity,{2,0,0},"spawn.velocityBeforeMotion");
+                bullets->Update(1.0F/hz);Equal(bullet->Velocity(),{2,0,0},"spawn.velocityBeforeMotion");
             }
-            bullets->Update(1.0F/hz);Equal(bullet->velocity.x,15.3928571F,"spawn.zeroMotionSample");Equal(bullet->velocity.z,0,"spawn.noEarlyAcceleration");
+            bullets->Update(1.0F/hz);Equal(bullet->Velocity().x,15.3928571F,"spawn.zeroMotionSample");Equal(bullet->Velocity().z,0,"spawn.noEarlyAcceleration");
         }
 }
 int observedStepEffects=0;Vector3 stepEffectPosition{};

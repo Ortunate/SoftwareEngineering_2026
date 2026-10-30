@@ -3,6 +3,7 @@
 #pragma once
 
 #include "gameplay/bullets/system.hpp"
+#include "gameplay/actors/aim.hpp"
 #include "gameplay/data/native_combat.hpp"
 #include "gameplay/data/native_sizes.hpp"
 
@@ -26,6 +27,7 @@ struct PlayerInput {
     bool focus = false;
     bool fire = false;
     bool bomb = false;
+    bool aimAssistEnabled = false; // 正式游戏由持久化设置传入，独立调用默认保留原行为。
 };
 
 /// @brief 玩家与一颗敌弹接触后的结果；擦弹只对同一颗弹幕报告一次。
@@ -39,13 +41,6 @@ struct PlayerShotVisuals {
     std::array<VisualId,4> impact{kInvalidVisualId,kInvalidVisualId,kInvalidVisualId,kInvalidVisualId};
 };
 
-/// @brief 本帧可瞄准的球形判定体快照；position/radius 为世界坐标/世界单位，radius 须为正。
-/// 仅用于确定准星射线的汇聚深度，不会将弹道吸附到偏离准星的目标中心。
-struct PlayerAimTarget {
-    Vector3 position{};
-    float radius = 0.0F;
-};
-
 /// @brief 持有玩家位置、视角、判定、资源及计时状态，并执行移动、射击和受击规则。
 /// 世界坐标沿用 raylib：正 Z 为初始前方，正 Y 为上方；时间单位为秒，角度单位为弧度。
 class Player {
@@ -56,6 +51,8 @@ public:
     static constexpr int kMaxPower = 128;
     /// @brief 自机弹和副机共用的不透明度（0～255），与贴图及原生动画 Alpha 相乘。
     static constexpr unsigned char kShotAlpha = 51;
+    /// @brief 世界单位的最大擦弹半径，供模型碰撞粗筛复用，命中半径仍由角色接触逻辑管理。
+    static float GrazeRadius();
     /// @brief 两角色副机未缩放的世界高度；原生显示直径均为 16 逻辑像素；第一视角模块的局部布局另行适配，不从显示直径反推。
     static constexpr float kOptionWorldHeight = native_sizes::kOptionHeight;
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
@@ -77,8 +74,8 @@ public:
     /// @param bulletVisual 当前关卡中央主符卡的外观 ID。
     /// @param secondaryVisual 当前机体副弹外观 ID，由关卡选择追踪符卡或直射针素材。
     /// @param allowFire 对话期间为 false；Bomb 不受此参数影响。
-    /// @param aimTargets 本次调用期间借用的活动敌人/Boss 判定体；移动和转向后求准星射线交点。
-    /// 射线未指向目标时在前方 20 世界单位汇聚，已发出的直射弹不再随准星改变方向。
+    /// @param aimTargets 本次调用期间借用的活动敌人/Boss 判定体；移动和转向后求准星射线交点及可选辅助落点。
+    /// 射线与辅助均未选中目标时在前方 20 世界单位汇聚，已发出的直射弹不再随准星改变方向。
     /// 四机体主副弹按原作 60 Hz、30 帧射击窗口分批生成；松开射击后完成当前窗口，allowFire=false 则取消。
     /// @return 成功消耗 Bomb 时返回 true，调用方据此处理清弹和范围伤害。
     bool Update(float deltaTime, const PlayerInput& input, BulletSystem& bullets,
@@ -96,9 +93,10 @@ public:
     bool AdjustPower(int delta);
 
     /// @brief 处理活动敌弹/光束的命中与擦弹；预警无害，命中只清除普通弹，光束保持到结束。
+    /// @param modelDistanceSquared 非负值为模型实体外距离平方（世界单位²）；负值沿用中心/束轴距离。
     /// @param bullet 由弹幕池持有的敌弹，可能清active或消费其擦弹状态；普通弹只擦一次，光束每12内容帧可再擦。
     /// @return 无接触、本次有效擦弹或可造成伤害的命中；无敌时命中返回 None。
-    PlayerContact ContactEnemyBullet(Bullet& bullet) const;
+    PlayerContact ContactEnemyBullet(Bullet& bullet,float modelDistanceSquared=-1) const;
     /// @brief 查询玩家命中球与敌方本体球是否接触；position/radius 为世界坐标/世界半径，半径须正且有限。
     /// 复活或 Bomb 无敌时、半径无效时返回 false；不修改敌人，不产生擦弹，受击结算由 Game 统一合并。
     [[nodiscard]] bool ContactEnemyBody(Vector3 position,float radius) const;
@@ -135,9 +133,15 @@ public:
     /// @brief 副机的近距离尺寸倍率，范围 (0,1]；随发射位置等比缩小以保持屏幕尺寸，避免遮挡准星。
     [[nodiscard]] float OptionScale() const;
     /// @brief 本次姿态重置后经过的游戏秒数，供副机原生动画同步；暂停时不推进。
+    /// @brief 受击保护剩余秒数，仅供观战闪烁，不改变伤害判定。
+    [[nodiscard]] float InvulnerabilitySeconds() const { return invulnerableTimer_; }
     [[nodiscard]] double VisualAge() const { return visualAge_; }
 
+    /// @brief 借用本帧解析结果，仅用于 HUD，不拥有目标对象。
+    [[nodiscard]] const PlayerAimResult& Aim() const { return aim_; }
+
 private:
+    PlayerAimResult aim_{};
     /// @brief 当前视线的单位前向向量。
     [[nodiscard]] Vector3 Forward() const;
     /// @brief 与当前水平朝向垂直的单位右向量。

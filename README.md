@@ -1,6 +1,19 @@
+三维弹体已接入正式游戏。双击 `Run-Model-Game.cmd` 使用项目内工具构建并运行；资源、模块结构、碰撞约定和验收截图见[运行时接入说明](docs/PROJECTILE_RUNTIME.md)。独立审阅工具继续保留，并复用正式实现。
+
 # koumakyou
 
-一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Normal 一至六面完整流程，支持连续闯关和逐关练习。出生时序、行为和弹幕参数依据本机新典数据提炼并通过独立参考测试核对；三维操作、碰撞、随机序列和部分结算仍有项目适配。数据来源、转写流程及验证边界见 [Stage 移植方法](docs/STAGE_PORTING_METHOD.md)。
+一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Easy／Normal／Hard／Lunatic 一至六面流程（Easy 在五面结束）及独立 Extra，支持连续闯关、逐关练习与已接入符卡练习。出生时序、行为和弹幕参数依据本机新典数据提炼并通过独立参考测试核对；三维操作、碰撞、随机序列和部分结算仍有项目适配。数据来源、转写流程及验证边界见 [Stage 移植方法](docs/STAGE_PORTING_METHOD.md)。
+
+敌方激光两套模型使用 `Review-Lasers.cmd` 独立审阅，`Stress-Lasers.cmd` 压测；长宽、时序、碰撞与资源说明见[敌方激光](docs/PROJECTILE_LASERS.md)。两套均已人工验收通过。
+
+弹体独立建模首件（Type 4 苦无）通过根目录 `Review-Kunai.cmd` 查看原版风格低面数模型、16 色/光效参数及真实碰撞体；`Stress-Kunai.cmd` 运行 8192 发压力测试。工具与依赖隔离在项目目录，不启动游戏；首次准备工具运行 `Setup-Projectile-Tools.cmd`。新版操作、性能范围及 raylib 接口见 [原版风格苦无验收卡](assets/projectiles/kunai_classic/REVIEW.md)，新版已由用户与 leader 人工验收通过。
+
+敌方普通弹体整组（Type 0–9）可通过根目录 `Review-Projectiles.cmd` 独立查看模型、色表、球壳/火焰及精确碰撞；`Stress-Projectiles.cmd` 统一测试 8192 发与混合弹种。新增九类已制作，其中八类已人工通过，泡弹待最终复验，操作与接口见 [全组交付说明](docs/PROJECTILE_COLLECTION_REVIEW.md)。
+
+
+## Replay
+
+Normal 一面、一面整关练习与 Night Bird／Demarcation 符卡练习结束后可询问保存并命名录像，从主菜单 Replay 选择播放；支持暂停、定位、倍速和三种观察视角。文件保存在启动目录的 `replays/`，仅支持相同构建。实现边界与验证方式见 [Replay 说明](docs/REPLAY.md)。
 
 ## 已实现
 
@@ -140,7 +153,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 若 GitHub 下载失败，配置命令末尾追加 `-DFETCHCONTENT_SOURCE_DIR_RAYLIB="D:/Libraries/raylib-5.5"`（改为实际 raylib 源码目录，不是游戏项目）。
 
-Windows/MSVC 构建自动嵌入 UTF-8 应用清单，保留中文音乐名；无需修改系统全局 UTF-8 设置，也无需每次手工修补 exe。
+Windows 的 MSVC 与 MinGW 构建均自动嵌入 UTF-8 应用清单，保留中文音乐名；无需修改系统全局 UTF-8 设置，也无需每次手工修补 exe。MinGW 使用 `windres` 编译 `src/windows_utf8.rc`，该工具应随编译器一起安装。
 
 也可以使用 CMake GUI 打开项目根目录并选择对应的 Visual Studio 生成器。
 
@@ -152,6 +165,25 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 .\build\koumakyou.exe
 ```
+
+有可用音频设备时，可额外静音验证标题和一面共 3 首 BGM 的文件加载、MP3 解码及播放推进；此测试不创建窗口，也不修改玩家设置：
+
+```powershell
+cmake --build build --target koumakyou_music_tests
+.\build\koumakyou_music_tests.exe
+```
+
+辅助瞄准默认开启，Option 的 AIM ASSIST 可关闭并即时保存。目标判定球边缘距准星最多 6°时修正弹道，被辅助瞄准的敌机周围显示四个朝内浮动的锁定箭头；镜头仍由鼠标控制，已发出的普通弹不再修正。
+
+锁定提示动画可通过真实游戏渲染路径复现（需要图形会话，GIF 编码需要 Pillow）：
+
+```powershell
+cmake --build build/release --target aim_lock_preview
+./build/release/aim_lock_preview.exe output/aim-lock/frames
+python tools/render_aim_lock_gif.py output/aim-lock/frames output/aim-lock/aim-lock.gif
+```
+
+导出 6 秒、24 FPS：开头与结尾关闭辅助，中间四秒展示移动敌机的四向锁定箭头。预览使用独立设置目录，不修改玩家记录。
 
 ## 操作
 
@@ -250,3 +282,12 @@ Boss 角色类与各关启动配方的组织、阶段跳转和所有权约定见
 ./build/koumakyou --capture-stage 6 side_view.png 90 20
 ./build/macos-debug/koumakyou --capture-stage 8 hitbox_capture.png 0 0 --debug-render
 ```
+
+灵梦三款自机弹体使用 `Review-Reimu.cmd` 独立审阅，见 [建模说明](docs/PROJECTILE_REIMU.md)。
+
+魔理沙四类、十二档自机弹体使用 `Review-Marisa.cmd` 独立审阅，见 [模型与验收说明](docs/PROJECTILE_MARISA.md)。
+
+三种 Bomb 模型（梦想封印、星群、Master Spark）使用 `Review-Bombs.cmd` 独立审阅，见 [模型与体积对照说明](docs/PROJECTILE_BOMBS.md)，三款均已人工验收通过。
+# 掉落物模型验收
+
+七款薄板道具：运行 `Review-Items.cmd`，旋转 GIF 和制作方式见 [掉落物模型](docs/ITEM_MODELS.md)。

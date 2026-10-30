@@ -60,7 +60,9 @@ constexpr VisualId kFullPowerPoint=kBombPoint+1;
 constexpr VisualId kLifePoint=kFullPowerPoint+1;
 /// @brief 独立外部粒子共用etama4材质；当前帧的脚本/尺寸由各粒子保存，不借用演员池槽。
 constexpr VisualId kExternalParticle=kLifePoint+1;
-constexpr std::size_t kCommonVisualCount=kExternalParticle+1;
+/// @brief 观战自机两角色各五个动作；公共槽保证所有关卡使用同一绑定。
+constexpr VisualId kPlayerBody=kExternalParticle+1;
+constexpr std::size_t kCommonVisualCount=kPlayerBody+10;
 /// @brief 保留 ECL 弹幕类型与颜色，非法输入回退普通蓝弹；类型内部颜色转换由战斗目录负责。
 constexpr VisualId NativeBulletVisual(int type,int color) {
     return type>=0 && type<10 && color>=0 && color<16

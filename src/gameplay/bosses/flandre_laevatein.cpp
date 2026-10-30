@@ -19,8 +19,8 @@ void Move(Actor& actor,int frames,Vector3 target) {
 Vector3 Direction(float angle,float tilt) {return {std::cos(angle)*std::cos(tilt),std::cos(angle)*std::sin(tilt),-std::sin(angle)};}
 void Relocate(Actor& actor,float angle,float tilt) {
     if(auto* beam=actor.Beam(0)) {
-        beam->beamAnchor=actor.Position();beam->beamDirection=Direction(angle,tilt);
-        const auto d=beam->beamDirection,p=beam->beamAnchor;const float start=beam->beamStartOffset;
+        beam->beamAnchor=actor.Position();beam->SetBeamDirection(Direction(angle,tilt));
+        const auto d=beam->Direction(),p=beam->beamAnchor;const float start=beam->beamStartOffset;
         beam->position={p.x+d.x*start,p.y+d.y*start,p.z+d.z*start};
     }
 }
@@ -41,7 +41,7 @@ int SampleSwords(Actor& actor,const skill::Shot& shot) {
     int active=0;
     for(int slot=0;slot<8;++slot)if(const auto* beam=actor.Beam(slot)) {
         ++active;
-        const auto p=beam->beamAnchor,d=beam->beamDirection;
+        const auto p=beam->beamAnchor,d=beam->Direction();
         // 起距闭、终距开；每48源像素对应固定世界步长，不能随光束长度重新均分。
         // 用整数序号计算相对距离，避免反复加起距的舍入在恰好七个间隔的剑上多发终点一弹。
         for(int sample=0;sample*2.14285707F<beam->beamLength;++sample) {

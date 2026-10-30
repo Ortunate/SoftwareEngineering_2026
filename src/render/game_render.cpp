@@ -1,6 +1,7 @@
 // 本文件负责全窗口三维世界、加载页、设置页面与暂停/结算叠加层的绘制。
 
 #include "app/game.hpp"
+#include "stages/common/ids.hpp"
 #include "app/constants.hpp"
 #include "app/math.hpp"
 #include "config/settings.hpp"
@@ -25,7 +26,8 @@ using namespace game_math;
 void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
-    if(state_==RunState::Ending) {
+    if(state_==RunState::ReplayList) { DrawReplayList(); }
+    else if(state_==RunState::Ending) {
         DrawEnding();
     } else if(state_==RunState::ScoreSave || state_==RunState::ScoreName) {
         DrawScoreEntry();
@@ -47,7 +49,15 @@ void Game::Draw() const {
         DrawOverlay();
     }
     // 唯一的全局按键提示出口；在所有页面、演出与模态上方绘制，避免遗漏或叠画多个旧页脚。
-    DrawCommandBar();
+    if(replayMode_==replay::Mode::Playback)DrawReplayBar();else if(!ReplaySaveModalOpen())DrawCommandBar();
+    if(ReplaySaveModalOpen())DrawReplaySave();
+    if(!replayStatus_.empty() && state_!=RunState::ReplayList && !ReplaySaveModalOpen()) {
+        const ui::DrawContext context{assets_.Common().uiFont};
+        const Rectangle bounds{16,16,std::max(1.0F,static_cast<float>(GetScreenWidth()-32)),36};
+        ui::Panel{bounds}.Draw(context);
+        ui::Label{{24,16,bounds.width-16,36},20}.Draw(context,replayStatus_.c_str(),context.theme.text);
+    }
+
 }
 
 void Game::DrawLoading() const {
@@ -92,6 +102,7 @@ void Game::DrawLoading() const {
 }
 
 void Game::DrawWorld() const {
+    const auto& drawCamera=replayMode_==replay::Mode::Playback && replayView_!=0?observer_:camera_;
     const GameplayLayout layout(GetScreenWidth(),GetScreenHeight());
     const Rectangle viewport=layout.Viewport();
     // 默认窗口的 rlgl 尺寸是逻辑像素，macOS Retina 实际视口需用 GetRenderWidth/Height；
@@ -104,10 +115,10 @@ void Game::DrawWorld() const {
     rlViewport(0,0,framebufferWidth,framebufferHeight);
     rlEnableScissorTest();
     rlScissor(0,0,framebufferWidth,framebufferHeight);
-    BeginMode3D(camera_);
+    BeginMode3D(drawCamera);
     // 原生窗口与离屏截图共用当前 framebuffer；只更改视口和投影，不创建/切换额外 FBO。
     rlMatrixMode(RL_PROJECTION); rlLoadIdentity();
-    const double top=rlGetCullDistanceNear()*std::tan(camera_.fovy*DEG2RAD/2);
+    const double top=rlGetCullDistanceNear()*std::tan(drawCamera.fovy*DEG2RAD/2);
     const double right=top*viewport.width/viewport.height;
     rlFrustum(-right,right,-top,top,rlGetCullDistanceNear(),rlGetCullDistanceFar());
     rlMatrixMode(RL_MODELVIEW);
@@ -136,7 +147,7 @@ void Game::DrawWorld() const {
             const VisualId visual=PickupVisual(pickup);
             const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
-            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample()});
+            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),255,pickup.RotationRadians()});
         });
         if (player_.OptionsVisible()) {
             const auto positions = player_.OptionPositions();
@@ -157,15 +168,19 @@ void Game::DrawWorld() const {
             }
         }
     }
+    if(replayMode_==replay::Mode::Playback && replayView_!=0 && player_.RemainingLives()>0 &&
+       (player_.InvulnerabilitySeconds()<=0 || static_cast<int>(player_.VisualAge()*12)%2==0))
+        pickupSprites_.push_back({player_.Position(),static_cast<VisualId>(stage_assets::kPlayerBody+(player_.IsMarisa()?5:0)+playerBodyAction_),1,&playerBodyAnimation_.player.Sample()});
     DrawPlayerBombBackdrop(viewport.width,viewport.height);
-    spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
+    combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,drawCamera,viewport.width/viewport.height,stage_.Elapsed());
+    spriteRenderer_.Draw(drawCamera, bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
-                         actorEffects_,playerBombVolumes_,&externalEffects_);
+                         actorEffects_,playerBombVolumes_,&externalEffects_,&combatRenderer_);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
-                                          player_.Position());
+                                          player_.Position(),assets_.Projectiles(),assets_.Stage().visuals);
     }
 #endif
 
@@ -261,7 +276,7 @@ void Game::DrawOverlay() const {
         detail(TextFormat("SCORE %09lld",score_),252,22);
         detail(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),284,18);
         for(int index=0;index<static_cast<int>(menu::kSpellResultLabels.size());++index)
-            drawModalRow(layout.SpellResultRow(index),menu::kSpellResultLabels[index],index,menu::kSpellResultAvailable[index]);
+            drawModalRow(layout.SpellResultRow(index),menu::kSpellResultLabels[index],index,index!=1 || CanSaveReplay());
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,175});
         const float center=canvas.Point(380,0).x;
@@ -280,7 +295,7 @@ void Game::DrawOverlay() const {
         for(int index=0;index<menu::kResultCount;++index) {
             const auto row=layout.ResultRow(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            ui::DrawPageButton(canvas,font,row,index==1 && stageId_==StageId::Extra?"保存成绩并返回":index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
+            ui::Button{row,index!=2 || CanSaveReplay()}.Draw({font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()},index==1 && stageId_==StageId::Extra?"保存成绩并返回":index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],{weight,reveal});
         }
     }
 

@@ -1,4 +1,4 @@
-// 本文件负责声明图片、着色器、BGM 和音效的统一资源管理接口。
+// 本文件负责声明模型、图片、着色器、BGM 和音效的统一资源管理接口。
 
 #pragma once
 
@@ -16,6 +16,7 @@
 #include <vector>
 
 namespace koumakyou {
+class ProjectileAssets;
 
 /// @brief 主菜单与关卡共同使用、直到程序退出才释放的图形素材。
 struct CommonAssets {
@@ -38,7 +39,7 @@ struct StageAssets {
     SpriteShaders shaders{};
 };
 
-/// @brief 按通用/关卡生命周期统一持有图片、着色器、BGM 和音效；所有接口由图形主线程调用。
+/// @brief 按通用/关卡生命周期统一持有模型、图片、着色器、BGM 和音效；所有接口由图形主线程调用。
 class AssetManager {
 public:
     /// @brief 指定可执行文件旁的素材根目录。
@@ -57,7 +58,7 @@ public:
     /// @brief 开始后台读取与解码；GPU/音频操作仍由主线程的 AdvanceStageLoad 完成。
     /// 清单及其字符串须保持有效，直到加载完成或 UnloadStage；不能与 LoadStage 交错调用。
     void BeginStageLoad(const StageAssetManifest& manifest);
-    /// @brief 主线程每帧调用一次，最多上传一张纹理；完成后返回 true，读取/上传失败抛异常。
+    /// @brief 主线程每帧调用一次，最多上传一张原图集纹理或加载一款模型；完成后返回 true，读取/上传失败抛异常。
     /// 首次调用启动后台任务，调用方应先显示加载页；未开始任务时调用属于逻辑错误。
     [[nodiscard]] bool AdvanceStageLoad();
     /// @brief 已上传资源占比（0～1），仅用于界面反馈；后台解码期间保持当前实际进度。
@@ -76,6 +77,8 @@ public:
     /// 不依赖当前关卡，可供未来自机/关卡或素材浏览器使用；缺失/损坏资源抛异常。
     /// 返回借用引用，随 UnloadStage 或管理器销毁失效，调用方不得释放纹理。
     [[nodiscard]] const BattleAtlasResource& LoadBattleAtlas(battle::Atlas id);
+    /// @brief 借用已加载的模型资源；无模型素材的测试关卡返回空，不转移所有权。
+    const ProjectileAssets* Projectiles() const;
     /// @brief 查询当前是否持有关卡专属素材。
     [[nodiscard]] bool HasStage() const { return stageLoaded_; }
 
@@ -89,6 +92,9 @@ public:
     /// 未加载的槽会停止旧曲但不播放；重复选择当前槽不重启。暂停、音量和卸载与其他关卡流一致。
     void PlayStageTrack(int index);
     /// @brief 游戏暂停时暂停当前 BGM。
+    /// @brief 观战定位使用当前音乐身份与秒偏移；不加载或切换素材，未知/无音频时无副作用。
+    int MusicIdentity() const { return static_cast<int>(activeMusic_); }
+    void SeekMusic(float seconds);
     void PauseMusic();
     /// @brief 游戏继续时恢复当前 BGM。
     void ResumeMusic();
@@ -127,6 +133,7 @@ private:
     void UnloadCommon();
 
     std::filesystem::path root_;
+    std::unique_ptr<ProjectileAssets> projectileAssets_;
     CommonAssets common_{};
     StageAssets stage_{};
     std::unique_ptr<StageLoad> stageLoad_;

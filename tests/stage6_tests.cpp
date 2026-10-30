@@ -235,7 +235,7 @@ void TestDifficultyOrdinaryReference() {
                 const auto& b=*shots[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 near(b.position.x,(e.position.x-192)*scale,5e-4F);near(b.position.z,10-e.position.y*scale,5e-4F);
-                near(b.velocity.x,e.velocity.x*speedScale,1e-4F);near(b.velocity.y,0,1e-5F);near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);near(b.Velocity().y,0,1e-5F);near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
             }
         }
         assert(actor.Random(1)==source.Random(1));
@@ -266,7 +266,7 @@ void TestOrdinaryDisplayRates() {
                     const auto& a=actual[n];const auto& b=expected[n];
                     assert(a.nativeType==b.nativeType&&a.nativeColor==b.nativeColor&&a.sampleMotionAtStart==b.sampleMotionAtStart);
                     Near(a.position.x,b.position.x);Near(a.position.y,b.position.y);Near(a.position.z,b.position.z);
-                    Near(a.velocity.x,b.velocity.x,1e-4F);Near(a.velocity.y,b.velocity.y,1e-4F);Near(a.velocity.z,b.velocity.z,1e-4F);
+                    Near(a.Velocity().x,b.Velocity().x,1e-4F);Near(a.Velocity().y,b.Velocity().y,1e-4F);Near(a.Velocity().z,b.Velocity().z,1e-4F);
                     Near(a.spawnVisualSeconds,b.spawnVisualSeconds,1e-5F);
                 }
             }
@@ -298,9 +298,9 @@ void TestMidbossDifficultyReference() {
             for(std::size_t n=0;n<shots.size();++n) {
                 const auto& b=*shots[n];const auto& e=source.emissions[n];
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                if(std::abs(b.velocity.x-e.velocity.x*speedScale)>1e-4F||std::abs(b.velocity.z+e.velocity.y*speedScale)>1e-4F)
+                if(std::abs(b.Velocity().x-e.velocity.x*speedScale)>1e-4F||std::abs(b.Velocity().z+e.velocity.y*speedScale)>1e-4F)
                     std::cerr<<"Stage6 mid velocity d "<<d<<" sub "<<sub<<" seed "<<seed<<" rank "<<rank<<" frame "<<frame<<" shot "<<n<<'\n';
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.y,0,1e-5F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().y,0,1e-5F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 Near(b.turnDelaySeconds,e.delay/60,1e-5F);
                 if(e.turns>0) {
@@ -412,9 +412,9 @@ void TestRemiliaNonspellDifficultyReference() {
             for(std::size_t n=0;n<shots.size();++n) {
                 const auto& b=*shots[n];const auto& e=source.emissions[n];
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                if(std::abs(b.velocity.x-e.velocity.x*speedScale)>1e-4F||std::abs(b.velocity.z+e.velocity.y*speedScale)>1e-4F)
+                if(std::abs(b.Velocity().x-e.velocity.x*speedScale)>1e-4F||std::abs(b.Velocity().z+e.velocity.y*speedScale)>1e-4F)
                     std::cerr<<"Stage6 Remilia nonspell velocity d "<<d<<" sub "<<sub<<" seed "<<seed<<" rank "<<rank<<" carry "<<carry<<" frame "<<frame<<" shot "<<n<<'\n';
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.y,0,1e-5F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().y,0,1e-5F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 Near(b.turnDelaySeconds,e.delay/60,1e-5F);
                 Near(b.acceleration.x,e.acceleration.x*scale*3600,1e-5F);Near(b.acceleration.y,0,1e-5F);Near(b.acceleration.z,-e.acceleration.y*scale*3600,1e-5F);
@@ -518,14 +518,14 @@ void TestRemiliaSpellDifficultyReference(int groups=kRemiliaSpellCases.size()) {
             for(std::size_t n=0;n<beams.size();++n) {
                 const auto& b=*beams[n];const auto& e=source.beams[n];
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.beamDirection.x,e.direction.x,1e-5F);Near(b.beamDirection.y,0,1e-5F);Near(b.beamDirection.z,-e.direction.y,1e-5F);
+                Near(b.Direction().x,e.direction.x,1e-5F);Near(b.Direction().y,0,1e-5F);Near(b.Direction().z,-e.direction.y,1e-5F);
                 Near(b.beamLength,e.length*scale);Near(b.radius,14*scale);Near(b.beamGrowSeconds,e.grow/60.0F,1e-5F);
                 Near(b.warningSeconds,50.0F/60,1e-5F);Near(b.dangerEndSeconds,134.0F/60,1e-5F);Near(b.maxAge,166.0F/60,1e-5F);
             }
             for(std::size_t n=0;n<shots.size();++n) {
                 const auto& b=*shots[n];const auto& e=expected[n];
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.y,0,1e-5F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().y,0,1e-5F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 assert(b.nativeType==e.type&&b.nativeColor==e.color);
                 assert(b.sampleMotionAtStart==(e.flags!=8||e.accelerationFrames>=0));
                 Near(b.acceleration.x,e.acceleration.x*scale*3600,1e-5F);Near(b.acceleration.y,0,1e-5F);Near(b.acceleration.z,-e.acceleration.y*scale*3600,1e-5F);
@@ -723,7 +723,7 @@ void TestNativeStarGeometry() {
     }
     std::size_t index=0;bullets->Pool().ForEachActive([&](const Bullet& b) {
         const auto& e=expected[index++];assert(b.IsBeam());Near(b.position.x,e.position.x);Near(b.position.z,e.position.z);
-        Near(b.beamDirection.x,e.direction.x);Near(b.beamDirection.z,e.direction.z);Near(b.beamLength,e.length);
+        Near(b.Direction().x,e.direction.x);Near(b.Direction().z,e.direction.z);Near(b.beamLength,e.length);
         Near(b.radius,0.625F);Near(b.beamGrowSeconds,e.grow/60.0F);Near(b.dangerEndSeconds,134.0F/60);Near(b.maxAge,166.0F/60);
     });
     assert(actor.Random(1)==static_cast<float>(Next(random)>>8)/16777216.0F);
@@ -739,9 +739,9 @@ void TestNativeMines() {
     actor.Update(1.0F/60,{},*bullets);assert(bullets->Pool().ActiveCount()==14);
     unsigned random=49;for(int i=0;i<4;++i)Next(random);const float phase=static_cast<float>(Next(random)>>8)/16777216.0F*2*pi-pi;
     int index=0;bullets->Pool().ForEachActive([&](const Bullet& b) {
-        if(index<10) {Near(b.velocity.z,1);Near(b.accelerationSeconds,1e9F);}
+        if(index<10) {Near(b.Velocity().z,1);Near(b.accelerationSeconds,1e9F);}
         else {
-            assert(b.nativeType==3&&b.nativeColor==2);Near(b.position.x,index-4.0F);Near(BulletSystem::Length(b.velocity),0);
+            assert(b.nativeType==3&&b.nativeColor==2);Near(b.position.x,index-4.0F);Near(BulletSystem::Length(b.Velocity()),0);
             const float angle=b.position.x*pi/11.4285714F+phase;
             Near(b.acceleration.x,1.60714281F*std::cos(angle));Near(b.acceleration.z,-1.60714281F*std::sin(angle));
             Near(b.accelerationSeconds,2);Near(b.spawnVisualSeconds,32.0F/60);
@@ -806,7 +806,7 @@ void TestSpatialDisplayFrameRates() {
             auto bullets=std::make_unique<BulletSystem>();behavior::Actor actor;actor.Reset({0,0,4},19000,7);
             actor.difficulty=*native_combat::DifficultyFromIndex(d);ConfigureBehavior(actor,true);actor.Start(entry(actor));
             for(int frame=0;frame<fps*12;++frame)actor.Update(1.0F/fps,{2,3,-6},*bullets);
-            std::vector<Snapshot> actual;bullets->Pool().ForEachActive([&](const Bullet& b){actual.push_back({b.position,b.velocity,b.nativeType,b.nativeColor,b.bouncesRemaining});});
+            std::vector<Snapshot> actual;bullets->Pool().ForEachActive([&](const Bullet& b){actual.push_back({b.position,b.Velocity(),b.nativeType,b.nativeColor,b.bouncesRemaining});});
             const float nextRandom=actor.Random(1);
             if(fps==120) {expected=actual;position=actor.position;random=nextRandom;phase=actor.phaseFrames;animation=actor.animationScript;}
             else {

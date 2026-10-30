@@ -30,7 +30,7 @@ void CompareShots(const BulletSystem& bullets,const Ref& source) {
         const auto& b=*actual[n];const auto& e=source.emissions[n];const auto p=World(e.position);
         assert(b.nativeType==e.type&&b.nativeColor==e.color);
         Near(b.position.x,p.x,"bullet.x");Near(b.position.z,p.z,"bullet.z");Near(b.position.y,p.y,"bullet.y");
-        Near(b.velocity.x,e.velocity.x*speedScale,"bullet.vx",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"bullet.vz",1e-4F);
+        Near(b.Velocity().x,e.velocity.x*speedScale,"bullet.vx",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"bullet.vz",1e-4F);
         Near(b.spawnVisualSeconds,(e.flags&8)?32.0F/60:(e.flags&2)?10.0F/60:0,"appearance",1e-5F);
         assert(b.sampleMotionAtStart&&b.polarMotion==((e.flags&32)!=0));
         if(b.polarMotion) {Near(b.angularVelocity,e.angularVelocity*60,"angular",1e-5F);Near(b.angularSeconds,e.angularFrames/60,"angular.seconds",1e-5F);}
@@ -109,7 +109,7 @@ void TestClocksAndSpatial() {
                 Near(actor.position.z,spawn.position.z+(target.z-spawn.position.z)*fraction,"half.z");
             }
             if(f>=252) {Near(actor.position.x,target.x,"target.x");Near(actor.position.y,target.y,"target.y");Near(actor.position.z,target.z,"target.z");}
-            bullets->Pool().ForEachActive([&](const Bullet& b){Near(BulletSystem::Length(b.velocity),1.33928573F,"spatial.speed",1e-4F);});
+            bullets->Pool().ForEachActive([&](const Bullet& b){Near(BulletSystem::Length(b.Velocity()),1.33928573F,"spatial.speed",1e-4F);});
         }
         assert(total==3*(end/period));
         actor.Activate(config);actor.Update(61.0F/60,target,*bullets);actor.ClearFromStage();assert(!actor.active&&actor.finished);
@@ -134,7 +134,7 @@ void TestProjectileTraces() {
             }
             bullets->Update(1.0F/60);const auto p=World({x,y,0});
             Near(actual->position.x,p.x,"trace.x");Near(actual->position.z,p.z,"trace.z");
-            Near(actual->velocity.x,vx*speedScale,"trace.vx",1e-4F);Near(actual->velocity.z,-vy*speedScale,"trace.vz",1e-4F);
+            Near(actual->Velocity().x,vx*speedScale,"trace.vx",1e-4F);Near(actual->Velocity().z,-vy*speedScale,"trace.vz",1e-4F);
             if(!actual->active)break;
         }
     }
@@ -157,7 +157,7 @@ void TestDisplayRates() {
                 for(std::size_t n=0;n<actual.size();++n) {
                     const auto& a=actual[n];const auto& b=expected[n];assert(a.nativeType==b.nativeType&&a.nativeColor==b.nativeColor&&a.polarMotion==b.polarMotion);
                     Near(a.position.x,b.position.x,"display.bullet.x");Near(a.position.y,b.position.y,"display.bullet.y");Near(a.position.z,b.position.z,"display.bullet.z");
-                    Near(a.velocity.x,b.velocity.x,"display.vx",1e-4F);Near(a.velocity.y,b.velocity.y,"display.vy",1e-4F);Near(a.velocity.z,b.velocity.z,"display.vz",1e-4F);
+                    Near(a.Velocity().x,b.Velocity().x,"display.vx",1e-4F);Near(a.Velocity().y,b.Velocity().y,"display.vy",1e-4F);Near(a.Velocity().z,b.Velocity().z,"display.vz",1e-4F);
                 }
             }
         }

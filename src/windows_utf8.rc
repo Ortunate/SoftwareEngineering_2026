@@ -1,0 +1,4 @@
+// 本文件为 MinGW 程序嵌入 UTF-8 进程清单，保证窄字符文件接口能读取中文素材路径。
+#include <winuser.h>
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "windows_utf8.manifest"

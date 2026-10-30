@@ -155,7 +155,7 @@ Routine MovingLasers(Actor& a) {
 void Freeze(Actor& a,bool release) {
     a.ModifyEnemyProjectiles([&](Bullet& bullet) {
         bullet.nativeColor=15;bullet.visual=NativeBulletVisual(bullet.nativeType,15);bullet.color=WHITE;
-        if(!release)bullet.velocity=bullet.baseVelocity={};
+        if(!release)bullet.SetVelocity(bullet.baseVelocity={});
         else {
             const float angle=a.Random(2*pi)-pi;
             bullet.acceleration={1.60714281F*std::cos(angle),0,-1.60714281F*std::sin(angle)};

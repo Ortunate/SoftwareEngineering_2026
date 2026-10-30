@@ -68,7 +68,7 @@ void TestSource() {
                 const auto& b=*actual[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&e.flags==513&&b.sampleMotionAtStart);
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
             }
             if(sub!=37)assert(source.health==spec->health&&source.reserve==spec->reserve&&source.timeout==1800&&source.death==spec->death&&source.healthCallback==spec->callback&&source.timeoutCallback==source.healthCallback);
         }
@@ -103,7 +103,7 @@ void TestClocksAndDisplayRates() {
                 assert(actual.size()==expected.size()&&next==random);
                 for(std::size_t n=0;n<actual.size();++n) {
                     Near(actual[n].position.x,expected[n].position.x);Near(actual[n].position.y,expected[n].position.y);Near(actual[n].position.z,expected[n].position.z);
-                    Near(actual[n].velocity.x,expected[n].velocity.x);Near(actual[n].velocity.y,expected[n].velocity.y);Near(actual[n].velocity.z,expected[n].velocity.z);
+                    Near(actual[n].Velocity().x,expected[n].Velocity().x);Near(actual[n].Velocity().y,expected[n].Velocity().y);Near(actual[n].Velocity().z,expected[n].Velocity().z);
                 }
             }
         }
@@ -156,7 +156,7 @@ void TestCranberrySource() {
                     const auto& b=*actual[n];const auto& e=child.emissions[n];
                     assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart&&e.flags==512);
                     Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                    Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                    Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 }
                 if(emitter.finished||!child.active) {assert(emitter.finished&&!child.active);break;}
             }
@@ -183,7 +183,7 @@ void TestCranberryEmitterDisplayRates() {
                 Near(actor.position.x,expected.x);Near(actor.position.z,expected.z);assert(actor.phaseFrames==phase&&actual.size()==snapshot.size()&&next==random);
                 for(std::size_t n=0;n<actual.size();++n) {
                     Near(actual[n].position.x,snapshot[n].position.x);Near(actual[n].position.y,snapshot[n].position.y);Near(actual[n].position.z,snapshot[n].position.z);
-                    Near(actual[n].velocity.x,snapshot[n].velocity.x,1e-4F);Near(actual[n].velocity.y,snapshot[n].velocity.y,1e-4F);Near(actual[n].velocity.z,snapshot[n].velocity.z,1e-4F);
+                    Near(actual[n].Velocity().x,snapshot[n].Velocity().x,1e-4F);Near(actual[n].Velocity().y,snapshot[n].Velocity().y,1e-4F);Near(actual[n].Velocity().z,snapshot[n].Velocity().z,1e-4F);
                 }
             }
         }
@@ -246,7 +246,7 @@ void TestLaevateinSource() {
                 const auto& b=*shots[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&e.flags==532&&b.sampleMotionAtStart);
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 Near(b.acceleration.x,std::cos(std::atan2(e.velocity.y,e.velocity.x))*e.acceleration*scale*3600,1e-4F);
                 Near(b.acceleration.z,-std::sin(std::atan2(e.velocity.y,e.velocity.x))*e.acceleration*scale*3600,1e-4F);
                 Near(b.accelerationSeconds,e.accelerationFrames/60,1e-5F);Near(b.spawnVisualSeconds,16.0F/60,1e-5F);
@@ -256,7 +256,7 @@ void TestLaevateinSource() {
             for(const auto& expected:source.beams)if(expected.active) {
                 auto match=std::find_if(beams.begin(),beams.end(),[&](const Bullet* b) {
                     return std::abs(b->age-expected.age/60.0F)<1e-5F&&std::abs(b->radius-expected.width*scale/2)<1e-5F&&
-                        std::abs(b->beamDirection.x-std::cos(expected.angle))<1e-5F&&std::abs(b->beamDirection.z+std::sin(expected.angle))<1e-5F;
+                        std::abs(b->Direction().x-std::cos(expected.angle))<1e-5F&&std::abs(b->Direction().z+std::sin(expected.angle))<1e-5F;
                 });
                 if(match==beams.end())std::cerr<<"Laevatein beam frame "<<frame<<" age "<<expected.age<<" slot "<<expected.slot<<" angle "<<expected.angle<<'\n';
                 assert(match!=beams.end());const auto* beam=*match;beams.erase(match);
@@ -329,8 +329,8 @@ void TestLaevateinClocksAndDisplayRates() {
                 for(std::size_t n=0;n<actual.size();++n) {
                     const auto& a=actual[n];const auto& e=expected[n];assert(a.IsBeam()==e.IsBeam()&&a.nativeType==e.nativeType&&a.nativeColor==e.nativeColor);
                     Near(a.position.x,e.position.x);Near(a.position.y,e.position.y);Near(a.position.z,e.position.z);
-                    Near(a.velocity.x,e.velocity.x,1e-4F);Near(a.velocity.y,e.velocity.y,1e-4F);Near(a.velocity.z,e.velocity.z,1e-4F);
-                    Near(a.beamDirection.x,e.beamDirection.x,1e-5F);Near(a.beamDirection.y,e.beamDirection.y,1e-5F);Near(a.beamDirection.z,e.beamDirection.z,1e-5F);
+                    Near(a.Velocity().x,e.Velocity().x,1e-4F);Near(a.Velocity().y,e.Velocity().y,1e-4F);Near(a.Velocity().z,e.Velocity().z,1e-4F);
+                    Near(a.Direction().x,e.Direction().x,1e-5F);Near(a.Direction().y,e.Direction().y,1e-5F);Near(a.Direction().z,e.Direction().z,1e-5F);
                     Near(a.beamLength,e.beamLength);Near(a.maxAge,e.maxAge,1e-5F);Near(a.dangerEndSeconds,e.dangerEndSeconds,1e-5F);
                 }
             }
@@ -364,7 +364,7 @@ void TestFourOfAKindSource() {
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 assert(e.flags==(e.type==2?513:512));
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
             }
         };
         for(int frame=0;frame<3900;++frame) {
@@ -446,7 +446,7 @@ void TestFourOfAKindClocksAndDisplayRates() {
                     Near(actor.position.x,position.x);Near(actor.position.y,position.y);Near(actor.position.z,position.z);assert(next==random&&actual.size()==expected.size());
                     for(std::size_t n=0;n<actual.size();++n) {
                         Near(actual[n].position.x,expected[n].position.x);Near(actual[n].position.y,expected[n].position.y);Near(actual[n].position.z,expected[n].position.z);
-                        Near(actual[n].velocity.x,expected[n].velocity.x);Near(actual[n].velocity.y,expected[n].velocity.y);Near(actual[n].velocity.z,expected[n].velocity.z);
+                        Near(actual[n].Velocity().x,expected[n].Velocity().x);Near(actual[n].Velocity().y,expected[n].Velocity().y);Near(actual[n].Velocity().z,expected[n].Velocity().z);
                         assert(actual[n].nativeType==expected[n].nativeType&&actual[n].nativeColor==expected[n].nativeColor);
                     }
                 }

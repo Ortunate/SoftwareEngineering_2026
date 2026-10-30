@@ -1,6 +1,7 @@
 // 本文件统一绘制角色、弹幕、道具及 Bomb 视觉精灵/光束，处理透明排序、光晕和调试图层。
 
 #include "render/sprite_renderer.hpp"
+#include "render/combat_renderer.hpp"
 #include "render/animated_sprite.hpp"
 #include "render/bomb_geometry.hpp"
 #include "gameplay/data/native_sizes.hpp"
@@ -221,7 +222,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                           std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
                           const SpriteShaders& shaders,
-                          const ActorEffectSystem& effects,std::span<const BombVolumeSprite> bombVolumes,const effects::ExternalEffectSystem* external) const {
+                          const ActorEffectSystem& effects,std::span<const BombVolumeSprite> bombVolumes,const effects::ExternalEffectSystem* external,CombatRenderer* models) const {
     // 旧清单仍可持有 cutout/core shader；所有透明贴图改用连续 Alpha，不能让裁剪阈值切断柔边。
     (void)shaders;
     using Kind=TransparentDraw::Kind;
@@ -269,7 +270,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     glowCounts_.assign(visuals.size(),0);
     const auto queue=[&](TransparentDraw command,SpritePlane plane) {
         command.depth=plane.depth;
-        if(!beams_.empty())spritePlanes_.push_back(plane);
+        if(!beams_.empty()&&command.kind!=Kind::ModelGroup)spritePlanes_.push_back(plane);
         if(command.kind==Kind::Actor)bombActorDepths_.push_back(plane.depth);
         transparentDraws_.push_back(command);
     };
@@ -308,16 +309,22 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         queue({Kind::Pickup,0,index},spritePlane(visual,visual.worldHeight*pickup.heightScale,pickup.position,pickup.animation));
     }
 
+    if(models)for(int group=0;group<models->TransparentGroups();group++)queue({Kind::ModelGroup,0,static_cast<std::size_t>(group)},SpritePlane{models->GroupDepth(group)});
+    if(models)models->DrawOpaque();
     // 只让真实不透明体积写入深度。贴图即使 Alpha=0 也会写矩形深度，所以不能放在此通道。
     rlDrawRenderBatchActive();rlEnableDepthMask();rlEnableBackfaceCulling();
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         const auto& visual=FindVisual(visuals,bullet.visual);
         if(bullet.IsBeam()) {
-            if(!visual.archive && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
+            if((!models||!models->Handles(bullet,visual))&&!visual.archive && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
                 const auto end=bullet.BeamEnd();
                 const float width=bullet.radius*bullet.BeamVisualScale();
                 DrawCylinderEx(bullet.position,end,width*0.45F,width*0.45F,10,WHITE);
             }
+            return;
+        }
+        if(models&&models->Handles(bullet,visual)) {
+            if(ProjectileFrameBuilder::Resolve(bullet,visual).type<0)queue({Kind::Bullet,0,0,&bullet},SpritePlane{depth(bullet.position)});
             return;
         }
         if(visual.mode==VisualMode::Sphere && bullet.color.a==255) {
@@ -327,7 +334,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         if(bullet.visual>=visuals.size() || (!visual.archive&&distance<0.7F*0.7F))return;
         if(!visual.archive && bullet.owner==BulletOwner::Enemy && distance<1.1F*1.1F)return;
         const auto plane=spritePlane(visual,BulletHeight(visual,bullet),bullet.position,
-                                  &bullet.animation.player.Sample(),bullet.velocity);
+                                  &bullet.animation.player.Sample(),bullet.Direction());
         // 同深度按插入顺序稳定绘制，光晕先于自身弹体，避免光效盖住前方角色或道具。
         if(visual.glow && !visual.archive && distance<=8.0F*8.0F && glowCounts_[bullet.visual]++<2048)
             queue({Kind::Glow,0,0,&bullet},plane);
@@ -404,7 +411,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         const auto* sprite=bombVolumes[i].sprite;
         if(!sprite)continue;
         if(sprite->shape==PlayerBombSprite::Shape::Beam)
-            queueBeam(sprite->volume.origin,sprite->volume.end,Kind::BombVolume,i,nullptr);
+            queueBeam(models&&models->Available()?sprite->position:sprite->volume.origin,models&&models->Available()?sprite->end:sprite->volume.end,Kind::BombVolume,i,nullptr);
         else transparentDraws_.push_back({Kind::BombVolume,depth(sprite->volume.origin),i});
     }
     // 沿视线投影的深度才决定遮挡；到相机的欧氏距离会在斜视/大公告板重叠时反转顺序。
@@ -412,9 +419,12 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                      [](const auto& left,const auto& right){return left.depth>right.depth;});
     rlDrawRenderBatchActive();rlDisableDepthMask();rlDisableBackfaceCulling();
     BeginBlendMode(BLEND_ALPHA);
+    modelCommands_.clear();
     for(const auto& command:transparentDraws_) {
         // 原生激光保留当前混合模式，相邻加色片段可合批；其他绘制入口仍以 Alpha 为默认状态。
         if(command.kind!=Kind::Beam)BeginBlendMode(BLEND_ALPHA);
+        if(command.kind==Kind::ModelGroup){modelCommands_.push_back(command.index);continue;}
+        if(!modelCommands_.empty()){models->DrawGroups(modelCommands_);modelCommands_.clear();}
         if(command.kind==Kind::Actor) {
             const auto& actor=translucentActors_[command.index];const auto& appearance=actor.appearance;
             const auto& visual=FindVisual(visuals,actor.visual);
@@ -433,15 +443,17 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                 DrawActorBurst(actor.position,actor.hitRadius,appearance.burst,Fade(color,appearance.burstAlpha),actor.kind);
         } else if(command.kind==Kind::Pickup) {
             const auto& pickup=pickups[command.index];const auto& visual=FindVisual(visuals,pickup.visual);
+            if(models&&(models->DrawItem(pickup,visual)||models->DrawOption(pickup,visual)))continue;
             const float height=visual.worldHeight*pickup.heightScale;
             if(IsTextureValid(visual.texture))DrawSprite(camera,screenUp,Spec(visual,height,pickup.animation),
                                                        pickup.position,{255,255,255,pickup.alpha});
             else DrawSphere(pickup.position,height*0.35F,Fade(RED,pickup.alpha/255.0F));
         } else if(command.kind==Kind::Bullet) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
+            if(models&&models->DrawBullet(bullet,visual))continue;
             if(visual.mode==VisualMode::Sphere)DrawSphere(bullet.position,bullet.radius,bullet.color);
             else DrawSprite(camera,screenUp,Spec(visual,BulletHeight(visual,bullet),
-                            &bullet.animation.player.Sample(),bullet.velocity),bullet.position,{255,255,255,bullet.color.a});
+                            &bullet.animation.player.Sample(),bullet.Direction()),bullet.position,{255,255,255,bullet.color.a});
         } else if(command.kind==Kind::Glow) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
             const float distance=std::sqrt(DistanceSquared(bullet.position,camera.position));
@@ -452,6 +464,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                        bullet.position,{255,255,255,opacity});
             EndBlendMode();
         } else if(command.kind==Kind::BombVolume) {
+            if(models&&models->DrawBomb(bombVolumes[command.index],FindVisual(visuals,bombVolumes[command.index].visual),command.from,command.to))continue;
             const auto& volume=bombVolumes[command.index];const auto& visual=FindVisual(visuals,volume.visual);
             if(visual.archive && volume.sprite) {
                 auto sample=*volume.sprite;
@@ -476,8 +489,9 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             }
         } else {
             const auto& beam=*command.bullet;const auto& visual=FindVisual(visuals,beam.visual);
-            const auto point=[&](float t) {return Vector3{beam.position.x+beam.beamDirection.x*beam.beamLength*t,
-                beam.position.y+beam.beamDirection.y*beam.beamLength*t,beam.position.z+beam.beamDirection.z*beam.beamLength*t};};
+            if(models&&models->DrawBeam(beam,visual,command.from,command.to))continue;
+            const auto point=[&](float t) {return Vector3{beam.position.x+beam.Direction().x*beam.beamLength*t,
+                beam.position.y+beam.Direction().y*beam.beamLength*t,beam.position.z+beam.Direction().z*beam.beamLength*t};};
             const auto start=point(command.from),end=point(command.to);
             const float width=beam.radius*beam.BeamVisualScale();
             if(visual.archive) {
@@ -498,6 +512,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             }
         }
     }
+    if(!modelCommands_.empty()){models->DrawGroups(modelCommands_);modelCommands_.clear();}
     EndBlendMode();
     // rlgl 批次延迟提交，必须先 flush 再恢复深度写入/剔除，否则最后一批透明矩形会污染深度。
     rlDrawRenderBatchActive();rlEnableDepthMask();rlEnableBackfaceCulling();
@@ -507,7 +522,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
 void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
                                        std::span<const behavior::Actor*> enemies,
                                        const Boss* boss,
-                                       Vector3 playerPosition) const {
+                                       Vector3 playerPosition,const ProjectileAssets* models,std::span<const VisualResource> visuals) const {
     rlDisableDepthTest();
     rlDisableDepthMask();
     int shownBullets = 0;
@@ -517,6 +532,14 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
             DrawCylinderWiresEx(bullet.position, bullet.BeamEnd(), bullet.radius, bullet.radius,
                                 10, Color{255, 230, 90, 230});
             return;
+        }
+        if(models&&bullet.visual<visuals.size()){
+            auto binding=ProjectileFrameBuilder::Resolve(bullet,visuals[bullet.visual]);
+            if(!binding.asset.empty()){
+                const auto&r=models->Get(binding.asset);
+                if(r.collision){auto pose=ProjectileFrameBuilder::Pose(bullet,binding,*models);auto point=[&](Vector3 v){return Vector3Add(pose.position,Vector3RotateByQuaternion(Vector3Scale(v,pose.scale),pose.rotation));};
+                    for(auto&part:r.collision->Parts())for(auto&t:part.triangles){auto a=point(t.a),b=point(t.b),c=point(t.c);DrawLine3D(a,b,YELLOW);DrawLine3D(b,c,YELLOW);DrawLine3D(c,a,YELLOW);}return;}
+            }
         }
         DrawSphereWires(bullet.position, bullet.radius, 7, 10,
                         Color{255, 230, 90, 230});

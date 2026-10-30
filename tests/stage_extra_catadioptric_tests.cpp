@@ -43,7 +43,7 @@ std::vector<Trace> TestSource() {
                 const auto& b=*actual[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.bouncesRemaining==e.bounces&&!b.reflectLowerZ&&e.flags==2048);
                 Near(b.position.x,(e.position.x-192)*scale,"bullet.x");Near(b.position.z,10-e.position.y*scale,"bullet.z");
-                Near(b.velocity.x,e.velocity.x*speedScale,"velocity.x",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"velocity.z",1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,"velocity.x",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"velocity.z",1e-4F);
                 Near(b.bounceSpeed,std::hypot(e.velocity.x,e.velocity.y)*speedScale,"bounce.speed",1e-4F);
                 const float half=e.type==9?32:e.type==6?16:8;
                 Near(b.bounceHalfExtents.x,half*scale,"half.x");Near(b.bounceHalfExtents.z,half*scale,"half.z");
@@ -79,7 +79,7 @@ void TestProjectileTraces(const std::vector<Trace>& traces) {
             }
             x+=vx;y+=vy;bullets->Update(1.0F/60);
             Near(actual->position.x,(x-192)*scale,"trace.x");Near(actual->position.z,10-y*scale,"trace.z");
-            Near(actual->velocity.x,vx*speedScale,"trace.vx",1e-4F);Near(actual->velocity.z,-vy*speedScale,"trace.vz",1e-4F);
+            Near(actual->Velocity().x,vx*speedScale,"trace.vx",1e-4F);Near(actual->Velocity().z,-vy*speedScale,"trace.vz",1e-4F);
             assert(actual->bouncesRemaining==remaining);if(!actual->active)break;
         }
     }
@@ -116,7 +116,7 @@ void TestClocksAndDisplayRates() {
                 for(std::size_t n=0;n<actual.size();++n) {
                     const auto& a=actual[n];const auto& b=expected[n];assert(a.nativeType==b.nativeType&&a.nativeColor==b.nativeColor&&a.bouncesRemaining==b.bouncesRemaining);
                     Near(a.position.x,b.position.x,"display.bullet.x");Near(a.position.y,b.position.y,"display.bullet.y");Near(a.position.z,b.position.z,"display.bullet.z");
-                    Near(a.velocity.x,b.velocity.x,"display.vx",1e-4F);Near(a.velocity.y,b.velocity.y,"display.vy",1e-4F);Near(a.velocity.z,b.velocity.z,"display.vz",1e-4F);
+                    Near(a.Velocity().x,b.Velocity().x,"display.vx",1e-4F);Near(a.Velocity().y,b.Velocity().y,"display.vy",1e-4F);Near(a.Velocity().z,b.Velocity().z,"display.vz",1e-4F);
                 }
             }
         }
@@ -170,15 +170,15 @@ void TestSpatialGeometry() {
         int sample=0;bool above=false,below=false;
         for(int cluster=0;cluster<5;++cluster) {
             const int start=cluster*26;const float x=std::cos(centers[cluster]),z=-std::sin(centers[cluster]);
-            const auto& center=*actual[start];const float centerSpeed=BulletSystem::Length(center.velocity);
-            Near(center.velocity.x/centerSpeed,x,"spatial.center.x",1e-5F);Near(center.velocity.y,0,"spatial.center.y",1e-5F);Near(center.velocity.z/centerSpeed,z,"spatial.center.z",1e-5F);
+            const auto& center=*actual[start];const float centerSpeed=BulletSystem::Length(center.Velocity());
+            Near(center.Velocity().x/centerSpeed,x,"spatial.center.x",1e-5F);Near(center.Velocity().y,0,"spatial.center.y",1e-5F);Near(center.Velocity().z/centerSpeed,z,"spatial.center.z",1e-5F);
             int index=start+1;
             for(int group=0;group<4;++group)for(int n=0;n<counts[group];++n,++index,++sample) {
-                const auto& b=*actual[index];const auto& e=source.emissions[index];const float speed=BulletSystem::Length(b.velocity);
+                const auto& b=*actual[index];const auto& e=source.emissions[index];const float speed=BulletSystem::Length(b.Velocity());
                 Near(speed,std::hypot(e.velocity.x,e.velocity.y)*speedScale,"spatial.speed",1e-4F);
                 const float expected=1-(1-std::cos(halfAngles[group]))*spatial::RadicalInverse(sample+1,2);
-                Near((b.velocity.x*x+b.velocity.z*z)/speed,expected,"spatial.area",1e-5F);
-                above|=b.velocity.y>1e-5F;below|=b.velocity.y<-1e-5F;
+                Near((b.Velocity().x*x+b.Velocity().z*z)/speed,expected,"spatial.area",1e-5F);
+                above|=b.Velocity().y>1e-5F;below|=b.Velocity().y<-1e-5F;
                 Near(b.position.x,actor.position.x,"spatial.origin.x");Near(b.position.y,actor.position.y,"spatial.origin.y");Near(b.position.z,actor.position.z,"spatial.origin.z");
             }
         }

@@ -44,7 +44,7 @@ void TestSource() {
                 const auto& b=*actual[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 Near(b.acceleration.x,e.acceleration.x*accelerationScale,1e-4F);Near(b.acceleration.z,-e.acceleration.y*accelerationScale,1e-4F);
                 if(e.flags&16)Near(b.accelerationSeconds,e.accelerationFrames/60,1e-5F);
                 Near(b.spawnVisualSeconds,e.flags&8?32.0F/60:0,1e-5F);
@@ -95,7 +95,7 @@ void TestMetadataAndDisplayRates() {
                     Near(actor.position.x,expectedPosition.x);Near(actor.position.y,expectedPosition.y);Near(actor.position.z,expectedPosition.z);
                     for(std::size_t n=0;n<actual.size();++n) {
                         Near(actual[n].position.x,expected[n].position.x);Near(actual[n].position.y,expected[n].position.y);Near(actual[n].position.z,expected[n].position.z);
-                        Near(actual[n].velocity.x,expected[n].velocity.x);Near(actual[n].velocity.y,expected[n].velocity.y);Near(actual[n].velocity.z,expected[n].velocity.z);
+                        Near(actual[n].Velocity().x,expected[n].Velocity().x);Near(actual[n].Velocity().y,expected[n].Velocity().y);Near(actual[n].Velocity().z,expected[n].Velocity().z);
                     }
                 }
                 assert(!bullets->Pool().DroppedSpawns()&&actor.phaseFrames==480&&actor.CanTakeDamage());
@@ -178,7 +178,7 @@ void TestStoneSourceAndDefeat() {
                 const auto& b=*actual[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 Near(b.acceleration.x,e.acceleration.x*accelerationScale,1e-4F);Near(b.acceleration.z,-e.acceleration.y*accelerationScale,1e-4F);
                 if(e.flags&16)Near(b.accelerationSeconds,e.accelerationFrames/60,1e-5F);
                 if(e.flags&(64|128|256)) {
@@ -220,7 +220,7 @@ void TestStoneDisplayRates() {
                 } else {
                     assert(actual.size()==expected.size()&&random==nextRandom);
                     for(std::size_t n=0;n<actual.size();++n) {
-                        Near(actual[n].velocity.x,expected[n].velocity.x);Near(actual[n].velocity.y,expected[n].velocity.y);Near(actual[n].velocity.z,expected[n].velocity.z);
+                        Near(actual[n].Velocity().x,expected[n].Velocity().x);Near(actual[n].Velocity().y,expected[n].Velocity().y);Near(actual[n].Velocity().z,expected[n].Velocity().z);
                         assert(actual[n].turnAbsolute==expected[n].turnAbsolute);Near(actual[n].turnAngle,expected[n].turnAngle);
                     }
                 }

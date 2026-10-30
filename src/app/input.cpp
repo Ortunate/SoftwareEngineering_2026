@@ -18,7 +18,7 @@ void Game::UpdateMainMenu() {
     if (!titleEntrance_.Finished()) return;
     const auto input = ui::MenuInput::Read();
     constexpr int itemCount = menu::kTitleRowCount;
-    const auto available = [](int index) { return index != 4; };
+    const auto available = [this](int index) { return MainMenuItemAvailable(index); };
     if (input.back) {
         selectedMenuItem_ = 9;
         assets_.PlaySoundEffect("menu_cancel");
@@ -58,6 +58,7 @@ void Game::UpdateMainMenu() {
             if(spellPractice_)spellSelection_.page=spell::Page::Stage;
             state_ = RunState::StartSetup;
             break;
+        case 4: OpenReplayList(); break;
         case 5:
             scoreMode_=lastSelection_.challenge?1:0;scoreShot_=lastSelection_.character*2+lastSelection_.shot;
             scoreDifficulty_=lastSelection_.difficulty;
@@ -157,6 +158,7 @@ void Game::UpdateOptions() {
         fpsLimitIndex_ = 1;
         musicVolume_ = defaults.musicVolume;
         mouseSensitivity_ = defaults.mouseSensitivity;
+        aimAssistEnabled_ = defaults.aimAssistEnabled;
         soundVolume_ = defaults.soundVolume;
         initialLives_ = defaults.initialLives;
         initialBombs_ = defaults.initialBombs;
@@ -242,11 +244,12 @@ void Game::AdjustOption(int offset) {
         mouseSensitivity_ = std::clamp(mouseSensitivity_ + offset * 10,
                                      kMinMouseSensitivity, kMaxMouseSensitivity);
     }
-    if (selectedOption_ == 3) {
+    if (selectedOption_ == 4) {
         soundVolume_ = std::clamp(soundVolume_ + offset * 5, 0, 100);
         assets_.SetSoundVolumePercent(soundVolume_);
-    } else if (selectedOption_ == 4) initialLives_ = std::clamp(initialLives_ + offset, 1, 5);
-    else if (selectedOption_ == 5) initialBombs_ = std::clamp(initialBombs_ + offset, 0, 3);
+    } else if (selectedOption_ == 5) initialLives_ = std::clamp(initialLives_ + offset, 1, 5);
+    else if (selectedOption_ == 3) aimAssistEnabled_ = offset>0;
+    else if (selectedOption_ == 6) initialBombs_ = std::clamp(initialBombs_ + offset, 0, 3);
     assets_.PlaySoundEffect("menu_move");
     SaveSettings();
 }
@@ -264,10 +267,11 @@ PlayerInput Game::ReadPlayerInput() const {
         .focus = BindingDown(bindings_.focus),
         .fire = BindingDown(bindings_.fire),
         .bomb = BindingPressed(bindings_.bomb),
+        .aimAssistEnabled = aimAssistEnabled_,
     };
 }
 
-void Game::UpdatePlayer(float deltaTime) { UpdatePlayer(deltaTime,ReadPlayerInput()); }
+void Game::UpdatePlayer(float deltaTime) { UpdatePlayer(deltaTime,runInput_.player); }
 
 void Game::UpdatePlayer(float deltaTime,const PlayerInput& input) {
     playerBombStartedThisFrame_=false;
@@ -279,9 +283,10 @@ void Game::UpdatePlayer(float deltaTime,const PlayerInput& input) {
     std::array<PlayerAimTarget, kActorCapacity + 1> aimTargets{};
     std::size_t aimTargetCount = 0;
     actors_.ForEachActive([&](const behavior::Actor& enemy) {
-        aimTargets[aimTargetCount++] = {enemy.position, enemy.hitRadius};
+        aimTargets[aimTargetCount++] = {enemy.position, enemy.hitRadius,
+            enemy.CanBeTargeted() && enemy.health>0 && enemy.CanTakeDamage()};
     });
-    if (boss_ && boss_->active) aimTargets[aimTargetCount++] = {boss_->position, boss_->hitRadius};
+    if (boss_ && boss_->active) aimTargets[aimTargetCount++] = {boss_->position, boss_->hitRadius, boss_->health>0 && boss_->CanTakeDamage()};
     const bool usedBomb=player_.Update(deltaTime,input,bullets_,stageContent_->PlayerVisuals(player_.Shot()),!dialogueActive_,
                                        {aimTargets.data(),aimTargetCount});
     player_.SyncCamera(camera_);

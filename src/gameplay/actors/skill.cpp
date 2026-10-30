@@ -24,17 +24,17 @@ void ConfigureProjectile(Bullet& bullet,const State& state,const Shot& shot,Vect
         if(state.projectile.accelerationFrames>=0)bullet.accelerationSeconds=state.projectile.accelerationFrames/60.0;
     } else if(flags&Velocity) {
         bullet.polarMotion=true;bullet.angularVelocity=state.projectile.angularVelocity;bullet.angularSeconds=state.projectile.angularFrames/60;
-        bullet.speedAcceleration=state.projectile.speedAcceleration;bullet.baseVelocity=bullet.velocity;
+        bullet.speedAcceleration=state.projectile.speedAcceleration;bullet.baseVelocity=bullet.Velocity();
     }
     if(flags&LaunchBoost) {
         bullet.launchBoost=13.3928571F*factor;bullet.launchBoostSeconds=16.0F/60;
-        bullet.baseVelocity=bullet.velocity;
+        bullet.baseVelocity=bullet.Velocity();
     }
     if(flags&(DelayTurn|DelayAim|AbsoluteTurn)) {
         bullet.turnDelaySeconds=state.projectile.delayFrames/60;
         bullet.turnAngle=state.projectile.turnAngle;
-        bullet.turnSpeed=state.projectile.preserveTurnSpeed ? BulletSystem::Length(bullet.velocity) : state.projectile.turnSpeed*factor;
-        bullet.turnAimed=(flags&DelayAim)!=0;bullet.baseVelocity=bullet.velocity;
+        bullet.turnSpeed=state.projectile.preserveTurnSpeed ? BulletSystem::Length(bullet.Velocity()) : state.projectile.turnSpeed*factor;
+        bullet.turnAimed=(flags&DelayAim)!=0;bullet.baseVelocity=bullet.Velocity();
         bullet.turnAbsolute=(flags&AbsoluteTurn)!=0;bullet.turnCount=state.projectile.turnCount;
         const float horizontal=std::hypot(direction.x,direction.z);
         bullet.turnFixedDirection={horizontal*std::cos(state.projectile.turnAngle),direction.y,-horizontal*std::sin(state.projectile.turnAngle)};
@@ -43,14 +43,14 @@ void ConfigureProjectile(Bullet& bullet,const State& state,const Shot& shot,Vect
     if((state.spatial||state.projectile.sampleAtStepStart)&&(flags&LaunchBoost))bullet.launchDirection=direction;
     if(flags&(BounceAll|BounceExceptLowerZ)) {
         bullet.bouncesRemaining=state.projectile.bounceCount;bullet.reflectLowerZ=(flags&BounceAll)!=0;
-        bullet.bounceSpeed=state.projectile.bounceSpeed<0 ? BulletSystem::Length(bullet.velocity) : state.projectile.bounceSpeed*factor;
+        bullet.bounceSpeed=state.projectile.bounceSpeed<0 ? BulletSystem::Length(bullet.Velocity()) : state.projectile.bounceSpeed*factor;
         bullet.bounceLower=state.projectile.bounceLower;bullet.bounceUpper=state.projectile.bounceUpper;
         bullet.bounceHalfExtents=state.projectile.bounceHalfExtents;bullet.launchDirection=direction;
     }
     // 显现与运动的交接由sampleAtStepStart选择；原生步首模式的最后显现内容帧同时推进运动时钟0。
     bullet.spawnVisualSeconds=flags&SpawnLarge ? 32.0F/60 : flags&SpawnMedium ? 16.0F/60 : flags&SpawnSmall ? 10.0F/60 : 0;
     bullet.spawnMoveScale=flags&SpawnLarge ? 1.0F/3 : flags&SpawnMedium ? 0.4F : flags&SpawnSmall ? 0.5F : 1;
-    if(bullet.spawnVisualSeconds>0)bullet.baseVelocity=bullet.velocity;
+    if(bullet.spawnVisualSeconds>0)bullet.baseVelocity=bullet.Velocity();
 }
 /// @brief 直接按等面积球带/球冠采样，不复制平面；速度层使用同一角分布以保留层间通道。
 void FireSpatial(const State& state,const Shot& shot,Vector3 origin,Vector3 player,BulletSystem& bullets,
@@ -167,9 +167,9 @@ Bullet* State::Fire(const Laser& laser,Vector3 position,Vector3 player,BulletSys
     Bullet* beam=bullets.SpawnBeam(start,direction,
         laser.length,laser.width/2,laser.grow/60,laser.sustain/60,kColors[laser.color%16]);
     if(beam) {
-        beam->velocity=Multiply(direction,laser.speed);
+        beam->SetVelocity(Multiply(direction,laser.speed));
         if(laser.initialLength>=0) {
-            beam->velocity={};beam->beamLength=laser.initialLength;beam->beamLengthLimit=laser.length;
+            beam->SetVelocity({});beam->beamLength=laser.initialLength;beam->beamLengthLimit=laser.length;
             beam->beamTravelSpeed=laser.speed;beam->beamEndDistance=laser.startOffset+laser.initialLength;
         }
         beam->visual=laser.visual==kInvalidVisualId ? static_cast<VisualId>(laserBase+laser.color%16) : laser.visual;

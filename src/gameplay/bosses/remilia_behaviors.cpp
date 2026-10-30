@@ -231,7 +231,7 @@ int RemiliaBoss::Behaviors::SeedMines(Actor& a) {
 void RemiliaBoss::Behaviors::ReleaseMines(Actor& a) {
     const float phase=a.Random(2*pi)-pi;const auto center=a.Position();a.soundEvents.push_back(12);
     a.ModifyEnemyProjectiles([&](Bullet& b) {
-        if(b.pendingExpiration||b.nativeType<0||b.nativeType>5||BulletSystem::Length(b.velocity)>0||BulletSystem::Length(b.acceleration)>0)return;
+        if(b.pendingExpiration||b.nativeType<0||b.nativeType>5||BulletSystem::Length(b.Velocity())>0||BulletSystem::Length(b.acceleration)>0)return;
         const Vector3 relative{b.position.x-center.x,b.position.y-center.y,b.position.z-center.z};
         const float distance=BulletSystem::Length(relative);const float angle=(distance>0.014117F ? distance*pi/11.4285714F : 0)+phase;
         Vector3 direction{std::cos(angle),0,-std::sin(angle)};
@@ -244,7 +244,7 @@ void RemiliaBoss::Behaviors::ScatterMines(Actor& a) {
     // 原生11先更新一次全局随机流却不使用结果，之后每颗符合条件的小弹再读取自己的方向。
     a.Random(2*pi);a.soundEvents.push_back(12);
     a.ModifyEnemyProjectiles([&](Bullet& b) {
-        if(b.pendingExpiration||b.nativeType<0||b.nativeType>5||BulletSystem::Length(b.velocity)>0||BulletSystem::Length(b.acceleration)>0)return;
+        if(b.pendingExpiration||b.nativeType<0||b.nativeType>5||BulletSystem::Length(b.Velocity())>0||BulletSystem::Length(b.acceleration)>0)return;
         const float angle=a.Random(2*pi)-pi;Vector3 direction{std::cos(angle),0,-std::sin(angle)};
         if(a.skills.spatial)direction=spatial::EqualAreaDirection(spatial::Frame::FromAxis({0,0,-1}),a.spatialIndex++,64,-1,angle);
         b.acceleration=spatial::Scale(direction,1.60714281F);b.accelerationSeconds=2;b.motionClock=0;b.sampleMotionAtStart=true;

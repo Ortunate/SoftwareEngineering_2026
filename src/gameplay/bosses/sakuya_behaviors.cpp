@@ -322,8 +322,8 @@ void SakuyaBoss::Behaviors::RedirectStoppedBullets(Actor& a) {
             const float polar=distance>5.71428571F ? angle-pi/2 : angle-std::atan2(-offset.z,offset.x);
             direction=frame.Direction(std::cos(polar),2.39996323F*static_cast<float>(a.spatialIndex++));
         }
-        const float speed=std::sqrt(spatial::Dot(bullet.velocity,bullet.velocity));
-        bullet.velocity=spatial::Scale(direction,speed);bullet.baseVelocity=bullet.velocity;bullet.launchDirection=direction;
+        const float speed=std::sqrt(spatial::Dot(bullet.Velocity(),bullet.Velocity()));
+        bullet.SetVelocity(spatial::Scale(direction,speed));bullet.baseVelocity=bullet.Velocity();bullet.launchDirection=direction;
         bullet.nativeColor=5;bullet.visual=static_cast<VisualId>(a.skills.bulletBase+bullet.nativeType*16+5);++changed;
     });
 }

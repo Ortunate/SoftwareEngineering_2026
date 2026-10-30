@@ -3,6 +3,8 @@
 #pragma once
 
 namespace koumakyou {
+/// @brief 临时启用命名页文字合成；不支持的平台返回 false，调用方须保留屏幕字符选择。
+[[nodiscard]] bool EnableWindowTextInput(void* nativeWindow);
 
 /// @brief 禁用指定游戏窗口的文字合成，避免中文等输入法的候选框干扰操作。
 /// @param nativeWindow raylib GetWindowHandle 返回的 HWND（Windows）或 NSWindow*（macOS）。

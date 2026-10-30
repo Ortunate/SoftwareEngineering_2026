@@ -121,7 +121,7 @@ void TestUnwrappedAngleAndIntegration() {
         for(int frame=0;frame<160;++frame) {
             Tick(source[0]);bullets->Update(1.0F/60);
             Near(small->position.x,(source[0].x-192)*scale,5e-4F);Near(small->position.z,10-source[0].y*scale,5e-4F);
-            Near(small->velocity.x,source[0].vx*speedScale);Near(small->velocity.z,-source[0].vy*speedScale);
+            Near(small->Velocity().x,source[0].vx*speedScale);Near(small->Velocity().z,-source[0].vy*speedScale);
             assert(small->active&&small->nativeColor==10);
         }
         assert(small->accelerationSeconds==0&&source[0].accelerationLeft==0);
@@ -130,14 +130,14 @@ void TestUnwrappedAngleAndIntegration() {
 }
 void TestSpatialAdaptation() {
     for(bool spatial:{false,true}) {
-        auto bullets=std::make_unique<BulletSystem>();auto* small=Make(*bullets,{192,224,16});small->position={2,2,0};small->velocity={0.2F,0.3F,0.4F};
+        auto bullets=std::make_unique<BulletSystem>();auto* small=Make(*bullets,{192,224,16});small->position={2,2,0};small->SetVelocity({0.2F,0.3F,0.4F});
         auto* outside=Make(*bullets,{192,224,16});outside->position={2,2.1F,0};
         Make(*bullets,{192,224,64,3},9);
         behavior::Actor actor;actor.Reset({},2400,7);actor.skills.spatial=spatial;actor.Start(ReleaseOnce(actor));actor.Update(1.0F/120,{},*bullets);
         assert(releasedCount==1&&small->nativeColor==10&&outside->nativeColor==(spatial?9:10));
         Near(BulletSystem::Length(small->acceleration),0.01F*accelerationScale,1e-5F);
         Near(small->acceleration.y,spatial?0.01F*accelerationScale/std::sqrt(2.0F):0,1e-5F);
-        assert(small->velocity.x==0.2F&&small->velocity.y==0.3F&&small->velocity.z==0.4F);
+        assert(small->Velocity().x==0.2F&&small->Velocity().y==0.3F&&small->Velocity().z==0.4F);
     }
 }
 void TestSpellSource() {
@@ -165,7 +165,7 @@ void TestSpellSource() {
                 const auto& b=*emitted[n];const auto& e=expected.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.spawnVisualSeconds==16.0F/60&&e.flags==516);
                 Near(b.position.x,(e.position.x-192)*scale,5e-4F);Near(b.position.z,10-e.position.y*scale,5e-4F);
-                Near(b.velocity.x,e.velocity.x*speedScale);Near(b.velocity.z,-e.velocity.y*speedScale);
+                Near(b.Velocity().x,e.velocity.x*speedScale);Near(b.Velocity().z,-e.velocity.y*speedScale);
             }
         };
         for(int frame=0;frame<3900;++frame) {
@@ -256,7 +256,7 @@ void TestClocksHandoffsAndDisplayRates() {
                     assert(actor.phaseFrames==expectedTime&&random==expectedRandom&&actual.size()==expected.size());
                     for(std::size_t n=0;n<actual.size();++n) {
                         Near(actual[n].position.x,expected[n].position.x,5e-4F);Near(actual[n].position.y,expected[n].position.y,5e-4F);Near(actual[n].position.z,expected[n].position.z,5e-4F);
-                        Near(actual[n].velocity.x,expected[n].velocity.x);Near(actual[n].velocity.y,expected[n].velocity.y);Near(actual[n].velocity.z,expected[n].velocity.z);
+                        Near(actual[n].Velocity().x,expected[n].Velocity().x);Near(actual[n].Velocity().y,expected[n].Velocity().y);Near(actual[n].Velocity().z,expected[n].Velocity().z);
                     }
                 }
                 if(index>=0)assert(!actor.active&&actor.finished);

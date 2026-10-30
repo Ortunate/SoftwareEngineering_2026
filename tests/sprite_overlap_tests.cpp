@@ -176,7 +176,7 @@ void CheckOverlaps(Fixture& f) {
     Expect(image,150,128,{255,128,0,255},"native additive beam failed to cover actor");
     Expect(image,90,128,kRed,"native additive rear beam appeared through actor");UnloadImage(image);
     // 同模式片段合批后仍须累加两束颜色，并在跨越演员时切回正确的混合模式。
-    auto* second=f.bullets.SpawnBeam(beam->position,beam->beamDirection,beam->beamLength,beam->radius,0,10,WHITE);
+    auto* second=f.bullets.SpawnBeam(beam->position,beam->Direction(),beam->beamLength,beam->radius,0,10,WHITE);
     second->visual=3;second->age=1;
     image=f.Render("adjacent-additive-beams",actors);
     Expect(image,150,128,{255,255,0,255},"adjacent additive beams stopped accumulating");
@@ -255,7 +255,7 @@ void CheckBeamPartitioning(Fixture& f) {
         beam->animation.player.Start(*f.archive,0);
 
         // 跨越相机平面时退回保守切分，不能用透视除法误判为屏幕外；也覆盖正交相机的近面退化。
-        beam->position={-2,0,-12};beam->beamDirection=BulletSystem::DirectionTo(beam->position,{2,0,2});
+        beam->position={-2,0,-12};beam->SetBeamDirection(BulletSystem::DirectionTo(beam->position,{2,0,2}));
         beam->beamLength=std::sqrt(212.0F);
         Image near=f.Render("beam-partition-camera-plane");UnloadImage(near);
         if(f.renderer.LastBeamSegmentCount()!=1025)throw std::runtime_error("camera-plane crossing lost conservative beam cuts");

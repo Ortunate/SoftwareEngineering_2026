@@ -55,7 +55,7 @@ void TestOrdinarySource() {
                 const auto& b=*actual[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.y,0,1e-5F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().y,0,1e-5F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
             }
         }
         assert(actor.Random(1)==source.Random(1));
@@ -90,7 +90,7 @@ void TestDisplayRatesAndLifetime() {
                 assert(actual.size()==expected.size()&&next==random&&actor.phaseFrames==phase);
                 Near(actor.position.x,position.x);Near(actor.position.z,position.z);
                 for(std::size_t n=0;n<actual.size();++n) {
-                    Near(actual[n].velocity.x,expected[n].velocity.x);Near(actual[n].velocity.y,expected[n].velocity.y);Near(actual[n].velocity.z,expected[n].velocity.z);
+                    Near(actual[n].Velocity().x,expected[n].Velocity().x);Near(actual[n].Velocity().y,expected[n].Velocity().y);Near(actual[n].Velocity().z,expected[n].Velocity().z);
                 }
             }
             assert(!bullets->Pool().DroppedSpawns());

@@ -73,10 +73,10 @@ void BeginLaser(Actor& a,int slot,float angle,bool second,bool red,const Nonspel
 }
 void RotateLaser(Actor& a,int slot,float angle) {
     if(auto* beam=a.Beam(slot)) {
-        beam->beamDirection=LaserDirection(a,slot,angle);
-        beam->position={beam->beamAnchor.x+beam->beamDirection.x*beam->beamStartOffset,
-            beam->beamAnchor.y+beam->beamDirection.y*beam->beamStartOffset,
-            beam->beamAnchor.z+beam->beamDirection.z*beam->beamStartOffset};
+        beam->SetBeamDirection(LaserDirection(a,slot,angle));
+        beam->position={beam->beamAnchor.x+beam->Direction().x*beam->beamStartOffset,
+            beam->beamAnchor.y+beam->Direction().y*beam->beamStartOffset,
+            beam->beamAnchor.z+beam->Direction().z*beam->beamStartOffset};
     }
 }
 /// @brief 新典 121(12) 原位旋转的第二分量读取已改写的第一分量，必须保留此求值顺序。
@@ -85,7 +85,7 @@ void EmitFromLasers(Actor& a,const std::array<float,8>& angles) {
     for(int slot=0;slot<8;++slot)if(const auto* beam=a.Beam(slot)) {
         const float x=2.85714293F*std::cos(angles[slot]),z=x*std::sin(angles[slot]);
         Vector3 offset{x,0,z};
-        if(a.skills.spatial) {const float length=std::hypot(x,z);offset={beam->beamDirection.x*length,beam->beamDirection.y*length,beam->beamDirection.z*length};}
+        if(a.skills.spatial) {const float length=std::hypot(x,z);offset={beam->Direction().x*length,beam->Direction().y*length,beam->Direction().z*length};}
         const auto p=a.Position();a.FireEmitterAt({p.x+offset.x,p.y+offset.y,p.z+offset.z});
     }
 }

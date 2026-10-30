@@ -65,7 +65,7 @@ void TestSource() {
                     assert(b.nativeType==3&&b.nativeColor==e.color&&e.flags==19&&b.sampleMotionAtStart);
                     assert(b.spawnVisualSeconds==10.0F/60&&b.launchBoostSeconds==16.0F/60);
                     Near(b.position.x,(e.position.x-192)*scale,"bullet.x");Near(b.position.z,10-e.position.y*scale,"bullet.z");
-                    Near(b.velocity.x,e.velocity.x*speedScale,"velocity.x",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"velocity.z",1e-4F);
+                    Near(b.Velocity().x,e.velocity.x*speedScale,"velocity.x",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"velocity.z",1e-4F);
                     Near(b.acceleration.x,e.accelerationVector.x*accelerationScale,"acceleration.x",1e-4F);
                     Near(b.acceleration.z,-e.accelerationVector.y*accelerationScale,"acceleration.z",1e-4F);
                     Near(b.accelerationSeconds,e.accelerationFrames/60,"acceleration.seconds",1e-5F);
@@ -82,7 +82,7 @@ void TestZeroSpeedAndLifetime() {
     behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Activate(spawn);actor.Update(1.0F/60,{},*bullets);
     Reference source(69,{192,80,2.356194496F},spawn.seed,16,102);source.Tick({240,350,0});
     assert(source.emissions.size()==1&&source.emissions[0].velocity.x==0&&source.emissions[0].velocity.y==0);
-    bullets->Pool().ForEachActive([&](const Bullet& b){assert(b.velocity.x==0&&b.velocity.z==0&&b.launchDirection.z>0.99F);samples.push_back({b,source.emissions[0]});});
+    bullets->Pool().ForEachActive([&](const Bullet& b){assert(b.Velocity().x==0&&b.Velocity().z==0&&b.launchDirection.z>0.99F);samples.push_back({b,source.emissions[0]});});
     assert(actor.Random(1)==source.Random(1));
     // 冻结上一更新步位移，仅隔离验证逻辑寿命；真实路线的场外回收已经逐条与源执行器对照。
     for(int route:{0,7})for(int factor:{1,2}) {
@@ -122,7 +122,7 @@ void TestProjectileMotion() {
         for(int frame=0;frame<200;++frame) {
             checkedFrame=frame;expected.Tick();bullets->Update(1.0F/60);
             Near(actual->position.x,(expected.x-192)*scale,"motion.x");Near(actual->position.z,10-expected.y*scale,"motion.z");
-            Near(actual->velocity.x,expected.vx*speedScale,"motion.vx",1e-4F);Near(actual->velocity.z,-expected.vy*speedScale,"motion.vz",1e-4F);
+            Near(actual->Velocity().x,expected.vx*speedScale,"motion.vx",1e-4F);Near(actual->Velocity().z,-expected.vy*speedScale,"motion.vz",1e-4F);
             assert(actual->active);
         }
         assert(actual->accelerationSeconds==0);++checked;
@@ -160,7 +160,7 @@ void TestClocksAndDisplayRates() {
                 assert(actor.phaseFrames==expectedFrames&&random==expectedRandom&&actual.size()==expected.size()&&spawns.size()==expectedSpawns.size());
                 for(std::size_t n=0;n<actual.size();++n) {
                     Near(actual[n].position.x,expected[n].position.x,"display.bullet.x");Near(actual[n].position.y,expected[n].position.y,"display.bullet.y");Near(actual[n].position.z,expected[n].position.z,"display.bullet.z");
-                    Near(actual[n].velocity.x,expected[n].velocity.x,"display.vx",1e-4F);Near(actual[n].velocity.y,expected[n].velocity.y,"display.vy",1e-4F);Near(actual[n].velocity.z,expected[n].velocity.z,"display.vz",1e-4F);
+                    Near(actual[n].Velocity().x,expected[n].Velocity().x,"display.vx",1e-4F);Near(actual[n].Velocity().y,expected[n].Velocity().y,"display.vy",1e-4F);Near(actual[n].Velocity().z,expected[n].Velocity().z,"display.vz",1e-4F);
                     Near(actual[n].acceleration.z,expected[n].acceleration.z,"display.az",1e-4F);assert(actual[n].nativeColor==expected[n].nativeColor);
                 }
                 for(std::size_t n=0;n<spawns.size();++n) {
@@ -205,7 +205,7 @@ void TestSpatialRain() {
             bullets->Pool().ForEachActive([&](const Bullet& b) {
                 const float rawSpeed=source.Random(1),rawAcceleration=source.Random(route==0?0.01F:0.013F)+(route==0?0.015F:0.012F);
                 const float expectedSpeed=rawSpeed==0?0:std::max(0.3F,rawSpeed)*speedScale;
-                Near(BulletSystem::Length(b.velocity),expectedSpeed,"spatial.speed",1e-5F);
+                Near(BulletSystem::Length(b.Velocity()),expectedSpeed,"spatial.speed",1e-5F);
                 Near(b.acceleration.y,0,"spatial.fixedAcceleration.y",1e-5F);
                 Near(b.acceleration.z,-rawAcceleration*accelerationScale,"spatial.fixedAcceleration.z",1e-4F);
                 double fraction=0,weight=0.5;for(int index=round+1;index;index/=2,weight*=0.5)fraction+=(index%2)*weight;

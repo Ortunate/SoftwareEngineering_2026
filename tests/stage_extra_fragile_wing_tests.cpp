@@ -36,7 +36,7 @@ void CompareChild(const behavior::Spawn& spawn,const Ref::Spawn& raw,int rank) {
         int n=0;bullets->Pool().ForEachActive([&](const Bullet& b) {
             assert(n<static_cast<int>(source.emissions.size()));const auto& e=source.emissions[n++];
             Position(b.position,e.position);assert(b.nativeType==5&&b.nativeColor==e.color&&e.flags==530&&b.sampleMotionAtStart);
-            assert(BulletSystem::Length(b.velocity)==0&&b.launchBoostSeconds==0&&b.spawnVisualSeconds==10.0F/60);
+            assert(BulletSystem::Length(b.Velocity())==0&&b.launchBoostSeconds==0&&b.spawnVisualSeconds==10.0F/60);
             Near(b.acceleration.x,e.accelerationVector.x*accelerationScale,"ax",1e-4F);
             Near(b.acceleration.y,0,"ay",1e-4F);Near(b.acceleration.z,-e.accelerationVector.y*accelerationScale,"az",1e-4F);
             Near(b.accelerationSeconds,5,"acceleration.seconds",1e-5F);
@@ -93,7 +93,7 @@ void TestProjectiles() {
                 x+=vx;y+=vy;
             }
             bullets->Update(1.0F/60);Near(actual->position.x,x*scale,"bullet.x");Near(actual->position.z,-y*scale,"bullet.z");
-            Near(actual->velocity.x,vx*speedScale,"bullet.vx",1e-4F);Near(actual->velocity.z,-vy*speedScale,"bullet.vz",1e-4F);
+            Near(actual->Velocity().x,vx*speedScale,"bullet.vx",1e-4F);Near(actual->Velocity().z,-vy*speedScale,"bullet.vz",1e-4F);
         }
         assert(actual->accelerationSeconds==0);
     }
@@ -174,7 +174,7 @@ void TestClocksAndSpatial() {
     auto flatSpawn=spawn;flatSpawn.pattern.spatialShots=false;behavior::Actor flat(behavior::UpdateRate::Hz60);flat.Activate(flatSpawn);bool above=false,below=false;
     for(frame=0;frame<100;++frame) {
         bullets->Reset();spatial.Update(1.0F/60,{},*bullets);flat.Update(1.0F/60,{},*bullets);int n=0;
-        bullets->Pool().ForEachActive([&](const Bullet& b) {if(n++==0) {Near(BulletSystem::Length(b.acceleration),.005F*accelerationScale,"spatial.acceleration",1e-5F);above|=b.acceleration.y>0;below|=b.acceleration.y<0;assert(BulletSystem::Length(b.velocity)==0);}});
+        bullets->Pool().ForEachActive([&](const Bullet& b) {if(n++==0) {Near(BulletSystem::Length(b.acceleration),.005F*accelerationScale,"spatial.acceleration",1e-5F);above|=b.acceleration.y>0;below|=b.acceleration.y<0;assert(BulletSystem::Length(b.Velocity())==0);}});
     }
     assert(above&&below&&spatial.Random(1)==flat.Random(1));
 }

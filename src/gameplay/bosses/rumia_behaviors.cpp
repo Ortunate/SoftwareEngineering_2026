@@ -290,7 +290,7 @@ Routine RumiaBoss::Behaviors::MoonlightRay(Actor& a) {
             co_await a.At(151+step);
             for(int slot=0;slot<2;++slot) {
                 angles[slot]+=slot==0?0.00826734863F:-0.00826734863F;
-                if(auto* beam=a.Beam(slot))beam->beamDirection=direction(slot);
+                if(auto* beam=a.Beam(slot))beam->SetBeamDirection(direction(slot));
             }
         }
         co_await a.At(330);Wander(a,5.35714293F,120);

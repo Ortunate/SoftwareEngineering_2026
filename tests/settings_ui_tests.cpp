@@ -698,7 +698,7 @@ void TestUnifiedUiInputs() {
     for(const int id:{2,3,9,10}) {
         show(id);
         const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
-        const auto removed=id==2?menu::OptionRow(canvas,8):id==3?
+        const auto removed=id==2?menu::OptionRow(canvas,menu::kOptionsCount):id==3?
             canvas.Rect(canvas.width<1000?390:560,canvas.height-130,canvas.width<1000?322:300,42):
             canvas.Rect(canvas.width<1000?40:70,canvas.width<1000?1010:675,canvas.width<1000?210:170,42);
         const auto before=Probe::State(game);click(removed);
@@ -707,7 +707,7 @@ void TestUnifiedUiInputs() {
         click(bar.Bounds());
         Check(Probe::State(game)==before,"command bar unexpectedly handled a left click");
     }
-    show(2);Key(game,KEY_W);Check(Probe::UiSelection(game)==7,"Option retained a removed Quit item");
+    show(2);Key(game,KEY_W);Check(Probe::UiSelection(game)==menu::kResetIndex,"Option retained a removed Quit item");
     show(3);move(bindings.Row(0));Key(game,KEY_W);
     Check(Probe::UiSelection(game)==10,"bindings retained a removed return item");
     for(const int key : {KEY_Z,KEY_SPACE,KEY_ENTER}) {
@@ -1580,6 +1580,10 @@ int main(int argc, char** argv) {
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).mouseSensitivity == 10, "sensitivity minimum failed");
             for (int i = 0; i < 9; ++i) Key(game, KEY_RIGHT);
             Capture(game, (screenshots / "options.png").string().c_str());
+            Key(game, KEY_DOWN); Key(game, KEY_LEFT);
+            Check(!koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).aimAssistEnabled,"assist off not saved");
+            Key(game, KEY_RIGHT);
+            Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).aimAssistEnabled,"assist on not saved");
             Key(game, KEY_DOWN); Key(game, KEY_RIGHT);
             Check(koumakyou::LoadOrCreateSettings(koumakyou::kSettingsFilename).soundVolume == 65, "SE volume not saved");
             Key(game, KEY_DOWN); Key(game, KEY_RIGHT);

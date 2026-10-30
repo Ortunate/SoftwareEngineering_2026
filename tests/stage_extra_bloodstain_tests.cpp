@@ -49,9 +49,9 @@ void CompareChild(const behavior::Spawn& spawn,const Ref::Spawn& raw,int rank) {
         int n=0;bullets->Pool().ForEachActive([&](const Bullet& b) {
             assert(n<static_cast<int>(source.emissions.size()));const auto& e=source.emissions[n++];Position(b.position,e.position);
             assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart&&b.spawnVisualSeconds==10.0F/60&&b.launchBoostSeconds==0);
-            Near(b.velocity.x,e.velocity.x*speedScale,"vx",1e-4F);Near(b.velocity.y,0,"vy",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"vz",1e-4F);
+            Near(b.Velocity().x,e.velocity.x*speedScale,"vx",1e-4F);Near(b.Velocity().y,0,"vy",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"vz",1e-4F);
             if(e.type==3) {
-                assert(e.color==1&&e.flags==530&&BulletSystem::Length(b.velocity)==0);
+                assert(e.color==1&&e.flags==530&&BulletSystem::Length(b.Velocity())==0);
                 Near(b.acceleration.x,e.accelerationVector.x*accelerationScale,"ax",1e-4F);Near(b.acceleration.z,-e.accelerationVector.y*accelerationScale,"az",1e-4F);
                 Near(b.accelerationSeconds,2000.0F/60,"acceleration.seconds",1e-5F);
             } else assert(e.type==9&&e.flags==514);
@@ -102,7 +102,7 @@ void TestProjectiles() {
                 x+=vx;y+=vy;
             }
             bullets->Update(1.0F/60);Near(actual->position.x,x*scale,"bullet.x");Near(actual->position.z,-y*scale,"bullet.z");
-            Near(actual->velocity.x,vx*speedScale,"bullet.vx",1e-4F);Near(actual->velocity.z,-vy*speedScale,"bullet.vz",1e-4F);
+            Near(actual->Velocity().x,vx*speedScale,"bullet.vx",1e-4F);Near(actual->Velocity().z,-vy*speedScale,"bullet.vz",1e-4F);
         }
     }
     // 单独固定位置和上一速度，仅隔离2000帧加速有效期；时钟不能因120Hz而减半或受显现9帧偏移干扰。
@@ -110,11 +110,11 @@ void TestProjectiles() {
         auto found=std::find_if(samples.begin(),samples.end(),[](const Sample& s){return s.source.type==3;});assert(found!=samples.end());
         bullets->Reset();auto* b=bullets->Spawn(BulletOwner::Enemy,{},{},.1F,WHITE,0);*b=found->actual;b->position={};b->maxAge=100;
         for(int tick=0;tick<2010*factor;++tick) {
-            b->position={};b->velocity={};bullets->Update(1.0F/(60*factor));
+            b->position={};b->SetVelocity({});bullets->Update(1.0F/(60*factor));
             const bool accelerating=tick>=9*factor&&tick<2009*factor;
-            if((BulletSystem::Length(b->velocity)>0)!=accelerating||!b->active)
+            if((BulletSystem::Length(b->Velocity())>0)!=accelerating||!b->active)
                 std::cerr<<"Bloodstain acceleration factor "<<factor<<" tick "<<tick<<" remaining "<<b->accelerationSeconds<<" active "<<b->active<<'\n';
-            assert((BulletSystem::Length(b->velocity)>0)==accelerating&&b->active);
+            assert((BulletSystem::Length(b->Velocity())>0)==accelerating&&b->active);
         }
         assert(b->accelerationSeconds==0);
     }

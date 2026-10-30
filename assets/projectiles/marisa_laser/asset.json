@@ -1,0 +1,294 @@
+{
+  "asset": "marisa_laser",
+  "kind": 2,
+  "triangles": 144,
+  "glowTriangles": 144,
+  "triangleHardLimit": 384,
+  "axis": "+Y",
+  "humanAcceptance": "approved",
+  "variants": [
+    {
+      "script": 69,
+      "scale": [
+        0.5,
+        1.0
+      ],
+      "alpha": 0,
+      "color": [
+        255,
+        128,
+        128
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            68
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            128,
+            20
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            16744576
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.5,
+            1.0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 30,
+          "opcode": 21,
+          "args": []
+        },
+        {
+          "frame": 30,
+          "opcode": 22,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 30,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 60,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 70,
+      "scale": [
+        0.75,
+        1.0
+      ],
+      "alpha": 0,
+      "color": [
+        255,
+        128,
+        128
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            68
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            160,
+            20
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            16744576
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0.75,
+            1.0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 30,
+          "opcode": 21,
+          "args": []
+        },
+        {
+          "frame": 30,
+          "opcode": 22,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 30,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 60,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 71,
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "alpha": 0,
+      "color": [
+        255,
+        128,
+        128
+      ],
+      "scalePerFrame": [
+        0.0,
+        0.0
+      ],
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            68
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 12,
+          "args": [
+            160,
+            20
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            16744576
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 30,
+          "opcode": 21,
+          "args": []
+        },
+        {
+          "frame": 30,
+          "opcode": 22,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 30,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 60,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    }
+  ],
+  "collision": {
+    "shape": "parameterized capsule",
+    "parameters": [
+      "origin",
+      "unitDirection",
+      "length",
+      "radius"
+    ]
+  },
+  "glowCollides": false,
+  "displayTrianglesWithGlow": 288,
+  "acceptanceFingerprint": "fff8e7ac58dca8f2203fffe7e343f21f11acb6077b98dc6dc73e210625fd3894",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

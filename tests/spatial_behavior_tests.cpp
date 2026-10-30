@@ -31,9 +31,9 @@ void TestSphereDensity() {
     state.Fire(shell,{2,2,4},{9,8,-6},*bullets);const auto emitted=Snapshot(*bullets);assert(emitted.size()==768);
     std::array<int,12> equalAreaBands{};std::array<int,8> octants{};std::vector<Vector3> directions;
     for(int n=0;n<384;++n) {
-        const auto& bullet=emitted[n];const auto direction=Unit(bullet.velocity);directions.push_back(direction);
-        Near(bullet.position,{2.25F,3,3.5F});Near(BulletSystem::Length(bullet.velocity),6);
-        Near(BulletSystem::Length(emitted[n+384].velocity),4.5F);Near(Unit(emitted[n+384].velocity),direction);
+        const auto& bullet=emitted[n];const auto direction=Unit(bullet.Velocity());directions.push_back(direction);
+        Near(bullet.position,{2.25F,3,3.5F});Near(BulletSystem::Length(bullet.Velocity()),6);
+        Near(BulletSystem::Length(emitted[n+384].Velocity()),4.5F);Near(Unit(emitted[n+384].Velocity()),direction);
         assert(bullet.nativeColor==6&&bullet.nativeType==2);
         // 球面面积与轴向坐标成正比，等高球带的独立期望都是 384/12=32。
         ++equalAreaBands[std::clamp(static_cast<int>((direction.z+1)*6),0,11)];
@@ -59,7 +59,7 @@ void TestConeAndStreamDensity() {
     state.Fire(cone,{1,2,3},{4,6,3},*bullets);
     std::array<int,8> rings{};std::array<int,4> sectors{};
     for(const auto& bullet:Snapshot(*bullets)) {
-        const Vector3 direction=Unit(bullet.velocity);Near(BulletSystem::Length(bullet.velocity),5);
+        const Vector3 direction=Unit(bullet.Velocity());Near(BulletSystem::Length(bullet.Velocity()),5);
         const float area=(1-Dot(direction,axis))/range;assert(area>=0&&area<=1);
         ++rings[std::clamp(static_cast<int>(area*8),0,7)];
         float angle=std::atan2(direction.z,0.8F*direction.x-0.6F*direction.y);if(angle<0)angle+=2*pi;
@@ -68,18 +68,18 @@ void TestConeAndStreamDensity() {
     for(int n:rings)assert(n==12);for(int n:sectors)assert(n>=20&&n<=28);
     // 单弹瞄准保持中心；逐发扫描的球冠面积分位则均衡覆盖，而非落在几张平面上。
     bullets->Reset();cone.count=1;cone.spatialCount=1;state.Fire(cone,{1,2,3},{4,6,3},*bullets);
-    Near(Snapshot(*bullets)[0].velocity,{3,4,0});
+    Near(Snapshot(*bullets)[0].Velocity(),{3,4,0});
     bullets->Reset();std::array<int,4> streamBands{};
     for(int index=0;index<256;++index) {cone.sampleIndex=index;state.Fire(cone,{1,2,3},{4,6,3},*bullets);}
     for(const auto& bullet:Snapshot(*bullets)) {
-        const float area=(1-Dot(Unit(bullet.velocity),axis))/range;
+        const float area=(1-Dot(Unit(bullet.Velocity()),axis))/range;
         ++streamBands[std::clamp(static_cast<int>(area*4+1e-5F),0,3)];
     }
     for(int n:streamBands)assert(n>=63&&n<=65);
     // 竖直瞄准和重合目标均须有限，且不放大速率。
     for(Vector3 target:{Vector3{1,8,3},Vector3{1,2,3},Vector3{1,2,-8},Vector3{1,2.001F,-8}}) {
         bullets->Reset();cone.sampleIndex=-1;state.Fire(cone,{1,2,3},target,*bullets);
-        Near(BulletSystem::Length(Snapshot(*bullets)[0].velocity),5);
+        Near(BulletSystem::Length(Snapshot(*bullets)[0].Velocity()),5);
     }
     auto invalid=cone;invalid.spatialCount=-1;assert(!skill::Valid({0,invalid}));
     invalid=cone;invalid.coneHalfAngle=0;assert(!skill::Valid({0,invalid}));
@@ -95,23 +95,23 @@ void TestProjectileMotion() {
     const auto after=Snapshot(*bullets);
     for(std::size_t i=0;i<before.size();++i) {
         const auto& b=after[i];assert(b.turnApplied);Near(b.turnSpeed,4);Near(b.turnDelaySeconds,2.0F/60);
-        const Vector3 a=Unit(before[i].velocity),c=Unit(b.velocity);Near(Dot(a,b.rotationAxis),0);Near(Dot(a,c),0);
-        Near(BulletSystem::Length(b.velocity),4);
+        const Vector3 a=Unit(before[i].Velocity()),c=Unit(b.Velocity());Near(Dot(a,b.rotationAxis),0);Near(Dot(a,c),0);
+        Near(BulletSystem::Length(b.Velocity()),4);
     }
     // 零初速的显现/启动加速环必须沿各自方向展开，不能全部退化到 +Z。
     bullets->Reset();state.projectile={.acceleration=2};shell.firstSpeed=0;shell.flags=skill::LaunchBoost|skill::Accelerate;
     state.Fire(shell,{}, {},*bullets);const auto zero=Snapshot(*bullets);bullets->Update(1.0F/120);
     const auto boosted=Snapshot(*bullets);
     for(std::size_t i=0;i<zero.size();++i) {
-        Near(Unit(boosted[i].velocity),Unit(zero[i].acceleration));
+        Near(Unit(boosted[i].Velocity()),Unit(zero[i].acceleration));
         Near(BulletSystem::Length(boosted[i].launchDirection),1);
     }
     // 重新瞄准使用转向时的真实玩家，而非采样球面的虚拟目标。
     bullets->Reset();state.projectile={.delayFrames=1,.turnSpeed=5};shell.firstSpeed=2;shell.flags=skill::DelayAim;
     state.Fire(shell,{0,0,3},{0,0,-6},*bullets);const Vector3 target{3,4,-3};bullets->Update(1.0F/60,{},target);
     for(const auto& b:Snapshot(*bullets)) {
-        const Vector3 old{b.position.x-b.velocity.x/60,b.position.y-b.velocity.y/60,b.position.z-b.velocity.z/60};
-        Near(Unit(b.velocity),Unit({target.x-old.x,target.y-old.y,target.z-old.z}));Near(BulletSystem::Length(b.velocity),5);
+        const Vector3 old{b.position.x-b.Velocity().x/60,b.position.y-b.Velocity().y/60,b.position.z-b.Velocity().z/60};
+        Near(Unit(b.Velocity()),Unit({target.x-old.x,target.y-old.y,target.z-old.z}));Near(BulletSystem::Length(b.Velocity()),5);
     }
     bullets->Reset();while(bullets->Spawn(BulletOwner::Player,{}, {},0.1F,WHITE,kInvalidVisualId)){}
     state.Fire(shell,{}, {},*bullets);assert(bullets->Pool().DroppedSpawns()==49);
@@ -185,7 +185,7 @@ void TestStageEncounters() {
         bullets->Reset();float low=0,high=0;bool verticalBullet=false;
         for(int tick=0;tick<2400&&!actor.pendingCallback&&!actor.finished;++tick) {
             actor.Update(1.0F/120,{2,3,-6},*bullets);low=std::min(low,actor.position.y);high=std::max(high,actor.position.y);
-            bullets->Pool().ForEachActive([&](const Bullet& b){verticalBullet=verticalBullet||std::abs(b.velocity.y)>0.05F;});
+            bullets->Pool().ForEachActive([&](const Bullet& b){verticalBullet=verticalBullet||std::abs(b.Velocity().y)>0.05F;});
             peak=std::max(peak,bullets->Pool().ActiveCount());bullets->Update(1.0F/120,{}, {2,3,-6});
         }
         assert(high-low>0.05F);

@@ -203,7 +203,7 @@ void TestDifficultyOrdinaryReference() {
                 const auto& b=*shots[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart);
                 near(b.position.x,(e.position.x-192)*scale,5e-4F);near(b.position.z,10-e.position.y*scale,5e-4F);
-                near(b.velocity.x,e.velocity.x*speedScale,1e-4F);near(b.velocity.y,0,1e-5F);near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);near(b.Velocity().y,0,1e-5F);near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
             }
         }
         assert(actor.Random(1)==source.Random(1));
@@ -236,7 +236,7 @@ void TestOrdinaryDisplayRates() {
                     const auto& a=actual[n];const auto& b=expected[n];
                     assert(a.nativeType==b.nativeType&&a.nativeColor==b.nativeColor&&a.sampleMotionAtStart==b.sampleMotionAtStart);
                     Near(a.position.x,b.position.x);Near(a.position.y,b.position.y);Near(a.position.z,b.position.z);
-                    Near(a.velocity.x,b.velocity.x,1e-4F);Near(a.velocity.y,b.velocity.y,1e-4F);Near(a.velocity.z,b.velocity.z,1e-4F);
+                    Near(a.Velocity().x,b.Velocity().x,1e-4F);Near(a.Velocity().y,b.Velocity().y,1e-4F);Near(a.Velocity().z,b.Velocity().z,1e-4F);
                     Near(a.spawnVisualSeconds,b.spawnVisualSeconds,1e-5F);
                 }
             }
@@ -268,9 +268,9 @@ void TestMidbossDifficultyReference() {
             for(std::size_t n=0;n<shots.size();++n) {
                 const auto& b=*shots[n];const auto& e=source.emissions[n];
                 Near(b.position.x,(e.position.x-192)*scale);Near(b.position.z,10-e.position.y*scale);
-                if(std::abs(b.velocity.x-e.velocity.x*speedScale)>1e-4F||std::abs(b.velocity.z+e.velocity.y*speedScale)>1e-4F)
+                if(std::abs(b.Velocity().x-e.velocity.x*speedScale)>1e-4F||std::abs(b.Velocity().z+e.velocity.y*speedScale)>1e-4F)
                     std::cerr<<"Stage5 mid velocity d "<<d<<" sub "<<sub<<" seed "<<seed<<" rank "<<rank<<" frame "<<frame<<" shot "<<n<<'\n';
-                Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.y,0,1e-5F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().y,0,1e-5F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.bouncesRemaining==e.bounces);
                 if(e.bounces) {assert(b.reflectLowerZ==e.reflectLower);Near(b.bounceSpeed,std::hypot(e.velocity.x,e.velocity.y)*speedScale,1e-4F);}
             }
@@ -294,7 +294,7 @@ void CompareCombatFrame(const behavior::Actor& actor,const stage5::reference::Co
     for(std::size_t n=0;n<shots.size();++n) {
         const auto& b=*shots[n];const auto& e=source.emissions[n];
         Near(b.position.x,(e.position.x-192)*scale);Near(b.position.y,-e.position.z*scale);Near(b.position.z,10-e.position.y*scale);
-        Near(b.velocity.x,e.velocity.x*speedScale,1e-4F);Near(b.velocity.y,-e.velocity.z*speedScale,1e-5F);Near(b.velocity.z,-e.velocity.y*speedScale,1e-4F);
+        Near(b.Velocity().x,e.velocity.x*speedScale,1e-4F);Near(b.Velocity().y,-e.velocity.z*speedScale,1e-5F);Near(b.Velocity().z,-e.velocity.y*speedScale,1e-4F);
         assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.bouncesRemaining==e.bounces);
         if(e.bounces) {assert(b.reflectLowerZ==e.reflectLower);Near(b.bounceSpeed,std::hypot(e.velocity.x,e.velocity.y)*speedScale,1e-4F);}
     }
@@ -613,24 +613,24 @@ void TestBounceAndLockedSpatialAxis() {
         bullets->Reset();state.projectile.bounceCount=1;
         state.Fire({skill::Formation::FixedFan,8,3,1,1,2,0,pi/2,0,all ? 1024 : 2048},{0,0,-11.8F},{},*bullets);
         bullets->Pool().ForEachActive([&](Bullet& b){bullet=&b;});bullets->Update(1.0F/60);
-        assert(bullet->bouncesRemaining==0&&(all ? bullet->velocity.z>0 : bullet->velocity.z<0));
+        assert(bullet->bouncesRemaining==0&&(all ? bullet->Velocity().z>0 : bullet->Velocity().z<0));
     }
     bullets->Reset();state.Fire({skill::Formation::FixedFan,8,3,1,1,2,0,-pi/4,0,2048},{10.3F,0,11.8F},{},*bullets);
     bullets->Pool().ForEachActive([&](Bullet& b){bullet=&b;});bullets->Update(1.0F/60);
-    assert(bullet->bouncesRemaining==0&&bullet->velocity.x<0&&bullet->velocity.z<0&&bullet->position.x>8.57142857F&&bullet->position.z>10);
+    assert(bullet->bouncesRemaining==0&&bullet->Velocity().x<0&&bullet->Velocity().z<0&&bullet->position.x>8.57142857F&&bullet->position.z>10);
     bullets->Reset();state.projectile={};state.spatial=true;
     state.Fire({.formation=skill::Formation::FixedFan,.count=1,.firstSpeed=2,.angle=pi,.spatialAxis=Vector3{1,2,-3}},{},{0,0,8},*bullets);
-    const float length=std::sqrt(14.0F);bullets->Pool().ForEachActive([&](const Bullet& b){Near(b.velocity.x,2/length);Near(b.velocity.y,4/length);Near(b.velocity.z,-6/length);});
+    const float length=std::sqrt(14.0F);bullets->Pool().ForEachActive([&](const Bullet& b){Near(b.Velocity().x,2/length);Near(b.Velocity().y,4/length);Near(b.Velocity().z,-6/length);});
     assert(!skill::Valid({0,skill::Shot{.spatialAxis=Vector3{}}}));
     bullets->Reset();state.spatial=false;state.projectile={.delayFrames=60,.turnAngle=0.7F,.preserveTurnSpeed=true};state.rank=32;
     state.Fire({skill::Formation::FixedFan,4,2,1,3,6,3,0,0,64},{},{},*bullets);
-    std::vector<float> speeds;bullets->Pool().ForEachActive([&](const Bullet& b){speeds.push_back(BulletSystem::Length(b.velocity));Near(b.turnSpeed,speeds.back());});
+    std::vector<float> speeds;bullets->Pool().ForEachActive([&](const Bullet& b){speeds.push_back(BulletSystem::Length(b.Velocity()));Near(b.turnSpeed,speeds.back());});
     for(int frame=0;frame<91;++frame)bullets->Update(1.0F/60);
-    std::size_t index=0;bullets->Pool().ForEachActive([&](const Bullet& b){assert(b.turnApplied);Near(BulletSystem::Length(b.velocity),speeds[index++]);});assert(index==3);
+    std::size_t index=0;bullets->Pool().ForEachActive([&](const Bullet& b){assert(b.turnApplied);Near(BulletSystem::Length(b.Velocity()),speeds[index++]);});assert(index==3);
     bullets->Reset();state.spatial=true;state.projectile={};state.rank=16;
     state.Fire({.formation=skill::Formation::RandomAngleSpeed,.count=128,.firstSpeed=2,.lastSpeed=2,.angle=1,.spacing=-1,.spatialAxis=Vector3{0,1,0}},
         {},{},*bullets,[](float range){return range*0.5F;});
-    bullets->Pool().ForEachActive([](const Bullet& b){assert(b.velocity.y>=2*std::cos(1.0F)-1e-5F);Near(BulletSystem::Length(b.velocity),2);});
+    bullets->Pool().ForEachActive([](const Bullet& b){assert(b.Velocity().y>=2*std::cos(1.0F)-1e-5F);Near(BulletSystem::Length(b.Velocity()),2);});
 
 }
 /// @brief 从源跳转及调用栈独立展开的帧表；不读取新协程或以其输出生成期望值。
@@ -719,7 +719,7 @@ void TestClockArcCoordinates() {
         const float armX=-dx/length*radius,armY=-dy/length*radius;
         const float x=baseX+armX*std::cos(phi)+armY*std::sin(phi),y=baseY-armX*std::sin(phi)+armY*std::cos(phi);
         Near(b.position.x,x*scale);Near(b.position.z,4.28571415F-y*scale);Near(b.position.y,0);
-        Near(BulletSystem::Length(b.velocity),5.35714293F);assert(b.nativeType==8&&b.nativeColor==3);++index;
+        Near(BulletSystem::Length(b.Velocity()),5.35714293F);assert(b.nativeType==8&&b.nativeColor==3);++index;
     });
 }
 void TestBossLifecycleAndSummons() {
@@ -779,7 +779,7 @@ void TestRedirectRandomOrder() {
         expected.push_back(result);
     }
     assert(changed==14);actor.Update(1.0F/60,{},*bullets);int index=0;
-    bullets->Pool().ForEachActive([&](const Bullet& b){const auto& value=expected[index++];assert(b.nativeColor==value.color);Near(b.velocity.x,value.velocity.x);Near(b.velocity.z,value.velocity.z);});
+    bullets->Pool().ForEachActive([&](const Bullet& b){const auto& value=expected[index++];assert(b.nativeColor==value.color);Near(b.Velocity().x,value.velocity.x);Near(b.Velocity().z,value.velocity.z);});
     assert(actor.Random(1)==static_cast<float>(Next(random)>>8)/16777216.0F);
 }
 void TestSpatialDisplayFrameRates() {
@@ -797,7 +797,7 @@ void TestSpatialDisplayFrameRates() {
             actor.difficulty=*native_combat::DifficultyFromIndex(d);
             stage5::ConfigureBehavior(actor,true);actor.Start(entry(actor));
             for(int frame=0;frame<fps*12;++frame)actor.Update(1.0F/fps,{2,3,-6},*bullets);
-            std::vector<Snapshot> actual;bullets->Pool().ForEachActive([&](const Bullet& b){actual.push_back({b.position,b.velocity,b.nativeType,b.nativeColor,b.bouncesRemaining});});
+            std::vector<Snapshot> actual;bullets->Pool().ForEachActive([&](const Bullet& b){actual.push_back({b.position,b.Velocity(),b.nativeType,b.nativeColor,b.bouncesRemaining});});
             const float nextRandom=actor.Random(1);
             if(fps==120) {expected=actual;position=actor.position;random=nextRandom;phase=actor.phaseFrames;stopped=actor.phaseClockPaused;}
             else {

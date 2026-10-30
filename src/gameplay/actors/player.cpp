@@ -32,28 +32,6 @@ constexpr float kMuzzleLayoutPixel = 0.42F/36;
 constexpr float kFocusedHomingSide = kHomingSide / 3.0F;
 constexpr float kOptionFocusSeconds = 8.0F / 60.0F;
 constexpr float kDefaultAimDepth = 20.0F;
-/// @brief 求最近准星命中球体的深度；forward 须为单位向量，返回正世界单位，未命中时使用默认深度。
-float AimDepth(Vector3 position, Vector3 forward, std::span<const PlayerAimTarget> targets) {
-    float nearestEntry = std::numeric_limits<float>::max();
-    float depth = kDefaultAimDepth;
-    for (const auto& target : targets) {
-        if (target.radius <= 0.0F) continue;
-        const auto relative = game_math::Subtract(target.position, position);
-        const float along = relative.x * forward.x + relative.y * forward.y + relative.z * forward.z;
-        const auto perpendicular = game_math::Subtract(relative, game_math::Scale(forward, along));
-        const float halfChordSquared = target.radius * target.radius -
-            (perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y + perpendicular.z * perpendicular.z);
-        if (along <= 0.0F || halfChordSquared < 0.0F) continue;
-        const float entry = std::max(0.0F, along - std::sqrt(halfChordSquared));
-        if (entry >= nearestEntry) continue;
-        nearestEntry = entry;
-        // 选择首先遮住射线的判定体，但瞄向射线上穿过其内部的点，避免从偏下的模块擦过球面。
-        // 不能直接瞄准球心，否则准星边缘的目标会获得额外吸附；极近距离保留正深度防止零向量。
-        depth = std::max(0.05F, along);
-    }
-    return depth;
-}
-
 /// @brief 从模块 origin 指向准星目标平面的散射落点；angleDegrees 为相对准星的横向角（度）。
 /// position 为视点，forward/right 须正交归一化，depth 为正世界单位；返回单位方向。
 Vector3 ConvergingShotDirection(Vector3 origin, Vector3 position, Vector3 forward,
@@ -85,6 +63,7 @@ void Player::ResetPose() {
     laserReadyAt_={};++weaponEpoch_;
     optionFocus_ = 0.0F;
     optionAimDepth_ = kDefaultAimDepth;
+    aim_ = {};
     visualAge_ = 0.0;
     bombCooldown_ = 0.0F;
 }
@@ -140,7 +119,8 @@ bool Player::Update(float deltaTime, const PlayerInput& input, BulletSystem& bul
     position_.x = std::clamp(position_.x, -limit.x, limit.x);
     position_.y = std::clamp(position_.y, -limit.y, limit.y);
     position_.z = std::clamp(position_.z, -limit.z, limit.z);
-    optionAimDepth_ = AimDepth(position_, forward, aimTargets);
+    aim_ = ResolvePlayerAim(position_,forward,aimTargets,input.aimAssistEnabled && allowFire);
+    optionAimDepth_ = aim_.depth;
 
     UpdateLasers(allowFire,bullets,aimTargets);
     if (!allowFire) {
@@ -180,19 +160,21 @@ bool Player::AdjustPower(int delta) {
     return previousPower < kMaxPower && power_ == kMaxPower;
 }
 
-PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
+float Player::GrazeRadius(){return kGrazeRadius;}
+
+PlayerContact Player::ContactEnemyBullet(Bullet& bullet,float modelDistanceSquared) const {
     if (!bullet.Dangerous() || bullet.owner != BulletOwner::Enemy)
         return PlayerContact::None;
-    const float distanceSquared = bullet.DistanceSquaredTo(position_);
-    // 使用距离平方比较，命中优先于擦弹；球心或轴线段由 Bullet 统一计算。
-    const float hitDistance = bullet.radius + kHitRadius;
+    const float distanceSquared = modelDistanceSquared>=0?modelDistanceSquared:bullet.DistanceSquaredTo(position_);
+    // 模型查询返回实体外距离；旧球/胶囊返回中心距离，只有旧路径需要再加弹体半径。
+    const float hitDistance = (modelDistanceSquared>=0?0:bullet.radius) + kHitRadius;
     if (distanceSquared <= hitDistance * hitDistance) {
         // 光束持续到其寿命结束，不能因无敌玩家站在轴线上而吞掉整束光；普通弹仍消失。
         if (!bullet.IsBeam()) bullet.active = false;
         return invulnerableTimer_ <= 0.0F ? PlayerContact::Hit
                                           : PlayerContact::None;
     }
-    const float grazeDistance = bullet.radius + kGrazeRadius;
+    const float grazeDistance = (modelDistanceSquared>=0?0:bullet.radius) + kGrazeRadius;
     if (distanceSquared <= grazeDistance * grazeDistance && bullet.ConsumeGraze()) {
         return PlayerContact::Graze;
     }
@@ -259,28 +241,35 @@ float Player::OptionScale() const {
 }
 
 void Player::UpdateLasers(bool allowFire, BulletSystem& bullets,
-                          std::span<const PlayerAimTarget> aimTargets) {
+                          std::span<const PlayerAimTarget> /*aimTargets*/) {
     if(!allowFire)laserReadyAt_={};
     const auto centers=OptionPositions();
     bullets.Pool().ForEachActive([&](Bullet& bullet) {
         if(bullet.owner!=BulletOwner::Player || bullet.playerShotKind!=PlayerShotKind::Laser)return;
         if(!allowFire || !IsMarisa() || bullet.weaponEpoch!=weaponEpoch_ || bullet.playerSlot<0 || bullet.playerSlot>1) {bullet.active=false;return;}
         bullet.position=centers[bullet.playerSlot];
-        const float depth=AimDepth(position_,Forward(),aimTargets);
-        bullet.beamDirection=ConvergingShotDirection(bullet.position,position_,Forward(),Right(),depth,0);
+        const float depth=BulletSystem::Length(game_math::Subtract(aim_.point,position_));
+        bullet.SetBeamDirection(ConvergingShotDirection(bullet.position,position_,aim_.forward,Right(),depth,0));
     });
 }
 
 void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& visuals,
-                             std::span<const PlayerAimTarget> aimTargets) {
+                             std::span<const PlayerAimTarget> /*aimTargets*/) {
     const auto centers=OptionPositions();
-    const auto forward=Forward(),right=Right(),up=Up();
-    const float depth=AimDepth(position_,forward,aimTargets);
+    const auto forward=aim_.forward,up=Up();
+    const auto right=Right();
+    // 发射点保持相机局部位置，散射右向量用最短旋转同步到修正视线。
+    const auto original=Forward();
+    const Vector3 axis{original.y*forward.z-original.z*forward.y,original.z*forward.x-original.x*forward.z,original.x*forward.y-original.y*forward.x};
+    const auto cross=[](Vector3 a,Vector3 b) { return Vector3{a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x}; };
+    const float cosine=original.x*forward.x+original.y*forward.y+original.z*forward.z;
+    const auto shotRight=game_math::Add(right,game_math::Add(cross(axis,right),game_math::Scale(cross(axis,cross(axis,right)),1/(1+cosine))));
+    const float depth=BulletSystem::Length(game_math::Subtract(aim_.point,position_));
     const float scale=OptionScale(),pixelUnit=kMuzzleLayoutPixel*scale;
     // 低帧率一次补发多个逻辑帧时，按各帧实际时刻检查副机槽，不能让整个显示帧提前冷却完成。
     const double fireTime=visualAge_-secondaryFractionalFrame_/60;
     const auto main=game_math::Add(position_,game_math::Subtract(
-        game_math::Scale(forward,kMuzzleForward*scale),game_math::Scale(up,kMuzzleDown*scale)));
+        game_math::Scale(Forward(),kMuzzleForward*scale),game_math::Scale(up,kMuzzleDown*scale)));
     for(const auto& shot:native_combat::ForPower(shot_,power_).shots) {
         if(shot.kind==3) {
             const int slot=shot.phase;
@@ -296,7 +285,7 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
             if(auto* beam=bullets.Spawn(BulletOwner::Player,origin,{},shot.width*native_sizes::kWorldPerPixel*0.5F,
                                        Color{255,255,255,kShotAlpha},visuals.secondary[shot.script-1125])) {
                 beam->visualScale=scale;beam->sourceShotRva=shot.sourceRva;beam->playerShotKind=PlayerShotKind::Laser;beam->playerSlot=slot;beam->weaponEpoch=weaponEpoch_;
-                beam->beamDirection=ConvergingShotDirection(origin,position_,forward,right,depth,0);
+                beam->SetBeamDirection(ConvergingShotDirection(origin,position_,forward,shotRight,depth,0));
                 beam->beamLength=shot.height*native_sizes::kWorldPerPixel;beam->damage=0;beam->damagePerSecond=shot.damage*60;
                 // 原动画在剩余 70 帧收到标签 1，再淡出 30 帧；槽冷却仍持续至表中 period 结束。
                 beam->laserFadeAt=(shot.period-70)/60.0F;beam->maxAge=(shot.period-40)/60.0F;
@@ -309,7 +298,7 @@ void Player::FireNativeFrame(BulletSystem& bullets, const PlayerShotVisuals& vis
         const auto base=shot.module==0 ? main : centers[shot.module-1];
         const auto origin=game_math::Add(base,game_math::Subtract(game_math::Scale(right,shot.x*pixelUnit),
                                                                  game_math::Scale(up,shot.y*pixelUnit)));
-        const auto direction=ConvergingShotDirection(origin,position_,forward,right,depth,shot.angle*180/std::numbers::pi_v<float>+90);
+        const auto direction=ConvergingShotDirection(origin,position_,forward,shotRight,depth,shot.angle*180/std::numbers::pi_v<float>+90);
         const auto visual=shot.module==0 ? visuals.primary : IsMarisa() ? visuals.secondary[shot.script-1121] : visuals.secondary[0];
         // 原生矩形按较短边内接为三维球，宽高是全尺寸；视觉尺寸独立读取 ANM。
         if(auto* bullet=bullets.Spawn(BulletOwner::Player,origin,game_math::Scale(direction,shot.speed*20/12),

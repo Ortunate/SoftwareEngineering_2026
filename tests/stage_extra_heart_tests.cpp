@@ -51,9 +51,9 @@ void CompareEmitter(const behavior::Spawn& spawn,const Ref::Spawn& original,int 
         bullets->Pool().ForEachActive([&](const Bullet& b) {
             assert(n<static_cast<int>(source.emissions.size()));const auto& e=source.emissions[n++];Position(b.position,e.position);
             assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart&&b.spawnVisualSeconds==10.0F/60&&b.launchBoostSeconds==0);
-            Near(b.velocity.x,e.velocity.x*speedScale,"vx",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"vz",1e-4F);
+            Near(b.Velocity().x,e.velocity.x*speedScale,"vx",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"vz",1e-4F);
             if(e.type==5) {
-                assert((e.color==2||e.color==3)&&e.flags==530&&BulletSystem::Length(b.velocity)==0);
+                assert((e.color==2||e.color==3)&&e.flags==530&&BulletSystem::Length(b.Velocity())==0);
                 Near(b.acceleration.x,e.accelerationVector.x*accelerationScale,"ax",1e-4F);Near(b.acceleration.z,-e.accelerationVector.y*accelerationScale,"az",1e-4F);
                 Near(b.accelerationSeconds,e.accelerationFrames/60,"acceleration.seconds",1e-5F);
             } else assert(e.type==6&&e.color==1&&e.flags==514);
@@ -154,7 +154,7 @@ void TestProjectilesAndOwnership() {
                 x+=vx;y+=vy;
             }
             bullets->Update(1.0F/60);Near(b->position.x,x*scale,"bullet.x");Near(b->position.z,-y*scale,"bullet.z");
-            Near(b->velocity.x,vx*speedScale,"bullet.vx",1e-4F);Near(b->velocity.z,-vy*speedScale,"bullet.vz",1e-4F);
+            Near(b->Velocity().x,vx*speedScale,"bullet.vx",1e-4F);Near(b->Velocity().z,-vy*speedScale,"bullet.vz",1e-4F);
         }
     }
     auto spawn=firstArms[0];behavior::Actor actor;actor.Activate(spawn);spawn.pattern.spiralTrail->emitterInterval=1;

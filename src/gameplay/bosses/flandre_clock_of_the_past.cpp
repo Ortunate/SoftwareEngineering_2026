@@ -19,7 +19,7 @@ void Height(Actor& actor) {
 Vector3 Direction(float angle,float tilt) {return {std::cos(angle)*std::cos(tilt),std::cos(angle)*std::sin(tilt),-std::sin(angle)};}
 void Follow(Actor& actor,const std::array<float,4>& angles,float tilt) {
     for(int slot=0;slot<4;++slot)if(auto* beam=actor.Beam(slot)) {
-        beam->beamAnchor=actor.Position();beam->beamDirection=Direction(angles[slot],tilt);
+        beam->beamAnchor=actor.Position();beam->SetBeamDirection(Direction(angles[slot],tilt));
         beam->position=beam->beamAnchor;
     }
 }

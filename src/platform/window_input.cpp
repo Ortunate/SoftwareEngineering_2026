@@ -19,6 +19,13 @@ extern "C" bool KoumakyouDisableCocoaInputMethods(void* nativeWindow);
 
 namespace koumakyou {
 
+bool EnableWindowTextInput(void* nativeWindow) {
+#if defined(_WIN32)
+    return nativeWindow && ImmAssociateContextEx(static_cast<HWND>(nativeWindow),nullptr,IACE_DEFAULT)!=FALSE;
+#else
+    (void)nativeWindow;return false;
+#endif
+}
 bool DisableWindowInputMethods(void* nativeWindow) {
     if (!nativeWindow) return false;
 #if defined(_WIN32)

@@ -358,7 +358,7 @@ void TestSpatialAndDisplayRates() {
                     for(std::size_t i=0;i<shots.size();++i) {
                         assert(shots[i].nativeType==expected[i].nativeType&&shots[i].nativeColor==expected[i].nativeColor);
                         Near(shots[i].position.x,expected[i].position.x,1e-5F);Near(shots[i].position.z,expected[i].position.z,1e-5F);
-                        Near(shots[i].velocity.x,expected[i].velocity.x,1e-5F);Near(shots[i].velocity.y,expected[i].velocity.y,1e-5F);Near(shots[i].velocity.z,expected[i].velocity.z,1e-5F);
+                        Near(shots[i].Velocity().x,expected[i].Velocity().x,1e-5F);Near(shots[i].Velocity().y,expected[i].Velocity().y,1e-5F);Near(shots[i].Velocity().z,expected[i].Velocity().z,1e-5F);
                     }
                 }
             }
@@ -369,7 +369,7 @@ void TestSpatialAndDisplayRates() {
     for(int frame=0;frame<400;++frame) {
         bullets->Reset();rain.Update(1.0F/60,{2,3,-6},*bullets);
         bullets->Pool().ForEachActive([&](const Bullet& b) {
-            const float cosine=b.velocity.x/BulletSystem::Length(b.velocity);
+            const float cosine=b.Velocity().x/BulletSystem::Length(b.Velocity());
             ++bands[std::clamp(static_cast<int>((cosine+1)*4),0,7)];
         });
     }
@@ -526,8 +526,8 @@ void TestSelaginellaSourceCycle() {
                 if(bullet.nativeColor!=13)return;
                 const int side=emitted/count,n=emitted%count;const auto& op=rings[side];
                 const float angle=(side?right:left)+n*2*pi/count;
-                Near(bullet.velocity.x,std::cos(angle)*op.args[4]*(60*scale),1e-5F);
-                Near(bullet.velocity.z,-std::sin(angle)*op.args[4]*(60*scale),1e-5F);
+                Near(bullet.Velocity().x,std::cos(angle)*op.args[4]*(60*scale),1e-5F);
+                Near(bullet.Velocity().z,-std::sin(angle)*op.args[4]*(60*scale),1e-5F);
                 Near(bullet.turnDelaySeconds,turns[side].args[0]/60,1e-6F);
                 Near(bullet.turnAngle,turns[side].args[4],1e-6F);
                 Near(bullet.turnSpeed,turns[side].args[5]*(60*scale),1e-5F);++emitted;
@@ -605,8 +605,8 @@ void TestHighSpellSourceExecution() {
                 if(actual.nativeType!=expected.type||actual.nativeColor!=expected.color)fail("bullet identity");
                 close(actual.position.x,(expected.position.x-192)*scale,5e-4F,"bullet X");
                 close(actual.position.z,10-expected.position.y*scale,5e-4F,"bullet Z");
-                close(actual.velocity.x,expected.velocity.x*(60*scale),1e-4F,"velocity X");
-                close(actual.velocity.z,-expected.velocity.y*(60*scale),1e-4F,"velocity Z");
+                close(actual.Velocity().x,expected.velocity.x*(60*scale),1e-4F,"velocity X");
+                close(actual.Velocity().z,-expected.velocity.y*(60*scale),1e-4F,"velocity Z");
                 close(actual.acceleration.x,expected.acceleration.x*(3600*scale),1e-4F,"acceleration X");
                 close(actual.acceleration.z,-expected.acceleration.y*(3600*scale),1e-4F,"acceleration Z");
                 if(expected.flags&64) {
@@ -658,7 +658,7 @@ void TestBossSpellDisplayRates() {
                 for(std::size_t i=0;i<actual.size();++i) {
                     assert(actual[i].nativeType==expected[i].nativeType&&actual[i].nativeColor==expected[i].nativeColor);
                     Near(actual[i].position.x,expected[i].position.x,1e-5F);Near(actual[i].position.y,expected[i].position.y,1e-5F);Near(actual[i].position.z,expected[i].position.z,1e-5F);
-                    Near(actual[i].velocity.x,expected[i].velocity.x,1e-5F);Near(actual[i].velocity.y,expected[i].velocity.y,1e-5F);Near(actual[i].velocity.z,expected[i].velocity.z,1e-5F);
+                    Near(actual[i].Velocity().x,expected[i].Velocity().x,1e-5F);Near(actual[i].Velocity().y,expected[i].Velocity().y,1e-5F);Near(actual[i].Velocity().z,expected[i].Velocity().z,1e-5F);
                 }
             }
         }

@@ -200,13 +200,13 @@ void TestActorDefeatAndRandomSkills() {
     state.Fire({skill::Formation::RandomAngleSpeed,1,6,2,1,8,4,1,-1}, {}, {},*bullets,
         [&](float range) {return samples.at(reads++)*range;});
     assert(reads==4);std::vector<Bullet> shots;bullets->Pool().ForEachActive([&](const Bullet& b){shots.push_back(b);});
-    Near(shots[0].velocity.x,std::cos(-0.5F)*7);Near(shots[0].velocity.z,-std::sin(-0.5F)*7);
-    Near(shots[1].velocity.x,5);Near(shots[1].velocity.z,0);
+    Near(shots[0].Velocity().x,std::cos(-0.5F)*7);Near(shots[0].Velocity().z,-std::sin(-0.5F)*7);
+    Near(shots[1].Velocity().x,5);Near(shots[1].Velocity().z,0);
     // 固定扇形的轴必须来自显式世界方向；单方向不能忽略 angle 而全部射向 -Z。
     bullets->Reset();state.spatial=true;state.Fire({skill::Formation::FixedFan,1,6,1,1,5,0,pi/2}, {},{},*bullets);
-    bullets->Pool().ForEachActive([](const Bullet& b) {Near(b.velocity.x,0);Near(b.velocity.z,-5);});
+    bullets->Pool().ForEachActive([](const Bullet& b) {Near(b.Velocity().x,0);Near(b.Velocity().z,-5);});
     bullets->Reset();state.Fire(skill::Laser{.angle=pi/2,.speed=6}, {},{1,0,0},*bullets);
-    bullets->Pool().ForEachActive([](const Bullet& b) {Near(b.beamDirection.z,-1);Near(b.velocity.z,-6);});
+    bullets->Pool().ForEachActive([](const Bullet& b) {Near(b.Direction().z,-1);Near(b.Velocity().z,-6);});
 }
 /// @brief 新典随机周期使用整数取模，rank 项在加 216 前截断；覆盖合并截断会出错的 rank。
 void TestRandomShotInterval() {
@@ -292,7 +292,7 @@ void TestDifficultyOrbDeath() {
         assert(!actor.active&&bullets->Pool().ActiveCount()==static_cast<std::size_t>(original->args[2]));
         bullets->Pool().ForEachActive([&](const Bullet& bullet) {
             // 默认 rank=16 的速度修正为零，按源像素/帧转换为世界单位/秒。
-            Near(BulletSystem::Length(bullet.velocity),original->args[4]*60*scale,1e-5F);
+            Near(BulletSystem::Length(bullet.Velocity()),original->args[4]*60*scale,1e-5F);
         });
     }
 }
@@ -518,7 +518,7 @@ void TestSourceAttackFrames() {
         if(frame==342)expected=18;
         assert(bullets->Pool().ActiveCount()==static_cast<std::size_t>(expected));
         if(frame==111)bullets->Pool().ForEachActive([](const Bullet& bullet) {
-            assert(bullet.nativeType==5&&bullet.nativeColor==6);Near(std::hypot(bullet.velocity.x,bullet.velocity.z),14.0625F);
+            assert(bullet.nativeType==5&&bullet.nativeColor==6);Near(std::hypot(bullet.Velocity().x,bullet.Velocity().z),14.0625F);
             Near(bullet.spawnVisualSeconds,16.0F/60);
         });
     }
@@ -531,7 +531,7 @@ void TestSourceAttackFrames() {
             int index=0;bullets->Pool().ForEachActive([&](const Bullet& bullet) {
                 const float angle=index<3 ? -0.196349546F+jitter : -2.94524312F-jitter;
                 const float speed=17.4107151F-(17.4107151F-1.33928573F)*(index%3)/3;
-                Near(bullet.velocity.x,std::cos(angle)*speed);Near(bullet.velocity.z,-std::sin(angle)*speed);
+                Near(bullet.Velocity().x,std::cos(angle)*speed);Near(bullet.Velocity().z,-std::sin(angle)*speed);
                 Near(bullet.turnDelaySeconds,1);Near(bullet.turnAngle,index<3 ? pi/2 : -pi/2);
                 ++index;
             });
@@ -548,10 +548,10 @@ void TestSourceAttackFrames() {
         if(frame==330) {
             int frozen=0;bullets->Pool().ForEachActive([&](const Bullet& bullet) {
                 if(bullet.owner==BulletOwner::Enemy&&bullet.beamLength==0) {
-                    ++frozen;Near(BulletSystem::Length(bullet.velocity),0);assert(bullet.nativeColor==15);
+                    ++frozen;Near(BulletSystem::Length(bullet.Velocity()),0);assert(bullet.nativeColor==15);
                 }
             });
-            assert(frozen>0&&friendly->velocity.x==1&&beam->active);
+            assert(frozen>0&&friendly->Velocity().x==1&&beam->active);
         }
         if(frame==570) {
             int released=0;bullets->Pool().ForEachActive([&](const Bullet& bullet) {
@@ -560,7 +560,7 @@ void TestSourceAttackFrames() {
                     Near(bullet.accelerationSeconds,220.0F/60);assert(bullet.nativeColor==15);
                 }
             });
-            assert(released>0&&friendly->velocity.x==1&&beam->active);
+            assert(released>0&&friendly->Velocity().x==1&&beam->active);
         }
         bullets->Update(1.0F/60,{}, {2,3,-6});
     }
@@ -608,7 +608,7 @@ void TestDifficultyBossDisplayRates() {
             actor.Start(bosses::CirnoBoss::Behaviors::FirstNonspell(actor));bullets->Reset();
             for(int frame=0;frame<fps*3;++frame)actor.Update(1.0F/fps,{2,3,-6},*bullets);
             std::vector<Vector3> velocities;
-            bullets->Pool().ForEachActive([&](const Bullet& bullet){velocities.push_back(bullet.velocity);});
+            bullets->Pool().ForEachActive([&](const Bullet& bullet){velocities.push_back(bullet.Velocity());});
             if(fps==120) {expected=velocities;position=actor.Position();}
             else {
                 assert(velocities.size()==expected.size());
@@ -644,8 +644,8 @@ void Test120HzAcrossDisplayRates() {
                 for(std::size_t i=0;i<shots.size();++i) {
                     assert(shots[i].nativeColor==expectedShots[i].nativeColor&&shots[i].nativeType==expectedShots[i].nativeType);
                     Near(shots[i].position.x,expectedShots[i].position.x,1e-5F);Near(shots[i].position.z,expectedShots[i].position.z,1e-5F);
-                    Near(shots[i].velocity.x,expectedShots[i].velocity.x,1e-5F);Near(shots[i].velocity.y,expectedShots[i].velocity.y,1e-5F);
-                    Near(shots[i].velocity.z,expectedShots[i].velocity.z,1e-5F);
+                    Near(shots[i].Velocity().x,expectedShots[i].Velocity().x,1e-5F);Near(shots[i].Velocity().y,expectedShots[i].Velocity().y,1e-5F);
+                    Near(shots[i].Velocity().z,expectedShots[i].Velocity().z,1e-5F);
                 }
             }
         }

@@ -38,7 +38,7 @@ void TestSource() {
                 const auto& b=*actual[n];const auto& e=source.emissions[n];
                 assert(b.nativeType==e.type&&b.nativeColor==e.color&&b.sampleMotionAtStart&&e.flags==512);
                 Near(b.position.x,(e.position.x-192)*scale,"bullet.x");Near(b.position.z,10-e.position.y*scale,"bullet.z");
-                Near(b.velocity.x,e.velocity.x*speedScale,"velocity.x",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"velocity.z",1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,"velocity.x",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"velocity.z",1e-4F);
             }
             if(!actual.empty()) {++narrowRounds;if(actual.size()==76) {++wallRounds;walls.push_back(frame);}}
             // 首发与反转均取源时钟的明确边界；移动仍在进行时就必须发出第一轮。
@@ -78,7 +78,7 @@ void TestClocksAndDisplayRates() {
                 for(std::size_t n=0;n<actual.size();++n) {
                     assert(actual[n].nativeType==snapshot[n].nativeType&&actual[n].nativeColor==snapshot[n].nativeColor);
                     Near(actual[n].position.x,snapshot[n].position.x,"display.bullet.x");Near(actual[n].position.y,snapshot[n].position.y,"display.bullet.y");Near(actual[n].position.z,snapshot[n].position.z,"display.bullet.z");
-                    Near(actual[n].velocity.x,snapshot[n].velocity.x,"display.velocity.x",1e-4F);Near(actual[n].velocity.y,snapshot[n].velocity.y,"display.velocity.y",1e-4F);Near(actual[n].velocity.z,snapshot[n].velocity.z,"display.velocity.z",1e-4F);
+                    Near(actual[n].Velocity().x,snapshot[n].Velocity().x,"display.velocity.x",1e-4F);Near(actual[n].Velocity().y,snapshot[n].Velocity().y,"display.velocity.y",1e-4F);Near(actual[n].Velocity().z,snapshot[n].Velocity().z,"display.velocity.z",1e-4F);
                 }
             }
         }
@@ -102,12 +102,12 @@ void TestSpatialCones() {
             const float halfAngle=(count-1)*0.5F*(group?0.19634954631328583F:0.06544984877109528F);
             bool above=false,below=false;
             for(int layer=0;layer<layers;++layer)for(int n=0;n<count;++n) {
-                const auto& b=*actual[begin+layer*count+n];const auto v=b.velocity;const float speed=std::sqrt(v.x*v.x+v.y*v.y+v.z*v.z);
+                const auto& b=*actual[begin+layer*count+n];const auto v=b.Velocity();const float speed=std::sqrt(v.x*v.x+v.y*v.y+v.z*v.z);
                 const float dot=(v.x*x+v.z*z)/speed;
                 Near(dot,1-(1-std::cos(halfAngle))*(n+0.5F)/count,"spatial.solidAngle",1e-5F);
                 above|=v.y>1e-5F;below|=v.y<-1e-5F;
                 if(layer>0) {
-                    const auto first=actual[begin+n]->velocity;const float firstSpeed=std::sqrt(first.x*first.x+first.y*first.y+first.z*first.z);
+                    const auto first=actual[begin+n]->Velocity();const float firstSpeed=std::sqrt(first.x*first.x+first.y*first.y+first.z*first.z);
                     Near(v.x/speed,first.x/firstSpeed,"spatial.layer.x",1e-5F);Near(v.y/speed,first.y/firstSpeed,"spatial.layer.y",1e-5F);Near(v.z/speed,first.z/firstSpeed,"spatial.layer.z",1e-5F);
                 }
             }

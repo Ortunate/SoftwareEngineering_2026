@@ -50,7 +50,7 @@ void TestSource() {
             for(std::size_t n=0;n<actual.size();++n) {
                 const auto& b=*actual[n];const auto& e=source.emissions[n];assert(b.nativeType==e.type&&b.nativeColor==e.color&&e.flags==0);
                 Near(b.position.x,(e.position.x-192)*scale,"bullet.x");Near(b.position.z,10-e.position.y*scale,"bullet.z");
-                Near(b.velocity.x,e.velocity.x*speedScale,"bullet.vx",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"bullet.vz",1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,"bullet.vx",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"bullet.vz",1e-4F);
             }
         }
         assert(children.size()==24&&emitted==7448&&rounds==324&&actor.Random(1)==source.Random(1));
@@ -72,7 +72,7 @@ void TestSource() {
                 for(std::size_t n=0;n<beams.size();++n) {
                     const auto& a=*beams[n];const auto& e=*expected[n];
                     Near(a.beamAnchor.x,(e.anchor.x-192)*scale,"beam.x");Near(a.beamAnchor.z,10-e.anchor.y*scale,"beam.z");
-                    Near(a.beamDirection.x,std::cos(e.angle),"beam.dx",1e-4F);Near(a.beamDirection.z,-std::sin(e.angle),"beam.dz",1e-4F);
+                    Near(a.Direction().x,std::cos(e.angle),"beam.dx",1e-4F);Near(a.Direction().z,-std::sin(e.angle),"beam.dz",1e-4F);
                     Near(a.beamLength,(e.end-e.start)*scale,"beam.length",1e-5F);Near(a.radius,e.width*scale/2,"beam.radius",1e-5F);
                     Near(a.age,e.age/60.0F,"beam.age",1e-5F);assert(a.beamAnimationScript==1);
                     Near(a.beamGrowSeconds,e.grow/60.0F,"beam.grow",1e-5F);Near(a.warningSeconds,e.warning/60.0F,"beam.warning",1e-5F);
@@ -120,14 +120,14 @@ void TestHalfFrames() {
             int count=0;bullets->Pool().ForEachActive([&](const Bullet& b) {
                 const float angle=static_cast<float>(-std::numbers::pi/2+count*std::numbers::pi/2+rotation*(frame-30+.5));
                 const float tilt=spatial?(spawn.position.x<0?.42F:-.42F):0;
-                Near(b.beamDirection.x,std::cos(angle)*std::cos(tilt),"half.dx",1e-4F);
-                Near(b.beamDirection.y,std::cos(angle)*std::sin(tilt),"half.dy",1e-4F);
-                Near(b.beamDirection.z,-std::sin(angle),"half.dz",1e-4F);
+                Near(b.Direction().x,std::cos(angle)*std::cos(tilt),"half.dx",1e-4F);
+                Near(b.Direction().y,std::cos(angle)*std::sin(tilt),"half.dy",1e-4F);
+                Near(b.Direction().z,-std::sin(angle),"half.dz",1e-4F);
                 // Follow读取应用上一半步位移后的位置；插值末步在Follow之后才吸附终点。
                 Near(b.beamAnchor.x,before.x+velocity.x/120,"half.anchor.x");
                 Near(b.beamAnchor.y,before.y+velocity.y/120,"half.anchor.y");
                 Near(b.beamAnchor.z,before.z+velocity.z/120,"half.anchor.z");
-                Near(BulletSystem::Length(b.beamDirection),1,"half.unit",1e-5F);++count;
+                Near(BulletSystem::Length(b.Direction()),1,"half.unit",1e-5F);++count;
             });
             assert(count==(frame>=30?4:0));bullets->Update(1.0F/120);
         }
@@ -165,8 +165,8 @@ void TestParentClocksAndDisplayRates() {
                 for(std::size_t n=0;n<actual.size();++n) {
                     const auto& a=actual[n];const auto& e=expected[n];
                     Near(a.position.x,e.position.x,"display.bx");Near(a.position.y,e.position.y,"display.by");Near(a.position.z,e.position.z,"display.bz");
-                    Near(a.velocity.x,e.velocity.x,"display.vx",1e-4F);Near(a.velocity.y,e.velocity.y,"display.vy",1e-4F);Near(a.velocity.z,e.velocity.z,"display.vz",1e-4F);
-                    Near(a.beamDirection.x,e.beamDirection.x,"display.dx",1e-5F);Near(a.beamDirection.y,e.beamDirection.y,"display.dy",1e-5F);Near(a.beamDirection.z,e.beamDirection.z,"display.dz",1e-5F);
+                    Near(a.Velocity().x,e.Velocity().x,"display.vx",1e-4F);Near(a.Velocity().y,e.Velocity().y,"display.vy",1e-4F);Near(a.Velocity().z,e.Velocity().z,"display.vz",1e-4F);
+                    Near(a.Direction().x,e.Direction().x,"display.dx",1e-5F);Near(a.Direction().y,e.Direction().y,"display.dy",1e-5F);Near(a.Direction().z,e.Direction().z,"display.dz",1e-5F);
                     assert(a.nativeColor==e.nativeColor&&a.nativeType==e.nativeType);
                 }
                 for(std::size_t n=0;n<children.size();++n)assert(children[n].seed==births[n].seed&&children[n].sourceHealth==births[n].sourceHealth);
@@ -229,12 +229,12 @@ void TestSpatialFans() {
         const float halfAngle=group==0?31*.5F*0.13089969754219055F:16*.5F*0.15707963705062866F;
         const float sourceSpeed=(group==0?5.199999809265137F:1.7999999523162842F)+.5F;
         for(int n=0;n<count;++n) {
-            const auto& b=*actual[offset+n];const float speed=BulletSystem::Length(b.velocity);
+            const auto& b=*actual[offset+n];const float speed=BulletSystem::Length(b.Velocity());
             Near(speed,sourceSpeed*speedScale,"spatial.speed",1e-4F);
             const float cosine=1-(1-std::cos(halfAngle))*(n+.5F)/count;
-            Near((b.velocity.x*axis.x+b.velocity.y*axis.y+b.velocity.z*axis.z)/speed,cosine,"spatial.area",1e-5F);
+            Near((b.Velocity().x*axis.x+b.Velocity().y*axis.y+b.Velocity().z*axis.z)/speed,cosine,"spatial.area",1e-5F);
             Near(b.position.x,actor.position.x,"spatial.origin.x");Near(b.position.y,actor.position.y,"spatial.origin.y");Near(b.position.z,actor.position.z,"spatial.origin.z");
-            above|=b.velocity.y>1e-5F;below|=b.velocity.y<-1e-5F;assert(b.nativeType==3&&b.nativeColor==2);
+            above|=b.Velocity().y>1e-5F;below|=b.Velocity().y<-1e-5F;assert(b.nativeType==3&&b.nativeColor==2);
         }
     }
     assert(above&&below);

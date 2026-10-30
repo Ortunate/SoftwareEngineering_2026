@@ -14,8 +14,10 @@
 #include <vector>
 
 namespace koumakyou {
+class CombatRenderer;
+class ProjectileAssets;
 
-/// @brief 道具、副机或纯视觉演出的临时公告板；position 为世界坐标，heightScale 乘以外观的世界高度。
+/// @brief 道具、副机或纯视觉演出的临时绘制对象；position 为世界坐标，heightScale 乘以外观的世界高度。
 /// visual 是当前 Stage 的外观 ID；渲染器只在本帧借用此数据。
 struct PickupSprite {
     Vector3 position{};
@@ -23,17 +25,20 @@ struct PickupSprite {
     float heightScale = 1.0F;
     const anm::Frame* animation = nullptr; // 借用道具或副机的当前帧，只在本次 Draw 内有效。
     unsigned char alpha = 255; // 额外不透明度（0～255），与贴图及原生动画 Alpha 相乘。
+    float itemRotation = 0; // 本地 +Y 长轴弧度；由 DropSystem 模拟年龄产生，不跟随相机。
 };
-/// @brief 本帧借用的 Bomb 三维实体；几何由攻击实例提供，visual 仅决定图集，绘制不做二次伤害计算。
+/// @brief 本帧借用的 Bomb 三维实体；几何由攻击实例提供，visual 决定原图集回退，模型按演出形状选择，绘制不做二次伤害计算。
 struct BombVolumeSprite {
     const PlayerBombSprite* sprite=nullptr;
     VisualId visual=kInvalidVisualId;
 };
 
-/// @brief 绘制角色、弹幕和道具的公告板与光晕；不持有传入的战斗对象或 GPU 资源。
+/// @brief 协调角色、道具公告板与正式模型绘制；不持有传入的战斗对象或 GPU 资源。
 class SpriteRenderer {
 public:
-    /// @brief 绘制战斗或收尾帧；全部贴图、光效按相机深度排序且不写深度，恢复深度和剔除状态。
+    SpriteRenderer(){modelCommands_.reserve(BulletSystem::kCapacity);}
+
+    /// @brief 绘制战斗或收尾帧；不透明模型先写深度，其他对象按相机深度排序，末尾恢复深度和剔除状态。
     /// 本次调用须汇总本帧所有透明战斗对象；分次调用不能保证跨批次遮挡正确。
     /// @param camera 当前 3D 相机。
     /// @param bullets 全部活动弹幕。
@@ -44,6 +49,7 @@ public:
     /// @param shaders 兼容旧清单的借用参数；透明绘制使用默认着色器，不再按阈值裁剪柔边。
     /// @param effects 本关卡退场快照；调用期间须保留对应外观资源。
     /// @param bombVolumes 借用战斗模拟的世界实体；光束按轴向和精灵深度切分，其余实体按中心排序。
+    /// @param models 可选的本帧三维模型渲染器；资源借用期仅本次 Draw。
     /// @param external 可选的独立粒子池；与演员/弹幕进入同一透明队列，借用期仅本次Draw。
     void Draw(const Camera3D& camera, const BulletSystem& bullets,
               std::span<const behavior::Actor*> enemies, const Boss* boss,
@@ -51,7 +57,7 @@ public:
               std::span<const VisualResource> visuals,
               const SpriteShaders& shaders,
               const ActorEffectSystem& effects,
-              std::span<const BombVolumeSprite> bombVolumes={},const effects::ExternalEffectSystem* external=nullptr) const;
+              std::span<const BombVolumeSprite> bombVolumes={},const effects::ExternalEffectSystem* external=nullptr,CombatRenderer* models=nullptr) const;
     /// @brief 最近一次 Draw 排入的普通激光片段数，含预警、不含 Bomb；用于定位随弹量放大的渲染开销。
     [[nodiscard]] std::size_t LastBeamSegmentCount() const { return beamSegmentCount_; }
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -62,7 +68,7 @@ public:
     /// @param playerPosition 计算发弹点所需的玩家位置。
     void DrawDebugGeometry(const BulletSystem& bullets,
                            std::span<const behavior::Actor*> enemies,
-                           const Boss* boss, Vector3 playerPosition) const;
+                           const Boss* boss, Vector3 playerPosition,const ProjectileAssets* models=nullptr,std::span<const VisualResource> visuals={}) const;
 #endif
 private:
     /// @brief 本帧角色绘制副本，半透明排序不借用战斗对象或效果池槽位。
@@ -78,13 +84,14 @@ private:
     /// @brief index 借用本帧 actor/pickup 数组；bullet 借用弹池，排序期间不得推进或回收对象。
     /// depth 为沿相机前向的世界距离；光束 from/to 为原线段的归一化区间，同时用于 UV 裁分。
     struct TransparentDraw {
-        enum class Kind { Actor, Pickup, Bullet, Beam, Glow, BombVolume } kind;
+        enum class Kind { Actor, Pickup, Bullet, Beam, Glow, BombVolume, ModelGroup } kind;
         float depth;
         std::size_t index=0;
         const Bullet* bullet=nullptr;
         float from=0,to=1;
     };
     mutable std::vector<TransparentDraw> transparentDraws_;
+    mutable std::vector<std::size_t> modelCommands_;
     /// @brief 精灵沿相机前向的世界深度及投影包围框；透视坐标为相机 X/Z、Y/Z，正交坐标为 X、Y。
     /// bounds.width < 0 表示无法安全界定（如跨越相机平面），必须保留该深度处的激光切分。
     struct SpritePlane {

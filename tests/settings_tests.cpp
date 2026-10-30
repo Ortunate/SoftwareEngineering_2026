@@ -16,7 +16,16 @@ void RunSettingsTests() {
     const auto defaults = LoadOrCreateSettings(path);
     assert(std::filesystem::exists(path));
     assert(defaults.fpsLimit == 60 && defaults.musicVolume == 50);
-    assert(defaults.mouseSensitivity == 100);
+    assert(defaults.mouseSensitivity == 100 && defaults.aimAssistEnabled);
+    for(bool enabled:{false,true}) {
+        auto settings=defaults;settings.aimAssistEnabled=enabled;
+        assert(SaveSettingsFile(path,settings));
+        assert(LoadOrCreateSettings(path).aimAssistEnabled==enabled);
+    }
+    for(const char* config:{"version=8\nbest_score=42\n", "version=9\naim_assist=5\n"}) {
+        { std::ofstream out(path);out<<config; }
+        assert(LoadOrCreateSettings(path).aimAssistEnabled);
+    }
     assert(defaults.soundVolume == 60 && defaults.initialLives == 2 && defaults.initialBombs == 3);
     assert(defaults.lastSelection.character == 0 && defaults.lastSelection.shot == 0 && !defaults.lastSelection.challenge && defaults.lastSelection.practicePhase == 2);
     assert(defaults.bindings.focus == MouseBinding(MOUSE_BUTTON_RIGHT));
@@ -90,7 +99,7 @@ void RunSettingsTests() {
     assert(migrated.bindings.fire == MouseBinding(MOUSE_BUTTON_LEFT));
     assert(migrated.bindings.bomb == KEY_F && migrated.bindings.pause == KEY_P);
     { std::ifstream in(path); const std::string content((std::istreambuf_iterator<char>(in)), {});
-      assert(content.find("version=8") != std::string::npos);
+      assert(content.find("version=9") != std::string::npos);
       assert(content.find("fire_alt") == std::string::npos && content.find("bomb_alt") == std::string::npos); }
     { std::ofstream out(path); out << "version=3\nfocus=86\nfire=81\nbomb=69\npause=79\n"; }
     const auto custom = LoadOrCreateSettings(path);

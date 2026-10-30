@@ -17,10 +17,10 @@ inline Canvas PageCanvas(int width,int height) {
     return Canvas::Full(width,ui::CommandBar::ContentHeight(width,height),compact?760:1100,compact?1100:760);
 }
 
-inline constexpr int kOptionsCount = 8;
-inline constexpr int kNumericOptions = 6;
-inline constexpr int kBindingsIndex = 6;
-inline constexpr int kResetIndex = 7;
+inline constexpr int kOptionsCount = 9;
+inline constexpr int kNumericOptions = 7;
+inline constexpr int kBindingsIndex = 7;
+inline constexpr int kResetIndex = 8;
 /// @brief 暂停菜单的局部顺序；输入导航、鼠标命中与绘制必须使用相同项数。
 inline constexpr int kPauseCount = 3;
 inline constexpr std::array<const char*,kPauseCount> kPauseLabels{
@@ -35,24 +35,23 @@ inline constexpr std::array<const char*,4> kPracticePauseLabels{
     return stagePractice?std::span<const char* const>(kPracticePauseLabels):std::span<const char* const>(kPauseLabels);
 }
 /// @brief 结算操作的局部顺序；输入与绘制共用，结算时默认选择重新开始。
-inline constexpr int kResultCount = 2;
-inline constexpr std::array<const char*,kResultCount> kResultLabels{"从头再来","返回主菜单"};
-/// @brief 新典符卡结果菜单顺序；Replay 尚未实现，仅展示，导航和鼠标必须跳过该项，默认选择重试。
-inline constexpr std::array<const char*,3> kSpellResultLabels{"返回符卡选择画面","保存Replay","重试"};
-inline constexpr std::array<bool,3> kSpellResultAvailable{true,false,true};
+inline constexpr int kResultCount = 3;
+inline constexpr std::array<const char*,kResultCount> kResultLabels{"从头再来","返回主菜单","保存 Replay"};
+/// @brief 符卡结果顺序；中间行打开保存询问和命名；已保存时不重复生成文件。
+inline constexpr std::array<const char*,3> kSpellResultLabels{"返回符卡选择画面","保存 Replay","重试"};
+inline constexpr std::array<bool,3> kSpellResultAvailable{true,true,true};
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
-    "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
-    "按键设置", "恢复默认设置"};
-/// @brief 第 index 行的屏幕矩形；index 为 0～7，返回只通过返回键处理，不加入选项列表。
+    "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "AIM ASSIST", "SE Vol", "Player", "Bomb", "按键设置", "恢复默认设置"};
+/// @brief 第 index 行的屏幕矩形；index 为 0～8，返回只通过返回键处理，不加入选项列表。
 inline Rectangle OptionRow(const Canvas& canvas, int index) {
-    return canvas.width<1000 ? canvas.Rect(48,220+index*76,664,64)
-                             : canvas.Rect(310,160+index*48,625,42);
+    return canvas.width<1000 ? canvas.Rect(48,220+index*64,664,64)
+                             : canvas.Rect(310,160+index*46,625,42);
 }
-/// @brief 数值行的屏幕箭头矩形；index 为 0～5，direction 为 -1（减小）或 1（增大）。
+/// @brief 数值行的屏幕箭头矩形；index 为 0～6，direction 为 -1（减小）或 1（增大）。
 inline Rectangle OptionArrow(const Canvas& canvas, int index, int direction) {
-    return canvas.width<1000 ? canvas.Rect(direction<0?420:664,230+index*76,40,40)
-                             : canvas.Rect(direction<0?670:886,165+index*48,32,32);
+    return canvas.width<1000 ? canvas.Rect(direction<0?420:664,230+index*64,40,40)
+                             : canvas.Rect(direction<0?670:886,165+index*46,32,32);
 }
 
 /// @brief 开局、音乐、成绩和制作信息的响应式布局；构造参数为窗口逻辑像素。
@@ -103,7 +102,7 @@ struct OverlayLayout {
     [[nodiscard]] Rectangle SpellResultRow(int index) const { return PauseRow(index,64); }
     /// @brief 关卡计分明细的居中底板，横竖屏按短边等比缩放。
     [[nodiscard]] Rectangle ClearPanel() const { return canvas.Rect(80,100,600,430); }
-    /// @brief 普通结算操作行，index 为 0～1；符卡结果使用 SpellResultRow。
+    /// @brief 普通结算操作行，index 为 0～2；符卡结果使用 SpellResultRow。
     [[nodiscard]] Rectangle ResultRow(int index) const { return canvas.Rect(170,430+index*48,420,42); }
 };
 /// @brief 标题页的响应式布局；使用完整窗口，方形/竖屏将标题放到菜单上方。

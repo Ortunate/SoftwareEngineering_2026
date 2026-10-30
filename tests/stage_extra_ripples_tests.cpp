@@ -53,7 +53,7 @@ void TestSource() {
                 assert(e.type==2&&e.color==6&&e.flags==2560&&e.bounces==1&&b.bouncesRemaining==1&&!b.reflectLowerZ&&b.sampleMotionAtStart);
                 assert(b.nativeType==2&&b.nativeColor==6&&b.spawnVisualSeconds==0);
                 Near(b.position.x,origin.x,"bullet.x");Near(b.position.z,origin.z,"bullet.z");
-                Near(b.velocity.x,e.velocity.x*speedScale,"bullet.vx",1e-4F);Near(b.velocity.z,-e.velocity.y*speedScale,"bullet.vz",1e-4F);
+                Near(b.Velocity().x,e.velocity.x*speedScale,"bullet.vx",1e-4F);Near(b.Velocity().z,-e.velocity.y*speedScale,"bullet.vz",1e-4F);
                 Near(b.bounceSpeed,std::hypot(e.velocity.x,e.velocity.y)*speedScale,"bounce.speed",1e-4F);
                 Near(b.bounceHalfExtents.x,7*scale,"bounce.half.x",1e-5F);Near(b.bounceHalfExtents.z,8*scale,"bounce.half.z",1e-5F);
                 if(profile==0&&seed==7&&rank==32&&(frame==180||frame==7205))traces.push_back({b,e});
@@ -78,7 +78,7 @@ void TestProjectileTraces() {
             }
             x+=vx;y+=vy;bullets->Update(1.0F/60);
             const auto p=World({x,y,0});Near(b->position.x,p.x,"trace.x");Near(b->position.z,p.z,"trace.z");
-            Near(b->velocity.x,vx*speedScale,"trace.vx",1e-4F);Near(b->velocity.z,-vy*speedScale,"trace.vz",1e-4F);
+            Near(b->Velocity().x,vx*speedScale,"trace.vx",1e-4F);Near(b->Velocity().z,-vy*speedScale,"trace.vz",1e-4F);
             assert(b->bouncesRemaining==remaining);if(!b->active)break;
         }
     }
@@ -103,9 +103,9 @@ void TestClocksAndSpatial() {
         bullets->Reset();source.Tick({240,350,0});actor.Update(1.0F/60,{2,3,-6},*bullets);
         if(frame==180||frame==461) {
             int n=0;bullets->Pool().ForEachActive([&](const Bullet& b) {
-                const auto& e=source.emissions[n++];Near(BulletSystem::Length(b.velocity),std::hypot(e.velocity.x,e.velocity.y)*speedScale,"spatial.speed",1e-4F);
+                const auto& e=source.emissions[n++];Near(BulletSystem::Length(b.Velocity()),std::hypot(e.velocity.x,e.velocity.y)*speedScale,"spatial.speed",1e-4F);
                 Near(b.position.x,frame==180?actor.position.x:(e.position.x-192)*scale,"spatial.x");Near(b.position.z,frame==180?actor.position.z:10-e.position.y*scale,"spatial.z");
-                assert(std::abs(b.position.y)<=1.25F&&b.bouncesRemaining==1);above|=b.velocity.y>0;below|=b.velocity.y<0;
+                assert(std::abs(b.position.y)<=1.25F&&b.bouncesRemaining==1);above|=b.Velocity().y>0;below|=b.Velocity().y<0;
             });assert(n==88);
         }
     }
@@ -123,7 +123,7 @@ void TestClocksAndSpatial() {
                 for(std::size_t n=0;n<actual.size();++n) {
                     const auto& b=actual[n];const auto& e=expected[n];assert(b.nativeType==e.nativeType&&b.nativeColor==e.nativeColor);
                     Near(b.position.x,e.position.x,"display.bullet.x");Near(b.position.y,e.position.y,"display.bullet.y");Near(b.position.z,e.position.z,"display.bullet.z");
-                    Near(b.velocity.x,e.velocity.x,"display.vx",1e-4F);Near(b.velocity.y,e.velocity.y,"display.vy",1e-4F);Near(b.velocity.z,e.velocity.z,"display.vz",1e-4F);
+                    Near(b.Velocity().x,e.Velocity().x,"display.vx",1e-4F);Near(b.Velocity().y,e.Velocity().y,"display.vy",1e-4F);Near(b.Velocity().z,e.Velocity().z,"display.vz",1e-4F);
                 }
             }
         }

@@ -39,6 +39,9 @@ target_link_libraries(koumakyou_ui PUBLIC raylib)
 # 游戏实现只编译一次，所有目标共用同一份实现。
 add_library(koumakyou_engine STATIC
     src/app/game.cpp
+    src/app/replay.cpp
+    src/app/replay_controls.cpp
+    src/replay/replay.cpp
     src/app/input.cpp
     src/app/start_setup.cpp
     src/app/spell_practice.cpp
@@ -258,3 +261,29 @@ if(WIN32)
         endif()
     endforeach()
 endif()
+
+# 兼容标识覆盖所有运行时代码和资源；任何源码改动触发重新配置，不允许旧录像静默使用新逻辑。
+file(GLOB_RECURSE REPLAY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*" "${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime/*")
+set(REPLAY_SIGNATURE "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_CXX_FLAGS}-${CMAKE_CXX_FLAGS_RELEASE}-${CMAKE_CXX_FLAGS_DEBUG}")
+foreach(REPLAY_SOURCE IN LISTS REPLAY_SOURCES)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${REPLAY_SOURCE}")
+    file(SHA256 "${REPLAY_SOURCE}" REPLAY_SOURCE_HASH)
+    string(APPEND REPLAY_SIGNATURE "${REPLAY_SOURCE_HASH}")
+endforeach()
+string(SHA256 REPLAY_BUILD_HASH "${REPLAY_SIGNATURE}")
+target_compile_definitions(koumakyou_engine PRIVATE KOUMAKYOU_REPLAY_BUILD="${REPLAY_BUILD_HASH}-$<CONFIG>")
+# 模拟兼容版本不依赖观战控件和渲染代码；内容清单单独签名，构建标识仅展示。
+set(REPLAY_SIM_SIGNATURE "v2-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_CXX_FLAGS}")
+set(REPLAY_CONTENT_SIGNATURE "v2")
+foreach(REPLAY_SOURCE IN LISTS REPLAY_SOURCES)
+    file(SHA256 "${REPLAY_SOURCE}" REPLAY_SOURCE_HASH)
+    if(REPLAY_SOURCE MATCHES "/(gameplay|stage|stages)/" OR REPLAY_SOURCE MATCHES "/app/(game|input|replay)[.](cpp|hpp)$" OR REPLAY_SOURCE MATCHES "/resources/(animation|battle_catalog)[.](cpp|hpp)$")
+        string(APPEND REPLAY_SIM_SIGNATURE "${REPLAY_SOURCE_HASH}")
+    endif()
+    if(REPLAY_SOURCE MATCHES "/assets/runtime/")
+        string(APPEND REPLAY_CONTENT_SIGNATURE "${REPLAY_SOURCE_HASH}")
+    endif()
+endforeach()
+string(SHA256 REPLAY_SIM_HASH "${REPLAY_SIM_SIGNATURE}")
+string(SHA256 REPLAY_CONTENT_HASH "${REPLAY_CONTENT_SIGNATURE}")
+target_compile_definitions(koumakyou_engine PRIVATE KOUMAKYOU_REPLAY_SIMULATION="${REPLAY_SIM_HASH}-$<CONFIG>" KOUMAKYOU_REPLAY_CONTENT="${REPLAY_CONTENT_HASH}")

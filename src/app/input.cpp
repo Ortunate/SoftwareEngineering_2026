@@ -18,7 +18,7 @@ void Game::UpdateMainMenu() {
     if (!titleEntrance_.Finished()) return;
     const auto input = ui::MenuInput::Read();
     constexpr int itemCount = menu::kTitleRowCount;
-    const auto available = [](int index) { return index != 1 && index != 4; };
+    const auto available = [this](int index) { return MainMenuItemAvailable(index); };
     if (input.back) {
         selectedMenuItem_ = 9;
         assets_.PlaySoundEffect("menu_cancel");
@@ -54,6 +54,7 @@ void Game::UpdateMainMenu() {
             if(spellPractice_)spellSelection_.page=spell::Page::Stage;
             state_ = RunState::StartSetup;
             break;
+        case 4: OpenReplayList(); break;
         case 5: state_ = RunState::Score; break;
         case 6: {
             // 音乐页借用 Stage 1 的流，离开时 EnterMainMenu 统一停止并释放。
@@ -247,20 +248,7 @@ void Game::AdjustOption(int offset) {
 
 void Game::UpdatePlayer(float deltaTime) {
     playerBombStartedThisFrame_=false;
-    const PlayerInput input{
-        .mouseDelta = GetMouseDelta(),
-        .mouseSensitivityScale = mouseSensitivity_ / 100.0F,
-        .forward = BindingDown(bindings_.forward),
-        .backward = BindingDown(bindings_.backward),
-        .moveLeft = BindingDown(bindings_.moveLeft),
-        .moveRight = BindingDown(bindings_.moveRight),
-        .ascend = BindingDown(bindings_.ascend),
-        .descend = BindingDown(bindings_.descend),
-        .focus = BindingDown(bindings_.focus),
-        .fire = BindingDown(bindings_.fire),
-        .bomb = BindingPressed(bindings_.bomb),
-        .aimAssistEnabled = aimAssistEnabled_,
-    };
+    const auto& input=runInput_.player;
     shotSoundTimer_ = std::max(0.0F, shotSoundTimer_ - deltaTime);
     if (input.fire && !dialogueActive_ && shotSoundTimer_ <= 0) {
         assets_.PlaySoundEffect("shoot");

@@ -20,3 +20,6 @@ koumakyou_settings.cfg
 
 # 本机原作血量与弹伤害的只读解析结果
 /output/native-combat-data/
+
+# 本地录像与未完成的原子保存文件
+/replays/

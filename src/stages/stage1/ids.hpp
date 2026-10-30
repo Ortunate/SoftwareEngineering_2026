@@ -54,7 +54,9 @@ constexpr VisualId kReimuBombSeal = kMarisaPortraits.back()+1;
 constexpr VisualId kReimuBombBarrier = kReimuBombSeal+4;
 constexpr VisualId kMarisaBombStars = kReimuBombBarrier+4;
 constexpr VisualId kMarisaBombSpark = kMarisaBombStars+3;
-constexpr std::size_t kVisualCount = kMarisaBombSpark+4;
+/// @brief 观战自机本体外观；两角色各五种动作，编号只在本关资源清单有效。
+constexpr VisualId kPlayerBody = kMarisaBombSpark+4;
+constexpr std::size_t kVisualCount = kPlayerBody+10;
 /// @brief 保留 ECL 弹幕类型与颜色，非法输入回退普通蓝弹；类型内部颜色转换由战斗目录负责。
 constexpr VisualId NativeBulletVisual(int type,int color) {
     return type>=0 && type<10 && color>=0 && color<16

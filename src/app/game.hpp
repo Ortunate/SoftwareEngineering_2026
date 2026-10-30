@@ -25,6 +25,7 @@
 #include "render/title_entrance.hpp"
 
 #include "raylib.h"
+#include "replay/replay.hpp"
 
 #include <array>
 #include <cstddef>
@@ -45,6 +46,8 @@ public:
 
     /// @brief 重置游戏并返回主菜单。
     void Reset();
+    /// @brief 从文件播放已兼容录像；失败返回 false 并保留中文错误提示，view=0/1/2。
+    bool OpenReplayFile(const std::filesystem::path& path,int view=0);
     /// @brief 从第一面开头开始一局战斗，先进入可持续更新的加载页。
     /// @param captureCursor 是否为交互游玩捕获鼠标；截图时传 false。
     void Start(bool captureCursor = true);
@@ -69,7 +72,8 @@ public:
     void OpenOptions();
     /// @brief 按当前状态更新输入、关卡与战斗逻辑。
     /// @param deltaTime 本帧经过的秒数。
-    void Update(float deltaTime);
+    /// @param playbackElapsed 播放预算使用的真实秒数；负值表示沿用 deltaTime，正常模拟仍只使用 deltaTime。
+    void Update(float deltaTime, float playbackElapsed = -1.0F);
     /// @brief 根据当前状态绘制游戏画面。
     void Draw() const;
     /// @brief 查询主菜单是否要求退出程序。
@@ -147,7 +151,7 @@ private:
     void AdjustFpsLimit(int offset);
     /// @brief 调节当前数值项并立即保存；offset 正负控制方向，音量步进 5%，灵敏度步进 10%。
     void AdjustOption(int offset);
-    /// @brief 采集玩家输入，委托 Player 更新，并处理 Bomb 对战场的影响。
+    /// @brief 消费本步 runInput_，委托 Player 更新，并处理 Bomb 对战场的影响。
     /// @param deltaTime 本帧经过的秒数。
     void UpdatePlayer(float deltaTime);
     /// @brief 推进全部活动敌人的航线及技能计时器。
@@ -247,6 +251,78 @@ private:
     void StartShotTest();
 #endif
 
+    /// @brief 采集一份逻辑输入；播放时由文件提供，避免多步播放重复消费实体按键。
+    replay::Frame ReadRunInput(float dt) const;
+    /// @brief 一次实际模拟更新，包含影响退场和碰撞的动画同步。
+    void StepRun(float dt);
+    /// @brief 初始化录制；仅交互正式关卡启用，随机种子在初始化掉落前设置。
+    void PrepareReplay();
+    /// @brief 当前开局配置和终局摘要，不拥有任何关卡资源。
+    replay::Header ReplayHeader() const;
+    replay::Result ReplayResult() const;
+    /// @brief 打开录像列表并释放旧关卡；保留状态文字，失败文件也可查看原因。
+    void OpenReplayList();
+    /// @brief 处理列表分页选择、播放及返回；坏文件不允许启动。
+    void UpdateReplayList();
+    /// @brief 只在选择变化时读取并缓存录像，避免每帧访问磁盘。
+    void RefreshReplaySelection();
+    /// @brief 绘制缓存的录像元数据，不在绘制路径访问文件系统。
+    void DrawReplayList() const;
+    /// @brief 从已校验文件启动关卡；退出时恢复原本的开局设置。
+    void PlayReplay(replay::Data data);
+    /// @brief 退出播放或加载失败时还原开局配置；未播放时无副作用。
+    void RestoreReplaySettings();
+    replay::Mode replayMode_=replay::Mode::Idle;
+    replay::Data replayData_{};
+    replay::Frame runInput_{};
+    std::optional<replay::Header> replayOriginal_;
+    std::vector<std::filesystem::path> replayFiles_;
+    std::vector<std::string> replayLabels_; // 列表名称缓存；选中后仍须完整校验文件。
+    int selectedReplay_=0;
+    std::optional<replay::Data> replaySelected_;
+    std::string replayDescription_;
+    bool replayOriginalDebug_=false;
+    std::size_t replayCursor_=0;
+    double replayBudget_=0; // 秒；只累计未暂停的真实播放时间，不能跳过录像步骤。
+    bool replayPaused_=false, replayEnded_=false;
+    std::string replayStatus_;
+    /// @brief 观战状态只驱动渲染，秒数索引指向原始步骤边界；定位不修改录像。
+    Camera3D observer_{};
+    int replayView_=0,replaySpeed_=2;
+    float orbitYaw_=0,orbitPitch_=0.2F,orbitDistance_=3;
+    std::vector<double> replayTimes_;
+    std::size_t replayTarget_=0;
+    bool replaySeeking_=false,replayFinished_=false;
+    // Ready 只在最终步骤封存后设置；Declined 可手动重开询问，Saved 不得重复保存。
+    enum class ReplaySaveState { None, Ready, Ask, Naming, Failed, Declined, Saved };
+    enum class ReplayAction { Retry, Menu, StageSelection, SpellSelection, Stay };
+    ReplaySaveState replaySaveState_=ReplaySaveState::None;
+    ReplayAction replayAfterSave_=ReplayAction::Stay;
+    int replayChoice_=0,replayChar_=0,replayNameChoice_=0;
+    ui::MenuMotion replaySaveMotion_{};
+    bool replayAvailable_=false,replayMenuFocused_=false;
+    float replayScanSeconds_=1;
+    /// @brief 仅检查录像文件存在性，启动、返回、聚焦和主菜单每秒刷新，不在 Draw 中访问文件系统。
+    void RefreshReplayAvailability(float seconds=0,bool force=false);
+    [[nodiscard]] bool MainMenuItemAvailable(int index) const;
+    /// @brief 保存资格同时供菜单和请求使用；拒绝后仍允许手动保存。
+    [[nodiscard]] bool CanSaveReplay() const;
+    [[nodiscard]] bool ReplaySaveModalOpen() const;
+
+    std::string replayName_;
+    battle::Cursor playerBodyAnimation_{};
+    int playerBodyAction_=0;
+    double playerBodySince_=0,replayMusicSince_=0;
+    int replayMusicSlot_=0;
+    bool replayAudioMuted_=true;
+    /// @brief 请求离开结果页；未保存时先询问，动作表示重试、返回首页/选择页或留在结果。
+    void RequestReplayAction(ReplayAction action);
+    void FinishReplayAction();
+    void UpdateReplaySave();
+    void DrawReplaySave() const;
+    void UpdateObserver(float seconds);
+    void SeekReplay(double seconds);
+    void DrawReplayBar() const;
     Camera3D camera_{};
     RunState state_ = RunState::MainMenu;
     float loadingSeconds_ = 0; // 秒；独立 UI 时钟，不能参与关卡/弹幕/符卡计时。

@@ -11,12 +11,51 @@
 #include <cmath>
 #include <chrono>
 #include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <ctime>
 
 namespace koumakyou {
 namespace {
 // 列表布局同时用于绘制与点击；紧凑窗口拉开行距，给双行元数据留出空间。
+int ReplayPageSize(const menu::Canvas& canvas) { return canvas.width<1000?4:8; }
 Rectangle ReplayRow(const menu::Canvas& canvas,int row) {
-    return canvas.Rect(48,(canvas.width<1000?210:180)+row*(canvas.width<1000?70:48),canvas.width-96,canvas.width<1000?64:44);
+    return canvas.Rect(48,(canvas.width<1000?210:180)+row*(canvas.width<1000?70:48),canvas.width<1000?canvas.width-96:canvas.width*0.5F-60,canvas.width<1000?64:44);
+}
+// 展示只读取录像快照；目录无法识别的 ID 保留原文，不借用当前菜单选择补全。
+std::string RecordedStage(const std::string& id) {
+    for(int i=0;i<6;++i)if(id=="stage"+std::to_string(i+1))return spell::Stages()[i].label;
+    return id=="extra"?"Extra":id;
+}
+std::string RecordedDate(std::uint64_t seconds) {
+    if(!seconds)return "未记录";
+    const auto time=static_cast<std::time_t>(seconds);const auto* date=std::gmtime(&time);if(!date)return "未记录";
+    std::ostringstream out;out<<std::put_time(date,"%Y-%m-%d %H:%M:%S UTC");return out.str();
+}
+std::string ReplayDetails(const replay::Data& data) {
+    double duration=0;for(const auto& frame:data.frames)duration+=frame.dt;
+    std::string stages,difficulties;
+    for(const auto& segment:data.segments) {
+        if(!stages.empty()){stages+=" / ";difficulties+=" / ";}
+        stages+=RecordedStage(segment.stage);difficulties+=spell::kDifficulties[static_cast<unsigned>(segment.difficulty)];
+    }
+    const auto& entry=data.segments.front();
+    std::string machine=data.character+" / "+data.shot;
+    constexpr std::array<const char*,4> shots{"reimu-a","reimu-b","marisa-a","marisa-b"};
+    for(std::size_t i=0;i<shots.size();++i)if(data.shot==shots[i] && data.character==(i<2?"reimu":"marisa")) {
+        const auto& character=spell::Characters()[i];machine=std::string(character.displayName)+" · "+character.shot;break;
+    }
+    const auto mode=data.route=="spell-practice"?"符卡练习":data.route=="stage-practice"?"整关练习":data.route=="stage1-prototype"?"普通流程":data.route.c_str();
+    const auto rules=data.rules=="challenge"?"挑战模式":data.rules=="standard"?"标准模式":data.rules.c_str();
+    const auto target=entry.target=="rumia-night-bird"?"夜符 Night Bird":entry.target=="rumia-demarcation"?"暗符 Demarcation":entry.target.c_str();
+    std::ostringstream out;
+    out<<data.name<<"\n关卡 "<<stages<<"\n难度 "<<difficulties<<"\n"<<machine
+       <<"\n"<<mode<<" · "<<rules;
+    if(!entry.target.empty())out<<" · "<<target;
+    out<<"\n"<<(data.result.won?"通关":"失败")<<" · SCORE "<<data.result.score<<" · "<<int(duration/60)<<":"<<std::setw(2)<<std::setfill('0')<<int(duration)%60
+       <<"\n"<<RecordedDate(data.recordedAt)<<"\nPlayer "<<entry.lives<<" · Bomb "<<entry.bombs<<" · Power "<<entry.power
+       <<"\nMiss "<<data.result.misses<<" · Bomb "<<data.result.bombs<<" · Seed "<<entry.seed;
+    return out.str();
 }
 std::string ReplayLabel(const std::filesystem::path& path) {
     // 浏览只读有界前缀，不把未经完整校验的元数据用于启动游戏。
@@ -44,7 +83,11 @@ void Game::PrepareReplay() {
     if(replayMode_!=replay::Mode::Playback) {
         auto header=ReplayHeader();header.seed=std::random_device{}();replay::BeginSession(replayData_,header);
         replayData_.route=spellPractice_?"spell-practice":practiceMode_?"stage-practice":"stage1-prototype";
-        replay::Segment segment;segment.seed=header.seed;segment.lives=header.lives;segment.bombs=header.bombs;segment.power=spellPractice_?128:8;segment.entry=spellPractice_?"spell":"stage";segment.target=spellPractice_?(practicePhase_==2?"rumia-night-bird":"rumia-demarcation"):"";replay::BeginStage(replayData_,segment);
+        replay::Segment segment;
+        // 当前运行内容仅开放 Normal；显式从已加载关卡取得稳定身份，后续难度接入须替换此实际配置来源。
+        switch(stageId_) {case StageId::Stage1:segment.stage="stage1";break;}
+        segment.difficulty=replay::Difficulty::Normal;
+        segment.seed=header.seed;segment.lives=header.lives;segment.bombs=header.bombs;segment.power=spellPractice_?128:8;segment.entry=spellPractice_?"spell":"stage";segment.target=spellPractice_?(practicePhase_==2?"rumia-night-bird":"rumia-demarcation"):"";replay::BeginStage(replayData_,segment);
         replaySaveState_=ReplaySaveState::None;
         bool eligible=captureCursor_ && !previewMode_;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -177,10 +220,7 @@ void Game::RefreshReplaySelection() {
     if(replayFiles_.empty())return;
     replay::Data data;std::string error;
     if(!replay::Load(replayFiles_[selectedReplay_],data,error)) { replayDescription_=error;return; }
-    double seconds=0;for(const auto& frame:data.frames)seconds+=frame.dt;
-    const auto& h=data.header;
-    replayDescription_=data.name+"\n"+std::string(spell::Characters()[h.shot].displayName)+" · "+(h.spell?(h.phase==2?"夜符练习":"暗符练习"):h.practice?"一面练习":"一面")+
-        (h.challenge?" · 挑战":" · 标准")+"\n"+std::to_string(static_cast<int>(seconds))+" 秒 · "+std::to_string(data.result.score)+(data.result.won?" · 通关":" · 失败");
+    replayDescription_=ReplayDetails(data);
     if(!replay::CanPlay(data,error))replayDescription_+="\n"+error;
     replaySelected_=std::move(data);
 }
@@ -188,15 +228,15 @@ void Game::UpdateReplayList() {
     const auto input=ui::MenuInput::Read();if(input.back){replayStatus_.clear();EnterMainMenu();return;}
     if(replayFiles_.empty())return;
     const int count=static_cast<int>(replayFiles_.size()),previous=selectedReplay_;
-    const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());const int start=(selectedReplay_/8)*8;
+    const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());const int pageSize=ReplayPageSize(canvas),start=(selectedReplay_/pageSize)*pageSize;
     for(int direction:{-1,1}) {
         const Rectangle bounds=canvas.Rect(direction<0?48:canvas.width-190,canvas.width<1000?1010:690,142,44);
-        if(ui::Button{bounds,direction<0?start>0:start+8<count}.Update(input).activated) {
-            selectedReplay_=std::clamp(start+direction*8,0,count-1);RefreshReplaySelection();assets_.PlaySoundEffect("menu_move");return;
+        if(ui::Button{bounds,direction<0?start>0:start+pageSize<count}.Update(input).activated) {
+            selectedReplay_=std::clamp(start+direction*pageSize,0,count-1);RefreshReplaySelection();assets_.PlaySoundEffect("menu_move");return;
         }
     }
     std::vector<ui::Item> items;items.reserve(count);
-    for(int i=0;i<count;++i)items.push_back({i,i>=start && i<start+8?ReplayRow(canvas,i-start):Rectangle{-100,-100,0,0}});
+    for(int i=0;i<count;++i)items.push_back({i,i>=start && i<start+pageSize?ReplayRow(canvas,i-start):Rectangle{-100,-100,0,0}});
     const auto result=ui::UpdateSelection(items,input,selectedReplay_,ui::Navigation::Vertical);
     if(previous!=selectedReplay_) {RefreshReplaySelection();assets_.PlaySoundEffect("menu_move");}
     if(result.confirmed) {assets_.PlaySoundEffect("menu_confirm");if(replaySelected_)PlayReplay(*replaySelected_);else replayStatus_=replayDescription_;}
@@ -207,15 +247,20 @@ void Game::DrawReplayList() const {
     ui::DrawPageSurface(canvas,menuMotion_);ui::DrawPageHeader(canvas,font,"录像回放","选择录像 · 保存名称与日期见详情","");
     const auto label=[&](const std::string& value,float y,Color color,float size=24){ui::Label{canvas.Rect(48,y,canvas.width-96,34),size}.Draw(context,value.c_str(),color);};
     if(replayFiles_.empty())label("暂无录像",185,context.theme.text);
-    const int start=(selectedReplay_/8)*8,count=static_cast<int>(replayFiles_.size());
-    for(int i=start;i<std::min(start+8,count);++i) {
+    const int pageSize=ReplayPageSize(canvas),start=(selectedReplay_/pageSize)*pageSize,count=static_cast<int>(replayFiles_.size());
+    for(int i=start;i<std::min(start+pageSize,count);++i) {
         const auto row=ReplayRow(canvas,i-start);const auto color=ui::SelectableRow{row,i}.Draw(context,i==selectedReplay_?1.0F:0.0F);
         ui::Label{{row.x+12*canvas.scale,row.y,row.width-24*canvas.scale,row.height},28}.Draw(context,replayLabels_[i].c_str(),color);
     }
-    const bool compact=canvas.width<1000;std::size_t offset=0;int line=0;
-    do {const auto end=replayDescription_.find('\n',offset);label(replayDescription_.substr(offset,end==std::string::npos?end:end-offset),(compact?810:575)+line*30.0F,context.theme.accent,20);if(end==std::string::npos)break;offset=end+1;++line;}while(line<4);
+    const bool compact=canvas.width<1000;
+    const float detailX=compact?48:canvas.width*0.53F,detailY=compact?525:180,detailWidth=compact?canvas.width-96:canvas.width-detailX-48;
+    ui::Panel{canvas.Rect(detailX,detailY,detailWidth,compact?405:430)}.Draw(context);
+    std::istringstream details(replayDescription_);std::string line;int lineIndex=0;
+    while(std::getline(details,line) && lineIndex<11) {
+        ui::Label{canvas.Rect(detailX+12,detailY+8+lineIndex*35,detailWidth-24,32),lineIndex?20.0F:24.0F}.Draw(context,line.c_str(),lineIndex?context.theme.text:context.theme.accent);++lineIndex;
+    }
     label(replayStatus_,compact?950:655,context.theme.text,18);
-    for(int direction:{-1,1})ui::Button{canvas.Rect(direction<0?48:canvas.width-190,canvas.width<1000?1010:690,142,44),direction<0?start>0:start+8<count}.Draw(context,direction<0?"上一页":"下一页");
+    for(int direction:{-1,1})ui::Button{canvas.Rect(direction<0?48:canvas.width-190,canvas.width<1000?1010:690,142,44),direction<0?start>0:start+pageSize<count}.Draw(context,direction<0?"上一页":"下一页");
     ui::Label{canvas.Rect(canvas.width/2-80,compact?1010:690,160,44),22,ui::TextAlign::Center}.Draw(context,(std::to_string(count?selectedReplay_+1:0)+" / "+std::to_string(count)).c_str(),context.theme.text);
 }
 }

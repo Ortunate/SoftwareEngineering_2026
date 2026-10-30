@@ -38,6 +38,8 @@ struct Data {
     Header header; std::vector<Frame> frames; Result result;
     std::string name="Replay", route="stage1-prototype", character="reimu", shot="reimu-a", rules="standard";
     std::string simulation,content,build;
+    /// @brief 开局时刻，UTC Unix 秒；旧录像未记录时为 0，不用当前时间或文件修改时间补造。
+    std::uint64_t recordedAt=0;
     std::uint32_t continues=0;
     std::vector<Segment> segments;
 };

@@ -32,6 +32,7 @@ std::uint32_t Hash(const Bytes& bytes,std::size_t count) {
 }
 void Require(bool valid,const char* message) { if(!valid)throw std::runtime_error(message); }
 void Validate(const Data& d) {
+    Require(d.recordedAt<=253402300799ULL,"录像时间超出范围");
     std::string normalized;Require(NormalizeName(d.name,normalized),"录像名称无效");
     Require(!d.segments.empty() && d.segments.size()<=64,"录像片段过多");
     std::size_t boundary=0;
@@ -58,7 +59,9 @@ Codec Encode(const Data& d) {
         c.Put(static_cast<std::uint32_t>(s.score));c.Put(static_cast<std::uint32_t>(s.score>>32));
         c.Put(static_cast<std::uint32_t>(s.result.score));c.Put(static_cast<std::uint32_t>(s.result.score>>32));for(auto v:{s.result.lives,s.result.power,s.result.misses,s.result.bombs,std::uint32_t(s.result.won)})c.Put(v);
     }
-    c.Put(0); // 扩展项数；类型高位标记必需项，未知必需项必须拒绝。
+    // 可选扩展 1 保存真实开局时间；旧版 v2 可按长度跳过，核心布局不变。
+    c.Put(d.recordedAt?1:0);
+    if(d.recordedAt) {c.Put(1);c.Put(8);c.Put(static_cast<std::uint32_t>(d.recordedAt));c.Put(static_cast<std::uint32_t>(d.recordedAt>>32));}
     const auto& h=d.header;for(auto v:{h.seed,h.shot,h.lives,h.bombs,h.phase})c.Put(v);
     c.Put(h.practice | (h.spell<<1) | (h.challenge<<2));c.Put(static_cast<std::uint32_t>(d.frames.size()));
     const auto& r=d.result;c.Put(static_cast<std::uint32_t>(r.score));c.Put(static_cast<std::uint32_t>(r.score>>32));for(auto v:{r.lives,r.power,r.misses,r.bombs,std::uint32_t(r.won)})c.Put(v);
@@ -98,7 +101,11 @@ bool Load(const std::filesystem::path& file,Data& out,std::string& error) {
         const auto segments=c.Get();Require(segments<=64,"录像片段过多");
         for(unsigned i=0;i<segments;++i) { Segment s;s.stage=c.String();s.entry=c.String();s.target=c.String();s.difficulty=static_cast<Difficulty>(c.Get());s.begin=c.Get();s.end=c.Get();s.seed=c.Get();s.lives=c.Get();s.bombs=c.Get();s.power=c.Get();s.rank=c.Get();const auto low=c.Get();s.score=low|(std::uint64_t(c.Get())<<32);const auto exitLow=c.Get();s.result.score=exitLow|(std::uint64_t(c.Get())<<32);s.result.lives=c.Get();s.result.power=c.Get();s.result.misses=c.Get();s.result.bombs=c.Get();const auto won=c.Get();Require(won<2,"片段结果无效");s.result.won=won;d.segments.push_back(s); }
         const auto extensions=c.Get();Require(extensions<=64,"录像扩展过多");
-        for(unsigned i=0;i<extensions;++i) {const auto type=c.Get(),length=c.Get();Require(!(type&0x80000000u),"录像需要不支持的扩展");Require(length<=65536 && c.offset+length<=c.bytes.size(),"录像扩展截断");c.offset+=length;}
+        for(unsigned i=0;i<extensions;++i) {
+            const auto type=c.Get(),length=c.Get();Require(!(type&0x80000000u),"录像需要不支持的扩展");Require(length<=65536 && c.offset+length<=c.bytes.size(),"录像扩展截断");
+            if(type==1) {Require(length==8 && d.recordedAt==0,"录像时间扩展无效");const auto low=c.Get();d.recordedAt=low|(std::uint64_t(c.Get())<<32);Require(d.recordedAt>0 && d.recordedAt<=253402300799ULL,"录像时间超出范围");}
+            else c.offset+=length;
+        }
         auto& h=d.header;h.seed=c.Get();h.shot=c.Get();h.lives=c.Get();h.bombs=c.Get();h.phase=c.Get();auto flags=c.Get();Require(flags<8,"录像模式无效");h.practice=flags&1;h.spell=flags&2;h.challenge=flags&4;
         const auto count=c.Get();Require(count>0 && count<=kMaxFrames,"录像步数无效");auto& r=d.result;const auto low=c.Get();r.score=low|(std::uint64_t(c.Get())<<32);r.lives=c.Get();r.power=c.Get();r.misses=c.Get();r.bombs=c.Get();const auto won=c.Get();Require(won<2,"录像结果无效");r.won=won;
         Require(c.offset+std::size_t(count)*20+4==c.bytes.size(),"录像步数与文件长度不符");d.frames.resize(count);
@@ -120,7 +127,7 @@ bool NormalizeName(const std::string& input,std::string& output) {
     }
     output=value;return true;
 }
-void BeginSession(Data& data,const Header& header) { data={};data.header=header;data.character=header.shot<2?"reimu":"marisa";data.shot=std::array<const char*,4>{"reimu-a","reimu-b","marisa-a","marisa-b"}.at(header.shot);data.rules=header.challenge?"challenge":"standard"; }
+void BeginSession(Data& data,const Header& header) { data={};data.header=header;data.recordedAt=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());data.simulation=SimulationId();data.content=ContentId();data.build=BuildId();data.character=header.shot<2?"reimu":"marisa";data.shot=std::array<const char*,4>{"reimu-a","reimu-b","marisa-a","marisa-b"}.at(header.shot);data.rules=header.challenge?"challenge":"standard"; }
 void BeginStage(Data& data,Segment s) { if(!data.segments.empty() && data.segments.back().end==0)throw std::invalid_argument("上一片段未结束");s.begin=static_cast<unsigned>(data.frames.size());s.end=0;data.segments.push_back(s); }
 void EndStage(Data& data,const Result& result) { if(data.segments.empty() || data.segments.back().end!=0)throw std::invalid_argument("没有打开的片段");data.segments.back().end=static_cast<unsigned>(data.frames.size());data.segments.back().result=result; }
 void FinishSession(Data& data,const Result& result) { if(!data.segments.empty() && data.segments.back().end==0)EndStage(data,result);data.result=result; }

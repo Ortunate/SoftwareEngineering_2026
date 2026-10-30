@@ -45,12 +45,13 @@ void Game::Draw() const {
         DrawOverlay();
     }
     // 唯一的全局按键提示出口；在所有页面、演出与模态上方绘制，避免遗漏或叠画多个旧页脚。
-    if(replayMode_==replay::Mode::Playback)DrawReplayBar();else DrawCommandBar();
-    if(replaySavePage_)DrawReplaySave();
-    if(!replayStatus_.empty() && state_!=RunState::ReplayList) {
-        const float width=std::min(static_cast<float>(GetScreenWidth()-32),ui::MeasureText(assets_.Common().uiFont,replayStatus_.c_str(),20).x+24);
-        DrawRectangleRec({16,16,width,36},Color{25,18,28,230});
-        ui::DrawText(assets_.Common().uiFont,replayStatus_.c_str(),{24,24},20,WHITE);
+    if(replayMode_==replay::Mode::Playback)DrawReplayBar();else if(!ReplaySaveModalOpen())DrawCommandBar();
+    if(ReplaySaveModalOpen())DrawReplaySave();
+    if(!replayStatus_.empty() && state_!=RunState::ReplayList && !ReplaySaveModalOpen()) {
+        const ui::DrawContext context{assets_.Common().uiFont};
+        const Rectangle bounds{16,16,std::max(1.0F,static_cast<float>(GetScreenWidth()-32)),36};
+        ui::Panel{bounds}.Draw(context);
+        ui::Label{{24,16,bounds.width-16,36},20}.Draw(context,replayStatus_.c_str(),context.theme.text);
     }
 
 }
@@ -273,7 +274,7 @@ void Game::DrawOverlay() const {
         detail(TextFormat("SCORE %09lld",score_),252,22);
         detail(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),284,18);
         for(int index=0;index<static_cast<int>(menu::kSpellResultLabels.size());++index)
-            drawModalRow(layout.SpellResultRow(index),menu::kSpellResultLabels[index],index,menu::kSpellResultAvailable[index]);
+            drawModalRow(layout.SpellResultRow(index),menu::kSpellResultLabels[index],index,index!=1 || CanSaveReplay());
     } else if (state_ == RunState::Won || state_ == RunState::GameOver) {
         DrawRectangle(0,0,GetScreenWidth(),GetScreenHeight(),Color{0,0,0,175});
         const float center=canvas.Point(380,0).x;
@@ -290,7 +291,7 @@ void Game::DrawOverlay() const {
         for(int index=0;index<menu::kResultCount;++index) {
             const auto row=layout.ResultRow(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            ui::DrawPageButton(canvas,font,row,index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
+            ui::Button{row,index!=2 || CanSaveReplay()}.Draw({font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()},index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],{weight,reveal});
         }
     }
 

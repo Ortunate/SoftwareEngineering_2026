@@ -2,6 +2,7 @@
 
 #include "app/game.hpp"
 #include "app/constants.hpp"
+#include "platform/window_input.hpp"
 #include "ui/components.hpp"
 #include "render/menu_layout.hpp"
 #include "config/settings.hpp"
@@ -132,7 +133,7 @@ void Game::SaveSettings() const {
 }
 
 void Game::StartRun(bool captureCursor, bool synchronous) {
-    if(replayMode_!=replay::Mode::Playback) { replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
+    if(replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear(); replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
     replayEnded_=false;
     playerBodyAnimation_={};playerBodyAction_=0;playerBodySince_=0;
     FinishSpellRecord(false);
@@ -242,6 +243,9 @@ void Game::CompleteStartRun() {
 }
 
 void Game::EnterMainMenu() {
+    replaySaveState_=ReplaySaveState::None;replayName_.clear();replayAfterSave_=ReplayAction::Stay;
+    (void)DisableWindowInputMethods(GetWindowHandle());
+    RefreshReplayAvailability(0,true);
     FinishSpellRecord(false);
     RestoreReplaySettings();
     replayMode_=replay::Mode::Idle; replayData_={};
@@ -519,40 +523,40 @@ void Game::UpdateState(float deltaTime) {
     if (state_ == RunState::Won || state_ == RunState::GameOver) {
         const auto input = ui::MenuInput::Read();
         if(spellPractice_) {
-            if(input.back) {RequestReplayAction(3);return;}
-            if(IsKeyPressed(KEY_M)) {RequestReplayAction(1);return;}
+            if(input.back) {RequestReplayAction(ReplayAction::SpellSelection);return;}
+            if(IsKeyPressed(KEY_M)) {RequestReplayAction(ReplayAction::Menu);return;}
             const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
             std::array<ui::Item,3> items{};
-            for(int index=0;index<3;++index)items[index]={index,layout.SpellResultRow(index),menu::kSpellResultAvailable[index]};
+            for(int index=0;index<3;++index)items[index]={index,layout.SpellResultRow(index),index!=1 || CanSaveReplay()};
             const auto selection=ui::UpdateSelection(items,input,selectedResultItem_);
             if(selection.changed)assets_.PlaySoundEffect("menu_move");
             bool confirm=selection.confirmed;
             if(IsKeyPressed(KEY_R)) {selectedResultItem_=2;confirm=true;}
             if(confirm) {
                 assets_.PlaySoundEffect("menu_confirm");
-                if(selectedResultItem_==1)RequestReplayAction(4);else if(selectedResultItem_==2)RequestReplayAction(0);else RequestReplayAction(3);
+                if(selectedResultItem_==1)RequestReplayAction(ReplayAction::Stay);else if(selectedResultItem_==2)RequestReplayAction(ReplayAction::Retry);else RequestReplayAction(ReplayAction::SpellSelection);
             }
             return;
         }
         if (input.back) {
-            if(practiceMode_ && !spellPractice_)RequestReplayAction(2); else RequestReplayAction(1);
+            if(practiceMode_ && !spellPractice_)RequestReplayAction(ReplayAction::StageSelection); else RequestReplayAction(ReplayAction::Menu);
             return;
         }
-        if(IsKeyPressed(KEY_M)) { RequestReplayAction(1); return; }
+        if(IsKeyPressed(KEY_M)) { RequestReplayAction(ReplayAction::Menu); return; }
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         std::array<ui::Item,menu::kResultCount> items{};
         for (int index = 0; index < menu::kResultCount; ++index)
-            items[index]={index,layout.ResultRow(index)};
+            items[index]={index,layout.ResultRow(index),index!=2 || CanSaveReplay()};
         const auto selection=ui::UpdateSelection(items,input,selectedResultItem_);
         bool confirm=selection.confirmed;
         if(selection.changed)assets_.PlaySoundEffect("menu_move");
         if (IsKeyPressed(KEY_R)) { selectedResultItem_ = 0; confirm = true; }
         if (confirm) {
             assets_.PlaySoundEffect("menu_confirm");
-            if(selectedResultItem_==2)RequestReplayAction(4);
-            else if (selectedResultItem_ == 0) RequestReplayAction(0);
-            else if(practiceMode_ && !spellPractice_)RequestReplayAction(2);
-            else RequestReplayAction(1);
+            if(selectedResultItem_==2)RequestReplayAction(ReplayAction::Stay);
+            else if (selectedResultItem_ == 0) RequestReplayAction(ReplayAction::Retry);
+            else if(practiceMode_ && !spellPractice_)RequestReplayAction(ReplayAction::StageSelection);
+            else RequestReplayAction(ReplayAction::Menu);
         }
         return;
     }
@@ -563,7 +567,7 @@ void Game::UpdateState(float deltaTime) {
         if (input.back || (BindingPressed(bindings_.pause) && !input.confirm && !input.click && input.Direction()==0)) {
             TogglePause(); return;
         }
-        if (IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
+        if (IsKeyPressed(KEY_M)) { RequestReplayAction(ReplayAction::Menu); return; }
         const int count=static_cast<int>(menu::PauseLabels(practiceMode_ && !spellPractice_,spellPractice_).size());
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         std::array<ui::Item,4> items{};
@@ -575,9 +579,9 @@ void Game::UpdateState(float deltaTime) {
             assets_.PlaySoundEffect("menu_confirm");
             switch (selectedPauseItem_) {
                 case 0: TogglePause(); break;
-                case 1: EnterMainMenu(); break;
-                case 2: StartRun(); break;
-                case 3: if(spellPractice_)ReturnToSpellPractice();else ReturnToPracticeStage(); break;
+                case 1: RequestReplayAction(ReplayAction::Menu); break;
+                case 2: RequestReplayAction(ReplayAction::Retry); break;
+                case 3: if(spellPractice_)RequestReplayAction(ReplayAction::SpellSelection);else RequestReplayAction(ReplayAction::StageSelection); break;
             }
         }
         return;
@@ -602,7 +606,7 @@ void Game::UpdateState(float deltaTime) {
             ClearPlayerBomb();
             assets_.UnloadStage();
             state_ = finishResult_; EnableCursor();
-            if(!practiceMode_)RequestReplayAction(4);
+            if(!practiceMode_)RequestReplayAction(ReplayAction::Stay);
         }
         return;
     }

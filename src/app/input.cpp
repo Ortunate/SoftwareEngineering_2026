@@ -18,7 +18,7 @@ void Game::UpdateMainMenu() {
     if (!titleEntrance_.Finished()) return;
     const auto input = ui::MenuInput::Read();
     constexpr int itemCount = menu::kTitleRowCount;
-    const auto available = [](int index) { return index != 1; };
+    const auto available = [this](int index) { return MainMenuItemAvailable(index); };
     if (input.back) {
         selectedMenuItem_ = 9;
         assets_.PlaySoundEffect("menu_cancel");

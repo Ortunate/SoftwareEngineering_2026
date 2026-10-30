@@ -1,7 +1,8 @@
-// 本文件负责录像会话、自动保存、播放调度及本地录像列表；模拟和绘制共用正式游戏资源。
+// 本文件负责录像会话、保存封存、播放调度及本地录像列表；模拟和绘制共用正式游戏资源。
 #include "app/game.hpp"
 #include "app/constants.hpp"
 #include "ui/input.hpp"
+#include "ui/components.hpp"
 #include "ui/page.hpp"
 #include "ui/typography.hpp"
 #include "render/menu_layout.hpp"
@@ -44,7 +45,7 @@ void Game::PrepareReplay() {
         auto header=ReplayHeader();header.seed=std::random_device{}();replay::BeginSession(replayData_,header);
         replayData_.route=spellPractice_?"spell-practice":practiceMode_?"stage-practice":"stage1-prototype";
         replay::Segment segment;segment.seed=header.seed;segment.lives=header.lives;segment.bombs=header.bombs;segment.power=spellPractice_?128:8;segment.entry=spellPractice_?"spell":"stage";segment.target=spellPractice_?(practicePhase_==2?"rumia-night-bird":"rumia-demarcation"):"";replay::BeginStage(replayData_,segment);
-        replaySaved_=replayAsked_=false;replaySavePage_=0;
+        replaySaveState_=ReplaySaveState::None;
         bool eligible=captureCursor_ && !previewMode_;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
         eligible=eligible && !debugInvincible_ && !loadingShotTest_;
@@ -66,7 +67,8 @@ replay::Frame Game::ReadRunInput(float dt) const {
 void Game::Update(float dt,float playbackElapsed) {
     assets_.UpdateAudio();
     if(!std::isfinite(dt) || dt<0)return;
-    if(replaySavePage_) { UpdateReplaySave();return; }
+    if(state_==RunState::MainMenu)RefreshReplayAvailability(dt);
+    if(ReplaySaveModalOpen()) { replaySaveMotion_.Advance(static_cast<int>(replaySaveState_),replaySaveState_==ReplaySaveState::Ask?replayChoice_:replayNameChoice_,dt);UpdateReplaySave();return; }
     if(replayMode_==replay::Mode::Playback && state_!=RunState::Loading) {
         if(IsKeyPressed(KEY_ESCAPE)) { replayStatus_="已退出回放";OpenReplayList();return; }
         const float elapsed=std::isfinite(playbackElapsed) && playbackElapsed>=0?playbackElapsed:dt;
@@ -125,6 +127,7 @@ void Game::Update(float dt,float playbackElapsed) {
         replayData_.frames.push_back(runInput_);
         if(replayEnded_) {
             replay::FinishSession(replayData_,ReplayResult());
+            replaySaveState_=ReplaySaveState::Ready;
             replayStatus_="Replay 等待保存";
             replayMode_=replay::Mode::Idle;
         }
@@ -181,30 +184,35 @@ void Game::UpdateReplayList() {
     const auto input=ui::MenuInput::Read();if(input.back){replayStatus_.clear();EnterMainMenu();return;}
     if(replayFiles_.empty())return;
     const int count=static_cast<int>(replayFiles_.size()),previous=selectedReplay_;
-    selectedReplay_=(selectedReplay_+input.vertical+count)%count;
     const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());const int start=(selectedReplay_/8)*8;
-    bool confirm=input.confirm;
-    for(int i=start;i<std::min(start+8,count);++i)if(input.Clicked(ReplayRow(canvas,i-start))) { selectedReplay_=i;confirm=true; }
-    if(previous!=selectedReplay_)RefreshReplaySelection();
-    if(confirm) { if(replaySelected_)PlayReplay(*replaySelected_);else replayStatus_=replayDescription_; }
+    for(int direction:{-1,1}) {
+        const Rectangle bounds=canvas.Rect(direction<0?48:canvas.width-190,canvas.width<1000?1010:690,142,44);
+        if(ui::Button{bounds,direction<0?start>0:start+8<count}.Update(input).activated) {
+            selectedReplay_=std::clamp(start+direction*8,0,count-1);RefreshReplaySelection();assets_.PlaySoundEffect("menu_move");return;
+        }
+    }
+    std::vector<ui::Item> items;items.reserve(count);
+    for(int i=0;i<count;++i)items.push_back({i,i>=start && i<start+8?ReplayRow(canvas,i-start):Rectangle{-100,-100,0,0}});
+    const auto result=ui::UpdateSelection(items,input,selectedReplay_,ui::Navigation::Vertical);
+    if(previous!=selectedReplay_) {RefreshReplaySelection();assets_.PlaySoundEffect("menu_move");}
+    if(result.confirmed) {assets_.PlaySoundEffect("menu_confirm");if(replaySelected_)PlayReplay(*replaySelected_);else replayStatus_=replayDescription_;}
 }
 void Game::DrawReplayList() const {
     const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());const auto font=assets_.Common().uiFont;
+    const ui::DrawContext context{font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()};
     ui::DrawPageSurface(canvas,menuMotion_);ui::DrawPageHeader(canvas,font,"录像回放","选择录像 · 保存名称与日期见详情","");
-    const auto text=[&](const std::string& s,float y,Color color,float size=28) {
-        const float width=ui::MeasureText(font,s.c_str(),size).x;
-        const float fit=width>0?std::min(1.0F,(canvas.width-96)/width):1.0F;
-        ui::DrawText(font,s.c_str(),canvas.Point(48,y),std::max(14.0F,size*canvas.scale)*fit,color);
-    };
-    if(replayFiles_.empty())text("暂无录像",185,WHITE);
-    const int start=(selectedReplay_/8)*8;
-    const bool compact=canvas.width<1000;
-    for(int i=start;i<std::min(start+8,static_cast<int>(replayFiles_.size()));++i) {
-        if(i==selectedReplay_)DrawRectangleRec(ReplayRow(canvas,i-start),Color{90,48,42,160});
-        text((i==selectedReplay_?"> ":"  ")+replayLabels_[i],(compact?220:185)+(compact?70.0F:48.0F)*(i-start),i==selectedReplay_?GOLD:WHITE);
+    const auto label=[&](const std::string& value,float y,Color color,float size=24){ui::Label{canvas.Rect(48,y,canvas.width-96,34),size}.Draw(context,value.c_str(),color);};
+    if(replayFiles_.empty())label("暂无录像",185,context.theme.text);
+    const int start=(selectedReplay_/8)*8,count=static_cast<int>(replayFiles_.size());
+    for(int i=start;i<std::min(start+8,count);++i) {
+        const auto row=ReplayRow(canvas,i-start);const auto color=ui::SelectableRow{row,i}.Draw(context,i==selectedReplay_?1.0F:0.0F);
+        ui::Label{{row.x+12*canvas.scale,row.y,row.width-24*canvas.scale,row.height},28}.Draw(context,replayLabels_[i].c_str(),color);
     }
-    text(replayDescription_,compact?820:580,GOLD,24);text(replayStatus_,compact?960:650,WHITE,22);
-    text(std::to_string(replayFiles_.empty()?0:selectedReplay_+1)+" / "+std::to_string(replayFiles_.size()),compact?1020:700,WHITE,22);
+    const bool compact=canvas.width<1000;std::size_t offset=0;int line=0;
+    do {const auto end=replayDescription_.find('\n',offset);label(replayDescription_.substr(offset,end==std::string::npos?end:end-offset),(compact?810:575)+line*30.0F,context.theme.accent,20);if(end==std::string::npos)break;offset=end+1;++line;}while(line<4);
+    label(replayStatus_,compact?950:655,context.theme.text,18);
+    for(int direction:{-1,1})ui::Button{canvas.Rect(direction<0?48:canvas.width-190,canvas.width<1000?1010:690,142,44),direction<0?start>0:start+8<count}.Draw(context,direction<0?"上一页":"下一页");
+    ui::Label{canvas.Rect(canvas.width/2-80,compact?1010:690,160,44),22,ui::TextAlign::Center}.Draw(context,(std::to_string(count?selectedReplay_+1:0)+" / "+std::to_string(count)).c_str(),context.theme.text);
 }
 }
 

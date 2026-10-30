@@ -293,16 +293,30 @@ private:
     std::vector<double> replayTimes_;
     std::size_t replayTarget_=0;
     bool replaySeeking_=false,replayFinished_=false;
-    bool replaySaved_=false,replayAsked_=false;
-    int replaySavePage_=0,replayAfterSave_=4,replayChoice_=0,replayChar_=0;
+    // Ready 只在最终步骤封存后设置；Declined 可手动重开询问，Saved 不得重复保存。
+    enum class ReplaySaveState { None, Ready, Ask, Naming, Failed, Declined, Saved };
+    enum class ReplayAction { Retry, Menu, StageSelection, SpellSelection, Stay };
+    ReplaySaveState replaySaveState_=ReplaySaveState::None;
+    ReplayAction replayAfterSave_=ReplayAction::Stay;
+    int replayChoice_=0,replayChar_=0,replayNameChoice_=0;
+    ui::MenuMotion replaySaveMotion_{};
+    bool replayAvailable_=false,replayMenuFocused_=false;
+    float replayScanSeconds_=1;
+    /// @brief 仅检查录像文件存在性，启动、返回、聚焦和主菜单每秒刷新，不在 Draw 中访问文件系统。
+    void RefreshReplayAvailability(float seconds=0,bool force=false);
+    [[nodiscard]] bool MainMenuItemAvailable(int index) const;
+    /// @brief 保存资格同时供菜单和请求使用；拒绝后仍允许手动保存。
+    [[nodiscard]] bool CanSaveReplay() const;
+    [[nodiscard]] bool ReplaySaveModalOpen() const;
+
     std::string replayName_;
     battle::Cursor playerBodyAnimation_{};
     int playerBodyAction_=0;
     double playerBodySince_=0,replayMusicSince_=0;
     int replayMusicSlot_=0;
     bool replayAudioMuted_=true;
-    /// @brief 请求离开结果页；未保存时先询问，action=0 重试/1 首页/2 选关/3 选卡/4 留在结果。
-    void RequestReplayAction(int action);
+    /// @brief 请求离开结果页；未保存时先询问，动作表示重试、返回首页/选择页或留在结果。
+    void RequestReplayAction(ReplayAction action);
     void FinishReplayAction();
     void UpdateReplaySave();
     void DrawReplaySave() const;

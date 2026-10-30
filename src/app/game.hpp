@@ -322,6 +322,7 @@ private:
     int fpsLimitIndex_ = 1;
     int musicVolume_ = 50;
     int mouseSensitivity_ = 100;
+    bool aimAssistEnabled_ = true;
     int soundVolume_ = 60;
     int initialLives_ = 2;
     int initialBombs_ = 3;

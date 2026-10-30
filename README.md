@@ -160,6 +160,18 @@ cmake --build build --target koumakyou_music_tests
 .\build\koumakyou_music_tests.exe
 ```
 
+辅助瞄准默认开启，Option 的 AIM ASSIST 可关闭并即时保存。目标判定球边缘距准星最多 6°时修正弹道，被辅助瞄准的敌机周围显示四个朝内浮动的锁定箭头；镜头仍由鼠标控制，已发出的普通弹不再修正。
+
+锁定提示动画可通过真实游戏渲染路径复现（需要图形会话，GIF 编码需要 Pillow）：
+
+```powershell
+cmake --build build/release --target aim_lock_preview
+./build/release/aim_lock_preview.exe output/aim-lock/frames
+python tools/render_aim_lock_gif.py output/aim-lock/frames output/aim-lock/aim-lock.gif
+```
+
+导出 6 秒、24 FPS：开头与结尾关闭辅助，中间四秒展示移动敌机的四向锁定箭头。预览使用独立设置目录，不修改玩家记录。
+
 ## 操作
 
 | 按键 | 功能 |

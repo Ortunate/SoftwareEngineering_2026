@@ -60,6 +60,8 @@ public:
 
     /// @brief 清除场上道具；随机序列继续推进，不因重新开始而重复。
     void Clear();
+    /// @brief 新局种子重置；清空道具并从种子初始化轮换表，后续 Clear 仍推进序列。
+    void ResetRun(std::uint32_t seed) { random_.seed(seed); Clear(); }
     /// @brief Bomb 释放时令当前所有道具立即追踪玩家；之后新生成的道具不继承这次吸取。
     void MagnetAllItems();
     /// @brief 在敌人死亡位置抽取一次结果并生成相应数量的两类道具。

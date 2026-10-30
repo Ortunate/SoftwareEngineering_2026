@@ -5,6 +5,7 @@
 #include "app/math.hpp"
 #include "config/settings.hpp"
 #include "stages/stage1/scenery.hpp"
+#include "stages/stage1/ids.hpp"
 #include "render/gameplay_layout.hpp"
 #include "render/menu_layout.hpp"
 #include "ui/page.hpp"
@@ -26,7 +27,8 @@ using namespace game_math;
 void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
-    if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
+    if(state_==RunState::ReplayList) { DrawReplayList(); }
+    else if(state_==RunState::StartSetup || (state_==RunState::MainMenu && startSetupMotion_.Setup()>0)) {
         DrawStartSetup();
     } else if (state_ == RunState::Loading) {
         DrawLoading();
@@ -43,7 +45,14 @@ void Game::Draw() const {
         DrawOverlay();
     }
     // 唯一的全局按键提示出口；在所有页面、演出与模态上方绘制，避免遗漏或叠画多个旧页脚。
-    DrawCommandBar();
+    if(replayMode_==replay::Mode::Playback)DrawReplayBar();else DrawCommandBar();
+    if(replaySavePage_)DrawReplaySave();
+    if(!replayStatus_.empty() && state_!=RunState::ReplayList) {
+        const float width=std::min(static_cast<float>(GetScreenWidth()-32),ui::MeasureText(assets_.Common().uiFont,replayStatus_.c_str(),20).x+24);
+        DrawRectangleRec({16,16,width,36},Color{25,18,28,230});
+        ui::DrawText(assets_.Common().uiFont,replayStatus_.c_str(),{24,24},20,WHITE);
+    }
+
 }
 
 void Game::DrawLoading() const {
@@ -88,6 +97,7 @@ void Game::DrawLoading() const {
 }
 
 void Game::DrawWorld() const {
+    const auto& drawCamera=replayMode_==replay::Mode::Playback && replayView_!=0?observer_:camera_;
     const GameplayLayout layout(GetScreenWidth(),GetScreenHeight());
     const Rectangle viewport=layout.Viewport();
     // 默认窗口的 rlgl 尺寸是逻辑像素，macOS Retina 实际视口需用 GetRenderWidth/Height；
@@ -100,10 +110,10 @@ void Game::DrawWorld() const {
     rlViewport(0,0,framebufferWidth,framebufferHeight);
     rlEnableScissorTest();
     rlScissor(0,0,framebufferWidth,framebufferHeight);
-    BeginMode3D(camera_);
+    BeginMode3D(drawCamera);
     // 原生窗口与离屏截图共用当前 framebuffer；只更改视口和投影，不创建/切换额外 FBO。
     rlMatrixMode(RL_PROJECTION); rlLoadIdentity();
-    const double top=rlGetCullDistanceNear()*std::tan(camera_.fovy*DEG2RAD/2);
+    const double top=rlGetCullDistanceNear()*std::tan(drawCamera.fovy*DEG2RAD/2);
     const double right=top*viewport.width/viewport.height;
     rlFrustum(-right,right,-top,top,rlGetCullDistanceNear(),rlGetCullDistanceFar());
     rlMatrixMode(RL_MODELVIEW);
@@ -156,8 +166,11 @@ void Game::DrawWorld() const {
             }
         }
     }
+    if(replayMode_==replay::Mode::Playback && replayView_!=0 && player_.RemainingLives()>0 &&
+       (player_.InvulnerabilitySeconds()<=0 || static_cast<int>(player_.VisualAge()*12)%2==0))
+        pickupSprites_.push_back({player_.Position(),static_cast<VisualId>(stage1::kPlayerBody+(player_.IsMarisa()?5:0)+playerBodyAction_),1,&playerBodyAnimation_.player.Sample()});
     DrawPlayerBombBackdrop(viewport.width,viewport.height);
-    spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
+    spriteRenderer_.Draw(drawCamera, bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
                          actorEffects_,playerBombVolumes_);

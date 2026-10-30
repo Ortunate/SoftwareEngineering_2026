@@ -123,6 +123,7 @@ void Game::LoadSettings() {
 }
 
 void Game::SaveSettings() const {
+    if(replayMode_==replay::Mode::Playback)return;
     const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_],
         musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_, stageHighScores_, spellSelection_, spellRecords_};
     if (!SaveSettingsFile(kSettingsFilename, settings)) {
@@ -131,6 +132,9 @@ void Game::SaveSettings() const {
 }
 
 void Game::StartRun(bool captureCursor, bool synchronous) {
+    if(replayMode_!=replay::Mode::Playback) { replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
+    replayEnded_=false;
+    playerBodyAnimation_={};playerBodyAction_=0;playerBodySince_=0;
     FinishSpellRecord(false);
     spellCaptured_=false;
     previewMode_ = false;
@@ -184,6 +188,7 @@ void Game::UpdateLoading(float deltaTime) {
 }
 
 void Game::CompleteStartRun() {
+    PrepareReplay();
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
     playerOptionAnimations_ = {};
@@ -196,7 +201,6 @@ void Game::CompleteStartRun() {
     boss_.reset();
     bullets_.Reset();
     enemies_.Clear();
-    drops_.Clear();
     stage_.Reset();
     score_ = 0;
     graze_ = pointItems_ = 0;
@@ -239,6 +243,8 @@ void Game::CompleteStartRun() {
 
 void Game::EnterMainMenu() {
     FinishSpellRecord(false);
+    RestoreReplaySettings();
+    replayMode_=replay::Mode::Idle; replayData_={};
     dialogueMotion_.Clear();
     actorEffects_.Clear();
     bullets_.Reset();
@@ -299,6 +305,7 @@ void Game::ContinueStageClear() {
 }
 
 void Game::RecordStageScore() {
+    if(replayMode_==replay::Mode::Playback)return;
     // 分模式记录包含通关与失败的整关尝试；预览和符卡练习的计分口径不同，不能混入。
     bool recordStage=!previewMode_ && !spellPractice_;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -309,11 +316,12 @@ void Game::RecordStageScore() {
 }
 
 void Game::EndStage(RunState result) {
+    replayEnded_=true;
     FinishSpellRecord(false);
     RecordStageScore();
     if (result == RunState::Won) {
         assets_.PlaySoundEffect("clear");
-        if (!practiceMode_ && !challengeMode_ && !previewMode_ && score_ > bestScore_) {
+        if (replayMode_!=replay::Mode::Playback && !practiceMode_ && !challengeMode_ && !previewMode_ && score_ > bestScore_) {
             bestScore_ = static_cast<int>(std::min(score_, 2000000000LL));
             SaveSettings();
         }
@@ -361,8 +369,7 @@ void Game::TogglePause() {
     }
 }
 
-void Game::Update(float deltaTime) {
-    assets_.UpdateAudio();
+void Game::StepRun(float deltaTime) {
     UpdateState(deltaTime);
     if(state_==RunState::Playing || state_==RunState::StageClear || state_==RunState::Finishing)UpdateBattleAnimations();
     UpdateUiMotion(deltaTime);
@@ -387,6 +394,12 @@ void Game::UpdateBattleAnimations() {
             const auto visual = stageContent_->PlayerOptionVisual(side,player_.Shot());
             if (visual != kInvalidVisualId) sync(playerOptionAnimations_[side], visual, player_.VisualAge());
         }
+    }
+    if(stageContent_ && replayMode_==replay::Mode::Playback) {
+        int action=runInput_.player.moveLeft?1:runInput_.player.moveRight?2:playerBodyAction_==1?3:playerBodyAction_==2?4:playerBodyAction_;
+        if(action!=playerBodyAction_) {playerBodyAction_=action;playerBodySince_=player_.VisualAge();}
+        const auto visual=static_cast<VisualId>(stage1::kPlayerBody+(player_.IsMarisa()?5:0)+action);
+        sync(playerBodyAnimation_,visual,player_.VisualAge()-playerBodySince_);
     }
     enemies_.ForEachActive([&](Enemy& enemy) {
         sync(enemy.animation,enemy.visual,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,
@@ -470,6 +483,7 @@ void Game::UpdateUiMotion(float deltaTime) {
 }
 
 void Game::UpdateState(float deltaTime) {
+    if(state_==RunState::ReplayList) { UpdateReplayList(); return; }
     if (state_ == RunState::Loading) {
         UpdateLoading(deltaTime);
         return; // 完成加载的这一帧也不更新战斗，下一帧从关卡时间零开始。
@@ -493,20 +507,20 @@ void Game::UpdateState(float deltaTime) {
 
     if(state_==RunState::StageClear) {
         const auto input=ui::MenuInput::Read();
-        if(input.back || (BindingPressed(bindings_.pause) && !input.confirm && !input.click)) {
+        if(replayMode_!=replay::Mode::Playback && (input.back || (BindingPressed(bindings_.pause) && !input.confirm && !input.click))) {
             TogglePause(); return;
         }
         stageClearSeconds_=std::min(kStageClearSeconds,stageClearSeconds_+std::max(0.0F,deltaTime));
         actorEffects_.Update(std::max(0.0F,deltaTime));
-        if(input.confirm || input.click || stageClearSeconds_>=kStageClearSeconds)ContinueStageClear();
+        if(runInput_.confirm || stageClearSeconds_>=kStageClearSeconds)ContinueStageClear();
         return; // 确认只关闭本层，下一帧才推进收尾，避免操作穿透到后续菜单。
     }
 
     if (state_ == RunState::Won || state_ == RunState::GameOver) {
         const auto input = ui::MenuInput::Read();
         if(spellPractice_) {
-            if(input.back) {ReturnToSpellPractice();return;}
-            if(IsKeyPressed(KEY_M)) {EnterMainMenu();return;}
+            if(input.back) {RequestReplayAction(3);return;}
+            if(IsKeyPressed(KEY_M)) {RequestReplayAction(1);return;}
             const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
             std::array<ui::Item,3> items{};
             for(int index=0;index<3;++index)items[index]={index,layout.SpellResultRow(index),menu::kSpellResultAvailable[index]};
@@ -516,15 +530,15 @@ void Game::UpdateState(float deltaTime) {
             if(IsKeyPressed(KEY_R)) {selectedResultItem_=2;confirm=true;}
             if(confirm) {
                 assets_.PlaySoundEffect("menu_confirm");
-                if(selectedResultItem_==2)StartRun();else ReturnToSpellPractice();
+                if(selectedResultItem_==1)RequestReplayAction(4);else if(selectedResultItem_==2)RequestReplayAction(0);else RequestReplayAction(3);
             }
             return;
         }
         if (input.back) {
-            if(practiceMode_ && !spellPractice_)ReturnToPracticeStage(); else EnterMainMenu();
+            if(practiceMode_ && !spellPractice_)RequestReplayAction(2); else RequestReplayAction(1);
             return;
         }
-        if(IsKeyPressed(KEY_M)) { EnterMainMenu(); return; }
+        if(IsKeyPressed(KEY_M)) { RequestReplayAction(1); return; }
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         std::array<ui::Item,menu::kResultCount> items{};
         for (int index = 0; index < menu::kResultCount; ++index)
@@ -535,9 +549,10 @@ void Game::UpdateState(float deltaTime) {
         if (IsKeyPressed(KEY_R)) { selectedResultItem_ = 0; confirm = true; }
         if (confirm) {
             assets_.PlaySoundEffect("menu_confirm");
-            if (selectedResultItem_ == 0) StartRun();
-            else if(practiceMode_ && !spellPractice_)ReturnToPracticeStage();
-            else EnterMainMenu();
+            if(selectedResultItem_==2)RequestReplayAction(4);
+            else if (selectedResultItem_ == 0) RequestReplayAction(0);
+            else if(practiceMode_ && !spellPractice_)RequestReplayAction(2);
+            else RequestReplayAction(1);
         }
         return;
     }
@@ -572,7 +587,7 @@ void Game::UpdateState(float deltaTime) {
     const auto dialogueInput = ui::MenuInput::Read();
     const bool pauseBinding = BindingPressed(bindings_.pause) &&
         (!dialogueActive_ || (!dialogueInput.confirm && !dialogueInput.click));
-    if (IsKeyPressed(KEY_ESCAPE) || pauseBinding || (dialogueActive_ && dialogueInput.back)) {
+    if (replayMode_!=replay::Mode::Playback && (IsKeyPressed(KEY_ESCAPE) || pauseBinding || (dialogueActive_ && dialogueInput.back))) {
         TogglePause();
         return;
     }
@@ -586,8 +601,8 @@ void Game::UpdateState(float deltaTime) {
             playerOptionAnimations_ = {};
             ClearPlayerBomb();
             assets_.UnloadStage();
-            if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
-            else { state_ = finishResult_; EnableCursor(); }
+            state_ = finishResult_; EnableCursor();
+            if(!practiceMode_)RequestReplayAction(4);
         }
         return;
     }
@@ -598,9 +613,9 @@ void Game::UpdateState(float deltaTime) {
         return;
     }
 #ifdef KOUMAKYOU_DEBUG_FEATURES
-    if (IsKeyPressed(KEY_F4)) debugInvincible_ = !debugInvincible_;
-    if (IsKeyPressed(KEY_F5)) AdjustPlayerPower(-8);
-    if (IsKeyPressed(KEY_F6)) AdjustPlayerPower(8);
+    if (replayMode_!=replay::Mode::Playback && IsKeyPressed(KEY_F4)) debugInvincible_ = !debugInvincible_;
+    if (replayMode_!=replay::Mode::Playback && IsKeyPressed(KEY_F5)) AdjustPlayerPower(-8);
+    if (replayMode_!=replay::Mode::Playback && IsKeyPressed(KEY_F6)) AdjustPlayerPower(8);
 #endif
 
     messageTimer_ = std::max(0.0F, messageTimer_ - deltaTime);
@@ -624,10 +639,10 @@ void Game::UpdateState(float deltaTime) {
         const auto lines=CurrentDialogue();
         const auto& line=lines[DialogueIndex(&lineStart)];
         const auto cues=stageContent_->DialogueCues(dialogueAfterBattle_,player_.Shot());
-        const bool fastForward=IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+        const bool fastForward=runInput_.fast;
         const bool inputAllowed=DialogueFlagAt(cues,DialogueCueKind::InputEnabled,dialogueTimer_,true) &&
             (fastForward || dialogueTimer_-lineStart+0.00001F>=line.confirmDelay);
-        if (inputAllowed && (dialogueInput.confirm || dialogueInput.click || fastForward))
+        if (inputAllowed && (runInput_.confirm || fastForward))
             dialogueTimer_=lineStart+(line.advanceAfter>=0 ? line.advanceAfter :
                 line.duration>0 ? line.duration : stageContent_->DialogueLineDuration());
         if (!dialogueAfterBattle_ && DialogueFlagAt(cues,DialogueCueKind::BossMusic,dialogueTimer_) && !dialogueBossMusic_) {

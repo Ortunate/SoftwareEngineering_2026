@@ -37,6 +37,7 @@ int main(int argc, char** argv) {
     constexpr int screenHeight = 760;
 
     // 命令行截图入口复用同一套游戏逻辑，可指定关卡时间和观察角度。
+    std::string replayPath;int replayView=0;float replaySeconds=0;
     bool captureFrame = false;
     bool captureGameplay = false;
     bool captureOptions = false;
@@ -48,7 +49,10 @@ int main(int argc, char** argv) {
     bool captureDebug = false;
 #endif
     std::string capturePath = "koumakyou_capture.png";
-    if (argc >= 3 && std::string_view(argv[1]) == "--capture-stage") {
+    if(argc>=3 && (std::string_view(argv[1])=="--replay" || std::string_view(argv[1])=="--capture-replay")) {
+        replayPath=argv[2];captureFrame=std::string_view(argv[1])=="--capture-replay";
+        if(argc>=4)capturePath=argv[3];if(argc>=5)replaySeconds=std::strtof(argv[4],nullptr);if(argc>=6)replayView=std::atoi(argv[5]);
+    } else if (argc >= 3 && std::string_view(argv[1]) == "--capture-stage") {
         captureFrame = true;
         captureStage = true;
         // 原文对话自动等待与所有 Boss 超时约需 301 秒，截图范围须覆盖战后独白。
@@ -97,7 +101,12 @@ int main(int argc, char** argv) {
     bool captureSaved = !captureFrame;
     {
         koumakyou::Game game;
-        if (captureStage) {
+        if(!replayPath.empty()) {
+            if(!game.OpenReplayFile(replayPath,replayView))return 1;
+            while(game.IsLoading() && !game.HasLoadingFailed())game.Update(1.0F/60);
+            if(game.HasLoadingFailed())return 1;
+            if(captureFrame)for(float t=0;t<replaySeconds;t+=1.0F/60)game.Update(1.0F/60);
+        } else if (captureStage) {
             // 以固定步长先推进关卡逻辑，再渲染目标时刻的画面。
             game.StartPreview();
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -128,8 +137,10 @@ int main(int argc, char** argv) {
         while (!WindowShouldClose() && !game.ShouldQuit() &&
                !(captureFrame && game.HasLoadingFailed())) {
             // 主循环每帧先更新状态，再绘制；截图模式改画到离屏纹理。
-            const float deltaTime = std::min(GetFrameTime(), 1.0F / 20.0F);
-            game.Update(deltaTime);
+            const float elapsed = GetFrameTime();
+            const float deltaTime = std::min(elapsed, 1.0F / 20.0F);
+            // 回放预算保留真实墙钟时间，低帧率下仍逐步消费录制的时间步。
+            game.Update(deltaTime, elapsed);
             if (captureStage) game.SetPreviewView(captureYaw, capturePitch);
 
             BeginDrawing();

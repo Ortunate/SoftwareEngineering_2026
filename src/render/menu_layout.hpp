@@ -35,11 +35,11 @@ inline constexpr std::array<const char*,4> kPracticePauseLabels{
     return stagePractice?std::span<const char* const>(kPracticePauseLabels):std::span<const char* const>(kPauseLabels);
 }
 /// @brief 结算操作的局部顺序；输入与绘制共用，结算时默认选择重新开始。
-inline constexpr int kResultCount = 2;
-inline constexpr std::array<const char*,kResultCount> kResultLabels{"从头再来","返回主菜单"};
-/// @brief 新典符卡结果菜单顺序；Replay 尚未实现，仅展示，导航和鼠标必须跳过该项，默认选择重试。
-inline constexpr std::array<const char*,3> kSpellResultLabels{"返回符卡选择画面","保存Replay","重试"};
-inline constexpr std::array<bool,3> kSpellResultAvailable{true,false,true};
+inline constexpr int kResultCount = 3;
+inline constexpr std::array<const char*,kResultCount> kResultLabels{"从头再来","返回主菜单","保存 Replay"};
+/// @brief 符卡结果顺序；中间行打开保存询问和命名；已保存时不重复生成文件。
+inline constexpr std::array<const char*,3> kSpellResultLabels{"返回符卡选择画面","保存 Replay","重试"};
+inline constexpr std::array<bool,3> kSpellResultAvailable{true,true,true};
 // 前三项沿用原有顺序；新增项目位于其后，编号不属于持久化配置格式。
 inline constexpr std::array<const char*, kOptionsCount> kOptionLabels{
     "FPS LIMIT", "BGM Vol", "MOUSE SENSITIVITY", "SE Vol", "Player", "Bomb",
@@ -103,7 +103,7 @@ struct OverlayLayout {
     [[nodiscard]] Rectangle SpellResultRow(int index) const { return PauseRow(index,64); }
     /// @brief 关卡计分明细的居中底板，横竖屏按短边等比缩放。
     [[nodiscard]] Rectangle ClearPanel() const { return canvas.Rect(80,100,600,430); }
-    /// @brief 普通结算操作行，index 为 0～1；符卡结果使用 SpellResultRow。
+    /// @brief 普通结算操作行，index 为 0～2；符卡结果使用 SpellResultRow。
     [[nodiscard]] Rectangle ResultRow(int index) const { return canvas.Rect(170,430+index*48,420,42); }
 };
 /// @brief 标题页的响应式布局；使用完整窗口，方形/竖屏将标题放到菜单上方。

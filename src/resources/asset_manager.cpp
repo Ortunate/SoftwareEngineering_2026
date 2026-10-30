@@ -7,6 +7,7 @@
 #include "rlgl.h"
 
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <chrono>
 #include <future>
@@ -486,6 +487,11 @@ void AssetManager::PlayMenuMusic() { SwitchMusic(MusicSlot::Menu); }
 void AssetManager::PlayStageMusic() { SwitchMusic(MusicSlot::Stage); }
 void AssetManager::PlayBossMusic() { SwitchMusic(MusicSlot::Boss); }
 
+void AssetManager::SeekMusic(float seconds) {
+    if(Music* music=MusicFor(activeMusic_);music && IsMusicValid(*music)) {
+        const float length=GetMusicTimeLength(*music);if(length>0)SeekMusicStream(*music,std::fmod(std::max(0.0F,seconds),length));
+    }
+}
 void AssetManager::PauseMusic() {
     if (Music* music = MusicFor(activeMusic_);
         music != nullptr && IsMusicValid(*music)) {

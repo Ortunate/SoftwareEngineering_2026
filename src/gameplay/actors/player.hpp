@@ -126,6 +126,8 @@ public:
     /// @brief 副机的近距离尺寸倍率，范围 (0,1]；随发射位置等比缩小以保持屏幕尺寸，避免遮挡准星。
     [[nodiscard]] float OptionScale() const;
     /// @brief 本次姿态重置后经过的游戏秒数，供副机原生动画同步；暂停时不推进。
+    /// @brief 受击保护剩余秒数，仅供观战闪烁，不改变伤害判定。
+    [[nodiscard]] float InvulnerabilitySeconds() const { return invulnerableTimer_; }
     [[nodiscard]] double VisualAge() const { return visualAge_; }
 
 private:

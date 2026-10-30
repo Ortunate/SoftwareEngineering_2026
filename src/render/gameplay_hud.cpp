@@ -191,6 +191,10 @@ void Game::DrawHud() const {
             if (bullet.owner == BulletOwner::Enemy && bullet.Dangerous() &&
                 bullet.DistanceSquaredTo(position) < 1.15F * 1.15F) danger = true;
         });
+        if(player_.Aim().assisted) {
+            const auto point=GetWorldToScreen(player_.Aim().point,camera_);
+            DrawCircleLines(static_cast<int>(point.x),static_cast<int>(point.y),3*s,Color{169,221,178,150});
+        }
         const float aimScale = std::clamp(s, 0.75F, 1.5F);
         const Color warning{255,90,110,255};
         ui::AimReticle({l.width/2,l.height/2},aimScale,danger?warning:kGold,danger?warning:kInk,

@@ -160,6 +160,8 @@ cmake --build build --target koumakyou_music_tests
 .\build\koumakyou_music_tests.exe
 ```
 
+辅助瞄准默认开启，Option 的 AIM ASSIST 可关闭并即时保存。目标判定球边缘距准星最多 6°时修正弹道，淡色小圈显示实际瞄准点；镜头仍由鼠标控制，已发出的普通弹不再修正。
+
 ## 操作
 
 | 按键 | 功能 |

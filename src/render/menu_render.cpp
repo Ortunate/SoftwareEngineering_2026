@@ -134,16 +134,16 @@ void Game::DrawOptions() const {
     const Font font=assets_.Common().uiFont;
     ui::DrawPageSurface(canvas,menuMotion_);
     ui::DrawPageHeader(canvas,font,"游戏设置","设置自动保存 · Player 为额外残机","OPTION");
-    const std::array<std::string,6> values{
+    const std::array<std::string,7> values{
         kSupportedFpsLimits[fpsLimitIndex_]==0 ? "Unlimited" : std::to_string(kSupportedFpsLimits[fpsLimitIndex_]),
         std::to_string(musicVolume_)+"%",std::string(TextFormat("%.1fx",mouseSensitivity_/100.0F)),
-        std::to_string(soundVolume_)+"%",std::to_string(initialLives_),std::to_string(initialBombs_)};
-    const std::array<int,6> levels{fpsLimitIndex_,musicVolume_,mouseSensitivity_,soundVolume_,initialLives_,initialBombs_};
-    constexpr std::array<int,6> minimum{0,0,kMinMouseSensitivity,0,1,0};
-    constexpr std::array<int,6> maximum{5,100,kMaxMouseSensitivity,100,5,3};
+        aimAssistEnabled_ ? "ON" : "OFF",std::to_string(soundVolume_)+"%",std::to_string(initialLives_),std::to_string(initialBombs_)};
+    const std::array<int,7> levels{fpsLimitIndex_,musicVolume_,mouseSensitivity_,aimAssistEnabled_ ? 1 : 0,soundVolume_,initialLives_,initialBombs_};
+    constexpr std::array<int,7> minimum{0,0,kMinMouseSensitivity,0,0,1,0};
+    constexpr std::array<int,7> maximum{5,100,kMaxMouseSensitivity,1,100,5,3};
     for(int index=0;index<menu::kOptionsCount;++index) {
         const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.012F);
-        const float y=(compact?230:168)+index*(compact?76:48);
+        const float y=(compact?230:168)+index*(compact?64:46);
         DrawPageChoiceText(canvas,font,menu::kOptionLabels[index],compact?64:322,y,compact?24:22,
                    Color{177,150,143,255},kGold,weight,reveal,menuMotion_.Pulse());
         const auto row=menu::OptionRow(canvas,index);

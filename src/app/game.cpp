@@ -97,6 +97,7 @@ void Game::LoadSettings() {
     bindings_ = settings.bindings;
     musicVolume_ = settings.musicVolume;
     mouseSensitivity_ = settings.mouseSensitivity;
+    aimAssistEnabled_ = settings.aimAssistEnabled;
     soundVolume_ = settings.soundVolume;
     initialLives_ = settings.initialLives;
     initialBombs_ = settings.initialBombs;
@@ -124,7 +125,7 @@ void Game::LoadSettings() {
 
 void Game::SaveSettings() const {
     const GameSettings settings{bindings_, kSupportedFpsLimits[fpsLimitIndex_],
-        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_, stageHighScores_, spellSelection_, spellRecords_};
+        musicVolume_, mouseSensitivity_, soundVolume_, initialLives_, initialBombs_, bestScore_, lastSelection_, stageHighScores_, spellSelection_, spellRecords_, aimAssistEnabled_};
     if (!SaveSettingsFile(kSettingsFilename, settings)) {
         TraceLog(LOG_WARNING, "SETTINGS: Failed to save %s", kSettingsFilename);
     }

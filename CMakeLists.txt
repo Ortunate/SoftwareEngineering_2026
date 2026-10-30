@@ -48,6 +48,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/actors/boss.cpp
     src/gameplay/actors/enemy.cpp
     src/gameplay/actors/player.cpp
+    src/gameplay/actors/aim.cpp
     src/gameplay/data/native_combat.cpp
     src/gameplay/bullets/system.cpp
     src/gameplay/combat/combat.cpp

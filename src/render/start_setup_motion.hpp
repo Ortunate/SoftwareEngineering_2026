@@ -33,7 +33,8 @@ public:
     [[nodiscard]] float Setup() const { return 1-Title(); }
     /// @brief 人物在除难度之外的页面持续可见，御札/模式/最终确认间切换时不重复播放人物入场。
     [[nodiscard]] float Character() const { return std::clamp(Setup()-Layer(StartSetupStep::Difficulty),0.0F,1.0F); }
-    /// @brief 难度札 index 为 0～3；间隔 0.07 秒错峰，单张用 0.38 秒滑入及淡入，返回时可从当前进度衔接。
+    /// @brief 难度札入场顺序 index 为 0～3，Extra单卡使用0；间隔0.07秒错峰，0.38秒滑入及淡入。
+    /// 返回时从当前进度衔接；此索引不是难度身份，不把Extra身份4用作错峰序号。
     [[nodiscard]] float CardEntry(int index) const {
         return Ease((ages_[static_cast<int>(StartSetupStep::Difficulty)]-0.04F-index*0.07F)/0.38F);
     }

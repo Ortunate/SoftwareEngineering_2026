@@ -334,6 +334,7 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_tests PRIVATE -UNDEBUG)
     endif()
     add_test(NAME koumakyou_core_tests COMMAND koumakyou_tests)
+    add_test(NAME koumakyou_start_setup_tests COMMAND koumakyou_tests --start-setup-only)
     # 参考导入与结构审阅使用独立合成数据；仅测试期使用 Python，不成为游戏运行依赖。
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)

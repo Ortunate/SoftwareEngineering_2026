@@ -39,7 +39,7 @@ void Game::UpdateMainMenu() {
         case 3:
             practiceMode_ = selectedMenuItem_ == 2 || selectedMenuItem_ == 3;
             spellPractice_ = selectedMenuItem_ == 3;
-            setupStep_ = spellPractice_ ? StartSetupStep::Spell : selectedMenuItem_==1 ? StartSetupStep::Character : StartSetupStep::Difficulty;
+            setupStep_ = spellPractice_ ? StartSetupStep::Spell : StartSetupStep::Difficulty;
             selectedShot_ = lastSelection_.shot;
             selectedCharacter_ = lastSelection_.character;
             selectedDifficulty_=lastSelection_.difficulty;

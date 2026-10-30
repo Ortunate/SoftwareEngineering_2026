@@ -13,9 +13,7 @@ void Game::UpdateStartSetup() {
         assets_.PlaySoundEffect("menu_cancel");
         switch(setupStep_) {
             case StartSetupStep::Difficulty: case StartSetupStep::Spell: EnterMainMenu(); break;
-            case StartSetupStep::Character:
-                if(stageId_==StageId::Extra)EnterMainMenu();else setupStep_=StartSetupStep::Difficulty;
-                break;
+            case StartSetupStep::Character: setupStep_=StartSetupStep::Difficulty; break;
             case StartSetupStep::Shot: setupStep_=StartSetupStep::Character; break;
             case StartSetupStep::Mode: setupStep_=StartSetupStep::Shot; break;
             case StartSetupStep::Stage: setupStep_=StartSetupStep::Mode; break;
@@ -27,16 +25,21 @@ void Game::UpdateStartSetup() {
     }
     bool confirm=input.confirm;
     if(setupStep_==StartSetupStep::Difficulty) {
-        const auto entry=practiceMode_ ? StageEntry::Practice : StageEntry::Campaign;
-        const auto available=[&](int index) {return SupportsDifficulty(*native_combat::DifficultyFromIndex(index),entry);};
-        const int previous=selectedDifficulty_;
-        if(input.Direction()!=0) {
-            do {selectedDifficulty_=(selectedDifficulty_+4+input.Direction())%4;}while(!available(selectedDifficulty_));
-        }
-        for(int index=0;index<4;++index)
-            if(available(index))confirm=ui::SelectableRow{layout.Difficulty(index),index}.Select(input,selectedDifficulty_) || confirm;
-        if(previous!=selectedDifficulty_) {
-            lastSelection_.difficulty=selectedDifficulty_;SaveSettings();assets_.PlaySoundEffect("menu_move");
+        if(stageId_==StageId::Extra) {
+            // 单卡页仅确认 Extra，方向键和主线卡片区域不能修改四难度的选择记忆。
+            confirm=input.Clicked(layout.ExtraDifficulty()) || confirm;
+        } else {
+            const auto entry=practiceMode_ ? StageEntry::Practice : StageEntry::Campaign;
+            const auto available=[&](int index) {return SupportsDifficulty(*native_combat::DifficultyFromIndex(index),entry);};
+            const int previous=selectedDifficulty_;
+            if(input.Direction()!=0) {
+                do {selectedDifficulty_=(selectedDifficulty_+4+input.Direction())%4;}while(!available(selectedDifficulty_));
+            }
+            for(int index=0;index<4;++index)
+                if(available(index))confirm=ui::SelectableRow{layout.Difficulty(index),index}.Select(input,selectedDifficulty_) || confirm;
+            if(previous!=selectedDifficulty_) {
+                lastSelection_.difficulty=selectedDifficulty_;SaveSettings();assets_.PlaySoundEffect("menu_move");
+            }
         }
     }
     else if(setupStep_==StartSetupStep::Character) {

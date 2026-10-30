@@ -47,7 +47,7 @@ struct GameLifecycleProbe {
         for(const auto& card:spell::Cards())if(!contains(card.name) || !contains(card.user))return false;
         for(const auto& character:spell::Characters())if(!contains(character.name) || !contains(character.title))return false;
         return contains("《》未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。") && contains("按键设置") && contains("恢复默认键位") && contains("请按下新键") && contains("梦幻夜行绘卷") &&
-               contains("请选择主人公。博丽神社的巫女小姐移动速度攻击范围攻击力准备好了吗？面向大多数人的难度尚未开放");
+               contains("请选择主人公。博丽神社的巫女小姐移动速度攻击范围攻击力准备好了吗？面向不擅长STG的人面向大多数人的难度一般街机STG的难度面向有些奇怪的人的难度收手吧！会疯的哦？");
     }
     /// @brief 设置 page=0～26 的测试展示；调用前须通过 StartPreview 加载关卡，不保存玩家配置。
     static void Show(Game& game,int page) {
@@ -495,8 +495,9 @@ void TestStartSelectionMemory(const std::filesystem::path& screenshots) {
     std::puts("Five-step Start flow, confirmation, backtracking, input and persisted selections passed.");
 }
 
-/// @brief 正式Extra键鼠入口覆盖四御札/双模式、逐级返回、确认防穿透、重试和失败后的独立命名选存。
-void TestExtraStart(const std::filesystem::path& screenshots) {
+/// @brief 正式Extra键鼠入口覆盖单卡页、四御札/双模式、逐级返回、确认防穿透及独立成绩出口。
+/// menuOnly仅验证开局菜单，不进入加载与战斗；供卡片改动的专项快速回归。
+void TestExtraStart(const std::filesystem::path& screenshots,bool menuOnly=false) {
     using namespace koumakyou;using Probe=GameLifecycleProbe;
     const int width=GetScreenWidth(),height=GetScreenHeight();
     for(int shot=0;shot<4;++shot)for(bool challenge:{false,true}) {
@@ -506,10 +507,27 @@ void TestExtraStart(const std::filesystem::path& screenshots) {
         Check(SaveSettingsFile(kSettingsFilename,settings),"Extra setup seed failed");
         Game game;SetTargetFPS(0);Probe::StartupAt(game,3);Event(7,0,0);Frame(game);
         Key(game,KEY_DOWN);Check(Probe::MenuSelection(game)==1,"Extra skipped by title navigation");
-        Key(game,KEY_Z);Check(Probe::SetupStep(game)==StartSetupStep::Character,"Extra did not skip mainline difficulty");
-        Key(game,KEY_X);Check(Probe::MainMenu(game)&&Probe::MenuSelection(game)==1,"Extra character back failed");
+        Key(game,KEY_Z);Check(Probe::SetupStep(game)==StartSetupStep::Difficulty,"Extra card page was skipped");
+        for(int key:{KEY_UP,KEY_DOWN,KEY_LEFT,KEY_RIGHT})Key(game,key);
+        Check(Probe::SetupStep(game)==StartSetupStep::Difficulty&&Probe::Selection(game).difficulty==3,
+              "Extra single-card navigation changed mainline difficulty");
+        const auto unused=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).Difficulty(0);
+        Click(game,unused.x+unused.width/2,unused.y+unused.height/2);
+        Check(Probe::SetupStep(game)==StartSetupStep::Difficulty,"Extra accepted a mainline card region");
+        if(shot==0&&!challenge)for(Vector2 size:{Vector2{1280,720},{390,844},{320,240}}) {
+            SetWindowSize(size.x,size.y);Frame(game);
+            Capture(game,(screenshots/("extra-card-"+std::to_string(int(size.x))+".png")).string().c_str());
+        }
+        SetWindowSize(width,height);Frame(game);
+        Key(game,KEY_X);Check(Probe::MainMenu(game)&&Probe::MenuSelection(game)==1,"Extra card back failed");
         const auto extra=menu::TitleLayout(GetScreenWidth(),GetScreenHeight(),menu::kTitleRowCount).Row(1);
         Click(game,extra.x+extra.width/2,extra.y+extra.height/2);
+        Check(Probe::SetupStep(game)==StartSetupStep::Difficulty,"Extra mouse entry skipped card page");
+        const auto card=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).ExtraDifficulty();
+        Click(game,card.x+card.width/2,card.y+card.height/2);
+        Check(Probe::SetupStep(game)==StartSetupStep::Character,"Extra card mouse confirmation failed");
+        Key(game,KEY_X);Check(Probe::SetupStep(game)==StartSetupStep::Difficulty,"Extra character back skipped card");
+        Key(game,KEY_Z);Check(Probe::SetupStep(game)==StartSetupStep::Character,"Extra card key confirmation failed");
         Key(game,KEY_Z);Key(game,KEY_Z);
         Check(Probe::SetupStep(game)==StartSetupStep::Mode,"Extra shot confirmation failed");
         Event(2,KEY_Z);Frame(game);Frame(game);Frame(game);
@@ -522,6 +540,10 @@ void TestExtraStart(const std::filesystem::path& screenshots) {
             Capture(game,(screenshots/("extra-ready-"+std::to_string(int(size.x))+".png")).string().c_str());
         }
         SetWindowSize(width,height);Frame(game);
+        if(menuOnly) {
+            Check(LoadOrCreateSettings(kSettingsFilename).lastSelection.difficulty==3,"Extra card changed difficulty memory");
+            continue;
+        }
         const auto ready=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).ReadyButton();
         Click(game,ready.x+ready.width/2,ready.y+ready.height/2);WaitForStage(game);
         Check(Probe::ExtraIdentity(game)&&int(Probe::ActualShot(game))==shot&&Probe::Selection(game).challenge==challenge,"Extra run identity mismatch");
@@ -544,7 +566,29 @@ void TestExtraStart(const std::filesystem::path& screenshots) {
         game.StartPreview();Check(!Probe::ExtraIdentity(game),"mainline preview inherited Extra identity");
     }
     SetWindowSize(width,height);
-    std::puts("Extra title/character/shot/mode/ready, four shots/two modes, restart, failure/save/discard and preview isolation passed.");
+    std::puts(menuOnly?"Extra single card, keyboard/mouse, four shots/two modes, return flow and difficulty memory passed.":
+        "Extra title/card/character/shot/mode/ready, four shots/two modes, restart, failure/save/discard and preview isolation passed.");
+}
+
+/// @brief 导出四难度原作文案和单Extra卡片的横竖屏，确认仅选择卡片后才进入主人公页。
+void TestStartCards(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;using Probe=GameLifecycleProbe;
+    const int width=GetScreenWidth(),height=GetScreenHeight();
+    Game game;SetTargetFPS(0);Probe::StartupAt(game,3);Event(7,0,0);Frame(game);Key(game,KEY_Z);
+    Check(Probe::HasLocalizedGlyphs(game),"original difficulty descriptions have missing glyphs");
+    Check(Probe::SetupStep(game)==StartSetupStep::Difficulty,"Start did not open difficulty cards");
+    for(Vector2 size:{Vector2{1280,720},{390,844},{320,240}}) {
+        SetWindowSize(size.x,size.y);Frame(game);
+        Capture(game,(screenshots/("start-cards-"+std::to_string(int(size.x))+".png")).string().c_str());
+    }
+    for(int difficulty=0;difficulty<4;++difficulty) {
+        const auto card=menu::StartSetupLayout(GetScreenWidth(),GetScreenHeight()).Difficulty(difficulty);
+        Click(game,card.x+card.width/2,card.y+card.height/2);
+        Check(Probe::SetupStep(game)==StartSetupStep::Character&&Probe::Selection(game).difficulty==difficulty,
+              "Start card confirmation changed difficulty");
+        Key(game,KEY_X);Check(Probe::SetupStep(game)==StartSetupStep::Difficulty,"Start character back skipped cards");
+    }
+    SetWindowSize(width,height);TestExtraStart(screenshots,true);
 }
 
 /// @brief 回放 Start/Practice Start 双角色选择，核验前后层、箭头、切换动画、记忆及魔理沙实际开局。
@@ -1430,6 +1474,8 @@ int main(int argc, char** argv) {
             TestStartCharacters(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--start-memory-only") {
             TestStartSelectionMemory(screenshots);
+        } else if(argc>2 && std::string(argv[2])=="--start-cards-only") {
+            TestStartCards(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--extra-only") {
             TestExtraStart(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--inputs-only") {

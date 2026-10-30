@@ -16,3 +16,22 @@
 cmake --build --preset macos-release --target koumakyou_settings_ui_tests
 ./build/macos-release/koumakyou_settings_ui_tests output/stage1-review/start-characters --start-characters-only
 ```
+
+
+## 难度卡片与 Extra Start
+
+Start／Practice Start 的四难度卡片，以及后续左下角的已选难度札，统一使用本机新典 `th06TL.dat` 中文图集的原文：
+
+| 卡片 | 描述 | 第二行 |
+|---|---|---|
+| EASY | 面向不擅长STG的人 | (共5面) |
+| NORMAL | 面向大多数人的难度 | (共6面) |
+| HARD | 一般街机STG的难度 | (共6面) |
+| LUNATIC | 面向有些奇怪的人的难度 | (共6面) |
+| EXTRA | 收手吧！会疯的哦？ | 无 |
+
+来源依次为 `select01_4k_zh-CN.dds`（Easy／Normal）、`select02_4k_zh-CN.dds`（Hard／Lunatic）及 `select05_4k_zh-CN.dds`（Extra）。SHA-256 分别为 `93904ba581572e4d18aee09e2328973c847cb815a2a30cb5e09aea892e39856e`、`be9ade562fa35dd0bb69184f269c6e5ddf598fd2e8adf0464081ed42b3768722`、`a1c933a7e503448a19829153f74ee5e586d73df92b8cd47af0de3609876ae99b`。保留项目现有卡片样式，以文本重排原文，不把原图或解包工具引入运行时。
+
+Extra Start 先打开居中单卡页，唯一可确认项是 Extra；方向键不能切换到主线难度。确认后依次进入主人公、御札、模式和 Ready。主人公页返回单卡页，单卡页再返回首页；主线四难度记忆不被修改，实际战斗仍使用 Extra 的独立入口和内部 Normal 上下文。卡片沿既有动画移动为后续页面的难度札，入场错峰序号使用0，不把Extra身份4当作第五行延迟。两字重从同版本官方 Noto Serif CJK SC 补齐“街”，保留原有全部字符与字形。
+
+`koumakyou_start_setup_tests` 检查响应式布局和卡片动画；`koumakyou_settings_ui_tests <截图目录> --start-cards-only` 检查主线四卡、Extra单卡、键鼠确认、逐级返回、四御札/双模式、难度记忆及横竖屏。`--extra-only` 继续覆盖正式开局、重试和成绩出口。

@@ -14,6 +14,10 @@ struct StartSetupLayout {
     [[nodiscard]] Rectangle Difficulty(int index) const {
         return canvas.Rect(compact?130:440,(compact?200:130)+index*(compact?180:120),compact?500:400,compact?150:104);
     }
+    /// @brief Extra单卡页的居中卡片；独立于主线0～3行号，绘制、动画与点击共用此区域。
+    [[nodiscard]] Rectangle ExtraDifficulty() const {
+        return canvas.Rect(compact?130:440,compact?470:310,compact?500:400,compact?150:104);
+    }
     [[nodiscard]] Rectangle Portrait() const { return canvas.Rect(compact?240:480,compact?90:40,compact?280:330,compact?390:410); }
     [[nodiscard]] Rectangle PortraitBackdrop() const { return canvas.Rect(compact?80:150,compact?60:-30,compact?480:480,compact?650:750); }
     /// @brief 角色阶段的固定箭头命中区；direction 为 -1/1，晃动不改变命中区，点击只切换候选，不能确认到御札页。

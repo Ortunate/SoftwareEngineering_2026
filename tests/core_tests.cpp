@@ -162,7 +162,7 @@ void TestResponsiveLayouts() {
         const koumakyou::menu::StartSetupLayout setup(size.x,size.y);
         fits(setup.Portrait()); fits(setup.CharacterInfo());
         fits(setup.Badge()); fits(setup.Heading()); fits(setup.ShotSummary()); fits(setup.ModeSummary());
-        fits(setup.ReadyBand()); fits(setup.ReadyButton());
+        fits(setup.ReadyBand()); fits(setup.ReadyButton()); fits(setup.ExtraDifficulty());
         for(int direction:{-1,1}) {
             fits(setup.CharacterArrow(direction));
             assert(!CheckCollisionRecs(setup.CharacterArrow(direction),setup.Portrait()));
@@ -459,6 +459,7 @@ void RunStage4EffectTests();
 
 /// @brief 默认运行全部核心回归；--stageN-only运行对应关卡，--extra-config/--extra-ordinary/--extra-patchouli/--extra-flandre/--extra-kagome/--extra-maze/--extra-starbow/--extra-catadioptric/--extra-clock/--extra-survival/--extra-ripples/--extra-encore-entrance/--extra-fragile-wing/--extra-bloodstain/--extra-heart隔离Extra已接入段，--stage6-first-spell/--stage6-nonspells/--stage6-midboss分别隔离六面对应差分，其余专用入口用于定位首次分歧。
 int main(int argc,char** argv) {
+    if(argc==2&&std::string_view(argv[1])=="--start-setup-only") {TestResponsiveLayouts();TestStartSetupMotion();return 0;}
     if(argc==2&&std::string_view(argv[1])=="--stage12-effects") {RunStage1EffectTests();RunStage2EffectTests();return 0;}
     if(argc==2&&std::string_view(argv[1])=="--stage5-effects") {RunStage5EffectTests();return 0;}
     if(argc==2&&std::string_view(argv[1])=="--stage1-behaviors") {RunBehaviorTests();return 0;}

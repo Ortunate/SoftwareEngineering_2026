@@ -10,6 +10,7 @@
 #include "gameplay/bosses/sakuya.hpp"
 #include "gameplay/bosses/remilia.hpp"
 #include "stages/stage6/ids.hpp"
+#include "render/dialogue_motion.hpp"
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -631,6 +632,7 @@ void TestStage6PracticeSkills() {
     }
     assert(count==18);
 }
+/// @brief MSG1 的创建帧独立取自原分支展开；检查隐藏、30 帧入场、表情与退场，以及跳句后重建。
 void TestDialogueMilestones() {
     for(bool marisa:{false,true}) {
         const auto cues=stage6::Stage6DialogueCues(DialogueScene::FinalBoss,false,marisa);
@@ -639,6 +641,23 @@ void TestDialogueMilestones() {
         assert(stage6::Stage6Dialogue(DialogueScene::FinalBoss,true,marisa).empty());
         const auto lines=stage6::Stage6Dialogue(DialogueScene::FinalBoss,false,marisa);
         int duration=0;for(const auto& line:lines)duration+=std::lround(line.duration*60);assert(duration==(marisa ? 11106 : 10704));
+        for(std::size_t index=1;index<lines.size();++index)assert(lines[index].showBoss);
+        std::vector<std::array<int,3>> starts;
+        for(const auto& cue:cues)if(cue.kind==DialogueCueKind::PortraitStart)starts.push_back({cue.frame,cue.slot,cue.value});
+        assert((starts==std::vector<std::array<int,3>>{{0,0,0},{921,1,0}}));
+        ui::DialogueMotion motion;
+        const auto seek=[&](int frame) {motion.Seek(cues,frame/60.0F);return motion.Sample(true);};
+        assert(seek(920).opacity==0);
+        assert(seek(921).slide==1&&motion.Sample(true).opacity==0);
+        const auto entering=seek(936);Near(entering.slide,.25F);assert(entering.opacity==1);
+        assert(seek(951).slide==0&&motion.Sample(true).opacity==1);
+        assert(seek(1071).focus==1&&motion.Sample(true).opacity==1);
+        assert(DialogueCueExpressionsAt(cues,1042.0F/60,{0,0})[1]==2);
+        assert(DialogueCueExpressionsAt(cues,1844.0F/60,{0,0})[1]==3);
+        assert(seek(duration).opacity==0);
+        assert(seek(1071).opacity==1); // 跳句或重开后的采样不能继承已经退场的状态。
+        const auto mid=stage6::Stage6DialogueCues(DialogueScene::Midboss,false,marisa);
+        motion.Seek(mid,30.0F/60);assert(motion.Sample(false).opacity>0&&motion.Sample(true).opacity>0);
     }
     // 测试接收端独立交付各次等待，目录不得把两次恢复或对白中的入场合并到最后一次 EndEvent。
     StageDirector director(stage6::Stage6Timeline());std::vector<int> resumed;std::vector<int> bosses;

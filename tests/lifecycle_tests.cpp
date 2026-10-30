@@ -3685,6 +3685,60 @@ struct GameLifecycleProbe {
     }
 
 
+    /// @brief 通过正式六面对话路径验证两自机的立绘创建、跳句重建与暂停；横竖屏实际像素必须包含两张蕾米莉亚差分。
+    /// 临时隐藏当前纹理仅用于同帧像素对照，读取后立即恢复资源，退出时检查关卡资源释放。
+    static void TestStage6Portraits(Game& game,const std::string& prefix) {
+        const int width=GetScreenWidth(),height=GetScreenHeight();
+        for(int character=0;character<2;++character) {
+            game.stageId_=StageId::Stage6;game.selectedCharacter_=character;game.selectedShot_=0;game.StartPreview();
+            game.stage_=StageDirector{};
+            game.BeginStageDialogue(3,false,DialogueScene::FinalBoss);
+            const auto at=[&](int frame) {game.dialogueTimer_=frame/60.0F;game.UpdateUiMotion(0);};
+            at(920);assert(game.dialogueMotion_.Sample(true).opacity==0);
+            at(936);assert(std::abs(game.dialogueMotion_.Sample(true).slide-.25F)<1e-5F);
+            at(951);assert(game.dialogueMotion_.Sample(true).slide==0&&game.dialogueMotion_.Sample(true).opacity==1);
+            game.TogglePause();game.Update(.5F);assert(game.dialogueTimer_==951.0F/60);
+            assert(game.dialogueMotion_.Sample(true).opacity==1);game.TogglePause();
+            for(const auto size:std::array<Vector2,2>{{{1100,760},{390,844}}}) {
+                SetWindowSize(size.x,size.y);
+                const auto target=LoadRenderTexture(GetScreenWidth(),GetScreenHeight());assert(IsRenderTextureValid(target));
+                const auto draw=[&]() {
+                    BeginDrawing();BeginTextureMode(target);ClearBackground(MAGENTA);game.DrawDialogue();EndTextureMode();EndDrawing();
+                    Image image=LoadImageFromTexture(target.texture);assert(IsImageValid(image));ImageFlipVertical(&image);return image;
+                };
+                // 两角色换句相差一帧；取共同完成 16 帧 Alpha 过渡后的时刻，不能把过渡中途当稳定状态。
+                for(const int frame:{936,1042,1460,1860}) {
+                    at(frame);assert(game.dialogueMotion_.Sample(true).opacity==(frame==1460?128.0F/255:1));
+                    const int expression=frame==1860?3:2;
+                    const auto cues=game.stageContent_->SceneDialogueCues(DialogueScene::FinalBoss,false,game.player_.Shot());
+                    assert(DialogueCueExpressionsAt(cues,game.dialogueTimer_,{0,0})[1]==expression);
+                    const auto id=game.stageContent_->SceneBossPortraitVisual(DialogueScene::FinalBoss,expression);
+                    auto& visual=const_cast<StageAssets&>(game.assets_.Stage()).visuals.at(id);
+                    const auto texture=visual.texture;assert(IsTextureValid(texture));
+                    Image shown=draw();visual.texture={};Image hidden=draw();visual.texture=texture;
+                    int changed=0;
+                    for(int y=0;y<shown.height;++y)for(int x=shown.width/2;x<shown.width;++x) {
+                        const auto a=GetImageColor(shown,x,y),b=GetImageColor(hidden,x,y);
+                        changed+=std::abs(int(a.r)-b.r)+std::abs(int(a.g)-b.g)+std::abs(int(a.b)-b.b)>6;
+                    }
+                    assert(changed>1000);UnloadImage(shown);UnloadImage(hidden);
+                    const auto label="stage6-portrait-"+std::to_string(character)+"-frame-"+std::to_string(frame)+"-"+std::to_string(GetScreenWidth());
+                    Capture(game,prefix,label.c_str());
+                }
+                UnloadRenderTexture(target);
+            }
+            at(920);assert(game.dialogueMotion_.Sample(true).opacity==0);
+            at(1042);assert(game.dialogueMotion_.Sample(true).opacity==1);
+            game.BeginStageDialogue(2,false,DialogueScene::Midboss);at(90);
+            assert(game.dialogueMotion_.Sample(true).opacity==1);
+            const auto maid=game.stageContent_->SceneBossPortraitVisual(DialogueScene::Midboss,1);
+            assert(IsTextureValid(game.assets_.GetVisual(maid).texture));
+            game.EnterMainMenu();assert(game.assets_.Stage().visuals.empty());
+        }
+        SetWindowSize(width,height);
+        std::cout<<"Stage 6 portrait entry, expressions, pause, seeking, sixteen rendered views and unload passed\n";
+    }
+
     /// @brief 六面两角色整关按给定N/H/L走超时或击破，再验四机体遭遇/Bomb及卸载；预验时显式注入未开放内容。
     static void TestStage6(Game& game,const std::string& prefix,int difficultyIndex=1,bool damage=false) {
         const auto difficulty=*native_combat::DifficultyFromIndex(difficultyIndex);
@@ -4696,6 +4750,8 @@ int main(int argc, char** argv) {
                 const auto label=prefix+"-d"+std::to_string(d)+(damage?"-damage":"-timeout");
                 koumakyou::GameLifecycleProbe::TestStage6(*game,label,d,damage);
             }
+        } else if(argc>=3 && std::string(argv[2])=="--stage6-portraits-only") {
+            koumakyou::GameLifecycleProbe::TestStage6Portraits(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--stage6-only") {
             koumakyou::GameLifecycleProbe::TestStage6(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--extra-four-kind") {

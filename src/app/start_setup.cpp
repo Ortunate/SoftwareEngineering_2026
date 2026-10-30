@@ -13,7 +13,9 @@ void Game::UpdateStartSetup() {
         assets_.PlaySoundEffect("menu_cancel");
         switch(setupStep_) {
             case StartSetupStep::Difficulty: case StartSetupStep::Spell: EnterMainMenu(); break;
-            case StartSetupStep::Character: setupStep_=StartSetupStep::Difficulty; break;
+            case StartSetupStep::Character:
+                if(stageId_==StageId::Extra)EnterMainMenu();else setupStep_=StartSetupStep::Difficulty;
+                break;
             case StartSetupStep::Shot: setupStep_=StartSetupStep::Character; break;
             case StartSetupStep::Mode: setupStep_=StartSetupStep::Shot; break;
             case StartSetupStep::Stage: setupStep_=StartSetupStep::Mode; break;
@@ -24,7 +26,19 @@ void Game::UpdateStartSetup() {
         return;
     }
     bool confirm=input.confirm;
-    if(setupStep_==StartSetupStep::Difficulty)confirm=confirm || input.Clicked(layout.Difficulty(1));
+    if(setupStep_==StartSetupStep::Difficulty) {
+        const auto entry=practiceMode_ ? StageEntry::Practice : StageEntry::Campaign;
+        const auto available=[&](int index) {return SupportsDifficulty(*native_combat::DifficultyFromIndex(index),entry);};
+        const int previous=selectedDifficulty_;
+        if(input.Direction()!=0) {
+            do {selectedDifficulty_=(selectedDifficulty_+4+input.Direction())%4;}while(!available(selectedDifficulty_));
+        }
+        for(int index=0;index<4;++index)
+            if(available(index))confirm=ui::SelectableRow{layout.Difficulty(index),index}.Select(input,selectedDifficulty_) || confirm;
+        if(previous!=selectedDifficulty_) {
+            lastSelection_.difficulty=selectedDifficulty_;SaveSettings();assets_.PlaySoundEffect("menu_move");
+        }
+    }
     else if(setupStep_==StartSetupStep::Character) {
         const int previous=selectedCharacter_;
         if(input.Direction()!=0)selectedCharacter_=1-selectedCharacter_;
@@ -43,13 +57,19 @@ void Game::UpdateStartSetup() {
     else if(setupStep_==StartSetupStep::Ready)confirm=confirm || input.Clicked(layout.ReadyButton());
     if(setupStep_==StartSetupStep::Stage) {
         const int previous=selectedPracticeStage_;
+        const auto available=[&](int index) {return kPracticeStages[index] && SupportsStage(*kPracticeStages[index],
+            *native_combat::DifficultyFromIndex(selectedDifficulty_),StageEntry::Practice);};
+        if(!available(selectedPracticeStage_)) {
+            selectedPracticeStage_=0;
+            while(!available(selectedPracticeStage_))++selectedPracticeStage_;
+        }
         if(input.Direction()!=0) {
             // 跳过未注册的关卡；目录始终包含第一面，避免导航落入不可启动的槽或无限循环。
             do { selectedPracticeStage_=(selectedPracticeStage_+kStageScoreCount+input.Direction())%kStageScoreCount; }
-            while(!kPracticeStages[selectedPracticeStage_]);
+            while(!available(selectedPracticeStage_));
         }
         for(int index=0;index<kStageScoreCount;++index)
-            if(kPracticeStages[index])confirm=ui::SelectableRow{layout.StageRow(index),index}.Select(input,selectedPracticeStage_) || confirm;
+            if(available(index))confirm=ui::SelectableRow{layout.StageRow(index),index}.Select(input,selectedPracticeStage_) || confirm;
         if(previous!=selectedPracticeStage_) {
             assets_.PlaySoundEffect("menu_move");
             lastSelection_.practiceStage=selectedPracticeStage_+1;

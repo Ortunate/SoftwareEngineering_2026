@@ -73,8 +73,8 @@ public:
     /// @param position 退场位置，使用世界坐标。
     /// @param power 增加的 Power 点数；非正值不生成。
     void SpawnFixedPower(Vector3 position, int power);
-    /// @brief 原作敌人掉落；item=0 固定小 P，-1 每三次击破按 32 项表轮换；其他值不生成。
-    /// 满 Power 时生成点数；计数属于整关，Clear 随机初始化两个表偏移。
+    /// @brief 原作敌人掉落；-1每三次击破按32项表轮换，0…6与SpawnNativeItem编号相同；其他值不生成。
+    /// 仅小/大P在满Power时转分数；固定道具不推进整关轮换计数，Clear随机初始化两个表偏移。
     void SpawnReferenceDrop(Vector3 position, int item, bool fullPower);
     /// @brief 执行 ins_119；count 限制在 0…32，未满 Power 时首个大 P（8），其余小 P（1）。
     /// 散落范围为 X/Z 各 ±72 原作像素，Y 保持敌人高度，满 Power 时全部转为点数。

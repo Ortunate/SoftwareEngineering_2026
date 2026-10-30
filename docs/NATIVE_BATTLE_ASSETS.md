@@ -27,7 +27,7 @@
 | stg7enm / stg7enm2 | ExtraEnemies / Flandre |
 | eff01…eff07 | Stage1Effects…ExtraEffects：各关卡背景/符卡演出 |
 
-目录包含 1084 个精灵定义和 347 个有效脚本。`stg7enm.anm` 的编号 71 有重复项，按原加载规则由后一项覆盖前一项。图集中的未使用角色、自机、道具与特效均已登记并可加载、播放、绘制；素材登记本身不等于玩法接入；当前一至六面 Normal 和魔理沙两种御札均已接入，Extra 仍仅有数据。逐关覆盖见 [二至六面接入记录](STAGES_2_6_REFERENCE.md)。
+目录包含 1084 个精灵定义和 347 个有效脚本。`stg7enm.anm` 的编号 71 有重复项，按原加载规则由后一项覆盖前一项。图集中的未使用角色、自机、道具与特效均已登记并可加载、播放、绘制；素材登记本身不等于玩法接入。当前一至六面已接通适用主线难度与四机体，Extra已开放正式关卡、独立成绩和119～131符卡练习；原生动态rank与完整外部粒子尚未完成。逐关覆盖见[全难度接入记录](DIFFICULTY_INTEGRATION.md)及[Extra记录](STAGE_EXTRA_REFERENCE.md)。
 
 解包工具为 [thdat-nc](https://github.com/Renko6626/thdat-nc)。ANM 指令与特效编号参照 [th06 动画管理器](https://github.com/GensokyoClub/th06/blob/master/src/AnmManager.cpp)、[特效管理器](https://github.com/GensokyoClub/th06/blob/master/src/EffectManager.cpp)核对；项目自行实现解析、播放和绘制。BC7 解码使用 MIT 许可的 [bcdec](https://github.com/iOrange/bcdec)，许可说明见 `third_party/bcdec/README.md`。游戏素材沿用原作品素材，bcdec 许可不适用于游戏素材。
 
@@ -69,6 +69,8 @@ DrawAnimatedSprite2D(atlas.texture, *atlas.archive, animation.Sample(), {320, 24
 一面清单将妖精主动画绑定 stg1enm，战斗露米娅绑定 stg1enm2 的 128 起脚本，世界角色与对话立绘使用不同编号和纹理。ECL 97/98 驱动待机、左右移动和收势并重置对应动作时钟；ECL 100 保留小爆散、旋转爆散、大爆散选择。实际敌弹保留类型和颜色，显现动画结束后切换主体；激光使用原纹理，P/点/星点使用原道具精灵，大 P 单独绑定。
 
 击破通过清单 `defeatVisual` 或演员覆盖值选择独立 ANM，删除指令结束效果，错误的长循环绑定最多保留 1 秒；自然离场和关卡清场保持原演员最后一帧的淡出快照。战斗贴图以连续 Alpha 绘制，按视线深度合并排序；全部贴图禁止深度写入，避免透明外框裁掉后方物体。不透明球体与场景仍参与深度遮挡，辅助网格不写深度。第一人称视角没有镜头前的玩家身体，自机图集的身体动画提供给未来玩法及预览接口；当前使用其中的射击动画。三维射击、碰撞、拾取、Bomb 规则及演员入场/退场淡出仍沿用项目设计，ANM 负责图像与局部动画，不代替完整原作场景或所有外部粒子运动回调。
+
+演员与ConfiguredBoss各持有八个辅助ANM槽，独立保存脚本、年龄、revision、中断和游标。辅助槽默认复用本体外观，也可显式借用当前关卡的另一VisualId，其档案、材质和几何由该外观决定。Game按120 Hz逻辑年龄同步，ANM仍按60 Hz播放；本体和辅助帧进入同一透明排序队列。Extra已恢复帕秋莉的script17、使魔/固定发射体的script16，以及芙兰朵露借用ExtraEnemies外观的script18（Flandre本体图集没有18），128与129中断分别交给本体和辅助槽。清池/重开先销毁这些借用者再卸载图集，Actor复用会清空全部辅助槽；辅助动画结束不提前结束演员协程。真实Extra ANM的独立播放、同编号重启、显示FPS和复用检查通过，Extra图形、透明遮挡和通用生命周期回归通过；不表示其他关卡的全部外部辅助槽都已逐一还原。
 
 ## 检查与审阅
 
@@ -114,3 +116,5 @@ cmake --build --preset macos-debug --target koumakyou_sprite_overlap_tests
 ## 四种 Bomb
 
 梦想封印绑定 `player00` 的 133～136，封魔阵绑定 137～140；Stardust Reverie 绑定 `player01` 的 5～7，Master Spark 绑定 8～11。复用原始高清图集和 ANM 颜色、Alpha、中断及淡出，将贴图包覆在三维球、星、法阵和圆台网格上。Bomb 实例独立于弹池，攻击和渲染共用世界实体，并加入统一透明排序。`--bomb-only` 验证真实扣血、清弹、掉落、符卡保护及四种主/侧视角画面；`--bomb-audio-only` 静音核对长音效暂停及退出。来源、帧数与三维适配见 [四 Bomb 对照](PLAYER_BOMBS_REFERENCE.md)。
+
+Extra现有独立生产素材清单，将Flandre与ExtraEnemies的道中帕秋莉绑定到不同VisualId，并提供face12三组立绘、背景原纹理及第三音乐流。同步/异步加载、立绘边缘、三音乐流播放/暂停/卸载已验证；资源身份与接入边界见[Extra素材记录](STAGE_EXTRA_ASSETS.md)。正式背景三维适配、MSG与入口仍未完成，目录保持DataOnly。

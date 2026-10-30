@@ -6,6 +6,8 @@
 #include "resources/visual_assets.hpp"
 #include <cstdint>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace koumakyou {
 
@@ -21,7 +23,7 @@ enum class PlayerShotKind : std::uint8_t { Projectile, Missile, Laser, Explosion
 struct Bullet {
     bool active = false;
     std::uint64_t generation=0; // BulletSystem 每次复用分配新代号；仅系统写入，清池不重置系统代号序列。
-    bool grazed = false;
+    bool grazed = false; // 普通弹已消费唯一擦弹；光束仅记录是否曾擦弹，不阻止后续周期。
     BulletOwner owner = BulletOwner::Enemy;
     VisualId visual = kInvalidVisualId;
     battle::Cursor animation; // 对象池复用时重置，借用当前关卡 CPU 档案。
@@ -29,11 +31,16 @@ struct Bullet {
     Vector3 position{};
     Vector3 velocity{};
     Vector3 acceleration{};
-    float accelerationSeconds=1.0e9F; // 加速度剩余有效秒数；重启冻结弹时可独立设定，不重置视觉年龄。
+    double accelerationSeconds=1.0e9; // 加速度剩余秒数；用双精度避免2000内容帧累减后多加速一步，重启时不重置视觉年龄。
     Vector3 rotationAxis{0.0F, 1.0F, 0.0F};
     float radius = 0.16F;
     float visualScale = 1; // 原生显示的额外等比缩放；不从判定半径反推贴图大小。
     float age = 0.0F;
+    double beamAge = 0; // 光束独立累计秒数，再投影到age；外部改写age时在下次更新同步，避免长寿命光束累加float提早一帧消失。
+    // 碰撞在弹池更新后执行，擦弹节拍却采样更新前时钟；不能由更新后的age反推首帧。
+    double beamContactAge = 0; // 本次更新前的光束年龄，秒；停时不推进。
+    float beamGrazeStartSeconds = 0; // 展开转持续的年龄，秒；独立于可配置的预警时窗。
+    std::int64_t lastBeamGrazeFrame = -1; // 持续阶段0起算的60Hz内容帧，槽复用时重置。
     float maxAge = 12.0F;
     float angularVelocity = 0.0F;
     float angularSeconds=1.0e9F; // 旋转速度剩余有效秒数；独立于视觉年龄和显现期。
@@ -109,6 +116,28 @@ struct Bullet {
         if(beamFadeSeconds>0 && age>maxAge-beamFadeSeconds)
             return std::clamp((maxAge-age)/beamFadeSeconds,0.0F,1.0F);
         return 1;
+    }
+    /// @brief 在调用方确认危险时窗、未命中且位于擦弹范围后，消费一次擦弹资格。
+    /// 普通弹只消费一次；光束在持续阶段每12内容帧可消费一次，重复调用和120Hz半帧不会重复结算。
+    bool ConsumeGraze() {
+        if (!IsBeam()) {
+            if (grazed) return false;
+        } else {
+            // 与Update的外部改龄契约一致；出生后未更新的光束可直接检查第0帧。
+            const double sample = age != static_cast<float>(beamAge) ? age : beamContactAge;
+            double frame = (sample - beamGrazeStartSeconds) * 60;
+            // 秒数接口及固定步长为float；仅消除整帧附近的表示误差，不把真实半帧提前到下一帧。
+            const double nearest = std::round(frame);
+            const double rounding = 4 * std::numeric_limits<float>::epsilon() *
+                (std::abs(sample * 60) + std::abs(beamGrazeStartSeconds * 60) + 1);
+            if (std::abs(frame - nearest) <= rounding) frame = nearest;
+            if (!std::isfinite(frame) || frame < 0 || frame >= static_cast<double>(INT64_MAX)) return false;
+            const auto contentFrame = static_cast<std::int64_t>(std::floor(frame));
+            if (contentFrame % 12 != 0 || contentFrame == lastBeamGrazeFrame) return false;
+            lastBeamGrazeFrame = contentFrame;
+        }
+        grazed = true;
+        return true;
     }
     Color color = WHITE;
 };

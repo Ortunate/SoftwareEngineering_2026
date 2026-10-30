@@ -38,8 +38,10 @@ void Configure(Actor& a,skill::Shot& shot) {
 }
 void Fire(Actor& a,skill::Shot shot) {Configure(a,shot);a.Fire(shot);}
 int Period(const Actor& a,int frames) {return frames+frames/5-(frames/5*2*a.skills.rank)/32;}
-void AutoRing(Actor& a,int frames,bool randomInitial) {
-    skill::Shot shot{Formation::AimedRing,8,3,16,1,5.35714293F,2.67857143F,0,0.157079637F,516};
+void AutoRing(Actor& a,int frames,bool randomInitial,bool reducedSpeed=false) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
+    skill::Shot shot{Formation::AimedRing,8,3,d==0?8:16,d>=2?2:1,
+        d==0?4.8214283F:d==1?5.35714293F:d==2||reducedSpeed?6.69642878F:8.03571415F,2.67857143F,0,0.157079637F,516};
     Configure(a,shot);const int period=Period(a,frames);
     a.SetEmitterPeriod(period,randomInitial ? static_cast<int>(a.RandomIndex(period)) : 0);a.SetEmitterSound(22);
 }
@@ -55,12 +57,16 @@ void Bounce(Actor& a,bool kunai) {
 }
 Routine FamiliarDefeated(Actor& a) {a.interactable=false;a.InterruptAnimation(1);co_await a.At(60);a.finished=true;}
 Routine Familiar(Actor& a,float heading,int color,float step,bool ricochet) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
     float angle=a.Random(2*pi)-pi;a.Animate(16);a.interactable=false;a.SetEmitterSound(22);
-    a.motion.Polar(heading,2.14285714F);a.motion.Decelerate(370);if(ricochet)Bounce(a,false);
+    a.motion.Polar(heading,2.14285714F);a.motion.Decelerate(370);
+    if(ricochet) {Bounce(a,false);a.skills.projectile.bounceCount=d>=2?2:1;}
     const int count=ricochet ? 17 : 40,interval=ricochet ? 14 : 6;
     for(int i=0;i<count;++i) {
         co_await a.At(50+i*interval);
-        Fire(a,{Formation::FixedFan,ricochet ? 4 : 2,color,ricochet ? 6 : 5,1,4.28571415F,3.21428585F,angle,
+        Fire(a,{Formation::FixedFan,ricochet ? 4 : 2,color,d==0?4:ricochet?(d==1?6:5):5,1,
+            ricochet?(d==0?3.75F:d==1?4.28571415F:d==2?4.8214283F:5.89285707F):
+                (d==0?3.21428585F:d==1?4.28571415F:d==2?4.8214283F:5.35714293F),3.21428585F,angle,
             ricochet ? 0.0157079641F : 0.0261799395F,ricochet ? 2560 : 512});angle+=step;
     }
     co_await a.At(50+count*interval);a.InterruptAnimation(1);
@@ -70,6 +76,10 @@ Routine BlueDiagonal(Actor& a) {co_await Familiar(a,pi/4,6,0.628318548F,false);}
 Routine GreenRight(Actor& a) {co_await Familiar(a,0,10,-0.314159274F,false);}
 Routine GreenDiagonal(Actor& a) {co_await Familiar(a,3*pi/4,10,-0.628318548F,false);}
 Routine BlueLeft(Actor& a) {co_await Familiar(a,pi,6,0.314159274F,false);}
+Routine BlueSteepDiagonal(Actor& a) {co_await Familiar(a,1.17809725F,6,0.628318548F,false);}
+Routine GreenSteepDiagonal(Actor& a) {co_await Familiar(a,1.96349537F,10,-0.628318548F,false);}
+Routine GreenShallowDiagonal(Actor& a) {co_await Familiar(a,0.392699093F,10,-0.314159274F,false);}
+Routine BlueShallowDiagonal(Actor& a) {co_await Familiar(a,2.7488935F,6,0.314159274F,false);}
 Routine RedRicochetDiagonal(Actor& a) {co_await Familiar(a,pi/4,2,0.628318548F,true);}
 Routine BlueRicochetRight(Actor& a) {co_await Familiar(a,0,6,-0.196349546F,true);}
 Routine BlueRicochetDiagonal(Actor& a) {co_await Familiar(a,3*pi/4,6,-0.628318548F,true);}
@@ -78,41 +88,57 @@ constexpr behavior::Pattern FamiliarPattern(behavior::Entry entry) {
     return {.initialAnimation=16,.deathEffect=0,.spatialShots=true,.routine=entry,.onDefeated=FamiliarDefeated};
 }
 constexpr std::array kFirstFamiliars{FamiliarPattern(BlueDiagonal),FamiliarPattern(GreenRight),FamiliarPattern(GreenDiagonal),FamiliarPattern(BlueLeft)};
+constexpr std::array kHardFamiliars{FamiliarPattern(BlueDiagonal),FamiliarPattern(GreenRight),FamiliarPattern(GreenDiagonal),FamiliarPattern(BlueLeft),
+    FamiliarPattern(GreenShallowDiagonal),FamiliarPattern(BlueShallowDiagonal)};
+constexpr std::array kLunaticFamiliars{FamiliarPattern(BlueDiagonal),FamiliarPattern(GreenRight),FamiliarPattern(GreenDiagonal),FamiliarPattern(BlueLeft),
+    FamiliarPattern(GreenShallowDiagonal),FamiliarPattern(BlueShallowDiagonal),FamiliarPattern(BlueSteepDiagonal),FamiliarPattern(GreenSteepDiagonal)};
 constexpr std::array kRicochetFamiliars{FamiliarPattern(RedRicochetDiagonal),FamiliarPattern(BlueRicochetRight),FamiliarPattern(BlueRicochetDiagonal),FamiliarPattern(RedRicochetLeft)};
 Routine Summon(Actor& a,bool ricochet) {
-    for(auto pattern:ricochet ? kRicochetFamiliars : kFirstFamiliars) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
+    // 首段非符在Hard追加两只、Lunatic再追加两只使魔；按源出生顺序分配实例种子。
+    using Patterns=std::span<const behavior::Pattern>;
+    const Patterns patterns=ricochet?Patterns{kRicochetFamiliars}:d==2?Patterns{kHardFamiliars}:
+        d==3?Patterns{kLunaticFamiliars}:Patterns{kFirstFamiliars};
+    for(auto pattern:patterns) {
         pattern.spatialShots=a.skills.spatial;
-        a.spawnEvents.push_back({.position=a.Position(),.pattern=pattern,.sourceHealth=100,.sourceScore=0,.seed=++a.spawnIndex,
+        a.spawnEvents.push_back({.position=a.Position(),.pattern=pattern,.difficulty=a.difficulty,.sourceHealth=100,.sourceScore=0,.seed=++a.spawnIndex,
             .sourceItem=0,.visual=kOrb,.hitRadius=0.625F,.bulletBase=kNativeBulletBase,.laserBase=kNativeLaserBase,
             .defeatBase=kNativeDefeat,.fallback=kBlueBullet,.retireOutside=false});
     }
     co_await a.At(60);
 }
 Routine MidFans(Actor& a,bool kunai,float angle,float step) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
     if(kunai)a.soundEvents.push_back(5);
     for(int i=0;i<10;++i) {
         co_await a.At(i*(kunai ? 8 : 3));
-        Fire(a,{Formation::FixedFan,kunai ? 8 : 4,kunai ? 3 : 2,kunai ? 8 : 4,kunai ? 1 : 2,
-            kunai ? 8.5714283F : 5.35714293F,2.67857143F,angle,kunai ? 0.285599321F : 0.044879895F,0});
-        angle-=step;a.soundEvents.push_back(7);
+        Fire(a,{Formation::FixedFan,kunai ? 8 : 4,kunai ? 3 : 2,kunai ? (d==0?4:8) : d>=2?5:4,kunai ? 1 : d==0?1:d==3?3:2,
+            kunai ? (d==0?7.5F:8.5714283F) : 5.35714293F,2.67857143F,angle,kunai ? 0.285599321F : 0.044879895F,0});
+        // 源子调用传入的是带符号角度增量；反向扇组传负值，不能再次取反。
+        angle+=step;a.soundEvents.push_back(7);
     }
     co_await a.At(kunai ? 80 : 30);
 }
 Routine MisdirectionSide(Actor& a,bool left) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
     MoveTo(a,40,{left ? -4.28571415F : 4.28571415F,0,3.57142854F});Bounce(a,false);
-    skill::Shot shot{Formation::AimedRing,4,2,24,3,8.03571415F,3.21428585F,0,0,4};
-    Configure(a,shot);a.SetEmitterSound(7);a.SetEmitterPeriod(6);
+    // 高难两侧的方向数不同，不能把瞬移侧的配方当作单纯镜像。
+    skill::Shot shot{Formation::AimedRing,4,2,d==0?16:d==1?24:d==2?(left?15:12):(left?19:16),d==0?1:d==1?3:2,
+        d>=2?4.01785707F:8.03571415F,d>=2?2.14285707F:3.21428585F,0,0,d>=2?2052:4};
+    Configure(a,shot);a.SetEmitterSound(7);a.SetEmitterPeriod(Period(a,6));
     co_await a.At(30);a.Animate(left ? 135 : 137);
     co_await a.At(60);a.Animate(134);Teleport(a,{left ? 4.28571415F : -4.28571415F,0,5.71428585F});a.SetEmitterPeriod(0);
-    for(int i=0;i<3;++i) {co_await a.At(80+i*18);Fire(a,{Formation::AimedFan,8,3,11,4,12.0535717F,3.21428585F,0,0.209439516F,516});}
+    for(int i=0;i<3;++i) {co_await a.At(80+i*18);Fire(a,{Formation::AimedFan,8,3,11,4,d==0?9.375F:d==1?12.0535717F:d==2?14.7321424F:17.4107151F,
+        3.21428585F,0,d>=2?0.314159274F:0.209439516F,516});}
     co_await a.At(134);a.Animate(left ? 139 : 140);
     co_await a.At(194);a.Animate(133);
     co_await a.At(254);a.Animate(134);Teleport(a,{0,0,3.57142854F});
     co_await a.At(284);
 }
 Routine KnifeSweep(Actor& a) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
     float spread=0.0490873866F;co_await a.At(170);a.Animate(149);a.SetEmitterSound(7);
-    for(int i=0;i<12;++i) {co_await a.At(170+i*8);Fire(a,{Formation::FixedFan,8,2,2,8,10.7142859F,3.21428585F,pi/2,spread,512});spread+=0.314159274F;}
+    for(int i=0;i<12;++i) {co_await a.At(170+i*8);Fire(a,{Formation::FixedFan,8,2,d>=2?4:2,d==0?6:8,d==0?8.03571415F:10.7142859F,3.21428585F,pi/2,spread,512});spread+=0.314159274F;}
     co_await a.At(326);
 }
 Routine FixedKnifeRing(Actor& a) {
@@ -121,9 +147,11 @@ Routine FixedKnifeRing(Actor& a) {
     co_await a.At(160);a.Animate(Motion(a).position.x<0 ? 143 : 142);
 }
 Routine RotatingKnifeRings(Actor& a,bool reverse) {
-    float angle=a.Random(2*pi)-pi;Bounce(a,true);
+    const int d=native_combat::DifficultyIndex(a.difficulty);
+    float angle=a.Random(2*pi)-pi;Bounce(a,true);a.skills.projectile.bounceCount=d>=2?2:1;
     for(int i=0;i<8;++i) {
-        co_await a.At(i*5);Fire(a,{Formation::FixedRing,8,reverse ? 1 : 3,reverse ? 6 : 5,2,4.8214283F,3.21428585F,angle,0.0157079641F,2560});
+        co_await a.At(i*5);Fire(a,{Formation::FixedRing,8,reverse ? 1 : 3,reverse ? (d==1?6:5) : (d==2?4:5),2,
+            reverse&&d>=2?5.35714293F:4.8214283F,3.21428585F,angle,0.0157079641F,2560});
         angle+=reverse ? -0.098174773F : 0.098174773F;
     }
     co_await a.At(100);
@@ -141,19 +169,69 @@ Routine FrozenArcEmitter(Actor& a,int duration) {
     co_await a.At(duration);
 }
 Routine LockedKnifeBurst(Actor& a,bool red) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);const bool hard=d>=2;
     const auto from=a.Position(),player=a.PlayerPosition();const Vector3 axis{player.x-from.x,player.y-from.y,player.z-from.z};
     const float angle=std::atan2(-axis.z,axis.x);Bounce(a,true);
-    for(int i=0;i<(red ? 5 : 4);++i) {
-        co_await a.At(i*(red ? 3 : 5));
-        skill::Shot shot{Formation::FixedFan,8,red ? 1 : 3,4,red ? 3 : 2,red ? 7.5F : 5.35714293F,2.67857143F,
-            angle,red ? 0.0785398185F : 0.157079637F,red ? 512 : 2560};
+    float heading=angle;
+    for(int i=0;i<(hard?8:red?5:4);++i) {
+        co_await a.At(i*(hard?(red?2:4):(red?3:5)));
+        skill::Shot shot{hard&&!red?Formation::FixedRing:Formation::FixedFan,8,red?1:3,
+            hard?(red?(d==2?5:7):(d==2?10:15)):(d==0?3:4),hard?(red?4:3):(red&&d==1?3:2),
+            red?(d==0?4.8214283F:7.5F):(d==0?4.01785707F:5.35714293F),2.67857143F,
+            heading,hard?(red?0.0392699092F:0):(red?0.0785398185F:0.157079637F),red||hard?512:2560};
         if(a.skills.spatial)shot.spatialAxis=spatial::Normalize(axis);Fire(a,shot);
+        if(hard)heading+=red?-pi/4:pi/4;
     }
-    co_await a.At(red ? 35 : 40);
+    // 源计数循环回拨局部时钟；八轮高难组的总墙钟不能沿用低难四/五轮的等待。
+    co_await a.At(hard?(red?37:53):(red?35:40));
+}
+Routine ClockRingSpell(Actor& a,bool world) {
+    co_await PrepareSpell(a,false);const int d=native_combat::DifficultyIndex(a.difficulty);
+    for(;;) {
+        a.soundEvents.push_back(5);
+        // 蓄力沿用攻击局部时钟；等待不能另起子调用，否则后面的时停会整体延后。
+        for(int i=0;i<32;++i) {co_await a.At(i*4);a.EmitEffect(effects::Kind::Charge,6,{128,128,255,255});}
+        co_await a.At(148);
+        if(world||d==1) {
+            a.Animate(148);Fire(a,{Formation::FixedRing,world?7:2,world?1:6,world?12:32,4,
+                world?5.89285707F:8.03571415F,3.21428585F,0,0,512});
+            // Lunatic 的14方向组追加在共用12方向组后，同帧顺序影响改向候选槽序。
+            if(world&&d==3)Fire(a,{Formation::FixedRing,7,1,14,4,5.89285707F,3.21428585F,0,0,512});
+        }
+        co_await a.At(198);StopWorld(a,true);Wander(a,6.69642878F,60);co_await FrozenArcEmitter(a,60);a.ElapseLocalFrames(60);
+        a.soundEvents.push_back(5);
+        for(int i=0;i<6;++i) {
+            co_await a.At(258+i*5);a.EmitEffect(effects::Kind::Charge,6,{128,128,255,255});
+            SakuyaBoss::Behaviors::RedirectStoppedBullets(a);
+        }
+        co_await a.At(318);RestorePose(a,false);StopWorld(a,false);
+        co_await a.At(378);RestorePose(a,true);co_await a.At(418);a.Rewind(0);
+    }
+}
+Routine DollSpell(Actor& a) {
+    co_await PrepareSpell(a,true);
+    for(;;) {
+        if(native_combat::DifficultyIndex(a.difficulty)>=2)a.Animate(148);
+        co_await LockedKnifeBurst(a,false);a.soundEvents.push_back(5);co_await LockedKnifeBurst(a,true);
+        StopWorld(a,true);Wander(a,6.69642878F,60);
+        co_await a.At(20);a.soundEvents.push_back(5);
+        for(int i=0;i<7;++i) {
+            co_await a.At(20+i*4);a.EmitEffect(effects::Kind::Charge,6,{128,128,255,255});
+            SakuyaBoss::Behaviors::RedirectStoppedBullets(a);
+        }
+        co_await a.At(78);RestorePose(a,false);StopWorld(a,false);
+        co_await a.At(138);RestorePose(a,true);if(Motion(a).position.x>=0)co_await a.At(178);a.Rewind(0);
+    }
 }
 
 }
 
+void SakuyaBoss::Behaviors::ConfigureFinalPractice(Actor& a,bool spatial) {
+    ConfigureBehavior(a,spatial);Initialize(a);a.SetPoses({128,131,132,129,130});
+}
+void SakuyaBoss::Behaviors::ConfigureMisdirectionPractice(Actor& a,bool spatial) {
+    ConfigureFinalPractice(a,spatial);Motion(a).bounds.lower.y=2.14285714F;
+}
 Routine SakuyaBoss::Behaviors::Entrance(Actor& a) {
     a.damageable=false;a.contactEnabled=false;a.SetPoses({128,131,132,129,130});a.skills.offset={0,0,0.535714269F};
     Motion(a).clamped=false;MoveTo(a,60,{0,0,4.28571415F});co_await a.At(60);
@@ -182,8 +260,14 @@ Routine SakuyaBoss::Behaviors::MisdirectionRetreat(Actor& a) {
 Routine SakuyaBoss::Behaviors::MisdirectionDefeated(Actor& a) {a.soundEvents.push_back(18);a.itemEvents.push_back(5);a.dropEvents.push_back(10);co_await MisdirectionRetreat(a);}
 Routine SakuyaBoss::Behaviors::FirstNonspell(Actor& a) {
     Initialize(a);
+    // 五条同色轨道来自非符首次进入；后续回拨到100帧，不能重复安装。
+    for(int i=0;i<5;++i) {
+        co_await a.At(i*10);
+        a.AttachEffect({std::array{-.3F,-1.0F,-.3F,.4F,1.1F}[i],.3F,.7F},2.14285714F,{255,224,255,255});
+    }
     for(;;) {
-        co_await a.At(100);a.Animate(148);co_await Summon(a,false);AutoRing(a,50,true);Wander(a,4.5535717F,60);
+        co_await a.At(100);a.Animate(148);co_await Summon(a,false);
+        const int d=native_combat::DifficultyIndex(a.difficulty);AutoRing(a,d==0?60:d==3?40:50,true);Wander(a,4.5535717F,60);
         co_await a.At(160);Wander(a,4.5535717F,60);co_await a.At(220);Wander(a,4.5535717F,60);
         a.SetEmitterPeriod(0);co_await KnifeSweep(a);a.InterruptAnimation(1);co_await a.At(300);a.Rewind(100);
     }
@@ -191,7 +275,8 @@ Routine SakuyaBoss::Behaviors::FirstNonspell(Actor& a) {
 Routine SakuyaBoss::Behaviors::SecondNonspell(Actor& a) {
     Initialize(a);a.dropEvents.push_back(12);a.ClearBullets();
     for(;;) {
-        co_await a.At(60);a.Animate(148);co_await Summon(a,true);AutoRing(a,50,true);Wander(a,4.01785707F,60);
+        co_await a.At(60);a.Animate(148);co_await Summon(a,true);
+        const int d=native_combat::DifficultyIndex(a.difficulty);AutoRing(a,d==0?60:d==3?40:50,true,true);Wander(a,4.01785707F,60);
         co_await a.At(120);Wander(a,4.01785707F,60);co_await a.At(180);Wander(a,4.01785707F,60);
         a.SetEmitterPeriod(0);co_await FixedKnifeRing(a);co_await a.At(260);a.Rewind(60);
     }
@@ -243,42 +328,50 @@ void SakuyaBoss::Behaviors::RedirectStoppedBullets(Actor& a) {
     });
 }
 Routine SakuyaBoss::Behaviors::ClockCorpse(Actor& a) {
-    co_await PrepareSpell(a,false);
+    co_await PrepareSpell(a,false);const bool easy=a.difficulty==native_combat::Difficulty::Easy;
     for(;;) {
-        a.soundEvents.push_back(5);co_await a.At(148);a.Animate(149);
-        co_await a.At(168);Fire(a,{Formation::RandomAngleSpeed,2,6,128,1,10.7142859F,3.21428585F,pi,-pi,512});
+        a.soundEvents.push_back(5);
+        for(int i=0;i<32;++i) {co_await a.At(i*4);a.EmitEffect(effects::Kind::Charge,6,{128,128,255,255});}
+        co_await a.At(148);a.Animate(easy?148:149);
+        co_await a.At(easy?148:168);Fire(a,{Formation::RandomAngleSpeed,2,6,easy?32:128,1,10.7142859F,3.21428585F,pi,-pi,512});
         co_await a.At(218);StopWorld(a,true);Wander(a,6.69642878F,90);co_await FrozenArcEmitter(a,90);a.ElapseLocalFrames(90);
-        a.soundEvents.push_back(5);co_await a.At(370);RestorePose(a,false);StopWorld(a,false);
+        a.soundEvents.push_back(5);
+        for(int i=0;i<8;++i) {co_await a.At(308+i*4);a.EmitEffect(effects::Kind::Charge,6,{128,128,255,255});}
+        co_await a.At(370);RestorePose(a,false);StopWorld(a,false);
         co_await a.At(400);RestorePose(a,true);a.Rewind(0);
     }
 }
-Routine SakuyaBoss::Behaviors::LunaClock(Actor& a) {
-    co_await PrepareSpell(a,false);
+Routine SakuyaBoss::Behaviors::JackTheLudoBile(Actor& a) {
+    co_await PrepareSpell(a,false);const bool lunatic=a.difficulty==native_combat::Difficulty::Lunatic;
     for(;;) {
-        a.soundEvents.push_back(5);co_await a.At(148);a.Animate(148);
-        Fire(a,{Formation::FixedRing,2,6,32,4,8.03571415F,3.21428585F,0,0,512});
-        co_await a.At(198);StopWorld(a,true);Wander(a,6.69642878F,60);co_await FrozenArcEmitter(a,60);a.ElapseLocalFrames(60);
         a.soundEvents.push_back(5);
-        for(int i=0;i<6;++i) {co_await a.At(258+i*5);RedirectStoppedBullets(a);}
-        co_await a.At(318);RestorePose(a,false);StopWorld(a,false);
-        co_await a.At(378);RestorePose(a,true);co_await a.At(418);a.Rewind(0);
+        for(int i=0;i<32;++i) {co_await a.At(i*4);a.EmitEffect(effects::Kind::Charge,6,{128,128,255,255});}
+        co_await a.At(148);a.Animate(148);
+        Fire(a,{Formation::RandomAngleSpeed,9,0,lunatic?35:20,1,lunatic?13.3928576F:11.7857141F,lunatic?3.21428585F:5.89285707F,pi,0,512});
+        co_await a.At(198);StopWorld(a,true);Wander(a,6.69642878F,90);co_await FrozenArcEmitter(a,90);a.ElapseLocalFrames(90);
+        a.soundEvents.push_back(5);
+        for(int i=0;i<8;++i) {co_await a.At(288+i*4);a.EmitEffect(effects::Kind::Charge,6,{128,128,255,255});}
+        co_await a.At(350);RestorePose(a,false);StopWorld(a,false);
+        co_await a.At(410);RestorePose(a,true);co_await a.At(450);a.Rewind(0);
     }
 }
+Routine SakuyaBoss::Behaviors::LunaClock(Actor& a) {
+    co_await ClockRingSpell(a,false);
+}
+Routine SakuyaBoss::Behaviors::TheWorld(Actor& a) {co_await ClockRingSpell(a,true);}
 Routine SakuyaBoss::Behaviors::Marionette(Actor& a) {
-    co_await PrepareSpell(a,true);
-    for(;;) {
-        co_await LockedKnifeBurst(a,false);a.soundEvents.push_back(5);co_await LockedKnifeBurst(a,true);
-        StopWorld(a,true);Wander(a,6.69642878F,60);
-        co_await a.At(20);a.soundEvents.push_back(5);
-        for(int i=0;i<7;++i) {co_await a.At(20+i*4);RedirectStoppedBullets(a);}
-        co_await a.At(78);RestorePose(a,false);StopWorld(a,false);
-        co_await a.At(138);RestorePose(a,true);if(Motion(a).position.x>=0)co_await a.At(178);a.Rewind(0);
-    }
+    co_await DollSpell(a);
 }
+Routine SakuyaBoss::Behaviors::KillingDoll(Actor& a) {co_await DollSpell(a);}
 Routine SakuyaBoss::Behaviors::Defeated(Actor& a) {
     StopWorld(a,false);a.SetEmitterPeriod(0);a.damageable=false;a.contactEnabled=false;a.lifeThreshold=-1;a.timeoutFrames=-1;
     Wander(a,1.60714281F,60);
-    for(int i=0;i<6;++i) {co_await a.At((i+1)*10);a.soundEvents.push_back(7);}
+    constexpr std::array<Color,5> colors{WHITE,Color{255,128,128,255},Color{128,255,128,255},
+        Color{128,128,255,255},Color{255,255,128,255}};
+    for(int i=0;i<6;++i) {
+        for(int n=0;n<5;++n) {co_await a.At(i*10+(n+1)*2);a.EmitEffect(effects::Kind::Burst,2,colors[n]);}
+        a.soundEvents.push_back(7);
+    }
     a.soundEvents.push_back(18);a.ClearBullets();a.finished=true;
 }
 Routine SakuyaBoss::Behaviors::SkillComplete(Actor& a) {a.finished=true;co_return;}

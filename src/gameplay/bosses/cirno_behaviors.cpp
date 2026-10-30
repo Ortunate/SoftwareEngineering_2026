@@ -3,6 +3,7 @@
 #include "stages/stage2/behaviors.hpp"
 #include "stages/stage2/ids.hpp"
 #include "gameplay/spatial.hpp"
+#include <array>
 #include <cmath>
 #include <numbers>
 namespace koumakyou::bosses {
@@ -55,39 +56,46 @@ void InitializeCirno(Actor& a) {
 namespace {
 Routine FirstVolley(Actor& a) {
     MoveTo(a,40,{0,0,5.71428585F});
-    float spacing=0.0560998693F;
+    const auto difficulty=static_cast<std::size_t>(native_combat::DifficultyIndex(a.difficulty));
+    float spacing=std::array{0.041336745F,0.0560998693F,0.0654498488F,0.0654498488F}.at(difficulty);
     for(int wave=0;wave<3;++wave) {
         co_await a.At(41+wave*70);a.skills.rankInfluence={-1.33928573F,2.67857146F,0,2,0,0};
         const float angle=AimAngle(a);a.soundEvents.push_back(8);
         for(int i=0;i<6;++i) {
             co_await a.At(41+wave*70+i*2);
             Fire(a,{Formation::FixedFan,5,6,i+1,1,13.3928576F-i*1.33928573F,2.67857146F,angle,spacing,4});
+            if(i==5&&difficulty>=2)Fire(a,{Formation::FixedRing,3,6,difficulty==2 ? 16 : 32,
+                difficulty==2 ? 1 : 2,8.03571415F,2.67857146F,angle,spacing,4});
         }
-        spacing+=0.0490873866F;
+        spacing+=std::array{0.0392699093F,0.0490873866F,0.0490873866F,0.0654498488F}.at(difficulty);
     }
     co_await a.At(251);
 }
 Routine FirstRings(Actor& a,int cycle) {
+    const auto difficulty=static_cast<std::size_t>(native_combat::DifficultyIndex(a.difficulty));
     Motion(a).Apply({.speed=8.03571415F});
     a.skills.rankInfluence={-1.33928573F,0.803571463F,0,4,0,0};
     for(int repeat=0;repeat<3;++repeat) {
         co_await a.At(21);a.RandomDirection(-pi,pi);Motion(a).Decelerate(60);AimHeight(a);
         a.skills.projectile={.delayFrames=60,.turnSpeed=10.7142859F};
-        Fire(a,{Formation::AimedRing,1,6,16,1,5.35714293F,2.67857146F,0,0,4});a.soundEvents.push_back(8);
+        Fire(a,{Formation::AimedRing,1,6,std::array{8,16,24,24}.at(difficulty),difficulty==3 ? 2 : 1,5.35714293F,2.67857146F,0,0,4});a.soundEvents.push_back(8);
         a.ElapseLocalFrames(cycle*3);
-        co_await a.At(41);Fire(a,{Formation::AimedRing,5,15,32,1,8.03571415F,2.67857146F,0,0,132});
+        co_await a.At(41);Fire(a,{Formation::AimedRing,5,15,std::array{16,32,32,32}.at(difficulty),1,
+            std::array{5.35714293F,8.03571415F,10.7142859F,13.3928576F}.at(difficulty),2.67857146F,0,0,132});
         a.soundEvents.push_back(8);a.ElapseLocalFrames(cycle*3);
-        co_await a.At(61);Fire(a,{Formation::AimedRing,1,6,14,1,5.35714293F,2.67857146F,0,0,4});
+        co_await a.At(61);Fire(a,{Formation::AimedRing,1,6,std::array{6,14,16,16}.at(difficulty),difficulty==3 ? 2 : 1,
+            difficulty==0 ? 10.7142859F : 5.35714293F,2.67857146F,0,0,4});
         a.soundEvents.push_back(8);a.ElapseLocalFrames(cycle*5);
         co_await a.At(101);if(repeat<2)a.Rewind(1);
     }
 }
 Routine IcicleStream(Actor& a) {
+    const auto difficulty=static_cast<std::size_t>(native_combat::DifficultyIndex(a.difficulty));
     for(int cycle=0;;++cycle) {
         float left=-0.196349546F,right=-2.94524312F;
         for(int remaining=11;remaining>0;--remaining) {
             const float jitter=a.Random(0.0490873866F);
-            const int layers=cycle<3 ? 3 : cycle<6 ? 4 : 5;
+            const int layers=(cycle<3 ? 3 : cycle<6 ? 4 : 5)+(difficulty>=2 ? 1 : 0);
             a.skills.projectile={.delayFrames=60,.turnAngle=1.57079637F,.turnSpeed=4.28571463F};
             Fire(a,{Formation::FixedFan,5,6,1,layers,17.4107151F,1.33928573F,left+jitter,0,68});
             a.skills.projectile.turnAngle=-1.57079637F;a.skills.projectile.turnSpeed=3.75F;
@@ -95,27 +103,51 @@ Routine IcicleStream(Actor& a) {
             left+=0.0981747732F;right-=0.0981747732F;
             const float playerX=a.PlayerPosition().x;
             const int divisor=playerX<0 ? 1 : playerX<2.85714286F ? 2 : 3;
-            if(remaining%divisor==0)Fire(a,{Formation::AimedFan,3,13,5,1,5.35714293F,1.33928573F,0,0.261799395F,4});
+            if(difficulty>0&&remaining%divisor==0)Fire(a,{Formation::AimedFan,3,13,5,1,5.35714293F,1.33928573F,0,0.261799395F,4});
             a.soundEvents.push_back(9);
             co_await a.At(27);a.Rewind(0);
         }
     }
 }
+/// @brief Hard/Lunatic 的 Icicle Fall 使用独立旋转环；随机角后仍消费源脚本未使用的抖动读取。
+Routine HardIcicle(Actor& a) {
+    const bool lunatic=a.difficulty==native_combat::Difficulty::Lunatic;
+    for(int cycle=0;;++cycle) {
+        const float turn=cycle%2==0 ? 0.392699093F : -0.392699093F;
+        for(int wave=0;wave<8;++wave) {
+            co_await a.At(wave*20);
+            const float angle=a.Random(2*pi)-pi;
+            (void)a.Random(0.0981747732F);
+            a.skills.projectile={.delayFrames=60,.turnAngle=turn,
+                .turnSpeed=(1.4F+0.15F*cycle)*2.67857143F};
+            Fire(a,{Formation::FixedRing,5,6,cycle+(lunatic ? 13 : 8),3,
+                13.3928576F,4.01785707F,angle,0,260});
+            a.soundEvents.push_back(9);
+        }
+        co_await a.At(160);Wander(a,2.67857143F,120);
+        if(cycle>=10)a.phaseFrames=99999;
+        co_await a.At(280);a.Rewind(0);
+    }
+}
 Routine SecondVolley(Actor& a,int cycle) {
+    const auto difficulty=static_cast<std::size_t>(native_combat::DifficultyIndex(a.difficulty));
     Wander(a,8.03571415F,60);a.skills.offset={0,0,-0.357142866F};
     for(int repeat=0;repeat<8;++repeat) {
-        Fire(a,{Formation::AimedRing,1,6,cycle+8,1,8.03571415F,2.67857146F,0,0,4});a.soundEvents.push_back(8);
+        Fire(a,{Formation::AimedRing,1,6,cycle+std::array{5,8,14,20}.at(difficulty),difficulty==3 ? 2 : 1,
+            std::array{5.35714293F,8.03571415F,10.7142859F,10.7142859F}.at(difficulty),2.67857146F,0,0,4});a.soundEvents.push_back(8);
         co_await a.At(10);Fire(a,{Formation::AimedOffsetRing,0,5,8,1,3.48214269F,2.67857146F,0,0,5});
         co_await a.At(20);if(repeat<7)a.Rewind(0);
     }
 }
 Routine MovingLasers(Actor& a) {
+    const auto difficulty=static_cast<std::size_t>(native_combat::DifficultyIndex(a.difficulty));
     Wander(a,8.03571415F,60);a.skills.offset={0,0,-0.357142866F};
     for(int repeat=0;repeat<3;++repeat) {
         a.soundEvents.push_back(16);
         for(int side=0;side<3;++side)a.Fire(skill::Laser{.color=side==0 ? 6 : 5,.length=8.5714283F,
             .width=0.267857134F,.grow=0,.sustain=9999,.fade=30,.warning=0,.harmlessTail=30,
             .angle=side==0 ? 0.0F : side==1 ? 0.392699093F : -0.392699093F,.speed=10.7142859F});
+        if(difficulty>=2)Fire(a,{Formation::AimedRing,1,6,difficulty==2 ? 16 : 32,2,5.35714293F,2.67857146F,0,0,4});
         co_await a.At(50);if(repeat<2)a.Rewind(0);
     }
 }
@@ -138,12 +170,13 @@ void Freeze(Actor& a,bool release) {
     });
 }
 Routine FreezeCycle(Actor& a) {
+    const auto difficulty=static_cast<std::size_t>(native_combat::DifficultyIndex(a.difficulty));
     for(int cycle=0;;++cycle) {
         Wander(a,5.35714293F,120);
         for(int repeat=0;repeat<6;++repeat) {
             for(int color=0;color<5;++color) {
                 co_await a.At((color+1)*5);
-                Fire(a,{Formation::RandomAngleSpeed,1,std::array{6,2,10,13,14}[color],cycle+7,1,
+                Fire(a,{Formation::RandomAngleSpeed,1,std::array{6,2,10,13,14}[color],cycle+std::array{4,7,10,16}.at(difficulty),1,
                     10.7142859F,2.67857146F,pi,-pi,4});a.soundEvents.push_back(9);
             }
             if(repeat<5)a.Rewind(0);
@@ -164,6 +197,8 @@ Routine FreezeCycle(Actor& a) {
 Routine CirnoBoss::Behaviors::FirstNonspell(Actor& a) {
     InitializeCirno(a);a.damageable=false;
     co_await a.At(20);a.damageable=true;
+    constexpr std::array<Vector3,4> axes{Vector3{-.7F,.3F,.7F},Vector3{-1,.3F,.7F},Vector3{-.7F,.3F,.3F},Vector3{-0.0F,.3F,1}};
+    for(int n=0;n<4;++n) {co_await a.At(20+n*10);a.AttachEffect(axes[n],2.14285714F,{255,224,224,255});}
     co_await a.At(70);
     for(int cycle=0;;++cycle) { co_await FirstVolley(a);co_await FirstRings(a,cycle); }
 }
@@ -171,7 +206,9 @@ Routine CirnoBoss::Behaviors::IcicleFall(Actor& a) {
     a.ClearBullets();a.damageable=false;
     MoveTo(a,120,{0,0,5.71428585F});
     co_await a.At(120);a.Animate(131);a.damageable=true;
-    co_await IcicleStream(a);
+    if(a.difficulty==native_combat::Difficulty::Hard||a.difficulty==native_combat::Difficulty::Lunatic)
+        co_await HardIcicle(a);
+    else co_await IcicleStream(a);
 }
 Routine CirnoBoss::Behaviors::SecondNonspell(Actor& a) {
     a.ClearBullets();a.damageable=false;
@@ -191,10 +228,12 @@ Routine CirnoBoss::Behaviors::PerfectFreeze(Actor& a) {
 }
 Routine CirnoBoss::Behaviors::DiamondBlizzard(Actor& a) {
     a.poses={128,128,128,129,130};a.ClearBullets();a.damageable=false;a.phaseFrames=0;
+    a.EmitEffect(effects::Kind::Flash,1,{128,128,255,255});
     a.soundEvents.push_back(7);a.dropEvents.push_back(5);
     a.skills.rankInfluence={-1.33928573F,0.803571463F,0,4,0,0};
     co_await a.At(60);
-    const skill::Shot shot{Formation::RandomAngleSpeed,5,6,10,1,5.35714293F,1.07142866F,pi,-pi,5,30};
+    const auto difficulty=static_cast<std::size_t>(native_combat::DifficultyIndex(a.difficulty));
+    const skill::Shot shot{Formation::RandomAngleSpeed,5,6,std::array{6,10,14,24}.at(difficulty),1,5.35714293F,1.07142866F,pi,-pi,5,30};
     const auto configuration=a.skills;
     MoveTo(a,120,{0,0,5.71428585F});
     co_await a.At(180);a.Animate(131);a.damageable=true;
@@ -212,7 +251,11 @@ Routine CirnoBoss::Behaviors::DiamondBlizzard(Actor& a) {
 Routine CirnoBoss::Behaviors::Defeated(Actor& a) {
     a.damageable=false;a.interactable=false;a.timeoutFrames=-1;a.lifeThreshold=-1;
     a.poses={128,128,128,129,130};Wander(a,1.60714293F,60);
-    for(int repeat=0;repeat<6;++repeat) { co_await a.At(10+repeat*10);a.soundEvents.push_back(7); }
+    constexpr std::array<Color,5> colors{WHITE,Color{255,128,128,255},Color{128,255,128,255},Color{128,128,255,255},Color{255,255,128,255}};
+    for(int repeat=0;repeat<6;++repeat) {
+        for(int n=0;n<5;++n) {co_await a.At(repeat*10+(n+1)*2);a.EmitEffect(effects::Kind::Burst,2,colors[n]);}
+        a.soundEvents.push_back(7);
+    }
     a.soundEvents.push_back(18);a.ClearBullets();a.pendingCallback=End;
 }
 Routine CirnoBoss::Behaviors::End(Actor& a) { a.finished=true;co_return; }

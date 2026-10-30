@@ -121,7 +121,7 @@ void Game::DrawWorld() const {
         rlEnableBackfaceCulling();
     }
     // 离屏尺寸/副机对照允许暂时移出内容接口；此时仍可独立绘制场地与其他已加载图层。
-    if(stageContent_)stageContent_->DrawScenery(static_cast<float>(scenerySeconds_));
+    if(stageContent_)stageContent_->DrawScenery(static_cast<float>(scenerySeconds_),assets_);
     DrawArena();
     std::array<const behavior::Actor*, kActorCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
@@ -161,7 +161,7 @@ void Game::DrawWorld() const {
     spriteRenderer_.Draw(camera_, bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
-                         actorEffects_,playerBombVolumes_);
+                         actorEffects_,playerBombVolumes_,&externalEffects_);
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     if (debugRender_) {
         spriteRenderer_.DrawDebugGeometry(bullets_, visible, boss_.get(),
@@ -274,11 +274,13 @@ void Game::DrawOverlay() const {
         // 统计拆成两行，最大分数/擦弹数也不会挤出窄窗口或与重试提示重叠。
         centered(TextFormat("SCORE %09lld",score_),295,26,RAYWHITE);
         centered(TextFormat("GRAZE %d   MISS %d   BOMB %d",graze_,missCount_,bombCount_),337,22,RAYWHITE);
-        centered(practiceMode_?"STAGE PRACTICE":challengeMode_?"CHALLENGE":"NORMAL",382,18,GOLD);
+        const auto mode=std::string(std::array<const char*,5>{"EASY","NORMAL","HARD","LUNATIC","EXTRA"}[ScoreDifficultyIndex()])+
+            (practiceMode_?" / STAGE PRACTICE":challengeMode_?" / CHALLENGE":"");
+        centered(mode.c_str(),382,18,GOLD);
         for(int index=0;index<menu::kResultCount;++index) {
             const auto row=layout.ResultRow(index);
             const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.02F);
-            ui::DrawPageButton(canvas,font,row,index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
+            ui::DrawPageButton(canvas,font,row,index==1 && stageId_==StageId::Extra?"保存成绩并返回":index==1 && practiceMode_?"返回关卡选择画面":menu::kResultLabels[index],menuMotion_,weight,reveal);
         }
     }
 
@@ -314,7 +316,16 @@ void Game::DrawStageClear() const {
     row("Power * 100 =",TextFormat("%lld",stageClearSummary_.PowerPoints()),251,ivory);
     row("Graze * 10 =",TextFormat("%lld",stageClearSummary_.GrazePoints()),288,ivory);
     row("* Point Item",TextFormat("%d",stageClearSummary_.pointItems),325,rose);
-    row("Normal Rank","* 1.0",380,rose,24);
+    if(stageClearSummary_.stage>=6) {
+        row("Lives / Bomb",TextFormat("%d / %d",stageClearSummary_.extraLives,stageClearSummary_.bombs),350,ivory,16);
+    }
+    constexpr std::array<const char*,4> rankNames{"Easy Rank","Normal Rank","Hard Rank","Lunatic Rank"};
+    constexpr std::array<const char*,4> rankFactors{"* 0.5","* 1.0","* 1.2","* 1.5"};
+    const int rankIndex=native_combat::DifficultyIndex(stageClearSummary_.difficulty);
+    row(rankNames[rankIndex],rankFactors[rankIndex],380,rose,24);
+    if(stageClearSummary_.startingLives==3 || stageClearSummary_.startingLives==4)
+        ui::DrawText(font,stageClearSummary_.startingLives==3?"初始残机倍率 ×0.5":"初始残机倍率 ×0.2",
+            canvas.Point(120,405),14*s,rose);
     const auto left=canvas.Point(120,416),right=canvas.Point(640,416);
     DrawLineEx(left,right,s,Fade(gold,0.6F));
     row("Total =",TextFormat("%lld",stageClearSummary_.Total()),431,gold,32);

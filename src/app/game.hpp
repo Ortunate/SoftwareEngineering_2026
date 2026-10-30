@@ -49,14 +49,17 @@ public:
     void Reset();
     /// @brief 从第一面开头开始一局战斗，先进入可持续更新的加载页。
     /// @param captureCursor 是否为交互游玩捕获鼠标；截图时传 false。
-    void Start(bool captureCursor = true);
-    /// @brief 选择关卡并进入加载页；重试沿用该关卡。
-    void StartStage(StageId id, bool captureCursor = true);
+    void Start(bool captureCursor = true,native_combat::Difficulty difficulty=native_combat::Difficulty::Normal);
+    /// @brief 选择关卡并进入加载页；Campaign继续主线，Practice独立结算，Extra仅接受Extra关卡/Normal上下文。
+    /// 不支持的难度或入口抛 invalid_argument；SpellPractice 必须使用独立符卡练习入口。
+    void StartStage(StageId id,bool captureCursor=true,native_combat::Difficulty difficulty=native_combat::Difficulty::Normal,
+                    StageEntry entry=StageEntry::Campaign);
     /// @brief 是否处于加载页（含失败提示）；截图方须等待完成，并检查 HasLoadingFailed。
     [[nodiscard]] bool IsLoading() const { return state_ == RunState::Loading; }
     /// @brief 加载失败时返回 true；交互用户可返回首页，截图调用方应结束并报告失败。
     [[nodiscard]] bool HasLoadingFailed() const { return IsLoading() && loadingFailed_; }
     /// @brief 进入不捕获鼠标、长时间无敌的关卡预览模式。
+    /// 保留当前主线关卡；上一局为Extra时回到一面，不改写持久化的主线难度选择。
     void StartPreview();
     /// @brief 设置关卡预览的相机观察角度。
     /// @param yawDegrees 水平角（度）。
@@ -103,9 +106,11 @@ private:
     void EnterMainMenu();
     /// @brief 清理本局资源并返回整关练习的 Stage 页，保留御札、模式和关卡；其他模式回首页。
     void ReturnToPracticeStage();
-    /// @brief 战后对话结束后固定奖励快照、计分并显示明细；每局只生效一次。
+    /// @brief 固定本关奖励及加分，允许内容在对白中提前触发；每关只生效一次，不结束对白保护。
+    void AwardStageClear();
+    /// @brief 战后对话实际结束后显示已固定奖励明细；未提前加分时先结算，重入不重置倒计时。
     void BeginStageClear();
-    /// @brief 关闭奖励明细；普通前五关继续下一关、完整六关接结局，整关练习安全收尾后返回选关。
+    /// @brief 关闭奖励明细；本篇按难度终点衔接关卡或结局，Extra独立选存，整关练习收尾后返回选关。
     void ContinueStageClear();
     /// @brief 末关退场及旧资源释放后加载所选结局；内容和音乐沿用异步加载通道。
     void BeginEnding();
@@ -113,6 +118,10 @@ private:
     void UpdateEnding(float deltaTime);
     /// @brief 固定本轮成绩快照、保存观看标记并打开选存页，不立即插入排行榜。
     void FinishEnding();
+    /// @brief 清理已结束关卡并固定本轮成绩，进入命名选存；保留调用方设置的存盘错误提示。
+    void BeginScoreSave();
+    /// @brief 排行榜索引为主线E/N/H/L的0～3或Extra的4；独立于Extra内部Normal脚本掩码。
+    [[nodiscard]] int ScoreDifficultyIndex() const {return stageId_==StageId::Extra?4:native_combat::DifficultyIndex(runDifficulty_);}
     /// @brief 处理选存、ASCII 命名与成绩页筛选；输入、存盘与绘制互相独立。
     void UpdateScoreSave();
     void UpdateScoreName();
@@ -121,7 +130,7 @@ private:
     void SaveNamedScore();
     /// @brief 追加一个可打印 ASCII 字符，首次输入替换上次名字，最多八字符。
     void AppendScoreName(char value);
-    /// @brief 把有效整关成绩写入对应模式的历史最高分；仅在关卡通关或失败结算时调用。
+    /// @brief 把有效主线整关成绩写入对应模式的历史最高分；通关或失败时调用，Extra使用独立命名表。
     void RecordStageScore();
     /// @brief 保存有效整关的分模式最高分并播放退场效果；池空并卸载素材后才进入结局或结算出口。
     /// @param result 胜利或失败后的游戏状态。
@@ -153,6 +162,9 @@ private:
     void BeginSpellRecord();
     /// @brief 结束当前尝试并存档，重复调用无副作用；capture 须排除受击、Bomb 和超时。
     void FinishSpellRecord(bool capture);
+    /// @brief 当前Boss已实际宣告符卡时固定Miss/Bomb基准、切入演出和遇见记录；不在准备期提前调用。
+    /// 外部Resume或新Boss可同步宣告，不能只依靠Update前后编号变化发现首张符卡。
+    void OnSpellDeclared();
     /// @brief 使用现有页面底板、字体、花饰和强调绘制独立符卡练习；opacity 为流程过渡权重。
     void DrawSpellPractice(float opacity) const;
     /// @brief 处理新典顺序的开局页；角色箭头只切换，只有已实现机体的最终确认才启动加载。
@@ -314,6 +326,7 @@ private:
     BulletSystem bullets_{};
     behavior::ActorPool<kActorCapacity> actors_{};
     ActorEffectSystem actorEffects_{};
+    effects::ExternalEffectSystem externalEffects_{}; // 独立512槽，StartRun/退出/卸载前必须解除ANM借用。
     PlayerBombEffect playerBomb_{}; // 仅借用关卡 ANM；退出、重开、结算及卸载资源前清空。
     bool playerBombStartedThisFrame_=false;
     int playerBombResolvedFrame_=-1; // 只属于当前 Bomb，Start/Clear 重置，杜绝重复碰撞入口再次扣血。
@@ -331,32 +344,37 @@ private:
     AssetManager assets_;
 
     long long score_ = 0;
-    /// @brief 按原作每 100 subrank 提升一个 rank；Normal 限制 10…32，初始 16。
-    void AdjustReferenceRank(int subrank);
-    int referenceRank_ = 16, referenceSubrank_ = 0;
-    float rankTime_ = 0;
-    int graze_ = 0; // 本局累计擦弹，跨关保留，用于 HUD 与统计。
+    // 加载完成后按本局难度/内容初始化，连续切关保留；已审阅事件和管理回调不提供动态调整规则。
+    // 其他原生间接写入仍待核验，不由此字段或初始化表推导全局恒定性及上下界。
+    int referenceRank_ = 0;
+    int graze_ = 0; // 本局累计擦弹，跨关保留，饱和于999999；饱和不停止擦弹加分。
     int pointItems_ = 0; // 本局普通蓝色道具累计数量，供原作点数栏显示。
-    int stageGraze_=0,stagePointItems_=0; // 本关奖励计数，每关加载完成时归零，不能用累计值重复计算奖励。
+    int stageGraze_=0,stagePointItems_=0; // 本关奖励计数，每关归零；stageGraze_饱和于99999，不能用累计值重复计算奖励。
     float messageTimer_ = 0.0F;
     float screenFlashTimer_ = 0.0F;
     float spellCutInTimer_ = 0.0F;
     float spellBonusTimer_ = 0; // 秒；暂停时冻结，捕获反馈最多显示 280 原作帧。
     long long spellBonus_ = 0, stageBonus_ = 0;
-    StageClearSummary stageClearSummary_{}; // 关卡结束时固定的 Normal 奖励明细，整个展示期间不变。
+    StageClearSummary stageClearSummary_{}; // 关卡结束时固定的奖励明细，整个展示期间不变。
     float stageClearSeconds_ = 0;
-    bool stageClearShown_ = false; // 每关至多计算并展示一次；进入下一关或重开时重置，防止事件重入重复加分。
+    bool stageClearShown_ = false; // 每关奖励至多固定一次；可早于结算页，在对白保护等待期间仍保持Playing。
     /// @brief 借用当前战前/战后台词；Stage 内容存储须覆盖整个展示期。
     [[nodiscard]] std::span<const DialogueLine> CurrentDialogue() const;
     /// @brief 当前句索引及起始秒数；每句以自身 duration 计时，确认不越过原生退场或结算保护。
     [[nodiscard]] int DialogueIndex(float* lineStart = nullptr) const;
-    [[nodiscard]] float DialogueDuration() const;
+    [[nodiscard]] double DialogueDuration() const;
+    /// @brief 顺序交付当前对白已到期的音乐指令；跳句也消费跨过的每条指令，同帧停止/重播不可合并。
+    /// 游标随 BeginStageDialogue 重置，暂停不调用；cues 借用当前内容且必须按实际内容帧排序。
+    void ApplyDialogueMusic(std::span<const DialogueCue> cues);
     bool dialogueAfterBattle_ = false;
     DialogueScene dialogueScene_=DialogueScene::FinalBoss;
     bool dialogueBossMusic_ = false;
+    std::size_t dialogueMusicCursor_=0; // 当前对白已消费的演出表前缀；保证同曲后继与停止只执行一次。
     double dialogueTimer_ = 0.0; // 整段对话的游戏秒数；双精度累积，避免长对白在高 FPS 下偏离原生指令帧。
     bool dialogueActive_ = false;
     int dialogueSignalsSeen_=0; // 当前整段对白累计放行序号；跳句只前进，BeginStageDialogue 时归零。
+    DialogueFlow dialogueFlow_{}; // 开始对白时固定的分支及加分边界；跳句不重新求值成绩门槛。
+    int stageSpellCaptures_=0; // 本关独立取得进度，按内容规则更新；新局、重开和进入下一关均清零。
     std::optional<std::pair<StageEventId,int>> dialogueSignalWait_; // 时间轴按序只登记一个未完成等待，不拥有对白。
     ui::DialogueMotion dialogueMotion_{}; // 只在 Playing 的对话期间推进；暂停保持当前透明度、缩放与位移。
     std::optional<StageEventId> bossEventId_;
@@ -385,12 +403,15 @@ private:
     StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。
     score::Profile scoreProfile_{};
     score::Entry pendingScore_{}; // 结局结束时固定，命名/选存期间不得再次加分或改变统计。
-    int scoreShot_=0,scoreMode_=0,selectedScoreSave_=0;
+    int scoreShot_=0,scoreMode_=0,scoreDifficulty_=1,selectedScoreSave_=0;
+    native_combat::Difficulty runDifficulty_=native_combat::Difficulty::Normal; // 本局身份，独立于自适应 rank。
+    int runInitialLives_=2; // 固定本局开局额外残机，跨关保留，供结算倍率使用。
     int scoreHighlight_=-1; // 最近一次成功保存的排名，浏览其他分组后清除。
     std::string scoreName_,scoreSaveError_;
     bool replaceScoreName_=true,scorePageFromRun_=false;
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
-    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 两位角色四种御札、Normal 与目录中已开放的关卡。
+    StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 只接受目录中已开放的难度和入口。
+    int selectedDifficulty_=1; // UI 0～3 索引；开始战斗时转换为独立运行身份。
     int selectedCharacter_ = 0; // 实际角色候选，0 灵梦/1 魔理沙；普通开局和符卡练习均沿用该编号。
     ui::MenuMotion startCharacterMotion_{}; // 角色切换时前景、背景及人物摘要共用的渐变权重。
     int selectedPracticeStage_ = 0; // kPracticeStages 的局部索引，始终指向已注册关卡。
@@ -403,8 +424,8 @@ private:
     ui::MenuMotion spellCharacterMotion_{}; // 四组合展示权重，切换人物与文字共用，不影响鼠标命中。
     ui::MenuMotion spellGroupMotion_{},spellDifficultyMotion_{}; // 同页两列分别保存强调，焦点递进不清空另列或重播页面动画。
     int spellAttemptNumber_=0,spellAttemptCharacter_=0;
-    bool spellAttemptOpen_=false,spellAttemptPractice_=false,spellCaptured_=false; // 已打开记录只能结算一次；仅成功无伤无 Bomb 击破为取得。
-    int practiceAttack_ = 2; // 符卡练习只允许露米娅第 2 或第 4 阶段。
+    bool spellAttemptOpen_=false,spellAttemptPractice_=false,spellCaptured_=false; // 已打开记录只能结算一次；无Miss/Bomb的击破或生存符实际超时可取得。
+    int practiceAttack_ = 2; // 选定符卡工厂内的1起算展开技能编号，由目录Card::phase给出。
     bool spellPractice_ = false;
     int selectedTrack_ = 0; // 音乐页局部编号为 0～2；返回使用固定返回键，不占曲目槽。
     int selectedPauseItem_ = 0; // 暂停项：继续、主菜单、重开。

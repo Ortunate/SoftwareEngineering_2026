@@ -8,6 +8,7 @@
 
 #include <span>
 #include <array>
+#include <cstdint>
 
 namespace koumakyou {
 
@@ -60,7 +61,7 @@ public:
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
     void Reset();
     /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
-    /// 挑战模式照常计 Miss、扣 Power 和复活，但不扣残机，不会因命中结束一局。
+    /// 新局净Miss归零；挑战模式照常计 Miss、扣 Power 和复活，但不扣残机，不会因命中结束一局。
     void ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot);
     /// @brief 重置位置、视角、副弹周期及副机收拢/动画时间，用于返回菜单或复活，旧激光下次更新回收。
     void ResetPose();
@@ -95,13 +96,14 @@ public:
     bool AdjustPower(int delta);
 
     /// @brief 处理活动敌弹/光束的命中与擦弹；预警无害，命中只清除普通弹，光束保持到结束。
-    /// @param bullet 由弹幕池持有的敌弹，玩家只修改 active 或 grazed。
-    /// @return 无接触、首次擦弹或可造成伤害的命中；无敌时命中返回 None。
+    /// @param bullet 由弹幕池持有的敌弹，可能清active或消费其擦弹状态；普通弹只擦一次，光束每12内容帧可再擦。
+    /// @return 无接触、本次有效擦弹或可造成伤害的命中；无敌时命中返回 None。
     PlayerContact ContactEnemyBullet(Bullet& bullet) const;
     /// @brief 查询玩家命中球与敌方本体球是否接触；position/radius 为世界坐标/世界半径，半径须正且有限。
     /// 复活或 Bomb 无敌时、半径无效时返回 false；不修改敌人，不产生擦弹，受击结算由 Game 统一合并。
     [[nodiscard]] bool ContactEnemyBody(Vector3 position,float radius) const;
-    /// @brief 普通模式扣除一条残机，挑战模式保留残机；均扣 16 Power（最低 8）、补足 Bomb、复位并给予无敌。
+    /// @brief 结算一次确认Miss并增加净Miss；普通模式扣残机，挑战模式保留库存。
+    /// 两模式均扣16 Power（最低8）、补足Bomb、复位并给予无敌；调用方须先合并同帧接触并检查保护期。
     /// @return 仍有可用残机时返回 true；用尽时返回 false。
     bool TakeHit();
     /// @brief 根据玩家位置和视角更新相机；相机位置始终等于玩家判定中心。
@@ -113,7 +115,11 @@ public:
     [[nodiscard]] int RemainingLives() const;
     /// @brief 返回当前可用 Bomb 数量。
     [[nodiscard]] int Bombs() const { return bombs_; }
-    /// @brief 应用非负的残机/Bomb 拾取奖励，库存各钳制到项目上限 8；负数抛 invalid_argument。
+    /// @brief 本局确认Miss次数；Challenge再减去已拾取残机，允许负数，与显示库存和总Miss分别维护。
+    /// 复活/切关的ResetPose保留此值，Reset或ConfigureRun开始新局时清零。
+    [[nodiscard]] std::int64_t NetMisses() const { return netMisses_; }
+    /// @brief 应用非负的残机/Bomb 拾取奖励；Standard残机、两模式Bomb库存各钳制到8。
+    /// Challenge每份残机减少一净Miss且不增加库存；负数抛invalid_argument，不应用任何奖励。
     void CollectResources(int extraLives,int bombs);
     /// @brief 返回当前 Power 点数，范围为 8 到 128。
     [[nodiscard]] int Power() const { return power_; }
@@ -167,6 +173,7 @@ private:
     int lives_ = 3;
     int bombs_ = 3;
     int power_ = kMinPower;
+    std::int64_t netMisses_=0; // Challenge残机可使该计数为负；用宽整数避免项目长局累计溢出。
     bool challenge_ = false;
     ShotType shot_ = ShotType::HomingAmulet;
 };

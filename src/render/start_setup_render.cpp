@@ -47,18 +47,17 @@ void Portrait(Texture2D texture,Rectangle slot,bool backdrop,float reveal) {
     DrawTexturePro(texture,source,slot,{},0,Fade(backdrop?Color{173,130,135,255}:WHITE,(backdrop?0.27F:1)*reveal));
 }
 
-/// @brief 难度札 index 为 Easy/Normal/Hard/Lunatic 的 0～3；未开放条目仅展示，不能暗示已可游玩。
-void DifficultyCard(Font font,Rectangle card,float scale,int index,bool selected,float opacity=1) {
-    constexpr std::array<const char*,4> names{"EASY","NORMAL","HARD","LUNATIC"};
-    constexpr std::array<Color,4> colors{{{81,131,96,255},{66,101,145,255},{141,71,117,255},{150,56,64,255}}};
+/// @brief 难度札index为主线0～3或Extra的4；Extra只作徽章，不进入四项难度选择。
+void DifficultyCard(Font font,Rectangle card,float scale,int index,bool selected,bool available,float opacity=1) {
+    constexpr std::array<const char*,5> names{"EASY","NORMAL","HARD","LUNATIC","EXTRA"};
+    constexpr std::array<Color,5> colors{{{81,131,96,255},{66,101,145,255},{141,71,117,255},{150,56,64,255},{115,61,139,255}}};
     DrawRectangleRec(card,ui::WithOpacity(selected?kIvory:Color{101,85,83,155},opacity));
     DrawRectangleLinesEx(card,2*scale,ui::WithOpacity(selected?kGold:Color{127,98,84,180},opacity));
     const Color ink=ui::WithOpacity(selected?colors[index]:Color{169,151,144,255},opacity);
     Label(font,names[index],card,42*scale,ink,0.08F);
     Rectangle rule{card.x+card.width*0.12F,card.y+card.height*0.48F,card.width*0.76F,0};
     Ornament(rule,scale,ink);
-    Label(font,selected?"面向大多数人的难度":"尚未开放",card,22*scale,selected?ui::WithOpacity(Color{63,43,43,255},opacity):ink,0.60F);
-    if(selected)Label(font,"第一面",card,18*scale,ui::WithOpacity(Color{90,65,63,255},opacity),0.81F);
+    Label(font,available?"已开放":"尚未开放",card,22*scale,selected?ui::WithOpacity(Color{63,43,43,255},opacity):ink,0.60F);
 }
 
 /// @brief 两行御札摘要与选择项共用样式；combination 为灵/梦/魔/恋的 0～3，weight/reveal 为 0～1。
@@ -77,7 +76,7 @@ struct Painter {
         Label(font,text,bounds,size,ui::WithOpacity(color,opacity),top,center,glow);
     }
     void Rule(Rectangle bounds,Color color) const { Ornament(bounds,scale,ui::WithOpacity(color,opacity)); }
-    void Card(Rectangle bounds,int index,bool selected) const { DifficultyCard(font,bounds,scale,index,selected,opacity); }
+    void Card(Rectangle bounds,int index,bool selected,bool available) const { DifficultyCard(font,bounds,scale,index,selected,available,opacity); }
 };
 
 /// @brief 两个屏幕矩形连续插值；t 为 0～1，窗口缩放时由当前布局重算，不能缓存旧窗口像素。
@@ -105,19 +104,19 @@ void Game::DrawStartSetup() const {
     ui::DrawPageSurface(canvas,menuMotion_,setup);
     if(spellPractice_) {DrawSpellPractice(setup);return;}
     const Painter page{font,s,setup};
-    page.Text(practiceMode_?(spellPractice_?"SPELL PRACTICE":"PRACTICE START"):"START",
+    page.Text(stageId_==StageId::Extra?"EXTRA START":practiceMode_?"PRACTICE START":"START",
               canvas.Rect(42,canvas.height-108,layout.compact?290:400,70),52*s,Color{122,48,51,150},0,false);
-    const float difficulty=motion.Layer(StartSetupStep::Difficulty);
+    const float difficulty=stageId_==StageId::Extra?0:motion.Layer(StartSetupStep::Difficulty);
     if(difficulty>0) {
         const Painter p{font,s,difficulty};
         auto title=canvas.Rect(layout.compact?80:360,45,layout.compact?600:560,58);
         title.y-=12*s*(1-difficulty);
         p.Text("请选择难度。",title,46*s,kIvory,0,true,0.5F);p.Rule(title,kRose);
-        for(int index:{0,2,3}) {
+        for(int index=0;index<4;++index)if(index!=selectedDifficulty_) {
             const float entry=motion.CardEntry(index);
             auto card=layout.Difficulty(index);
             card.x+=48*s*(1-entry)-18*s*(1-difficulty);
-            Painter{font,s,difficulty*entry}.Card(card,index,false);
+            Painter{font,s,difficulty*entry}.Card(card,index,false,SupportsDifficulty(*native_combat::DifficultyFromIndex(index),practiceMode_?StageEntry::Practice:StageEntry::Campaign));
         }
     }
     for(int role=0;role<2 && character>0;++role) {
@@ -141,12 +140,12 @@ void Game::DrawStartSetup() const {
             p.Text(stars[profile.stars[index]-1],{row.x+row.width*0.5F,row.y,row.width*0.5F,row.height},27*s,kGold,0,false);
         }
     }
-    // Normal 札沿连续路径移到人物页左下，放在人物之上保持移动途中可读，后续步骤不重复淡入。
-    const float entry=motion.CardEntry(1),normal=character+difficulty*entry;
+    // 已选难度札沿连续路径移到人物页左下，放在人物之上保持移动途中可读。
+    const float entry=motion.CardEntry(selectedDifficulty_),normal=character+difficulty*entry;
     if(normal>0) {
-        auto card=layout.Difficulty(1);card.x+=48*s*(1-entry)-18*s*(1-difficulty);
+        auto card=layout.Difficulty(selectedDifficulty_);card.x+=48*s*(1-entry)-18*s*(1-difficulty);
         const float progress=character/std::max(0.00001F,character+difficulty);
-        Painter{font,s,normal}.Card(Mix(card,layout.Badge(),progress),1,true);
+        Painter{font,s,normal}.Card(Mix(card,layout.Badge(),progress),stageId_==StageId::Extra?4:selectedDifficulty_,true,true);
     }
     // 可见页面各自保留当前权重；快速确认或返回只改变目标，旧标题与选项从当前画面继续退场。
     for(const auto step:{StartSetupStep::Character,StartSetupStep::Shot,StartSetupStep::Mode}) {
@@ -200,14 +199,15 @@ void Game::DrawStartSetup() const {
         }
         const auto& selection=setupChoiceMotion_[static_cast<int>(StartSetupStep::Stage)];
         for(int index=0;index<kStageScoreCount;++index) {
-            const bool available=kPracticeStages[index].has_value();
+            const bool available=kPracticeStages[index] && SupportsStage(*kPracticeStages[index],
+                *native_combat::DifficultyFromIndex(selectedDifficulty_),StageEntry::Practice);
             const float weight=available?selection.Weight(index):0;
             auto row=layout.StageRow(index);row.x+=18*s*(1-stages)-4*s*weight;
             const Color color=available?ui::Blend(Color{161,138,132,255},kGold,weight):Color{127,106,106,180};
             DrawRectangleRec(row,ui::WithOpacity(Color{46,22,29,static_cast<unsigned char>(45+70*weight)},stages));
             const float split=row.width*0.36F;
             p.Text(TextFormat("STAGE %d",index+1),{row.x+8*s,row.y,split-12*s,row.height},(layout.compact?25:21)*s,color,0.1F,false,weight*0.35F);
-            const char* score=TextFormat("%09lld",stageHighScores_.Best(challengeMode_,index+1));
+            const char* score=TextFormat("%09lld",stageHighScores_.Best(challengeMode_,index+1,selectedDifficulty_));
             const float scoreSize=ui::FittedSize(common.hudFont,score,(layout.compact?24:22)*s,row.width-split-8*s);
             const float scoreWidth=ui::MeasureText(common.hudFont,score,scoreSize).x;
             Label(common.hudFont,score,{row.x+row.width-8*s-scoreWidth,row.y,scoreWidth,row.height},

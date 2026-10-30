@@ -6,6 +6,7 @@ namespace koumakyou::stage_assets {
 /// @brief 复用玩家/道具/自机立绘接口，不持有资源；Assets 须包含 CommonBattleVisuals 的全部公共槽。
 class NativeBattleContent : public StageContent {
 public:
+    using StageContent::StageContent;
     std::array<VisualId,4> PlayerBombVisuals(ShotType shot) const override;
     PlayerShotVisuals PlayerVisuals(ShotType shot) const override;
     VisualId HeroPortraitVisual(int expression=0,ShotType shot=ShotType::HomingAmulet) const override;

@@ -56,7 +56,8 @@ void Game::DrawCommandBar() const {
             break;
         case RunState::Paused:menu("确认","继续");add("M","返回主菜单");break;
         case RunState::Won: case RunState::GameOver:
-            menu();add("R","重试");add("M","返回主菜单");break;
+            menu("确认",stageId_==StageId::Extra&&!previewMode_?"成绩选存":"返回");
+            add("R","重试");add("M",stageId_==StageId::Extra&&!previewMode_?"成绩选存":"返回主菜单");break;
         case RunState::StageClear:
             add("Z / Space / 左键","继续");add("X / Esc / 右键","暂停");add("10s","自动继续");break;
         case RunState::Finishing:add("","等待",false);add("Esc / "+KeyLabel(bindings_.pause),"暂停");break;

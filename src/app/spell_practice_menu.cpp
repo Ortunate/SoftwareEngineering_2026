@@ -103,7 +103,7 @@ void Game::UpdateSpellPractice() {
         if(!spell::Available(card,choice.character,spellRecords_)) {assets_.PlaySoundEffect("menu_cancel");return;}
         selectedCharacter_=choice.character/2;selectedShot_=choice.character%2;
         practiceAttack_=card->phase;
-        stageId_=StageId::Stage1;
+        stageId_=*SpellPracticeStage(card->stage);
         challengeMode_=false;
         SaveSettings();
         StartRun();
@@ -128,7 +128,7 @@ void Game::BeginSpellRecord() {
     if(shotTestActive_)return;
 #endif
     const int number=boss_->SpellCardNumber();
-    if(number<1||number>spell::kSpellCount)return;
+    if(number<1||number>spell::kRecordCount||(spellPractice_&&number>spell::kSpellCount))return;
     spellAttemptNumber_=number;spellAttemptCharacter_=static_cast<int>(player_.Shot());
     spellAttemptOpen_=true;spellAttemptPractice_=spellPractice_;
     spellRecords_.Begin(spellAttemptCharacter_,number,spellPractice_);

@@ -32,7 +32,7 @@ StageDirector::StageDirector(std::span<const StageEvent> events)
                     throw std::invalid_argument("StartBoss requires an id and valid battle definition");
                 }
             } else if constexpr (std::is_same_v<Action, StartDialogue>) {
-                if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss)||
+                if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss&&action.scene!=DialogueScene::EncoreBoss)||
                     (action.clearPolicy!=DialogueClearPolicy::ClearEnemiesAndBullets&&action.clearPolicy!=DialogueClearPolicy::PreserveWorld))
                     throw std::invalid_argument("StartDialogue requires an id and valid scene");
             } else if constexpr (std::is_same_v<Action, ResumeBoss>) {

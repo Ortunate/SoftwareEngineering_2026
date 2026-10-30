@@ -17,7 +17,7 @@ struct DialoguePose {
 class DialogueMotion {
 public:
     /// @brief 按整段对话的游戏秒数重建原生中断标签，支持跳句和任意帧率；暂停时保持已有采样。
-    /// 标签 1/5 在 30 帧内入退场，3/4 的 Alpha 用 16 帧变为 255/128；对手位置过渡用 30 帧。
+    /// 标签 1/2/5 在 30 帧内入退场，2退到场外后仍可重用，5对应源动画结束；3/4 的 Alpha 用 16 帧变为 255/128。
     void Seek(std::span<const DialogueCue> cues, float seconds) {
         struct Channel {
             float from=0,to=0,at=0,duration=0;
@@ -35,16 +35,18 @@ public:
         const float frame=std::floor(std::max(0.0F,seconds)*60+0.001F);
         for(const auto& cue:cues) {
             if(cue.frame>frame)break;
-            if(cue.kind!=DialogueCueKind::Portrait || cue.slot<0 || cue.slot>1)continue;
+            if((cue.kind!=DialogueCueKind::Portrait&&cue.kind!=DialogueCueKind::PortraitStart) || cue.slot<0 || cue.slot>1)continue;
+            if(cue.kind==DialogueCueKind::PortraitStart&&cue.value!=0)continue;
             const int slot=cue.slot;
-            if(cue.value==1) {
+            // 普通脚本创建后从头执行并自然落入标签1；没有额外中断也会入场，不能只靠MSG5判定可见性。
+            if(cue.kind==DialogueCueKind::PortraitStart || cue.value==1) {
                 visible[slot]=true;focus[slot]={1,1,0,0};alpha[slot]={1,1,0,0};
                 slide[slot]={1,0,static_cast<float>(cue.frame),30};
             } else if(cue.value==3 || cue.value==4) {
                 const bool speaking=cue.value==3;
                 focus[slot].Set(cue.frame,speaking?1:0,slot==0?16:30,true);
                 alpha[slot].Set(cue.frame,speaking?1:128.0F/255,16,false);
-            } else if(cue.value==5) {
+            } else if(cue.value==2 || cue.value==5) {
                 slide[slot].Set(cue.frame,1,30,true);
             }
         }

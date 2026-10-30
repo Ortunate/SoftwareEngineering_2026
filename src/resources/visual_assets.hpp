@@ -53,6 +53,7 @@ struct StageAssetManifest {
     std::string_view stageBgm;
     std::string_view bossBgm;
     std::span<const SoundDefinition> sounds;
+    std::string_view eventBgm{}; // 可选第三首关卡演出音乐；空值不加载，借用期同其他路径，不作为音效加载。
 };
 
 }  // namespace koumakyou

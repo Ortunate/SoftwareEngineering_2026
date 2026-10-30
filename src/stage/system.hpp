@@ -33,8 +33,8 @@ struct StartBoss {
     const bosses::Battle* battle = nullptr; // 借用静态战斗定义，必须覆盖调度器生命周期。
 };
 
-/// @brief 对话所属遭遇；道中战后对白结束后继续本关，只有关底战后对白进入结算。
-enum class DialogueScene { FinalBoss, Midboss };
+/// @brief 对话所属命名遭遇；是否结束本关由内容的DialogueFlow决定，追加战不混用主战对白。
+enum class DialogueScene { FinalBoss, Midboss, EncoreBoss };
 /// @brief 对白开始时的清场策略；PreserveWorld 保留旧演员/弹幕，由内容在真实开战或退场时处理。
 enum class DialogueClearPolicy { ClearEnemiesAndBullets, PreserveWorld };
 /// @brief 开始当前关卡对话；所属 StageEvent 必须带 id，对话结束时报告完成。

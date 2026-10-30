@@ -107,9 +107,10 @@ void Game::DrawHud() const {
         const auto info = stageContent_->DisplayInfo();
         const float x = stage.x + 16 * s, w = stage.width - 32 * s;
         StageTitle(font, info, stage, s, emphasis);
-        const char* mode = spellPractice_ ? "NORMAL / 符卡练习" : practiceMode_ ? "NORMAL / 关卡练习"
-            : challengeMode_ ? "NORMAL / 挑战模式" : "NORMAL";
-        Label(font, mode, {x, stage.y + (l.compact ? 118 : 124) * s}, 16 * s, w,
+        constexpr std::array<const char*,5> difficultyNames{"EASY","NORMAL","HARD","LUNATIC","EXTRA"};
+        const auto mode=std::string(difficultyNames[ScoreDifficultyIndex()])+
+            (spellPractice_ ? " / 符卡练习" : practiceMode_ ? " / 关卡练习" : challengeMode_ ? " / 挑战模式" : "");
+        Label(font, mode.c_str(), {x, stage.y + (l.compact ? 118 : 124) * s}, 16 * s, w,
                kRose, emphasis);
     }
 
@@ -128,9 +129,11 @@ void Game::DrawHud() const {
     if (!l.compact)
         Label(font, "状态", {left, status.y + 13 * s}, 16 * s, contentWidth, kGold, emphasis);
     row("得分", TextFormat("%09lld", score_), l.compact ? 12 : 48, l.compact ? 22 : 27);
-    const auto& namedScores=scoreProfile_.Get(challengeMode_,static_cast<int>(player_.Shot()));
-    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practiceAttack_==2?3:7).bestScore:
-        namedScores[0]?namedScores[0]->value:challengeMode_?0:bestScore_;
+    const auto& namedScores=scoreProfile_.Get(challengeMode_,static_cast<int>(player_.Shot()),ScoreDifficultyIndex());
+    // 展开技能编号只在各自工厂内有效；读取全局Card编号，保证单符工厂的attack=1不会串到一面成绩。
+    const auto* practiceCard=spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty);
+    const long long displayedBest=spellPractice_?spellRecords_.Get(static_cast<int>(player_.Shot()),practiceCard?practiceCard->number:0).bestScore:
+        namedScores[0]?namedScores[0]->value:challengeMode_||stageId_==StageId::Extra||runDifficulty_!=native_combat::Difficulty::Normal?0:bestScore_;
     row("最高得分", TextFormat("%09lld", displayedBest), l.compact ? 42 : 88, l.compact ? 16 : 18);
     if (!l.compact)
         DrawLineEx({left, status.y + 118 * s}, {right, status.y + 118 * s}, s,
@@ -282,7 +285,7 @@ void Game::DrawSpellCutIn() const {
     const GameplayLayout l(GetScreenWidth(), GetScreenHeight());
     const float elapsed = kSpellCutInDuration - spellCutInTimer_;
     const float opacity = std::clamp(std::min(elapsed / 0.2F, spellCutInTimer_ / 0.4F), 0.0F, 1.0F);
-    const Texture2D texture = assets_.GetVisual(stageContent_->SpellPortraitVisual()).texture;
+    const Texture2D texture = assets_.GetVisual(stageContent_->SpellPortraitVisual(boss_->SpellCardNumber())).texture;
     if (texture.id && texture.height > 0) {
         // 只以窗口边缘裁掉滑入阶段的离屏部分；完整全身差分保持宽高比和原有淡入淡出时序。
         BeginScissorMode(0, 0, GetScreenWidth(), GetScreenHeight());

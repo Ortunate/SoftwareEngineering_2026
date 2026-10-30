@@ -20,21 +20,29 @@ Routine Stop(Actor& a) {
     co_await a.At(70);a.motion.Apply({.acceleration=0});a.SetEmitterSound(22);
 }
 Routine SpeedRings(Actor& a,bool shortWave) {
-    co_await Stop(a);float speed=4.01785707F;
+    co_await Stop(a);float speed=4.01785707F;const int d=native_combat::DifficultyIndex(a.difficulty);
     for(int burst=0;burst<(shortWave ? 5 : 8);++burst) {
-        co_await a.At(burst*(shortWave ? 4 : 5));Fire(a,{Formation::AimedRing,3,6,shortWave ? 24 : 30,1,speed,2.67857143F,0,0,516});
+        co_await a.At(burst*(shortWave ? 4 : 5));Fire(a,{Formation::AimedRing,3,6,shortWave ? (d==0?12:d==1?24:32) : d==0?16:d==1?30:40,1,speed,2.67857143F,0,0,516});
         speed+=shortWave ? 1.47321427F : 1.01785719F;
+        // Lunatic 在基础增量后另加一次速度；保留两次浮点加法的顺序。
+        if(d==3)speed+=shortWave?0.535714269F:0.267857134F;
     }
     co_await a.At(shortWave ? 20 : 40);a.motion.Polar(pi/2,4.8214283F);co_await Lifetime(a);
 }
 Routine LayeredRings(Actor& a,int color) {
-    co_await Stop(a);float speed=4.01785707F;
-    for(int burst=0;burst<8;++burst) {
-        co_await a.At(burst*5);
-        Fire(a,{Formation::AimedRing,3,color,24,1,speed,2.67857143F,burst<4&&burst%2==0 ? 0.130899698F : 0,0,516});
-        speed+=burst<4 ? 0.535714269F : 0.669642866F;
+    co_await Stop(a);float speed=4.01785707F;const int d=native_combat::DifficultyIndex(a.difficulty);
+    const int pairs=d==0?0:d==1?2:4,tail=d==0?5:d==1?4:3;
+    // Easy 的源跳转跳过前段并推进局部时钟；实际在停顿结束当帧开始尾段，不能额外等十帧。
+    for(int pair=0;pair<pairs;++pair)for(int half=0;half<2;++half) {
+        co_await a.At(pair*10+half*5);
+        Fire(a,{Formation::AimedRing,3,color,24,d==3&&half==0?2:1,speed,2.67857143F,half==0?0.130899698F:0,0,516});
+        speed+=0.535714269F;
     }
-    co_await a.At(40);a.motion.Polar(pi/2,4.8214283F);co_await Lifetime(a);
+    for(int burst=0;burst<tail;++burst) {
+        co_await a.At(pairs*10+burst*5);
+        Fire(a,{Formation::AimedRing,3,color,24,1,speed,2.67857143F,0,0,516});speed+=0.669642866F;
+    }
+    co_await a.At(pairs*10+tail*5);a.motion.Polar(pi/2,4.8214283F);co_await Lifetime(a);
 }
 Routine Passing(Actor& a,int period,skill::Shot shot) {
     Configure(a,shot);a.ConfigureEmitter(shot);period+=period/5-(period/5*2*a.skills.rank)/32;
@@ -47,14 +55,18 @@ Routine BlueLayeredRings(Actor& a) {co_await LayeredRings(a,6);}
 Routine RedLayeredRings(Actor& a) {co_await LayeredRings(a,2);}
 Routine GreenLayeredRings(Actor& a) {co_await LayeredRings(a,10);}
 Routine RandomBlueFans(Actor& a) {
-    co_await Stop(a);
-    for(int burst=0;burst<40;++burst) {
+    co_await Stop(a);const int d=native_combat::DifficultyIndex(a.difficulty),bursts=d==0?20:40;
+    for(int burst=0;burst<bursts;++burst) {
         co_await a.At(burst*3);const float angle=a.Random(3.92699075F)-0.392699093F,speed=a.Random(5.35714293F)+2.67857143F;
-        Fire(a,{Formation::FixedFan,1,6,5,1,speed,2.67857143F,angle,0.0392699093F,516});
+        Fire(a,{Formation::FixedFan,1,6,d==3?7:5,d>=2?2:1,speed,2.67857143F,angle,0.0392699093F,516});
     }
-    co_await a.At(120);a.motion.Polar(pi/2,4.8214283F);co_await Lifetime(a);
+    co_await a.At(bursts*3);a.motion.Polar(pi/2,4.8214283F);co_await Lifetime(a);
 }
-Routine PassingRandomCrystals(Actor& a) {co_await Passing(a,60,{Formation::RandomAngleSpeed,2,6,3,2,4.8214283F,2.14285707F,pi,0,516});}
+Routine PassingRandomCrystals(Actor& a) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
+    co_await Passing(a,d<2?60:d==2?40:30,{Formation::RandomAngleSpeed,2,6,d<2?3:d==2?4:5,d==0?1:2,
+        4.8214283F,2.14285707F,pi,0,516});
+}
 Routine PassingBlueFans(Actor& a) {co_await Passing(a,40,{Formation::AimedFan,0,6,6,1,4.01785707F,2.14285707F,0,0.196349546F,516});}
 Routine PassingRedFans(Actor& a) {co_await Passing(a,30,{Formation::AimedFan,4,2,4,1,4.01785707F,2.14285707F,0,0.261799395F,516});}
 Routine PassingRandomRedRings(Actor& a) {co_await Passing(a,10,{Formation::RandomAngleSpeed,3,2,4,1,4.01785707F,2.14285707F,pi,-pi,516});}

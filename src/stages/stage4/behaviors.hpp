@@ -15,7 +15,7 @@ behavior::Routine DescendingFanShooter(behavior::Actor& actor);
 behavior::Routine CrossingFanShooter(behavior::Actor& actor);
 behavior::Routine PassingHookCrystal(behavior::Actor& actor);
 behavior::Routine PassingRisingCrystal(behavior::Actor& actor);
-/// @brief 停顿晶体发射 64 轮双速度层旋转环，击破后按正常掉落外另散落三个道具。
+/// @brief 停顿晶体发射 64 轮旋转环，强型按难度选择方向和速度层；击破另散落三个道具。
 behavior::Routine StrongSpiralCrystal(behavior::Actor& actor);
 behavior::Routine GentleSpiralCrystal(behavior::Actor& actor);
 behavior::Routine CrystalDefeated(behavior::Actor& actor);

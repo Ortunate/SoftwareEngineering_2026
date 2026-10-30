@@ -51,6 +51,23 @@ add_library(koumakyou_engine STATIC
     src/gameplay/bosses/meiling_behaviors.cpp
     src/gameplay/bosses/koakuma_behaviors.cpp
     src/gameplay/bosses/patchouli_behaviors.cpp
+    src/gameplay/bosses/patchouli_extra_behaviors.cpp
+    src/gameplay/bosses/flandre.cpp
+    src/gameplay/bosses/flandre_behaviors.cpp
+    src/gameplay/bosses/flandre_cranberry.cpp
+    src/gameplay/bosses/flandre_laevatein.cpp
+    src/gameplay/bosses/flandre_four_of_a_kind.cpp
+    src/gameplay/bosses/flandre_kagome.cpp
+    src/gameplay/bosses/flandre_maze_of_love.cpp
+    src/gameplay/bosses/flandre_starbow_break.cpp
+    src/gameplay/bosses/flandre_catadioptric.cpp
+    src/gameplay/bosses/flandre_ripples.cpp
+    src/gameplay/bosses/flandre_danmaku_heart.cpp
+    src/gameplay/bosses/flandre_creeping_bloodstain.cpp
+    src/gameplay/bosses/flandre_fragile_wing.cpp
+    src/gameplay/bosses/flandre_encore_entrance.cpp
+    src/gameplay/bosses/flandre_and_then_will_there_be_none.cpp
+    src/gameplay/bosses/flandre_clock_of_the_past.cpp
     src/gameplay/bosses/sakuya_behaviors.cpp
     src/gameplay/bosses/remilia_behaviors.cpp
     src/gameplay/bosses/sakuya_eternal_meek.cpp
@@ -68,6 +85,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/combat/combat.cpp
     src/gameplay/combat/damage_rules.cpp
     src/gameplay/effects/actor_effects.cpp
+    src/gameplay/effects/external_effects.cpp
     src/gameplay/effects/player_bomb.cpp
     src/gameplay/effects/bomb_volume.cpp
     src/gameplay/items/drop_system.cpp
@@ -129,6 +147,13 @@ add_library(koumakyou_engine STATIC
     src/stages/stage6/timeline.cpp
     src/stages/stage6/dialogue.cpp
     src/stages/stage6/manifest.cpp
+    src/stages/stage_extra/behaviors.cpp
+    src/stages/stage_extra/boss_config.cpp
+    src/stages/stage_extra/manifest.cpp
+    src/stages/stage_extra/dialogue.cpp
+    src/stages/stage_extra/timeline.cpp
+    src/stages/stage_extra/scenery.cpp
+    src/stages/stage_extra/content.cpp
     src/stages/stage1/behaviors.cpp
     src/stages/stage1/boss_config.cpp
     src/stages/stage1/content.cpp
@@ -231,6 +256,8 @@ if(BUILD_TESTING)
         tests/spatial_behavior_tests.cpp
         tests/core_tests.cpp
         tests/animation_tests.cpp
+        tests/external_effect_tests.cpp
+        tests/attached_effect_tests.cpp
         tests/actor_effect_tests.cpp
         tests/drop_tests.cpp
         tests/gameplay_tests.cpp
@@ -240,7 +267,9 @@ if(BUILD_TESTING)
         tests/player_bomb_tests.cpp
         tests/settings_tests.cpp
         tests/stage_tests.cpp)
-    target_sources(koumakyou_tests PRIVATE tests/stage2_tests.cpp tests/stage3_tests.cpp tests/stage4_tests.cpp tests/stage5_tests.cpp tests/stage6_tests.cpp)
+    target_sources(koumakyou_tests PRIVATE tests/stage_extra_dialogue_tests.cpp)
+    target_sources(koumakyou_tests PRIVATE tests/stage_extra_timeline_tests.cpp)
+    target_sources(koumakyou_tests PRIVATE tests/stage2_tests.cpp tests/stage3_tests.cpp tests/stage3_spell_reference.cpp tests/stage4_tests.cpp tests/stage4_combat_reference.cpp tests/stage5_tests.cpp tests/stage5_combat_reference.cpp tests/stage6_tests.cpp tests/stage6_combat_reference.cpp tests/stage_extra_tests.cpp tests/stage_extra_patchouli_tests.cpp tests/stage_extra_flandre_tests.cpp tests/stage_extra_kagome_tests.cpp tests/stage_extra_maze_tests.cpp tests/stage_extra_starbow_tests.cpp tests/stage_extra_catadioptric_tests.cpp tests/stage_extra_clock_tests.cpp tests/stage_extra_survival_tests.cpp tests/stage_extra_ripples_tests.cpp tests/stage_extra_encore_entrance_tests.cpp tests/stage_extra_fragile_wing_tests.cpp tests/stage_extra_bloodstain_tests.cpp tests/stage_extra_heart_tests.cpp)
     target_link_libraries(koumakyou_tests PRIVATE koumakyou_engine)
     target_compile_definitions(koumakyou_tests PRIVATE KOUMAKYOU_ASSET_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/assets/runtime")
     # 离屏生命周期测试仍需要图形会话，手动运行，避免普通无窗口测试依赖桌面服务。
@@ -282,6 +311,22 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_tests PRIVATE -UNDEBUG)
     endif()
     add_test(NAME koumakyou_core_tests COMMAND koumakyou_tests)
+    # 参考导入与结构审阅使用独立合成数据；仅测试期使用 Python，不成为游戏运行依赖。
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME koumakyou_reference_tool_tests
+            COMMAND ${Python3_EXECUTABLE} -B -m unittest
+                tests/test_native_combat_data.py
+                tests/test_native_difficulty.py
+                tests/test_native_rank_events.py
+                tests/test_native_effects.py
+                tests/test_extra_flow.py
+                tests/test_extra_dialogue.py
+                tests/test_stage_script_inspection.py
+                tests/test_stage1_reference_import.py)
+        set_tests_properties(koumakyou_reference_tool_tests PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
 endif()
 
 # 隐藏窗口交互测试需 OpenGL/音频环境，按需构建，不影响无图形环境的核心测试。

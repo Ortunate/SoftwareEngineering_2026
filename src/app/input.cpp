@@ -18,7 +18,7 @@ void Game::UpdateMainMenu() {
     if (!titleEntrance_.Finished()) return;
     const auto input = ui::MenuInput::Read();
     constexpr int itemCount = menu::kTitleRowCount;
-    const auto available = [](int index) { return index != 1 && index != 4; };
+    const auto available = [](int index) { return index != 4; };
     if (input.back) {
         selectedMenuItem_ = 9;
         assets_.PlaySoundEffect("menu_cancel");
@@ -34,20 +34,24 @@ void Game::UpdateMainMenu() {
     assets_.PlaySoundEffect("menu_confirm");
     switch (selectedMenuItem_) {
         case 0:
+        case 1:
         case 2:
         case 3:
-            practiceMode_ = selectedMenuItem_ != 0;
+            practiceMode_ = selectedMenuItem_ == 2 || selectedMenuItem_ == 3;
             spellPractice_ = selectedMenuItem_ == 3;
-            setupStep_ = spellPractice_ ? StartSetupStep::Spell : StartSetupStep::Difficulty;
+            setupStep_ = spellPractice_ ? StartSetupStep::Spell : selectedMenuItem_==1 ? StartSetupStep::Character : StartSetupStep::Difficulty;
             selectedShot_ = lastSelection_.shot;
             selectedCharacter_ = lastSelection_.character;
+            selectedDifficulty_=lastSelection_.difficulty;
+            if(!SupportsDifficulty(*native_combat::DifficultyFromIndex(selectedDifficulty_),
+                practiceMode_ ? StageEntry::Practice : StageEntry::Campaign))selectedDifficulty_=1;
             selectedPracticeStage_ = lastSelection_.practiceStage-1;
             if(!kPracticeStages[selectedPracticeStage_]) {
                 selectedPracticeStage_=0;
                 lastSelection_.practiceStage=1;
                 SaveSettings();
             }
-            stageId_ = StageId::Stage1;
+            stageId_ = selectedMenuItem_==1 ? StageId::Extra : StageId::Stage1;
             // 符卡练习跳过模式页，仍沿用固定练习规则；不能将它的临时模式写回上次开局记录。
             challengeMode_ = !spellPractice_ && lastSelection_.challenge;
             practiceAttack_ = lastSelection_.practicePhase;
@@ -56,6 +60,7 @@ void Game::UpdateMainMenu() {
             break;
         case 5:
             scoreMode_=lastSelection_.challenge?1:0;scoreShot_=lastSelection_.character*2+lastSelection_.shot;
+            scoreDifficulty_=lastSelection_.difficulty;
             scorePageFromRun_=false;scoreHighlight_=-1;state_=RunState::Score;break;
         case 6: {
             // 音乐页借用 Stage 1 的流，离开时 EnterMainMenu 统一停止并释放。

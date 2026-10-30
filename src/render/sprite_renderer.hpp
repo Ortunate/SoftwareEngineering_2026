@@ -44,13 +44,14 @@ public:
     /// @param shaders 兼容旧清单的借用参数；透明绘制使用默认着色器，不再按阈值裁剪柔边。
     /// @param effects 本关卡退场快照；调用期间须保留对应外观资源。
     /// @param bombVolumes 借用战斗模拟的世界实体；光束按轴向和精灵深度切分，其余实体按中心排序。
+    /// @param external 可选的独立粒子池；与演员/弹幕进入同一透明队列，借用期仅本次Draw。
     void Draw(const Camera3D& camera, const BulletSystem& bullets,
               std::span<const behavior::Actor*> enemies, const Boss* boss,
               std::span<const PickupSprite> pickups,
               std::span<const VisualResource> visuals,
               const SpriteShaders& shaders,
               const ActorEffectSystem& effects,
-              std::span<const BombVolumeSprite> bombVolumes={}) const;
+              std::span<const BombVolumeSprite> bombVolumes={},const effects::ExternalEffectSystem* external=nullptr) const;
     /// @brief 最近一次 Draw 排入的普通激光片段数，含预警、不含 Bomb；用于定位随弹量放大的渲染开销。
     [[nodiscard]] std::size_t LastBeamSegmentCount() const { return beamSegmentCount_; }
 #ifdef KOUMAKYOU_DEBUG_FEATURES

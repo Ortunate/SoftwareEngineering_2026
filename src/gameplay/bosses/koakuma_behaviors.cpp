@@ -51,13 +51,14 @@ Routine SpiralWave(Actor& a,float step) {
     a.skills.projectile={.acceleration=3.85714293F};
     for(int i=0;i<8;++i) {
         co_await a.At(i*20);Fire(a,{Formation::FixedRing,9,1,8,1,3.21428585F,2.67857143F,angle,0,20});
-        angle-=step;a.soundEvents.push_back(7);
+        angle+=step;a.soundEvents.push_back(7);
     }
     co_await a.At(160);
 }
 }
 Routine KoakumaBoss::Behaviors::Encounter(Actor& a) {
     a.SetEmitterPeriod(0);a.ClearBullets();a.defeatActors=true;a.interactable=false;a.Animate(64);a.deathEffect=2;
+    a.soundEvents.push_back(5);
     a.motion.position={0,a.motion.position.y,4.28571415F};
     Motion(a).bounds={{-7.14285714F,2.14285714F},{7.14285714F,7.85714286F}};Motion(a).clamped=true;
     co_await a.At(30);a.interactable=true;

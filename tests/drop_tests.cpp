@@ -373,4 +373,25 @@ void RunDropTests() {
     burstCount=0;
     drops.ForEachActive([&](const Pickup&) { ++burstCount; });
     assert(burstCount==32);
+    // 敌人出生指定的特殊道具与脚本道具共用编号；满P不能吞掉残机/Bomb或改成分数。
+    constexpr std::array<PickupKind,4> fixedKinds{PickupKind::Bomb,PickupKind::FullPower,PickupKind::Life,PickupKind::Star};
+    constexpr std::array<int,4> fixedValues{1,128,1,DropSystem::kStarPointValue};
+    for(bool fullPower:{false,true})for(int item=3;item<=6;++item) {
+        drops.Clear();drops.SpawnReferenceDrop(burstOrigin,item,fullPower);
+        const auto pickup=SinglePickup(drops);assert(pickup.kind==fixedKinds[item-3]&&pickup.value==fixedValues[item-3]);
+        assert(pickup.position.x==burstOrigin.x&&pickup.position.y==burstOrigin.y&&pickup.position.z==burstOrigin.z);
+    }
+    DropSystem ordinary(1234),withFixed(1234);ordinary.Clear();withFixed.Clear();
+    withFixed.SpawnReferenceDrop({},5,false);
+    for(int kill=0;kill<96;++kill) {
+        const Vector3 origin{static_cast<float>(kill),0,0};
+        ordinary.SpawnReferenceDrop(origin,-1,false);withFixed.SpawnReferenceDrop(origin,-1,false);
+    }
+    std::array<Pickup,32> baseline{};int count=0;
+    ordinary.ForEachActive([&](const Pickup& pickup){baseline.at(count++)=pickup;});assert(count==32);count=0;
+    withFixed.ForEachActive([&](const Pickup& pickup) {
+        if(pickup.kind==PickupKind::Life)return;
+        const auto& expected=baseline.at(count++);
+        assert(pickup.kind==expected.kind&&pickup.value==expected.value&&pickup.position.x==expected.position.x);
+    });assert(count==32);
 }

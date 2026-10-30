@@ -20,21 +20,25 @@ void Actor::Attach(Routine::Handle handle) {
     catch(...) { handle.destroy();throw; }
 }
 void Actor::Reset(Vector3 initialPosition,float hp,std::uint32_t seed,bool mirrored) {
+    difficulty=native_combat::Difficulty::Normal;
     ClearRoutines();ClearBeamSlots();motion={};skills={};motion.position=initialPosition;motion.mirrored=mirrored;liftedMotion.reset();spatialIndex=spawnIndex=seed ? seed : 1;
     health=maxHealth=hp;lifeThreshold=-1;damageable=interactable=visible=contactEnabled=true;finished=retiring=false;
-    rotateAnimation=false;
+    rotateAnimation=false;stageClearResponse=StageClearResponse::Defeat;polarSweep.reset();spiralTrail.reset();
     emitterShot_={};emitterSkills_={};emitterPeriod_=0;emitterElapsed_=0;emitterConfigured_=false;emitterSound_=-1;
     pendingCallback=lifeCallback=deathCallback=timeoutCallback=nullptr;
     callbackCause=CallbackCause::None;
     phaseFrames=0;timeoutFrames=-1;scheduledTimeout=timeoutArmFrame=-1;deathEffect=0;soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();defeatActors=false;
     animationScript=-1;animationAge=0;animationRevision=0;animationInterrupt.reset();animationInterruptSequence_=0;poses={-1,-1,-1,-1,-1};pose_=-1;
-    random_=seed ? seed : 1;remainingTicks_=0;bullets_=nullptr;
+    auxiliaryAnimations={};effectEvents.clear();
+    random_=seed ? seed : 1;remainingTicks_=0;bullets_=nullptr;stepEffect_=nullptr;
+    ambientEffects_.Reset(seed);ambientMode_=effects::AmbientMode::Disabled;ReleaseAttachedEffects();
     active=true;phaseClockPaused=false;visual=defeatVisual=kInvalidVisualId;position=origin=Position();age=0;hitRadius=native_sizes::kDefaultEnemyRadius;
     scoreValue=0;sourceItem=-2;presentation.Reset();animation={};entered_=false;retireOutside_=false;retirementHeights_.reset();defeatBase_=kInvalidVisualId;
 }
 void Actor::Activate(const Spawn& spawn) {
     if(!Valid(spawn))throw std::invalid_argument("Invalid behavior actor spawn");
     Reset(spawn.position,spawn.sourceHealth,spawn.seed,spawn.mirrored);
+    difficulty=spawn.difficulty;
     skills.bulletBase=spawn.bulletBase;skills.laserBase=spawn.laserBase;skills.fallback=spawn.fallback;
     if(spawn.randomX) {
         const float fraction=static_cast<float>((spawn.seed*1664525U+1013904223U)>>8)/16777216.0F;
@@ -42,7 +46,8 @@ void Actor::Activate(const Spawn& spawn) {
     }
     position=origin=Position();visual=spawn.visual;hitRadius=spawn.hitRadius;
     scoreValue=spawn.sourceScore;sourceItem=spawn.sourceItem;retireOutside_=spawn.retireOutside;defeatBase_=spawn.defeatBase;
-    damageable=spawn.damageable;retirementBounds_=spawn.retirementBounds;retirementHeights_=spawn.retirementHeights;
+    damageable=spawn.damageable;visible=spawn.visible;stageClearResponse=spawn.stageClearResponse;
+    retirementBounds_=spawn.retirementBounds;retirementHeights_=spawn.retirementHeights;
     // 场内出生已满足入场条件；否则一次较大的首帧更新越界后会被误认为尚未入场。
     entered_=retireOutside_&&retirementBounds_.Contains(motion.position)&&
         (!retirementHeights_||(motion.position.y>=retirementHeights_->x&&motion.position.y<=retirementHeights_->y));
@@ -51,10 +56,10 @@ void Actor::Activate(const Spawn& spawn) {
     auto pattern=spawn.pattern;if(spawn.initialAnimation>=0)pattern.initialAnimation=spawn.initialAnimation;
     Start(Follow(*this,pattern));
 }
-void Actor::Start(Routine routine) { ClearRoutines();Attach(routine.Release()); }
+void Actor::Start(Routine routine) { ClearRoutines();stepEffect_=nullptr;Attach(routine.Release()); }
 void Actor::Update(float seconds,Vector3 player,BulletSystem& bullets) {
     if(!std::isfinite(seconds)||seconds<0)throw std::invalid_argument("Invalid behavior delta time");
-    soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();defeatActors=false;player_=player;bullets_=&bullets;
+    soundEvents.clear();dropEvents.clear();itemEvents.clear();spawnEvents.clear();effectEvents.clear();defeatActors=false;player_=player;bullets_=&bullets;
     age+=seconds;presentation.Update(seconds);
     remainingTicks_+=static_cast<double>(seconds)*updateHz_;
     while(remainingTicks_+0.00001>=1&&!finished&&!pendingCallback) { remainingTicks_-=1;Tick(); }
@@ -69,6 +74,8 @@ void Actor::Update(float seconds,Vector3 player,BulletSystem& bullets) {
         if(entered_&&!inside)active=false;
     }
     if(finished)active=false;
+    if(!active||!visible)ReleaseAttachedEffects();
+    else if(attachedEffects_)attachedEffects_->Follow(Position(),attachedEffects_->Radius());
 }
 void Actor::Transition() {
     if(!pendingCallback)return;
@@ -80,10 +87,40 @@ void Actor::Transition() {
 }
 bool Actor::Defeat() {
     if(retiring||!active)return false;
-    retiring=true;damageable=false;
+    retiring=true;damageable=false;ReleaseAttachedEffects();
     if(deathCallback) { pendingCallback=deathCallback;Transition(); }
     else active=false;
     return true;
+}
+void Actor::ClearFromStage() {
+    if(stageClearResponse==StageClearResponse::Remove) {ClearRoutines();stepEffect_=nullptr;ambientEffects_.Reset();ambientMode_=effects::AmbientMode::Disabled;ReleaseAttachedEffects();active=false;finished=true;}
+    else health=0;
+}
+void Actor::SetStepEffect(void (*effect)(Actor&)) {
+    if(!bullets_)throw std::logic_error("Step effect registration requires a running behavior update");
+    stepEffect_=effect;
+}
+void Actor::EmitEffect(effects::Kind kind,int count,Color color) {
+    if(!bullets_)throw std::logic_error("External effect requires a running behavior update");
+    static_cast<void>(effects::AnimationScript(kind));
+    if(kind==effects::Kind::Attached)throw std::invalid_argument("Attached effects require an anchor");
+    if(count<1)throw std::invalid_argument("External effect count must be positive");
+    effectEvents.push_back({kind,Position(),count,color,phaseFrames});
+}
+void Actor::SetAmbientEffects(effects::AmbientMode mode) {
+    if(!bullets_)throw std::logic_error("Ambient effects require a running behavior update");
+    if(mode!=effects::AmbientMode::Disabled&&mode!=effects::AmbientMode::Active&&mode!=effects::AmbientMode::Living)
+        throw std::invalid_argument("Invalid ambient effect mode");
+    ambientMode_=mode;
+}
+void Actor::AttachEffect(Vector3 axis,float radius,Color color) {
+    if(!bullets_)throw std::logic_error("Attachment requires a running behavior update");
+    if(!std::isfinite(axis.x)||!std::isfinite(axis.y)||!std::isfinite(axis.z)||!std::isfinite(radius)||radius<0)
+        throw std::invalid_argument("Invalid actor attachment");
+    if(!attachedEffects_)attachedEffects_=std::make_shared<effects::AttachmentAnchor>();
+    attachedEffects_->Follow(Position(),radius);
+    effects::Request request{effects::Kind::Attached,Position(),1,color,phaseFrames};
+    request.axis=axis;request.attachment=attachedEffects_;effectEvents.push_back(request);
 }
 void Actor::FireAt(const skill::Shot& shot,Vector3 position,const skill::State* configuration) {
     if(!bullets_)throw std::logic_error("Fire requires a running behavior update");
@@ -150,6 +187,15 @@ void Actor::InterruptAnimation(int label) {
     if(animationScript<0)throw std::logic_error("Animation interrupt requires an active script");
     animationInterrupt=battle::AnimationInterrupt{animationAge,label,animationRevision,++animationInterruptSequence_};
 }
+void Actor::AnimateAuxiliary(int slot,int script,VisualId visual) {
+    if(slot<0||slot>=static_cast<int>(auxiliaryAnimations.size())||script<0)throw std::invalid_argument("Invalid auxiliary animation");
+    auto& animation=auxiliaryAnimations[slot];animation.script=script;animation.visual=visual;animation.age=0;++animation.revision;animation.interrupt.reset();
+}
+void Actor::InterruptAuxiliary(int slot,int label) {
+    auto& animation=auxiliaryAnimations.at(static_cast<std::size_t>(slot));
+    if(animation.script<0)throw std::logic_error("Auxiliary interrupt requires an active script");
+    animation.interrupt=battle::AnimationInterrupt{animation.age,label,animation.revision,++animationInterruptSequence_};
+}
 void Actor::ClearBullets() { bullets_->ClearEnemyBullets();skills.rankInfluence=skill::kDefaultRankInfluence; }
 void Actor::ScheduleTimeout(int frames,int armFrame) {
     if(frames< -1||armFrame<0)throw std::invalid_argument("Invalid scheduled timeout");
@@ -162,8 +208,9 @@ void Actor::Tick() {
     }
     if(liftedMotion)liftedMotion->BeginFrame(motion,updateHz_);else motion.BeginFrame(updateHz_);
     if(health<lifeThreshold) { health=lifeThreshold;pendingCallback=lifeCallback;callbackCause=CallbackCause::HealthThreshold;return; }
-    if(health<=0&&deathCallback) { pendingCallback=deathCallback;callbackCause=CallbackCause::Defeat;return; }
+    if(health<=0&&deathCallback) {ReleaseAttachedEffects();pendingCallback=deathCallback;callbackCause=CallbackCause::Defeat;return;}
     if(timeoutFrames>=0&&phaseFrames>=timeoutFrames) {
+        ReleaseAttachedEffects();
         if(lifeThreshold>0)health=lifeThreshold;
         pendingCallback=timeoutCallback;callbackCause=CallbackCause::Timeout;return;
     }
@@ -199,14 +246,22 @@ void Actor::Tick() {
             pose_=next;
         }
     }
+    // 末尾效果可以检查本步插值落点与最终姿态，不能提前到协程等待处，否则交界步会读取旧位置。
+    if(stepEffect_&&!finished&&!pendingCallback)stepEffect_(*this);
+    if(!finished&&!pendingCallback&&visible&&(ambientMode_==effects::AmbientMode::Active||
+       (ambientMode_==effects::AmbientMode::Living&&health>0))) {
+        const auto requests=ambientEffects_.Step(ContentStepFrames(),Position(),phaseFrames);
+        effectEvents.insert(effectEvents.end(),requests.begin(),requests.end());
+    }
     // 内容仍以 60 Hz 帧编号；提高更新频率只细分时间，不使技能、子行为或阶段超时加速。
     const double contentFrames=60.0/updateHz_;
     animationAge+=1.0/updateHz_;
+    for(auto& animation:auxiliaryAnimations)if(animation.script>=0)animation.age+=1.0/updateHz_;
     if(!stack_.empty())stack_.back().promise().frame+=contentFrames;
     if(!phaseClockPaused)phaseFrames+=contentFrames;
 }
 Routine Follow(Actor& actor,Pattern pattern) {
-    actor.skills.spatial=pattern.spatialShots;
+    actor.skills.spatial=pattern.spatialShots;actor.polarSweep=pattern.polarSweep;actor.spiralTrail=pattern.spiralTrail;
     actor.motion.Polar(pattern.movement.angle,pattern.movement.speed);
     actor.Animate(pattern.initialAnimation);actor.deathEffect=pattern.deathEffect;actor.skills.offset=pattern.muzzleOffset;
     if(pattern.routine) { co_await pattern.routine(actor);co_return; }
@@ -225,6 +280,13 @@ Routine Follow(Actor& actor,Pattern pattern) {
     co_await actor.At(pattern.endFrame);actor.finished=true;
 }
 bool Valid(const Pattern& pattern) {
+    if(pattern.spiralTrail) {
+        const auto& p=*pattern.spiralTrail;
+        if(!pattern.routine||p.accelerationFrames<1||p.emitterInterval<1||p.acceleration<0||
+           !std::isfinite(p.acceleration)||!std::isfinite(p.aimOffset)||!std::isfinite(p.axisAngle)||!std::isfinite(p.angleStep))return false;
+    }
+    if(pattern.polarSweep&&(!pattern.routine||pattern.polarSweep->emissions<1||
+       !std::isfinite(pattern.polarSweep->offsetAngleStep)||!std::isfinite(pattern.polarSweep->shotAngleStep)))return false;
     if(pattern.routine&&(pattern.movement.count!=0||pattern.skill||pattern.stoppedAnimation>=0))return false;
     if(!movement::Valid(pattern.movement)||pattern.endFrame<0||
        (pattern.movement.count>0&&pattern.movement.keys[pattern.movement.count-1].frame>pattern.endFrame))return false;
@@ -236,11 +298,12 @@ bool Valid(const Pattern& pattern) {
 }
 bool Valid(const Spawn& spawn) {
     const auto& bounds=spawn.retirementBounds;
-    return (!spawn.retirementHeights||(std::isfinite(spawn.retirementHeights->x)&&std::isfinite(spawn.retirementHeights->y)&&
+    return (spawn.stageClearResponse==StageClearResponse::Defeat||spawn.stageClearResponse==StageClearResponse::Remove)&&
+        native_combat::DifficultyIndex(spawn.difficulty)>=0&&(!spawn.retirementHeights||(std::isfinite(spawn.retirementHeights->x)&&std::isfinite(spawn.retirementHeights->y)&&
         spawn.retirementHeights->x<=spawn.retirementHeights->y))&&
         Valid(spawn.pattern)&&spawn.initialAnimation>=-1&&std::isfinite(spawn.position.x)&&std::isfinite(spawn.position.y)&&std::isfinite(spawn.position.z)&&
         std::isfinite(spawn.sourceHealth)&&spawn.sourceHealth>0&&spawn.sourceScore>=0&&
-        spawn.sourceItem>=-2&&spawn.sourceItem<=2&&spawn.visual!=kInvalidVisualId&&
+        spawn.sourceItem>=-2&&spawn.sourceItem<=6&&spawn.visual!=kInvalidVisualId&&
         std::isfinite(spawn.hitRadius)&&spawn.hitRadius>0&&
         std::isfinite(spawn.randomXRange.x)&&std::isfinite(spawn.randomXRange.y)&&spawn.randomXRange.x<=spawn.randomXRange.y&&
         std::isfinite(spawn.randomXRange.y-spawn.randomXRange.x)&&

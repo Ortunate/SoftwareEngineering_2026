@@ -23,8 +23,9 @@ public:
         Bullet* slot_=nullptr;
         std::uint64_t generation_=0;
     };
-    /// @brief 弹幕池可容纳的最大活动弹幕数。
-    static constexpr std::size_t kCapacity = 8192;
+    /// @brief 最大同时活动弹数；满池仍丢弃该次请求，并由 DroppedSpawns 暴露。
+    /// 四面 Lunatic 无攻击整关在 168.117 秒的普通波已超过旧 8192 槽，三维采样不缩减源弹数来适配容量。
+    static constexpr std::size_t kCapacity = 16384;
 
     /// @brief 清空弹幕池及丢弃计数。
     void Reset();
@@ -59,6 +60,7 @@ public:
 
     /// @brief 生成固定三维敌方光束；方向在生成时锁定，预警后才有胶囊碰撞。
     /// direction 自动归一化；length/radius 为正世界单位，warning/duration 为非负/正秒数。
+    /// warning同时初始化展开结束的擦弹时钟起点；技能可另改warningSeconds，但不得移动该起点。
     /// @return 池持有的光束；容量不足、尺寸或时间非法时返回 nullptr；生命期与 Spawn 一致。
     Bullet* SpawnBeam(Vector3 origin, Vector3 direction, float length, float radius,
                       float warning, float duration, Color color);

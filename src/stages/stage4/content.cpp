@@ -5,9 +5,10 @@
 #include "stages/stage4/scenery.hpp"
 namespace koumakyou::stage4 {
 const StageAssetManifest& Stage4Content::Assets() const {return Stage4Manifest();}
-void Stage4Content::DrawScenery(float seconds) const {stage4::DrawScenery(seconds);}
+void Stage4Content::DrawScenery(float seconds,const AssetManager&) const {stage4::DrawScenery(seconds);}
 std::span<const StageEvent> Stage4Content::Events() const {return Stage4Timeline();}
 const bosses::Battle& Stage4Content::PracticeBoss() const {return kPatchouliFinal;}
+const bosses::Battle& Stage4Content::PracticeBoss(int spellCard) const {return PatchouliSpellBattle(spellCard,Difficulty());}
 std::span<const DialogueLine> Stage4Content::Dialogue(bool after,ShotType shot) const {
     return Stage4Dialogue(after,shot==ShotType::MagicMissile||shot==ShotType::IllusionLaser);
 }

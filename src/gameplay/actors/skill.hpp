@@ -10,7 +10,7 @@ namespace koumakyou::skill {
 /// RandomSpeedRing 保留规则环，随机速率；RandomAngleSpeed 对每发依次读取角度、速率两个随机数。
 enum class Formation { AimedFan, FixedFan, AimedRing, FixedRing, AimedOffsetRing, FixedOffsetRing,
                        RandomAngle, RandomSpeedRing, RandomAngleSpeed };
-/// @brief 可组合的显现与运动选项；显现期结束后才开始计算加速/转向延迟。
+/// @brief 可组合的显现与运动选项；显现末帧的交接按ProjectileMotion::sampleAtStepStart约定计算运动时钟。
 /// PlaySound 由 Actor 按已配置的音效身份生成事件，纯 State 发射不访问音频资源。
 enum ShotFlag { LaunchBoost=1, SpawnSmall=2, SpawnMedium=4, SpawnLarge=8, Accelerate=16, Velocity=32, DelayTurn=64, DelayAim=128, AbsoluteTurn=256, PlaySound=512, BounceAll=1024, BounceExceptLowerZ=2048 };
 /// @brief 一轮弹幕的参数；速度为世界单位/秒，角度从世界 +X 朝 -Z 为正、单位弧度，count/layers 至少为 1。
@@ -30,6 +30,16 @@ struct Shot {
 };
 /// @brief 出生局部帧上的一次技能，frame 非负；为空表示该敌人不发弹。
 struct TimedShot { int frame=0; Shot shot; };
+/// @brief 子发射体按次推进的极坐标扫描参数；角步长为弧度/次，emissions至少为1。
+/// 配方只保存初值；实际偏移角、弹向角与剩余次数由演员的独占协程保存，不共享可变状态。
+struct PolarSweep {float offsetAngleStep=0,shotAngleStep=0;int emissions=1;};
+/// @brief 分层旋转发射体的只读快照；acceleration为世界单位/秒²，两个时间为正整数60Hz内容帧，角为弧度。
+/// aimOffset用于控制器锁定自机轴，axisAngle/angleStep用于后继逐次扫描；状态和随机流由每名演员独占。
+struct SpiralTrail {
+    float acceleration=0;
+    int accelerationFrames=1,emitterInterval=1;
+    float aimOffset=0,axisAngle=0,angleStep=0;
+};
 /// @brief 固定瞄准光束；length/width 为世界单位长度/全宽，其他时间均为 60 Hz 帧。
 /// color 为 0…15，长度与宽度须为正，时间须有限且非负，sustain 须为正。
 struct Laser {
@@ -51,7 +61,7 @@ struct ProjectileMotion {
     float angularVelocity=0,angularFrames=99999; // 旋转速率为弧度/秒，时长为内容帧；Velocity 选项启用。
     float speedAcceleration=0,accelerationFrames=-1; // 极坐标速度增量为世界单位/秒²；加速度时长为内容帧，-1 不限。
     int turnCount=1; // 延迟转向的总次数，至少一次；每次都重新减速，后继弹保留自己的次数/速度快照。
-    bool sampleAtStepStart=false; // 以显现结束的零时刻采样运动时钟；false 保留既有步末采样约定。
+    bool sampleAtStepStart=false; // 显现末内容帧同时启动零运动时钟，按步首采样；false 保留既有步末采样约定。
     int bounceCount=0; // 反弹选项启用时须为正；同次越界可反射多个轴，但只消耗一次次数。
     float bounceSpeed=-1; // 负值沿用生成时速率，非负为反弹后世界单位/秒速率。
     Vector3 bounceLower{-10,-10,-11.5F},bounceUpper{10,10,11.5F};

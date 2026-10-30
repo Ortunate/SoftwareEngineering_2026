@@ -48,11 +48,17 @@ public:
     [[nodiscard]] virtual bool CanBeTargeted() const { return active&&health>0; }
     /// @brief 活动且存活的本体可接触玩家，独立于受伤开关；子类须排除只保留演员的无害退场状态。
     [[nodiscard]] virtual bool CanContactPlayer() const { return active && health>0; }
-    /// @brief 生命耗尽或达到下一阶段阈值时返回 true；Game 统一清弹并调用 AdvanceSkill。
+    /// @brief 本体与附属动画是否可绘制；隐藏本体仍继续推进攻击、计时和HUD。
+    [[nodiscard]] virtual bool BodyVisible() const { return true; }
+    /// @brief 生命耗尽或达到下一阶段阈值时返回 true；Game 按技能清场策略交接。
     [[nodiscard]] virtual bool ShouldAdvanceFromDamage() const { return health <= 0; }
     /// @brief 当前攻击是否由伤害完成；正 HP 符卡阈值须由子类明确覆盖，超时不得视为击破。
     /// Game 在 AdvanceSkill 之前读取，用于符卡取得与奖励，和整场 Defeated 分开。
     [[nodiscard]] virtual bool SkillDefeated() const { return health<=0; }
+    /// @brief 当前符卡满足自身成功条件；Game另核对Miss/Bomb记录，不把生存超时伪装成伤害击破。
+    [[nodiscard]] virtual bool SpellSucceeded() const { return SkillDefeated(); }
+    /// @brief 交接前是否清除敌弹；生存超时可将清场延迟至后继行为，不影响完整退出时的资源清理。
+    [[nodiscard]] virtual bool ClearsBulletsOnSkillEnd() const { return true; }
     /// @brief 当前技能原始时间上限（秒）；负值表示退场或无计时技能。
     [[nodiscard]] virtual float TimeLimit() const { return -1; }
     /// @brief 返回当前组的独立血条快照；默认按 health/maxHealth 显示单段，组合阶段由具体 Boss 覆盖。
@@ -71,6 +77,9 @@ public:
     virtual bool WorldTimeStopped() const {return false;}
     /// @brief 当前本体动画的最后一次中断，只借用至下一次 Update；缺省不发送中断。
     virtual const battle::AnimationInterrupt* AnimationInterrupt() const {return nullptr;}
+    /// @brief 当前本体图集内的辅助动画槽；只借用到下一次启动/销毁。可变重载仅供图形层同步游标。
+    virtual std::span<const behavior::AuxiliaryAnimation> AuxiliaryAnimations() const {return {};}
+    virtual std::span<behavior::AuxiliaryAnimation> AuxiliaryAnimations() {return {};}
     /// @brief 借用本帧脚本产生的音效编号；下次更新失效，普通演员返回空表。
     [[nodiscard]] virtual std::span<const int> SoundEvents() const { return {}; }
     /// @brief 借用本帧脚本要求散落的道具数量；调用方按当前玩家 Power 决定 P 点或点数。
@@ -79,6 +88,8 @@ public:
     [[nodiscard]] virtual std::span<const int> ItemEvents() const { return {}; }
     /// @brief 本次更新请求生成的独立子演员；借用期到下次 Update，接收方不按时间轴的 Boss 活动过滤。
     [[nodiscard]] virtual std::span<const behavior::Spawn> SpawnEvents() const { return {}; }
+    /// @brief 本次行为更新产生的世界坐标外部效果；下次Update/启动/销毁前由Game交付，不持有演员。
+    [[nodiscard]] virtual std::span<const effects::Request> EffectEvents() const {return {};}
     /// @brief 本次更新是否请求普通演员生命归零；总控保留正常击破、奖励与死亡回调，不删除 Boss。
     [[nodiscard]] virtual bool DefeatActorsRequested() const { return false; }
     /// @brief 整场退场是由击破触发还是超时触发；退场结束后仍保留结果。

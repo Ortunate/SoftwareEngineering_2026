@@ -21,7 +21,7 @@ void ConfigureProjectile(Bullet& bullet,const State& state,const Shot& shot,Vect
     bullet.sampleMotionAtStart=state.projectile.sampleAtStepStart;
     if(flags&Accelerate) {
         bullet.acceleration=state.projectile.accelerationVector.value_or(Multiply(direction,state.projectile.acceleration));
-        if(state.projectile.accelerationFrames>=0)bullet.accelerationSeconds=state.projectile.accelerationFrames/60;
+        if(state.projectile.accelerationFrames>=0)bullet.accelerationSeconds=state.projectile.accelerationFrames/60.0;
     } else if(flags&Velocity) {
         bullet.polarMotion=true;bullet.angularVelocity=state.projectile.angularVelocity;bullet.angularSeconds=state.projectile.angularFrames/60;
         bullet.speedAcceleration=state.projectile.speedAcceleration;bullet.baseVelocity=bullet.velocity;
@@ -47,7 +47,7 @@ void ConfigureProjectile(Bullet& bullet,const State& state,const Shot& shot,Vect
         bullet.bounceLower=state.projectile.bounceLower;bullet.bounceUpper=state.projectile.bounceUpper;
         bullet.bounceHalfExtents=state.projectile.bounceHalfExtents;bullet.launchDirection=direction;
     }
-    // 显现脚本结束后才开始加速、减速和延迟转向，所有方向使用相同内容时长。
+    // 显现与运动的交接由sampleAtStepStart选择；原生步首模式的最后显现内容帧同时推进运动时钟0。
     bullet.spawnVisualSeconds=flags&SpawnLarge ? 32.0F/60 : flags&SpawnMedium ? 16.0F/60 : flags&SpawnSmall ? 10.0F/60 : 0;
     bullet.spawnMoveScale=flags&SpawnLarge ? 1.0F/3 : flags&SpawnMedium ? 0.4F : flags&SpawnSmall ? 0.5F : 1;
     if(bullet.spawnVisualSeconds>0)bullet.baseVelocity=bullet.velocity;

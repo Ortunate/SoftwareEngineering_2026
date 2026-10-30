@@ -11,7 +11,19 @@ namespace koumakyou {
 enum class ShotType { HomingAmulet, Needle, MagicMissile, IllusionLaser };
 namespace native_combat {
 inline constexpr int kFramesPerSecond=60, kShotWindowFrames=30;
+/// @brief 四种主线难度的原始 ECL 位掩码；UI 和存档索引另为 0～3。
 enum class Difficulty : std::uint16_t { Easy=0x100, Normal=0x200, Hard=0x400, Lunatic=0x800 };
+/// @brief 将 ECL 掩码身份转换为 E/N/H/L 的 0～3 索引；非法枚举返回 -1。
+[[nodiscard]] constexpr int DifficultyIndex(Difficulty difficulty) {
+    switch(difficulty) {case Difficulty::Easy:return 0;case Difficulty::Normal:return 1;
+        case Difficulty::Hard:return 2;case Difficulty::Lunatic:return 3;}
+    return -1;
+}
+/// @brief 将 E/N/H/L 的 0～3 索引转换为掩码身份；其他索引返回空，不包含 Extra。
+[[nodiscard]] constexpr std::optional<Difficulty> DifficultyFromIndex(int index) {
+    switch(index) {case 0:return Difficulty::Easy;case 1:return Difficulty::Normal;
+        case 2:return Difficulty::Hard;case 3:return Difficulty::Lunatic;default:return std::nullopt;}
+}
 /// @brief DataOnly 表示仅注册数值，尚无可玩关卡；不得据此开放关卡选择或构造演员。
 enum class Integration { DataOnly, Playable };
 enum class HealthScope { Instruction, TimelineSpawn, SubSpawn };

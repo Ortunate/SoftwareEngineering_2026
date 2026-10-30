@@ -1,10 +1,10 @@
-# 二面 Normal 接入记录
+# 二面接入记录
 
 目标分支为 `heny/stages`。输入来自新典 `th06ST.dat` 的 `ecldata2.ecl`、`msg2.msg`、`stg2enm.anm`、`face05a`，音乐为原包 `th06_04` / `th06_05`。ECL / MSG 哈希见 [逐关输入记录](STAGES_2_6_REFERENCE.md)；完整解包和机器码审阅文件不进入运行时。
 
 ## 已接入范围
 
-`src/stages/stage2` 提供独立素材清单、显式事件表、12 种命名普通配方、大妖精道中、琪露诺五阶段、灵梦/魔理沙前后对话与湖面背景。内容目录和 `native_combat` 导出规则同时登记 `Playable`。原生 Stage / Spell Practice 入口、其他难度和全关连续流程仍需单独实现，不能由数值目录推定已经开放。
+`src/stages/stage2` 提供独立素材清单、显式事件表、12 种命名普通配方、大妖精道中、琪露诺五阶段、灵梦/魔理沙前后对话与湖面背景。内容目录和 `native_combat` 导出规则同时登记 `Playable`。四难度整关练习已通过实际击破与超时流程，符卡练习已接入四难度共 11 个变体；连续本篇已开放四难度，Easy在五面结束。原生练习执行路径与本项目入口分别验证，不能由数值目录推定已经还原。
 
 468 条事件包含 464 次普通出生及两场 Boss、两段对话。道中 Boss 源帧为 2498，战前对话为 5893；关底等待战前对话实际结束再延迟 1 帧，战后对话等待关底实际结束再延迟 2 帧。道中时钟继续；Boss 活动期间到期普通出生跳过，入场保留既有对象，对话清场。普通出生的生命、分数、掉落、镜像与随机 X 标记逐条对照原始目录。
 
@@ -34,3 +34,18 @@ cmake --build build-debug --target koumakyou koumakyou_tests koumakyou_lifecycle
 ctest --test-dir build-debug --output-on-failure
 ./build-debug/koumakyou_lifecycle_tests /tmp/stage2-lifecycle --stage2-only
 ```
+
+## 四难度原始控制流补充
+
+二面 ECL SHA-256 为 `9a9aa3c3608195f1c814985706189ecf22c2ade1e302780acdf61a270a6267c0`；测试参考表按难度保存 49 个子程序，Easy / Normal / Hard / Lunatic 分别有 570 / 581 / 585 / 592 条筛选指令。它们是静态记录数，不是运行覆盖数。首张符卡在 Easy / Normal 是冰符「Icicle Fall」，在 Hard / Lunatic 是雹符「Hailstorm」；Easy 的第二组在 Perfect Freeze 后直接退场，其余难度进入 Diamond Blizzard。
+
+Easy Perfect Freeze 超时后继由新典 EXE（SHA-256 `48630a42a2eb6762d0db2a7e0d151203efbe67220fef7d2f9d0d51857928ac82`）核对：生命阈值交接的 RVA `0x38fb3`～`0x39024` 在进入 Sub36 前把死亡回调写入超时回调；原 Sub25 的死亡回调是 Sub28，而 Easy Sub36 不覆盖该回调。由 Sub25 超时进入 Sub36 时，RVA `0x388e3`～`0x38930` 同样先将超时回调重置为死亡回调，再清除时限和阶段时间。Sub37 的 2400 帧时限因此最终跳到 Sub28 退场；Normal / Hard / Lunatic 的 Sub36 显式将超时回调改为 Sub39。上述事实不依赖经典版回调猜测。
+
+
+## 二面102/118效果接线
+
+本轮重新核验ECL SHA-256 `9a9aa3c3608195f1c814985706189ecf22c2ade1e302780acdf61a270a6267c0`及共同EXE。大妖精60/70/80/90帧、琪露诺第一非符20/30/40/50帧分别安装四条附着；源颜色表3/4/5均为ARGB 0xffffe0e0，不能由索引推断颜色。生产直接使用世界轴与2.14285714世界半径，原130帧/70帧攻击入口保持不变。Diamond Blizzard于0帧交付12/count1/0xff8080ff闪光，正式Easy目录继续拒绝本符；静态源记录存在不代表Easy能走到它。
+
+琪露诺六轮五色退场交付30次3/count2请求，共60粒；每10帧末音效7，60帧末音效18和清弹，随后公共结束回调完成遭遇。四难度夹具独立保留118整数颜色，指令数570/581/585/592不变。`stage2_effect_reference.hpp`只解释20截至129帧、22截至69帧、28截至60帧和39截至59帧的独立源窗口，超过窗口或未知指令拒绝；其余攻击继续由已有二面差分覆盖，不把有限窗口称为完整解释器。
+
+`--stage12-effects`核心专项核对四难度/两种子请求、源像素插值、音效、受伤开关和清弹存活；60/120Hz下五显示FPS逐项比较请求时刻与位置。既有二面完整逻辑回归通过；实际Game专项包含两场遭遇、ANM18/17/6、暂停、轨道跟随/释放和资源保留，最终结果见DIFFICULTY_INTEGRATION.md。局部视觉RNG与原生全局交织及满池哨兵仍未证明等价。

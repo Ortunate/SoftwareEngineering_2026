@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace koumakyou {
 namespace {
@@ -73,12 +74,12 @@ void UpdateStartSampledMotion(Bullet& bullet,float delta,float age,Vector3 targe
             const auto direction=BulletSystem::RotateAroundAxis(Normalize(bullet.baseVelocity),bullet.rotationAxis,bullet.angularVelocity*elapsed);
             bullet.baseVelocity=Scale(direction,speed);bullet.velocity=bullet.baseVelocity;
         } else {
-            const float elapsed=std::min(delta,std::max(0.0F,bullet.accelerationSeconds));
+            const float elapsed=std::min(delta,static_cast<float>(std::max(0.0,bullet.accelerationSeconds)));
             bullet.velocity=Add(bullet.velocity,Scale(bullet.acceleration,elapsed));
         }
     }
     bullet.angularSeconds=std::max(0.0F,bullet.angularSeconds-delta);
-    bullet.accelerationSeconds=std::max(0.0F,bullet.accelerationSeconds-delta);
+    bullet.accelerationSeconds=std::max(0.0,bullet.accelerationSeconds-delta);
     if(bullet.turnDelaySeconds>0&&!bullet.turnApplied) {
         bool turned=false;
         while(bullet.turnCompleted<bullet.turnCount&&age+epsilon>=bullet.turnDelaySeconds*(bullet.turnCompleted+1)) {
@@ -124,7 +125,14 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
             return;
         }
         const float oldAge=bullet.age;
-        bullet.age += deltaTime;
+        if(bullet.IsBeam()) {
+            if(bullet.age!=static_cast<float>(bullet.beamAge))bullet.beamAge=bullet.age;
+            bullet.beamContactAge=bullet.beamAge;
+            bullet.beamAge+=deltaTime;bullet.age=static_cast<float>(bullet.beamAge);
+        } else bullet.age += deltaTime;
+        // 光束截止值可能由两个float秒数相加得到；只包容该次表示的一ULP，真实跨过下一逻辑步仍立即回收。
+        // 原生淡出末帧在演员逻辑中仍可见，之后的弹幕更新才释放，不能以累计float误差吞掉这帧。
+        const bool expired=bullet.age>(bullet.IsBeam()?std::nextafter(bullet.maxAge,std::numeric_limits<float>::infinity()):bullet.maxAge);
         // 在本帧内裁剪有效区间，避免两个累计年龄相减产生精度损失，进而漏算伤害及整数得分。
         bullet.damageSeconds=std::max(0.0F,std::min({deltaTime,bullet.maxAge-oldAge,bullet.dangerEndSeconds-oldAge})-
             std::max({0.0F,bullet.warningSeconds-oldAge,bullet.spawnVisualSeconds-oldAge}));
@@ -133,14 +141,26 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
             bullet.position=Add(bullet.position,Add(Scale(bullet.velocity,deltaTime),
                 Scale(bullet.acceleration,0.5F*deltaTime*(deltaTime+1.0F/60))));
             bullet.velocity=Add(bullet.velocity,Scale(bullet.acceleration,deltaTime));
-            if(bullet.age>bullet.maxAge || std::abs(bullet.position.x)>kArenaHalfExtents.x+3 ||
+            if(expired || std::abs(bullet.position.x)>kArenaHalfExtents.x+3 ||
                std::abs(bullet.position.y)>kArenaHalfExtents.y+3 || std::abs(bullet.position.z)>kArenaHalfExtents.z+3)
                 bullet.active=false;
             return;
         }
-        const float spawnDelta=std::clamp(bullet.spawnVisualSeconds-(bullet.age-deltaTime),0.0F,deltaTime);
+        // age的float累计在整帧边界可能留下数个ULP；仅消除表示残余，不吞掉真实跨界时间。
+        const auto remainingStep=[&](float end) {
+            float value=std::clamp(end-oldAge,0.0F,deltaTime);
+            const float rounding=4*std::numeric_limits<float>::epsilon()*(std::abs(end)+oldAge+deltaTime);
+            if(value<=rounding)return 0.0F;
+            if(deltaTime-value<=rounding)return deltaTime;
+            return value;
+        };
+        const float spawnDelta=remainingStep(bullet.spawnVisualSeconds);
         bullet.position=Add(bullet.position,Scale(bullet.baseVelocity,spawnDelta*bullet.spawnMoveScale));
-        const float motionDelta=deltaTime-spawnDelta;
+        // 原生ANM在创建时执行第0帧；结束更新先做显现位移，再落入零时钟运动。
+        // 步首采样路径保留最后一个60Hz内容帧的重叠，120Hz拆成两个半步；旧路径保持既有采样契约。
+        const float motionStart=bullet.sampleMotionAtStart&&bullet.spawnVisualSeconds>0 ?
+            bullet.spawnVisualSeconds-1.0F/60 : bullet.spawnVisualSeconds;
+        const float motionDelta=deltaTime-remainingStep(motionStart);
         const float motionAge=std::max(0.0F,bullet.age-bullet.spawnVisualSeconds);
         const float startAge=static_cast<float>(bullet.motionClock);bullet.motionClock+=motionDelta;
         const bool turning=bullet.turnDelaySeconds>0&&!bullet.turnApplied;
@@ -154,9 +174,9 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
                     (1 - motionAge / bullet.launchBoostSeconds);
                 bullet.velocity = Scale(Normalize(Length(bullet.launchDirection)>0 ? bullet.launchDirection : bullet.baseVelocity), speed);
             } else {
-                const float accelerationDelta=std::min(motionDelta,std::max(0.0F,bullet.accelerationSeconds));
+                const float accelerationDelta=std::min(motionDelta,static_cast<float>(std::max(0.0,bullet.accelerationSeconds)));
                 bullet.velocity=Add(bullet.velocity,Scale(bullet.acceleration,accelerationDelta));
-                bullet.accelerationSeconds=std::max(0.0F,bullet.accelerationSeconds-accelerationDelta);
+                bullet.accelerationSeconds=std::max(0.0,bullet.accelerationSeconds-accelerationDelta);
             }
             if (bullet.turnDelaySeconds > 0 && !bullet.turnApplied) {
                 if (motionAge >= bullet.turnDelaySeconds) {
@@ -223,9 +243,9 @@ void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vec
         }
 
         constexpr float margin = 3.0F;
-        if (bullet.age > bullet.maxAge && bullet.damagePerSecond>0 && bullet.damageSeconds>0) {
+        if (expired && bullet.damagePerSecond>0 && bullet.damageSeconds>0) {
             bullet.pendingExpiration=true;
-        } else if (bullet.age > bullet.maxAge ||
+        } else if (expired ||
             std::abs(bullet.position.x) > kArenaHalfExtents.x + margin ||
             std::abs(bullet.position.y) > kArenaHalfExtents.y + margin ||
             std::abs(bullet.position.z) > kArenaHalfExtents.z + margin) {
@@ -280,6 +300,7 @@ Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
     beam->beamAnchor=origin;
     beam->beamLength = length;
     beam->warningSeconds = warning;
+    beam->beamGrazeStartSeconds = warning;
     beam->maxAge = warning + duration;
     return beam;
 }

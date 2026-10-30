@@ -35,13 +35,16 @@ namespace {
 struct EventExecutor {
     const StageEvent& event;
     StageEventSink& sink;
+    const StageContent& content;
 
     bool operator()(const SpawnActors& action) const {
         if (action.count != 1 || !std::isfinite(action.interval) ||
             action.interval < 0.0F || !behavior::Valid(action.actor)) {
             throw std::invalid_argument("Expected one valid enemy spawn request");
         }
-        sink.SpawnStageActor(action.actor);
+        auto configured=content.ConfigureSpawn(action.actor);
+        if(!behavior::Valid(configured))throw std::invalid_argument("Invalid configured actor spawn");
+        sink.SpawnStageActor(configured);
         return true;
     }
 
@@ -54,7 +57,7 @@ struct EventExecutor {
     }
 
     bool operator()(const StartDialogue& action) const {
-        if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss)||
+        if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss&&action.scene!=DialogueScene::EncoreBoss)||
             (action.clearPolicy!=DialogueClearPolicy::ClearEnemiesAndBullets&&action.clearPolicy!=DialogueClearPolicy::PreserveWorld))
             throw std::invalid_argument("StartDialogue requires an id and valid scene");
         sink.BeginStageDialogue(*event.id,action.afterBattle,action.scene,action.clearPolicy);
@@ -77,7 +80,7 @@ struct EventExecutor {
 }  // namespace
 
 bool StageContent::HandleEvent(const StageEvent& event, StageEventSink& sink) const {
-    return std::visit(EventExecutor{event, sink}, event.action);
+    return std::visit(EventExecutor{event, sink, *this}, event.action);
 }
 
 }  // namespace koumakyou

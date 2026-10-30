@@ -29,6 +29,30 @@
 #include <vector>
 
 namespace {
+/// @brief 独立验证Standard库存及Challenge有符号净Miss；奖励不抵扣用于符卡取得的总Miss。
+void TestChallengeLifeCredits() {
+    using namespace koumakyou;
+    for(bool challenge:{false,true}) {
+        Player player;player.Reset();player.ConfigureRun(2,1,challenge,ShotType::HomingAmulet);
+        assert(player.NetMisses()==0&&player.RemainingLives()==3);
+        player.CollectResources(1,1);
+        assert(player.NetMisses()==(challenge?-1:0)&&player.RemainingLives()==(challenge?3:4)&&player.Bombs()==2);
+        assert(player.TakeHit());assert(player.NetMisses()==(challenge?0:1));
+        assert(player.RemainingLives()==3);
+        player.CollectResources(2,0);assert(player.NetMisses()==(challenge?-2:1));
+        const auto count=player.NetMisses();const auto lives=player.RemainingLives();
+        player.ResetPose();assert(player.NetMisses()==count&&player.RemainingLives()==lives);
+        for(const auto reward:{std::array{-1,1},std::array{1,-1}}) {
+            bool rejected=false;try {player.CollectResources(reward[0],reward[1]);}catch(const std::invalid_argument&) {rejected=true;}
+            assert(rejected&&player.NetMisses()==count&&player.RemainingLives()==lives&&player.Bombs()==2);
+        }
+        player.CollectResources(20,20);
+        assert(player.NetMisses()==(challenge?-22:1)&&player.RemainingLives()==(challenge?3:9)&&player.Bombs()==8);
+        player.ConfigureRun(2,1,challenge,ShotType::Needle);assert(player.NetMisses()==0);
+        player.CollectResources(1,0);player.Reset();assert(player.NetMisses()==0);
+    }
+}
+
 /// @brief 非符与符卡共享固定血量区间；击破、超时、下一组和退场均不能把符卡段错误铺满。
 void TestBossHealthGroups() {
     auto bullets=std::make_unique<koumakyou::BulletSystem>();
@@ -96,6 +120,8 @@ void TestBeamContacts() {
     player.SetInvulnerability(2);
     assert(player.ContactEnemyBullet(*beam) == PlayerContact::None && beam->active);
     beam->position.y += 0.6F;
+    assert(player.ContactEnemyBullet(*beam) == PlayerContact::None); // 更新前仍处于预警阶段。
+    pool->Update(1.0F/120);
     assert(player.ContactEnemyBullet(*beam) == PlayerContact::Graze);
     assert(player.ContactEnemyBullet(*beam) == PlayerContact::None);
     assert(std::abs(beam->DistanceSquaredTo({target.x + 4.3F, target.y + 0.6F, target.z}) - 0.09F) < 0.0001F);
@@ -120,6 +146,71 @@ void TestBeamContacts() {
         });
         assert(count == 21);
     }
+}
+
+/// @brief 原生淡出末帧保持可访问，下一逻辑步回收；独立验证长寿命累计、强制淡出、外部改龄和暂停。
+void TestBeamLifetimeBoundary() {
+    using namespace koumakyou;
+    auto pool=std::make_unique<BulletSystem>();
+    for(int factor:{1,2})for(int fadeStart:{270,750}) {
+        pool->Reset();auto* beam=pool->SpawnBeam({}, {1,0,0},4,0.1F,1,14,WHITE);assert(beam);
+        const float step=1.0F/(60*factor);
+        for(int tick=0;tick<fadeStart*factor;++tick)pool->Update(step);
+        assert(beam->active&&std::abs(beam->age-fadeStart/60.0F)<1e-6F);
+        beam->maxAge=beam->age+20.0F/60;beam->beamFadeSeconds=20.0F/60;
+        for(int tick=0;tick<20*factor;++tick) {pool->Update(step);assert(beam->active);}
+        const auto age=beam->age;pool->Update(1,{}, {},true);assert(beam->active&&beam->age==age);
+        pool->Update(step);assert(!beam->active);
+    }
+    pool->Reset();auto* beam=pool->SpawnBeam({}, {1,0,0},4,0.1F,0,2,WHITE);assert(beam);
+    beam->age=1;pool->Update(0.25F);assert(beam->age==1.25F&&beam->active);
+    beam->age=0;pool->Update(0.5F);assert(beam->age==0.5F&&beam->active);
+    beam->maxAge=0.5F;pool->Update(1.0e-5F);assert(!beam->active); // 真正跨界的微小更新不得被时钟修正吞掉。
+}
+
+/// @brief 用独立整数帧期望核对光束周期、展开偏移、120Hz去重、长时钟、外部改龄与槽复用。
+void TestBeamRepeatGraze() {
+    using namespace koumakyou;
+    auto pool=std::make_unique<BulletSystem>();Player player;player.SetInvulnerability(1000);
+    const auto origin=player.Position();const Vector3 near{origin.x-2,origin.y+.6F,origin.z};
+    for(int factor:{1,2})for(int grow:{0,7,120,750}) {
+        pool->Reset();auto* beam=pool->SpawnBeam(near,{1,0,0},4,.1F,grow/60.0F,160,WHITE);assert(beam);
+        // 与展开独立的warning、六帧淡出尾部及淡出不能改变周期起点。
+        beam->warningSeconds=std::max(0,grow-3)/60.0F;
+        beam->dangerEndSeconds=(grow+9002)/60.0F;beam->maxAge=(grow+9008)/60.0F;
+        int count=0;
+        for(int tick=0;tick<(grow+9008)*factor;++tick) {
+            pool->Update(1.0F/(60*factor));
+            const int local=tick/factor-grow;
+            const bool expected=local>=0 && local%12==0 && tick%factor==0 && tick+1<(grow+9002)*factor;
+            const auto result=player.ContactEnemyBullet(*beam);
+            assert((result==PlayerContact::Graze)==expected);
+            count+=result==PlayerContact::Graze;
+            assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+        }
+        assert(count==751);
+    }
+    pool->Reset();auto* beam=pool->SpawnBeam(near,{1,0,0},4,.1F,0,2,WHITE);assert(beam);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
+    for(int n=0;n<24;++n)pool->Update(1.0F/120);
+    pool->Update(1.0F/120);assert(player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
+    pool->Update(1,{}, {},true);assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+    // 离开范围不消费资格；同一内容帧的后半步进入仍只结算一次。
+    beam->age=.4F;beam->position.y=origin.y+4;pool->Update(1.0F/120);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+    beam->position.y=near.y;pool->Update(1.0F/120);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
+    assert(player.ContactEnemyBullet(*beam)==PlayerContact::None);
+    // 命中优先，不消费擦弹资格；另一个光束拥有独立的周期记录。
+    auto* other=pool->SpawnBeam({origin.x-2,origin.y,origin.z},{1,0,0},4,.1F,0,2,WHITE);assert(other);
+    assert(player.ContactEnemyBullet(*other)==PlayerContact::None&&!other->grazed);
+    other->position.y=near.y;assert(player.ContactEnemyBullet(*other)==PlayerContact::Graze);
+    auto* ordinary=pool->Spawn(BulletOwner::Enemy,{origin.x,near.y,origin.z},{},.1F,WHITE,0);assert(ordinary);
+    assert(player.ContactEnemyBullet(*ordinary)==PlayerContact::Graze);
+    for(int n=0;n<30;++n)pool->Update(1.0F/60);
+    assert(player.ContactEnemyBullet(*ordinary)==PlayerContact::None);
+    pool->Reset();beam=pool->SpawnBeam(near,{1,0,0},4,.1F,0,2,WHITE);assert(beam);
+    assert(beam->lastBeamGrazeFrame==-1&&!beam->grazed&&player.ContactEnemyBullet(*beam)==PlayerContact::Graze);
 }
 
 /// @brief 本体接触使用三维命中球和统一保护期；不依赖敌方是否免伤，也不触发擦弹或自行扣残机。
@@ -163,8 +254,11 @@ void TestEnemyBodyContacts() {
 
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
+    TestChallengeLifeCredits();
     TestBossHealthGroups();
     TestBeamContacts();
+    TestBeamRepeatGraze();
+    TestBeamLifetimeBoundary();
     TestEnemyBodyContacts();
     using koumakyou::BulletOwner;
     using koumakyou::BulletSystem;

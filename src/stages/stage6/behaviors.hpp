@@ -4,14 +4,14 @@
 namespace koumakyou::stage6 {
 // 以下协程由 Actor::Start/Call 持有；等待采用 60 Hz 内容帧，空间量使用世界单位。
 // actor 与 PhaseMemory 的借用期覆盖协程执行期；阶段回调由 Boss 包装层推进，不在协程内销毁演员。
-/// @brief 隐藏环境演出保留周期位置随机读取和寿命，不参与碰撞或索敌。
+/// @brief 隐藏环境演出每40内容帧随机定位并发出两粒慢收束，红/蓝/绿循环54组；不参与碰撞或索敌。
 behavior::Routine AmbientPositions(behavior::Actor& actor);
-/// @brief 两类弯曲晶体保留各自转速、停火帧和随机初相，不由外观脚本反推路线。
+/// @brief 两类弯曲晶体保留各自转速、停火帧和随机初相，发射周期使用 actor.difficulty 并应用 rank 修正。
 behavior::Routine BlueHook(behavior::Actor& actor);
 behavior::Routine RedHook(behavior::Actor& actor);
-/// @brief 横穿蓝环在第 40 内容帧发射并选择随机退场方向；击破掉落由配方的独立回调负责。
+/// @brief 横穿蓝环在第 40 内容帧按 actor.difficulty 发射并选择随机退场方向；击破掉落由配方的独立回调负责。
 behavior::Routine CrossingRing(behavior::Actor& actor);
-/// @brief 下行蓝环保留与横穿款相同的发射/随机读取契约，出生方向由配方决定。
+/// @brief 下行蓝环四难度共用 60 方向单层弹，随机读取及第 40 内容帧发射契约与横穿款相同。
 behavior::Routine DescendingRing(behavior::Actor& actor);
 /// @brief 击破时请求散落八个普通道具并结束演员；调用方仍负责一次性的分数及源掉落。
 behavior::Routine DropEight(behavior::Actor& actor);

@@ -394,6 +394,8 @@ void AssetManager::FinishStageLoad(const StageAssetManifest& manifest) {
         stageMusic_ = LoadMusicAsset(root_ / std::string(manifest.stageBgm));
     if (!manifest.bossBgm.empty())
         bossMusic_ = LoadMusicAsset(root_ / std::string(manifest.bossBgm));
+    if (!manifest.eventBgm.empty())
+        eventMusic_ = LoadMusicAsset(root_ / std::string(manifest.eventBgm));
     SetMusicVolumePercent(musicVolumePercent_);
     LoadSounds(stageSounds_, root_, manifest.sounds);
     SetSoundVolumePercent(soundVolumePercent_);
@@ -420,12 +422,13 @@ const BattleAtlasResource& AssetManager::LoadBattleAtlas(battle::Atlas id) {
 void AssetManager::UnloadStage() {
     // 等待唯一的在途 CPU 解码；随后才能释放清单字符串或销毁图形上下文。
     stageLoad_.reset();
-    if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss) {
+    if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss || activeMusic_ == MusicSlot::Event) {
         SwitchMusic(MusicSlot::None);
     }
     UnloadSounds(stageSounds_);
     UnloadMusicAsset(stageMusic_);
     UnloadMusicAsset(bossMusic_);
+    UnloadMusicAsset(eventMusic_);
     UnloadShaderAsset(stage_.shaders.bulletCore);
     UnloadShaderAsset(stage_.shaders.cutout);
     for (auto& [path, texture] : stageTextures_) {
@@ -471,6 +474,7 @@ Music* AssetManager::MusicFor(MusicSlot slot) {
         case MusicSlot::Menu: return &menuMusic_;
         case MusicSlot::Stage: return &stageMusic_;
         case MusicSlot::Boss: return &bossMusic_;
+        case MusicSlot::Event: return &eventMusic_;
         case MusicSlot::None: return nullptr;
     }
     return nullptr;
@@ -492,6 +496,15 @@ void AssetManager::SwitchMusic(MusicSlot slot) {
 void AssetManager::PlayMenuMusic() { SwitchMusic(MusicSlot::Menu); }
 void AssetManager::PlayStageMusic() { SwitchMusic(MusicSlot::Stage); }
 void AssetManager::PlayBossMusic() { SwitchMusic(MusicSlot::Boss); }
+void AssetManager::PlayStageTrack(int index) {
+    switch(index) {
+        case -1:SwitchMusic(MusicSlot::None);break;
+        case 0:SwitchMusic(MusicSlot::Stage);break;
+        case 1:SwitchMusic(MusicSlot::Boss);break;
+        case 2:SwitchMusic(MusicSlot::Event);break;
+        default:throw std::invalid_argument("Invalid stage music track");
+    }
+}
 
 void AssetManager::PauseMusic() {
     if (Music* music = MusicFor(activeMusic_);
@@ -509,7 +522,7 @@ void AssetManager::ResumeMusic() {
 
 void AssetManager::SetMusicVolumePercent(int percent) {
     musicVolumePercent_ = std::clamp(percent, 0, 100);
-    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_}) {
+    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_, &eventMusic_}) {
         if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F*musicGain_);
     }
 }

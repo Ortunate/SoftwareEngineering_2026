@@ -4,12 +4,32 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <numbers>
 namespace koumakyou::movement {
 namespace {
 Vector3 Add(Vector3 a,Vector3 b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 Vector3 Multiply(Vector3 v,float n) { return {v.x*n,v.y*n,v.z*n}; }
 }
 void State::BeginFrame(int updateHz) {
+    if(floatIntegration_) {
+        auto& f=*floatIntegration_;
+        const auto local=[&](Vector3 p) {return Vector3{
+            static_cast<float>((static_cast<double>(p.x)-f.origin.x)/f.unitSize.x),
+            static_cast<float>((static_cast<double>(p.y)-f.origin.y)/f.unitSize.y),
+            static_cast<float>((static_cast<double>(p.z)-f.origin.z)/f.unitSize.z)};};
+        if(position.x!=f.lastWorld.x||position.y!=f.lastWorld.y||position.z!=f.lastWorld.z)f.point=local(position);
+        if(velocity.x!=f.lastVelocity.x||velocity.y!=f.lastVelocity.y||velocity.z!=f.lastVelocity.z)
+            f.displacement={velocity.x/(60*f.unitSize.x),velocity.y/(60*f.unitSize.y),velocity.z/(60*f.unitSize.z)};
+        const float step=60.0F/updateHz;
+        f.point.x+=f.displacement.x*step*(mirrored?-1:1);f.point.y+=f.displacement.y*step;f.point.z+=f.displacement.z*step;
+        position={f.origin.x+f.point.x*f.unitSize.x,f.origin.y+f.point.y*f.unitSize.y,f.origin.z+f.point.z*f.unitSize.z};
+        if(clamped) {
+            position.x=std::clamp(position.x,bounds.lower.x,bounds.upper.x);position.z=std::clamp(position.z,bounds.lower.y,bounds.upper.y);
+            if(heightBounds)position.y=std::clamp(position.y,heightBounds->x,heightBounds->y);
+            f.point=local(position);
+        }
+        f.lastWorld=position;return;
+    }
     // 插值速度已经指向世界目标；仅极坐标速度需要最终 X 镜像。
     position.x+=velocity.x/updateHz*(mirrored&&!interpolating_ ? -1 : 1);
     position.y+=velocity.y/updateHz; position.z+=velocity.z/updateHz;
@@ -30,7 +50,12 @@ void State::EndFrame(int updateHz) {
         angle+=angularVelocity/updateHz; speed+=acceleration/updateHz;
         const float lateral=std::cos(angle)*speed;
         velocity={lateral,0,-std::sin(angle)*speed};
-
+        if(floatIntegration_) {
+            auto& f=*floatIntegration_;
+            // 先将标量速度换到内部格，再乘三角函数，避免先换成世界速度再除回时丢失原float乘法边界。
+            f.displacement={std::cos(angle)*(speed/(60*f.unitSize.x)),0,-std::sin(angle)*(speed/(60*f.unitSize.z))};
+            f.lastVelocity=velocity;
+        }
     }
 }
 void State::Apply(const Keyframe& key) {
@@ -42,7 +67,7 @@ void State::Apply(const Keyframe& key) {
 void State::Polar(float radians,float unitsPerSecond) { angle=radians;speed=unitsPerSecond;interpolating_=false; }
 void State::Interpolate(int duration,Vector3 target,int power) {
     if(duration<=0)throw std::invalid_argument("Movement duration must be positive");
-    start_=position; delta_=Add(target,Multiply(position,-1));
+    floatIntegration_.reset();start_=position; delta_=Add(target,Multiply(position,-1));
     duration_=left_=duration;power_=power;interpolating_=true;velocity={};
 }
 void State::Decelerate(int duration) {
@@ -53,6 +78,30 @@ void State::Decelerate(int duration) {
     Interpolate(duration,target,2);
 }
 Vector3 State::Target() const { return interpolating_ ? Add(start_,delta_) : position; }
+void State::EnableFloatIntegration(Vector3 origin,Vector3 unitSize) {
+    for(float v:{origin.x,origin.y,origin.z,unitSize.x,unitSize.y,unitSize.z})
+        if(!std::isfinite(v))throw std::invalid_argument("Non-finite integration frame");
+    if(unitSize.x==0||unitSize.y==0||unitSize.z==0||std::abs(unitSize.x)!=std::abs(unitSize.z))
+        throw std::invalid_argument("Invalid integration frame scale");
+    FloatIntegration f{origin,unitSize,{
+        static_cast<float>((static_cast<double>(position.x)-origin.x)/unitSize.x),
+        static_cast<float>((static_cast<double>(position.y)-origin.y)/unitSize.y),
+        static_cast<float>((static_cast<double>(position.z)-origin.z)/unitSize.z)}};
+    position={origin.x+f.point.x*unitSize.x,origin.y+f.point.y*unitSize.y,origin.z+f.point.z*unitSize.z};
+    f.lastWorld=position;f.lastVelocity=velocity;
+    f.displacement={velocity.x/(60*unitSize.x),velocity.y/(60*unitSize.y),velocity.z/(60*unitSize.z)};
+    floatIntegration_=f;interpolating_=false;
+}
+float State::AngleTo(Vector3 target) const {
+    float x=target.x-position.x,z=position.z-target.z;
+    if(floatIntegration_) {
+        const auto& f=*floatIntegration_;
+        const float tx=static_cast<float>((static_cast<double>(target.x)-f.origin.x)/f.unitSize.x);
+        const float tz=static_cast<float>((static_cast<double>(target.z)-f.origin.z)/f.unitSize.z);
+        x=(tx-f.point.x)*std::copysign(1.0F,f.unitSize.x);z=(f.point.z-tz)*std::copysign(1.0F,f.unitSize.z);
+    }
+    return x==0&&z==0?std::numbers::pi_v<float>/2:std::atan2(z,x);
+}
 void LiftedPath::Aim(const State& world,float height) {
     const Vector3 target=planar.Target();
     const Vector3 delta{target.x-planar.position.x,0,target.z-planar.position.z};

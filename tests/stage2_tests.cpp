@@ -1,5 +1,7 @@
 // 本文件以独立源参数检查二面全部出生、60 Hz 普通演员轨迹、发射边界、Boss 血量/超时与新公共能力。
 #include "boss_fixture.hpp"
+#include "stage2_reference_program.hpp"
+#include "stage2_effect_reference.hpp"
 #include "stages/stage2/content.hpp"
 #include "stages/stage2/behaviors.hpp"
 #include "stages/stage2/boss_config.hpp"
@@ -25,6 +27,81 @@ void Near(float a,float b,float tolerance=5e-4F) {
 float Random(unsigned& state,float range) {
     state^=state<<13;state^=state>>17;state^=state<<5;
     return static_cast<float>(state>>8)/16777216.0F*range;
+}
+/// @brief 二面有限源窗口逐步核对102/118、音效和延后清弹；源坐标/颜色换算只留测试侧。
+void TestStage2EffectReference() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(unsigned d=0;d<4;++d)for(unsigned seed:{7U,0x9e3779b9U})for(int sub:{20,22,28,39}) {
+        const Vector3 point=sub==20?Vector3{192,-32,0}:Vector3{192,112,0};
+        stage2::reference::EffectReference source(d,sub,point,seed);
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({(point.x-192)*scale,0,10-point.y*scale},10000,seed);
+        actor.difficulty=*native_combat::DifficultyFromIndex(d);stage2::ConfigureBehavior(actor,false);
+        actor.motion.bounds={{-7.14285714F,4.01785714F},{7.14285714F,7.85714286F}};actor.motion.clamped=sub!=20;
+        const auto entry=sub==20?bosses::DaiyouseiBoss::Behaviors::Midboss:sub==22?bosses::CirnoBoss::Behaviors::FirstNonspell:
+            sub==28?bosses::CirnoBoss::Behaviors::Defeated:bosses::CirnoBoss::Behaviors::DiamondBlizzard;
+        actor.Start(entry(actor));int requests=0,particles=0;const int end=sub==20?129:sub==22?69:sub==28?60:59;
+        for(int frame=0;frame<=end;++frame) {
+            bullets->Reset();auto* retained=bullets->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,stage2::kBlueBullet);assert(retained);
+            source.Tick();actor.Update(1.0F/60,{},*bullets);
+            assert(actor.effectEvents.size()==source.effects.size()&&actor.soundEvents==source.sounds);
+            assert(actor.damageable==source.damageable&&retained->active==!source.clearBullets);
+            Near(actor.position.x,(source.position.x-192)*scale);Near(actor.position.z,10-source.position.y*scale);
+            for(std::size_t n=0;n<source.effects.size();++n) {
+                const auto& a=actor.effectEvents[n];const auto& e=source.effects[n];++requests;particles+=a.count;
+                assert(e.type==3||e.type==12||e.type==13);
+                assert(a.kind==(e.type==3?effects::Kind::Burst:e.type==12?effects::Kind::Flash:effects::Kind::Attached)&&a.count==e.count);
+                assert(a.color.r==((e.color>>16)&255)&&a.color.g==((e.color>>8)&255)&&a.color.b==(e.color&255)&&a.color.a==(e.color>>24));
+                Near(a.position.x,(e.position.x-192)*scale);Near(a.position.y,-e.position.z*scale);Near(a.position.z,10-e.position.y*scale);
+                if(e.type==13) {
+                    assert(a.axis.x==e.axis.x&&a.axis.y==-e.axis.z&&a.axis.z==-e.axis.y);
+                    const auto anchor=a.attachment.lock();assert(anchor);Near(anchor->Radius(),e.radius*scale,1e-5F);
+                }
+            }
+        }
+        assert(requests==(sub==28?30:sub==39?1:4)&&particles==(sub==28?60:sub==39?1:4));
+    }
+}
+/// @brief 双固定更新频率和五显示FPS保持同一内容请求窗口；同频率比较全部位置，不放宽时序。
+void TestStage2EffectDisplayRates() {
+    for(const auto rate:{behavior::UpdateRate::Hz60,behavior::UpdateRate::Hz120})for(int sub:{20,22,28,39}) {
+        std::vector<effects::Request> expected;
+        for(int fps:{120,30,60,144,240}) {
+            behavior::Actor actor(rate);actor.Reset({0,0,5},10000,7);stage2::ConfigureBehavior(actor,false);
+            const auto entry=sub==20?bosses::DaiyouseiBoss::Behaviors::Midboss:sub==22?bosses::CirnoBoss::Behaviors::FirstNonspell:
+                sub==28?bosses::CirnoBoss::Behaviors::Defeated:bosses::CirnoBoss::Behaviors::DiamondBlizzard;
+            actor.Start(entry(actor));auto bullets=std::make_unique<BulletSystem>();std::vector<effects::Request> actual;
+            for(int n=0;n<fps*3;++n) {bullets->Reset();actor.Update(1.0F/fps,{},*bullets);actual.insert(actual.end(),actor.effectEvents.begin(),actor.effectEvents.end());}
+            assert(actual.size()==(sub==28?30U:sub==39?1U:4U));
+            for(std::size_t n=0;n<actual.size();++n)assert(actual[n].contentFrame==(sub==28?n/5*10+(n%5+1)*2:sub==39?0:(sub==20?60:20)+n*10));
+            if(fps==120)expected=actual;
+            else for(std::size_t n=0;n<actual.size();++n) {
+                const auto& a=actual[n];const auto& e=expected[n];assert(a.kind==e.kind&&a.count==e.count&&a.contentFrame==e.contentFrame);
+                assert(a.color.r==e.color.r&&a.color.g==e.color.g&&a.color.b==e.color.b&&a.color.a==e.color.a);
+                Near(a.position.x,e.position.x);Near(a.position.y,e.position.y);Near(a.position.z,e.position.z);
+            }
+        }
+    }
+}
+void TestDifficultySourceShots() {
+    // 对照 ECL Sub12 第 70 帧及 Sub5 击破发射，不从生产配方推导期望。
+    for(unsigned index=0;index<4;++index) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(index);
+        const auto programs=stage2::reference::ProgramsForDifficulty(index);
+        const stage2::reference::Instruction* source=nullptr;
+        for(const auto& instruction:programs[12])if(instruction.opcode==67&&instruction.frame==70)source=&instruction;
+        assert(source);
+        behavior::Spawn spawn{};spawn.visual=stage2::kOrb;spawn.pattern=stage2::kShootingDarkFairy;
+        stage2::Stage2Content content(difficulty);
+        const auto configured=content.ConfigureSpawn(spawn);
+        assert(configured.difficulty==difficulty&&configured.pattern.skill);
+        const auto& shot=configured.pattern.skill->shot;
+        assert(shot.count==source->args[2]&&shot.layers==source->args[3]);
+        Near(shot.firstSpeed,source->args[4]*60*scale,1e-5F);Near(shot.spacing,source->args[7],1e-6F);
+        spawn.pattern=stage2::kLeftRedOrb;
+        const auto red=content.ConfigureSpawn(spawn);
+        assert((red.pattern.routine!=nullptr)==(index==3));
+        assert(behavior::Valid(red));
+    }
 }
 void TestBirthsAndSourceMovement() {
     stage2::Stage2Content content;assert(content.Events().size()==468);
@@ -149,6 +226,133 @@ void TestRandomShotInterval() {
         }
     }
 }
+void TestDifficultyPeriodicOrbs() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(unsigned index=0;index<4;++index)for(int sub:{0,1}) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(index);
+        stage2::Stage2Content content(difficulty);behavior::Spawn spawn;
+        spawn.visual=stage2::kOrb;spawn.retireOutside=false;spawn.seed=73;
+        spawn.pattern=sub==0 ? stage2::kLeftBlueOrb : stage2::kLeftRedOrb;
+        spawn.pattern.spatialShots=false;spawn=content.ConfigureSpawn(spawn);
+        const auto program=stage2::reference::ProgramsForDifficulty(index)[sub];
+        const stage2::reference::Instruction* sourceShot=nullptr;bool periodic=false;
+        for(const auto& instruction:program) {
+            if(instruction.opcode==69||instruction.opcode==71)sourceShot=&instruction;
+            if(instruction.opcode==77)periodic=true;
+        }
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Activate(spawn);
+        unsigned random=73;random^=random<<13;random^=random>>17;random^=random<<5;
+        int next=180-static_cast<int>(random%180)-1;
+        for(int frame=0;frame<=200;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{},*bullets);
+            const bool fires=periodic&&frame==next&&frame<(sub==0 ? 180 : 200);
+            const auto expected=fires ? static_cast<std::size_t>(sourceShot->args[2]*sourceShot->args[3]) : 0;
+            assert(bullets->Pool().ActiveCount()==expected);
+            if(fires)next+=180;
+        }
+    }
+}
+void TestAimedFairyDifficultyPeriod() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(unsigned index=0;index<4;++index) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(index);
+        stage2::Stage2Content content(difficulty);behavior::Spawn spawn;
+        spawn.visual=stage2::kOrb;spawn.retireOutside=false;spawn.seed=73;
+        spawn.pattern=stage2::kAimedFairy;spawn.pattern.spatialShots=false;spawn=content.ConfigureSpawn(spawn);
+        const auto program=stage2::reference::ProgramsForDifficulty(index)[6];
+        bool periodic=false;const stage2::reference::Instruction* sourceShot=nullptr;
+        for(const auto& instruction:program) {
+            if(instruction.opcode==77)periodic=true;
+            if(instruction.opcode==67)sourceShot=&instruction;
+        }
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Activate(spawn);
+        unsigned random=73;random^=random<<13;random^=random>>17;random^=random<<5;
+        int next=120-static_cast<int>(random%120)-1;
+        for(int frame=0;frame<300;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{2,0,-6},*bullets);
+            const bool fires=periodic&&frame==next;
+            assert(bullets->Pool().ActiveCount()==(fires ? static_cast<std::size_t>(sourceShot->args[2]) : 0));
+            if(fires)next+=120;
+        }
+    }
+}
+void TestDifficultyOrbDeath() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(unsigned index=0;index<4;++index) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(index);
+        const auto programs=stage2::reference::ProgramsForDifficulty(index);
+        const stage2::reference::Instruction* original=nullptr;
+        for(const auto& instruction:programs[5])if(instruction.opcode==71)original=&instruction;
+        assert(original);
+        behavior::Spawn spawn;spawn.visual=stage2::kOrb;spawn.pattern=stage2::kCenterBlueOrb;
+        spawn.pattern.spatialShots=false;spawn.retireOutside=false;spawn.difficulty=difficulty;
+        behavior::Actor actor(behavior::UpdateRate::Hz60);bullets->Reset();actor.Activate(spawn);
+        actor.health=0;assert(actor.Defeat());
+        for(int frame=0;frame<3&&actor.active;++frame)actor.Update(1.0F/60,{},*bullets);
+        assert(!actor.active&&bullets->Pool().ActiveCount()==static_cast<std::size_t>(original->args[2]));
+        bullets->Pool().ForEachActive([&](const Bullet& bullet) {
+            // 默认 rank=16 的速度修正为零，按源像素/帧转换为世界单位/秒。
+            Near(BulletSystem::Length(bullet.velocity),original->args[4]*60*scale,1e-5F);
+        });
+    }
+}
+void TestDifficultyBossDefinitions() {
+    using B=bosses::CirnoBoss::Behavior;
+    bosses::CirnoBoss boss(behavior::UpdateRate::Hz60,false);
+    for(unsigned index=0;index<4;++index) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(index);
+        const auto source=stage2::reference::ProgramsForDifficulty(index);
+        const auto literal=[&](int sub,int opcode) {
+            const stage2::reference::Instruction* found=nullptr;
+            for(const auto& instruction:source[sub])if(instruction.frame==0&&instruction.opcode==opcode) {
+                assert(!found);found=&instruction;
+            }
+            assert(found);return found->args[0];
+        };
+        const auto first=boss.DescribeSkill(B::FirstNonspell,ShotType::HomingAmulet,difficulty);
+        const auto ice=boss.DescribeSkill(B::IcicleFall,ShotType::HomingAmulet,difficulty);
+        const auto second=boss.DescribeSkill(B::SecondNonspell,ShotType::HomingAmulet,difficulty);
+        const auto freeze=boss.DescribeSkill(B::PerfectFreeze,ShotType::HomingAmulet,difficulty);
+        assert(first.NativeHealth()==literal(22,111)&&first.reserveHealth==literal(22,113));
+        assert(ice.timeoutFrames==literal(index<2 ? 31 : 34,115));
+        assert(second.NativeHealth()==literal(25,111)&&second.reserveHealth==literal(25,113));
+        assert(freeze.NativeHealth()==literal(25,113)&&freeze.reserveHealth==(index==0 ? 0 : literal(36,113)));
+        assert(ice.spellCard==static_cast<int>(source[index<2 ? 31 : 34][0].args[1])+1);
+        assert(freeze.spellCard==static_cast<int>(source[37][0].args[1])+1);
+        const auto config=stage2::CirnoFinalConfig(ShotType::HomingAmulet,difficulty);
+        assert(config.phases[1].skills.size()==(index==0 ? 2 : 3));
+        boss.StartBoss(config);assert(boss.health==literal(22,111));
+        boss.AdvanceSkill();assert(boss.SpellCardNumber()==ice.spellCard);
+        boss.AdvanceSkill();assert(boss.health==literal(25,111));
+        boss.AdvanceSkill();assert(boss.health==literal(25,113));
+        if(index==0) {
+            assert(boss.HealthBar().count==2);
+            bool rejected=false;try {boss.DescribeSkill(B::DiamondBlizzard,ShotType::HomingAmulet,difficulty);}
+            catch(const std::invalid_argument&) {rejected=true;}assert(rejected);
+        } else {
+            const auto diamond=boss.DescribeSkill(B::DiamondBlizzard,ShotType::HomingAmulet,difficulty);
+            assert(diamond.NativeHealth()==literal(36,113)&&diamond.timeoutFrames==literal(40,115));
+            boss.AdvanceSkill();assert(boss.health==literal(36,113));
+        }
+    }
+}
+void TestEasyPerfectFreezeTimeoutExit() {
+    // EXE 交接会将死亡回调 Sub28 留给 Easy 的超时回调，不能回到 Sub36 或进入最后一符。
+    auto bullets=std::make_unique<BulletSystem>();
+    bosses::CirnoBoss boss(behavior::UpdateRate::Hz60,false);
+    boss.StartBoss(stage2::CirnoFinalConfig(ShotType::HomingAmulet,native_combat::Difficulty::Easy));
+    for(int i=0;i<3;++i)boss.AdvanceSkill();
+    assert(boss.attack==4&&boss.health==1400);
+    bool timeout=false;
+    for(int frame=0;frame<2402&&!timeout;++frame) {
+        bullets->Reset();timeout=boss.Update(1.0F/60,{2,3,-6},*bullets);
+    }
+    assert(timeout&&!boss.SkillDefeated());boss.AdvanceSkill();
+    for(int frame=0;frame<100&&boss.active;++frame) {
+        bullets->Reset();if(boss.Update(1.0F/60,{2,3,-6},*bullets))boss.AdvanceSkill();
+    }
+    assert(!boss.active&&!boss.Defeated()&&boss.attack!=5);
+}
 void TestBossHealthAndTimeouts() {
     auto bullets=std::make_unique<BulletSystem>();bosses::CirnoBoss boss(behavior::UpdateRate::Hz120,true);boss.StartBoss(stage2::CirnoFinalConfig());
     assert(boss.health==10000&&boss.attack==1&&!boss.CanTakeDamage());
@@ -187,6 +391,119 @@ void TestBossHealthAndTimeouts() {
     }
     assert(!mid.active&&bombDrops==1&&mid.Defeated());
     std::cout<<"Stage 2 timeout phases validated; peak projectiles "<<peak<<'\n';
+}
+/// @brief 攻击期望来自二面 Normal 原指令的父/子时钟展开；不从新协程或配方重新生成答案。
+void TestDaiyouseiEightCycles() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(unsigned index=0;index<4;++index) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(index);
+        const auto programs=stage2::reference::ProgramsForDifficulty(index);
+        const auto sourceShot=[&](int sub,int occurrence) -> const stage2::reference::Instruction& {
+            for(const auto& instruction:programs[sub])if((instruction.opcode==67||instruction.opcode==70)&&occurrence--==0)return instruction;
+            throw std::logic_error("Missing Daiyousei source shot");
+        };
+        struct Witness {int frame;std::size_t count;int color;};
+        std::vector<Witness> shots;std::vector<std::pair<int,float>> teleports;
+        int start=130;unsigned random=7;
+        for(int cycle=0;cycle<8;++cycle) {
+            const bool aimed=cycle%3==2;
+            if(aimed) {
+                const auto& first=sourceShot(16,0);const auto& second=sourceShot(16,1);
+                const auto count=static_cast<std::size_t>(first.args[2]*first.args[3]+second.args[2]*second.args[3]);
+                for(int n=0;n<16;++n)shots.push_back({start+40+n*10,count,-1});
+            } else {
+                const auto& source=sourceShot(cycle%3==0 ? 14 : 15,0);
+                for(int n=0;n<48;++n)shots.push_back({start+40+n,static_cast<std::size_t>(source.args[2]*source.args[3]),cycle%3==0 ? 10 : 2});
+            }
+            const int attackEnd=aimed ? 200 : 88;
+            teleports.emplace_back(start+attackEnd+40,(Random(random,320)+32-192)*scale);
+            start+=attackEnd+160;
+        }
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,11.4285717F},10000,7);
+        actor.difficulty=difficulty;stage2::ConfigureBehavior(actor,false);
+        actor.Start(bosses::DaiyouseiBoss::Behaviors::Midboss(actor));
+        std::size_t shotIndex=0,teleportIndex=0;
+        for(int frame=0;frame<=teleports.back().first;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{2,0,-6},*bullets);
+            const bool fires=shotIndex<shots.size()&&shots[shotIndex].frame==frame;
+            assert(bullets->Pool().ActiveCount()==(fires ? shots[shotIndex].count : 0));
+            if(fires) {
+                const int color=shots[shotIndex].color;
+                if(color>=0)bullets->Pool().ForEachActive([&](const Bullet& bullet) {assert(bullet.nativeColor==color);});
+                ++shotIndex;
+            }
+            if(teleportIndex<teleports.size()&&teleports[teleportIndex].first==frame) {
+                assert(actor.interactable);Near(actor.Position().x,teleports[teleportIndex].second);
+                Near(actor.Position().z,5.71428585F);++teleportIndex;
+            }
+        }
+        assert(shotIndex==shots.size()&&teleportIndex==teleports.size());
+    }
+}
+void TestHailstormMultiCycle() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(auto difficulty:{native_combat::Difficulty::Hard,native_combat::Difficulty::Lunatic}) {
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,5.71428585F},1500,7);
+        actor.difficulty=difficulty;stage2::ConfigureBehavior(actor,false);
+        actor.Start(bosses::CirnoBoss::Behaviors::IcicleFall(actor));
+        for(int frame=0;frame<=3080;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{2,0,-6},*bullets);
+            const int relative=frame-120;
+            const int cycle=relative>=0 ? relative/280 : -1;
+            const int within=relative>=0 ? relative%280 : -1;
+            const bool fires=cycle>=0&&cycle<11&&within<=140&&within%20==0;
+            const int count=cycle+(difficulty==native_combat::Difficulty::Hard ? 8 : 13);
+            assert(bullets->Pool().ActiveCount()==static_cast<std::size_t>(fires ? count*3 : 0));
+            if(fires)bullets->Pool().ForEachActive([&](const Bullet& bullet) {
+                Near(bullet.turnDelaySeconds,1);Near(bullet.turnAngle,cycle%2==0 ? 0.392699093F : -0.392699093F);
+                Near(bullet.turnSpeed,(1.4F+cycle*0.15F)*60*scale,1e-5F);assert(bullet.turnAbsolute);
+            });
+        }
+        assert(actor.phaseFrames>=99999);
+    }
+}
+void TestDifficultyBossShots() {
+    auto bullets=std::make_unique<BulletSystem>();
+    behavior::Actor actor(behavior::UpdateRate::Hz60);
+    for(unsigned index=0;index<4;++index) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(index);
+        const auto programs=stage2::reference::ProgramsForDifficulty(index);
+        const auto shot=[&](int sub,int opcode,int frame) -> const stage2::reference::Instruction& {
+            for(const auto& instruction:programs[sub])
+                if(instruction.opcode==opcode&&instruction.frame==frame)return instruction;
+            throw std::logic_error("Missing stage 2 source shot");
+        };
+        const auto start=[&](behavior::Entry entry,float hp) {
+            actor.Reset({0,0,5.71428585F},hp,7);actor.difficulty=difficulty;
+            stage2::ConfigureBehavior(actor,false);actor.Start(entry(actor));bullets->Reset();
+        };
+        start(bosses::DaiyouseiBoss::Behaviors::Midboss,10000);
+        for(int frame=0;frame<=170;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
+            if(frame==170) {
+                const auto& original=shot(14,70,40);
+                assert(bullets->Pool().ActiveCount()==static_cast<std::size_t>(original.args[2]*original.args[3]));
+            }
+        }
+        start(bosses::CirnoBoss::Behaviors::IcicleFall,1500);
+        for(int frame=0;frame<=120;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
+            if(frame==120) {
+                // H/L 源 Sub35 首轮 8/13 方向、3 层；E/N 同时两侧各 3 层。
+                const std::size_t expected=index<2 ? 6 : (index==2 ? 24 : 39);
+                assert(bullets->Pool().ActiveCount()==expected);
+            }
+        }
+        start(bosses::CirnoBoss::Behaviors::PerfectFreeze,index==0 ? 1400 : 3200);
+        for(int frame=0;frame<=125;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
+            if(frame==125) {
+                // Sub38 的源基数加 rank=16 时截断得到的两发修正。
+                const auto& original=shot(38,13,0);
+                assert(bullets->Pool().ActiveCount()==static_cast<std::size_t>(original.args[2]+2));
+            }
+        }
+    }
 }
 /// @brief 攻击期望来自二面 Normal 原指令的父/子时钟展开；不从新协程或配方重新生成答案。
 void TestSourceAttackFrames() {
@@ -280,6 +597,29 @@ void TestDialogueAndItems() {
     assert(content.BossPortraitVisual(2)==content.BossPortraitVisual(0));
     assert(content.Assets().visuals[content.BossPortraitVisual(0)].path=="stages/stage2/portraits/cirno/face05a_0.png");
 }
+void TestDifficultyBossDisplayRates() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(unsigned index=0;index<4;++index) {
+        std::vector<Vector3> expected;Vector3 position{};
+        for(int fps:{120,30,60,144,240}) {
+            behavior::Actor actor;actor.Reset({0,0,5.71428585F},10000,7);
+            actor.difficulty=*native_combat::DifficultyFromIndex(index);
+            stage2::ConfigureBehavior(actor,false);
+            actor.Start(bosses::CirnoBoss::Behaviors::FirstNonspell(actor));bullets->Reset();
+            for(int frame=0;frame<fps*3;++frame)actor.Update(1.0F/fps,{2,3,-6},*bullets);
+            std::vector<Vector3> velocities;
+            bullets->Pool().ForEachActive([&](const Bullet& bullet){velocities.push_back(bullet.velocity);});
+            if(fps==120) {expected=velocities;position=actor.Position();}
+            else {
+                assert(velocities.size()==expected.size());
+                Near(actor.Position().x,position.x,1e-5F);Near(actor.Position().z,position.z,1e-5F);
+                for(std::size_t n=0;n<velocities.size();++n) {
+                    Near(velocities[n].x,expected[n].x,1e-5F);Near(velocities[n].z,expected[n].z,1e-5F);
+                }
+            }
+        }
+    }
+}
 void Test120HzAcrossDisplayRates() {
     stage2::Stage2Content content;std::vector<const native_combat::HealthRecord*> source;
     for(const auto& r:native_combat::Stage(2)->health)
@@ -315,6 +655,9 @@ void Test120HzAcrossDisplayRates() {
 }
 /// @brief 核对本关独立静态事实及真实公共组件执行，不依赖原游戏安装目录。
 void RunStage2Tests() {
-    TestBirthsAndSourceMovement();TestActorDefeatAndRandomSkills();TestBossHealthAndTimeouts();TestSourceAttackFrames();
-    TestDialogueAndItems();Test120HzAcrossDisplayRates();TestRandomShotInterval();
+    TestStage2EffectReference();TestStage2EffectDisplayRates();
+    TestDifficultySourceShots();TestBirthsAndSourceMovement();TestActorDefeatAndRandomSkills();TestDifficultyPeriodicOrbs();TestAimedFairyDifficultyPeriod();TestDifficultyOrbDeath();TestDifficultyBossDefinitions();TestEasyPerfectFreezeTimeoutExit();TestBossHealthAndTimeouts();TestDaiyouseiEightCycles();TestHailstormMultiCycle();TestDifficultyBossShots();TestSourceAttackFrames();
+    TestDialogueAndItems();TestDifficultyBossDisplayRates();Test120HzAcrossDisplayRates();TestRandomShotInterval();
 }
+/// @brief 独立运行二面全部102/118源窗口和双频率显示时钟验收。
+void RunStage2EffectTests() {TestStage2EffectReference();TestStage2EffectDisplayRates();}

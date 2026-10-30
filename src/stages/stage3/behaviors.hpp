@@ -14,15 +14,18 @@ behavior::Routine RisingStream(behavior::Actor& actor);
 behavior::Routine RainOrb(behavior::Actor& actor);
 /// @brief Boss 召唤的四轮瞄准小怪；独占生命、技能、随机流和协程，不借用 Boss 状态。
 behavior::Routine SummonedStream(behavior::Actor& actor);
+/// @brief 高难勾转/上升轨迹以配置副本绑定周期发射，Normal 与 Easy 保留原有无发射路线。
+void ConfigureHookOrb(behavior::Pattern& pattern,native_combat::Difficulty difficulty);
+void ConfigureRisingOrb(behavior::Pattern& pattern,native_combat::Difficulty difficulty);
 inline constexpr behavior::Pattern kBlueHookOrb{
     .movement={.angle=0.52359879F,.speed=12.0535717F,.keys={{{.frame=30,.angularVelocity=-3.92699099F},
-        {.frame=115,.angularVelocity=0}}},.count=2},.initialAnimation=13,.deathEffect=0,.spatialShots=true};
+        {.frame=115,.angularVelocity=0}}},.count=2},.initialAnimation=13,.deathEffect=0,.spatialShots=true,.configureDifficulty=ConfigureHookOrb};
 inline constexpr behavior::Pattern kRedHookOrb{
     .movement={.angle=0.52359879F,.speed=12.0535717F,.keys={{{.frame=30,.angularVelocity=-3.92699099F},
-        {.frame=115,.angularVelocity=0}}},.count=2},.initialAnimation=14,.deathEffect=0,.spatialShots=true};
+        {.frame=115,.angularVelocity=0}}},.count=2},.initialAnimation=14,.deathEffect=0,.spatialShots=true,.configureDifficulty=ConfigureHookOrb};
 inline constexpr behavior::Pattern kBlueRisingOrb{
     .movement={.angle=-1.04719758F,.speed=10.7142859F,.keys={{{.frame=30,.angularVelocity=2.09439516F},
-        {.frame=90,.angularVelocity=0}}},.count=2},.initialAnimation=13,.deathEffect=0,.spatialShots=true};
+        {.frame=90,.angularVelocity=0}}},.count=2},.initialAnimation=13,.deathEffect=0,.spatialShots=true,.configureDifficulty=ConfigureRisingOrb};
 inline constexpr behavior::Pattern kAimedStreamOrb{
     .movement={.speed=4.01785707F},.initialAnimation=15,.deathEffect=0,.spatialShots=true,.routine=AcceleratingStream};
 inline constexpr behavior::Pattern kRetreatingRingOrb{

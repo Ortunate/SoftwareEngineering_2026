@@ -89,10 +89,10 @@ void Game::DrawScoreEntry() const {
     const bool compact=layout.compact;const Font font=assets_.Common().uiFont;
     ui::DrawPageSurface(c,menuMotion_);
     Label(c,font,state_==RunState::ScoreName?"为成绩命名":"保存最高分",40,48,c.width-80,36,kIvory,ui::TextAlign::Center);
-    const auto description=std::string(scoreMode_?"挑战模式":"标准模式")+"  ·  "+kShotNames[scoreShot_]+"  ·  NORMAL";
+    const auto description=std::string(scoreMode_?"挑战模式":"标准模式")+"  ·  "+kShotNames[scoreShot_]+"  ·  "+std::array<const char*,5>{"EASY","NORMAL","HARD","LUNATIC","EXTRA"}[scoreDifficulty_];
     Label(c,font,description.c_str(),40,112,c.width-80,19,kGold,ui::TextAlign::Center);
-    const auto rank=scoreProfile_.Position(scoreMode_!=0,scoreShot_,1,pendingScore_.value);
-    Ranking(c,font,scoreProfile_.Get(scoreMode_!=0,scoreShot_),48,compact?212:202,compact?664:560,compact?29:35,rank?*rank:-1);
+    const auto rank=scoreProfile_.Position(scoreMode_!=0,scoreShot_,scoreDifficulty_,pendingScore_.value);
+    Ranking(c,font,scoreProfile_.Get(scoreMode_!=0,scoreShot_,scoreDifficulty_),48,compact?212:202,compact?664:560,compact?29:35,rank?*rank:-1);
     const float x=compact?48:690,width=compact?664:340;
     if(state_==RunState::ScoreSave) {
         Label(c,font,"本轮总分",x,compact?548:202,width,20,kGold);
@@ -131,8 +131,10 @@ void Game::DrawScorePage() const {
         ui::ArrowButton{layout.ModeArrow(direction),direction}.Draw(context);
         ui::ArrowButton{layout.ShotArrow(direction),direction}.Draw(context);
     }
-    Ranking(c,font,scoreProfile_.Get(scoreMode_!=0,scoreShot_),64,layout.compact?225:215,c.width-128,layout.compact?49:38,scoreHighlight_);
-    Label(c,font,"NORMAL · 完整主线通关记录",48,c.height-104,c.width-96,19,kGold,ui::TextAlign::Center);
-    Label(c,font,"标准 / 挑战与四种御札分别记录，保留最高十名",48,c.height-60,c.width-96,17,kMuted,ui::TextAlign::Center);
+    Ranking(c,font,scoreProfile_.Get(scoreMode_!=0,scoreShot_,scoreDifficulty_),64,layout.compact?225:215,c.width-128,layout.compact?49:38,scoreHighlight_);
+    const auto difficultyLabel=std::string(std::array<const char*,5>{"EASY","NORMAL","HARD","LUNATIC","EXTRA"}[scoreDifficulty_])+" · 本局记录";
+    Label(c,font,difficultyLabel.c_str(),48,c.height-104,c.width-96,19,kGold,ui::TextAlign::Center);
+    for(int direction:{-1,1})ui::ArrowButton{layout.DifficultyArrow(direction),direction}.Draw(context);
+    Label(c,font,"Q / E 切换难度 · 各模式与御札分别记录",48,c.height-60,c.width-96,17,kMuted,ui::TextAlign::Center);
 }
 } // namespace koumakyou

@@ -63,6 +63,10 @@ public:
     void SetSprite(int id);
     /// @brief 外部演员方向覆盖当前局部 Z 旋转（弧度）；不重启动画或改变旋转速度，非有限值抛异常。
     void SetRotationZ(float radians);
+    /// @brief 外部效果创建器在Start首帧之后覆盖RGBA；保留脚本已经建立的Alpha插值基准，不重启动画。
+    void SetColor(Color color) {frame_.color=color;}
+    /// @brief 外部效果覆盖当前无量纲缩放，不重启动画或取消脚本插值；非有限值抛invalid_argument。
+    void SetScale(Vector2 scale);
     [[nodiscard]] const Frame& Sample() const { return frame_; }
     [[nodiscard]] bool Finished() const { return finished_; }
     [[nodiscard]] int ScriptId() const { return script_ ? script_->id : -1; }

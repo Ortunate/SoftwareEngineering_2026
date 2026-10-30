@@ -12,7 +12,7 @@ namespace koumakyou::ending {
 /// @brief 稳定结局编号；前四项分别为灵/梦/魔/恋好结局，后两项为灵梦/魔理沙坏结局。
 enum class Id : std::uint8_t { ReimuA, ReimuB, MarisaA, MarisaB, ReimuBad, MarisaBad, Count };
 /// @brief 原作选择输入；shot 为四御札 0～3，difficulty 为 Easy～Extra 的 0～4，计数非负。
-/// completedMainline 仅在本局依次完成一至六面时为 true；练习、预览、调试靶场必须传 false。
+/// completedMainline 仅在本局依次完成该难度终点（Easy五面，其余六面）时为 true；练习、预览、调试靶场必须传 false。
 struct Request {
     int shot=0,difficulty=1,continues=0,misses=0;
     bool challenge=false,completedMainline=false;

@@ -1,6 +1,8 @@
 // 本文件定义角色行为标识、阶段技能组合及血条外观配置；不保存技能血量或攻击实现。
 #pragma once
 #include "gameplay/actors/boss.hpp"
+#include <array>
+#include <optional>
 #include <functional>
 #include <memory>
 #include <type_traits>
@@ -28,6 +30,7 @@ inline Attack Run(behavior::Entry entry) {
 }
 /// @brief 技能的只读定义，由角色解析，启动配置只能引用它，不能覆盖血量。
 /// health 为该技能实际可消耗 HP；reserveHealth 是原生命寄存器的保留偏移，不属于后继技能状态。
+/// 仅当reserveHealth>0时允许health=0，表示原寄存器恰好位于阈值的过渡；当前血条为空，不伪造可消耗生命。
 /// Actor 和 Boss::health 为与原行为差分兼容仍使用 health+reserveHealth，展示按剩余值减去偏移计算。
 /// 所有时间为 60 Hz 内容帧；spellName 借用角色静态文本，行为闭包按值保存。
 struct SkillDefinition {
@@ -39,28 +42,36 @@ struct SkillDefinition {
     const char* spellName=nullptr;
     int spellCard=0,spellRevealFrame=0;
     bool spellNeedsTimer=false,reactToBomb=false;
+    int bombReactionFrame=0; // 角色原生Bomb回调安装的60 Hz内容帧；reactToBomb为真时才消费，非负。
+    std::optional<std::array<int,5>> bombRecoveryPoses; // 可选角色恢复姿态组；图集内脚本>=-1，空值沿用角色既有组。
+    // 生存符由超时成功；跳过普通超时清弹，后继行为自行清场。不能据此修改受伤/接触开关。
+    bool survival=false;
     float hitRadius=0; // 0 继承入场或上一技能半径，否则使用世界单位。
     float NativeHealth() const {return health+reserveHealth;}
 };
-/// @brief 技能完成后的控制流；Jump 的 phase/skill 均为配置内 0 起算索引，其他类型不使用索引。
+/// @brief 技能完成后的控制流；Jump 的索引从 0 起算，ExitDefeated 指定击破式退场，不改变符卡捕获判定。
 struct Transition {
-    enum class Kind {Next,Exit,Jump};
+    enum class Kind {Next,Exit,Jump,ExitDefeated};
     Kind kind=Kind::Next;
     std::size_t phase=0,skill=0;
     static Transition Exit() {return {Kind::Exit};}
+    static Transition ExitDefeated() {return {Kind::ExitDefeated};}
     static Transition Jump(std::size_t phase,std::size_t skill) {return {Kind::Jump,phase,skill};}
 };
-/// @brief 阶段内一次技能使用；同一技能可重复引用，每次使用独立交接。默认顺序执行，末技能转下一阶段。
+/// @brief 阶段内一次技能使用；onDamage用于阈值/一般伤害，onDefeat可单独指定原生命归零的后继，空值沿用onDamage。
+/// 同一技能可重复引用，每次使用独立交接。默认顺序执行，末技能转下一阶段。
 struct SkillSlot {
     BehaviorId id;
     Transition onDamage{},onTimeout{};
+    std::optional<Transition> onDefeat;
+    bool omitHealthBarSegment=false; // 显式准备技能不占HUD段；仍保持独立生命、时钟与回调，不由HP或符卡类型推断。
     SkillSlot()=default;
     SkillSlot(BehaviorId id):id(id) {}
     template<class Enum> requires std::is_enum_v<Enum>
     SkillSlot(Enum id):id(id) {}
 };
 /// @brief 血条一段的显式外观；skillIndex 引用本阶段技能（0 起算），ratio 为整条固定宽度比例。
-/// 段按屏幕从左到右排列，与技能执行顺序独立；同阶段每个技能必须恰好对应一段，比例之和为 1。
+/// 段按屏幕从左到右排列，与技能执行顺序独立；同阶段每个未显式省略的技能必须恰好对应一段，比例之和为 1。
 struct HealthBarSegmentConfig {
     std::size_t skillIndex=0;
     float ratio=1;
@@ -85,6 +96,7 @@ struct StartConfig {
     VisualId visual=kInvalidVisualId,defeatBase=kInvalidVisualId;
     void (*configure)(behavior::Actor&,bool)=nullptr;
     ShotType shot=ShotType::HomingAmulet;
+    native_combat::Difficulty difficulty=native_combat::Difficulty::Normal;
     BehaviorId intro{},defeated{},retreat{};
     std::vector<BehaviorId> resumeSteps;
     std::vector<Phase> phases;
@@ -93,10 +105,13 @@ struct StartConfig {
     int defeatScore=0,retreatScore=0;
 };
 /// @brief 事件表借用的静态战斗工厂；解析机体配置后返回已启动角色，调用方取得唯一所有权。
-struct Battle {std::unique_ptr<Boss> (*create)(ShotType)=nullptr;};
+struct Battle {std::unique_ptr<Boss> (*create)(ShotType,native_combat::Difficulty)=nullptr;};
 template<class Character,StartConfig (*Build)(ShotType)>
-std::unique_ptr<Boss> Create(ShotType shot) {
-    auto boss=std::make_unique<Character>();boss->StartBoss(Build(shot));return boss;
+std::unique_ptr<Boss> Create(ShotType shot,native_combat::Difficulty difficulty) {
+    // 旧配方仅验证过 Normal，不能把其他难度静默解释为 Normal。
+    if(difficulty!=native_combat::Difficulty::Normal)throw std::invalid_argument("Boss difficulty not implemented");
+    auto config=Build(shot);config.difficulty=difficulty;
+    auto boss=std::make_unique<Character>();boss->StartBoss(config);return boss;
 }
 /// @brief 完成哨兵仅唤醒公共交接；行为不选择下一个技能，Actor::finished 表示整场脚本已退场。
 behavior::Routine SkillComplete(behavior::Actor& actor);

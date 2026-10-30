@@ -85,6 +85,9 @@ public:
     void PlayStageMusic();
     /// @brief 播放当前关卡的 Boss BGM。
     void PlayBossMusic();
+    /// @brief 切换本关音乐：0道中、1Boss、2事件，-1停止当前音乐；其他索引抛invalid_argument。
+    /// 未加载的槽会停止旧曲但不播放；重复选择当前槽不重启。暂停、音量和卸载与其他关卡流一致。
+    void PlayStageTrack(int index);
     /// @brief 游戏暂停时暂停当前 BGM。
     void PauseMusic();
     /// @brief 游戏继续时恢复当前 BGM。
@@ -108,12 +111,13 @@ public:
     void StopSoundEffect(std::string_view name) const;
 
 private:
+    friend struct GameLifecycleProbe; // 图形生命周期测试检查流对象的实际所有权与播放状态，不暴露可变音乐句柄给产品代码。
     /// @brief 优先查询关卡音效，借用指针仅在对应资源表有效期内使用；无设备或资源返回空。
     [[nodiscard]] const Sound* FindSoundEffect(std::string_view name) const;
     struct StageLoad; // 独占后台任务与 CPU 图片；取消/析构时等待当前解码完成，再释放结果。
     /// @brief 在纹理缓存已备好后绑定外观、着色器与音频；只允许在主线程调用。
     void FinishStageLoad(const StageAssetManifest& manifest);
-    enum class MusicSlot : std::uint8_t { None, Menu, Stage, Boss };
+    enum class MusicSlot : std::uint8_t { None, Menu, Stage, Boss, Event };
 
     /// @brief 切换 BGM，并在播放新曲之前停止旧曲。
     void SwitchMusic(MusicSlot slot);
@@ -129,6 +133,7 @@ private:
     Music menuMusic_{};
     Music stageMusic_{};
     Music bossMusic_{};
+    Music eventMusic_{}; // 管理器独占的可选第三流，随本关卸载；不能继续借用上一个关卡的流。
     std::unordered_map<std::string, Sound> commonSounds_;
     std::unordered_map<std::string, Sound> stageSounds_;
     std::unordered_map<std::string, Texture2D> stageTextures_;

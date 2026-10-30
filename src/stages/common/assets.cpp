@@ -32,6 +32,7 @@ std::vector<VisualDefinition> CommonBattleVisuals() {
     visuals.push_back({.id=kBombPoint,.animation=battle::Item(3)});
     visuals.push_back({.id=kFullPowerPoint,.animation=battle::Item(4)});
     visuals.push_back({.id=kLifePoint,.animation=battle::Item(5)});
+    visuals.push_back({.id=kExternalParticle,.animation={battle::Atlas::BulletEffects,6}});
     for(int color=0;color<16;++color)
         visuals.push_back({.id=static_cast<VisualId>(kNativeLaserBase+color), .mode=VisualMode::Bullet,
                            .animation={battle::Atlas::BeamBullets,0,color}});

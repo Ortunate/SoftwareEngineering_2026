@@ -44,19 +44,28 @@ void Initialize(Actor& a) {
 
 Routine MidFans(Actor& a,float angle,float step) {
     a.soundEvents.push_back(5);
-    for(int i=0;i<12;++i) {co_await a.At(i*4);Fire(a,{Formation::FixedFan,8,3,8,1,8.5714283F,2.67857143F,angle,0.261799395F,0});angle-=step;a.soundEvents.push_back(7);}
+    const int d=native_combat::DifficultyIndex(a.difficulty);
+    const int count=std::array{4,8,12,12}.at(d);
+    const float speed=std::array{7.5F,8.5714283F,8.5714283F,12.8571434F}.at(d);
+    // 两轮扫描的 step 自带正负号；累加才能保持源扇组的旋转方向及后续随机移动读取顺序。
+    for(int i=0;i<12;++i) {co_await a.At(i*4);Fire(a,{Formation::FixedFan,8,3,count,1,speed,2.67857143F,angle,0.261799395F,0});angle+=step;a.soundEvents.push_back(7);}
     co_await a.At(48);
 }
 Routine MidDelayedFans(Actor& a) {
+    const int d=native_combat::DifficultyIndex(a.difficulty);
+    const float spacing=std::array{0.0628318563F,0.0448798947F,0.0392699093F,0.0349065848F}.at(d);
     for(int i=0;i<16;++i) {
         co_await a.At(i);const float angle=a.Random(2*pi)-pi,turn=a.Random(2*pi)-pi;
         a.skills.projectile={.delayFrames=60,.turnAngle=turn,.preserveTurnSpeed=true};a.soundEvents.push_back(22);
-        co_await a.At(i+1);Fire(a,{Formation::FixedFan,4,2,5,1,6.69642878F,2.67857143F,angle,0.044879895F,66});
+        co_await a.At(i+1);Fire(a,{Formation::FixedFan,4,2,3+2*d,1,6.69642878F,2.67857143F,angle,spacing,66});
     }
 }
 
 }
 
+void SakuyaBoss::Behaviors::ConfigureEternalMeekPractice(Actor& a,bool spatial) {
+    ConfigureBehavior(a,spatial);Initialize(a);Motion(a).bounds.lower.y=4.28571415F;a.SetPoses({128,131,132,129,130});
+}
 Routine SakuyaBoss::Behaviors::EternalMeekEntrance(Actor& a) {
     a.damageable=false;a.contactEnabled=false;a.SetPoses({128,131,132,129,130});a.skills.offset={0,0,0.535714269F};
     Motion(a).clamped=false;MoveTo(a,60,{0,0,4.28571415F});co_await a.At(60);
@@ -75,7 +84,8 @@ Routine SakuyaBoss::Behaviors::EternalMeek(Actor& a) {
     a.SetEmitterPeriod(0);a.damageable=false;a.skills.offset={};a.phaseFrames=0;MoveTo(a,120,{0,0,3.57142854F});
     co_await a.At(120);a.damageable=true;a.Animate(139);
     for(;;) {
-        Fire(a,{Formation::RandomAngleSpeed,3,6,4,1,16.0714283F,8.03571415F,pi,0,4});
+        const int count=std::array{2,4,6,9}.at(native_combat::DifficultyIndex(a.difficulty));
+        Fire(a,{Formation::RandomAngleSpeed,3,6,count,1,16.0714283F,8.03571415F,pi,0,4});
         Fire(a,{Formation::RandomAngleSpeed,3,6,12,1,13.3928576F,8.03571415F,0,-pi,4});a.soundEvents.push_back(7);
         co_await a.At(124);a.Rewind(120);
     }

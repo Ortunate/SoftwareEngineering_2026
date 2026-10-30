@@ -1,5 +1,6 @@
 // 本文件保留重构前 ECL 行为作为测试基准，覆盖调用/循环、镜像、瞄准和延迟转向，不进入生产引擎。
 #include "reference_script.hpp"
+#include "reference_program_difficulties.hpp"
 #include "stages/stage1/ids.hpp"
 #include "gameplay/bullets/patterns.hpp"
 #include "gameplay/data/native_combat.hpp"
@@ -17,9 +18,12 @@ constexpr std::array<Color,16> kColors{{{190,190,200,255},{140,35,60,255},{255,6
 Vector3 Add(Vector3 a, Vector3 b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 Vector3 Multiply(Vector3 v, float n) { return {v.x*n,v.y*n,v.z*n}; }
 }
-void ReferenceScript::Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored) {
+void ReferenceScript::Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored,native_combat::Difficulty difficulty) {
     *this = ReferenceScript{};
     if (sub < 0 || sub >= 38) throw std::invalid_argument("Invalid Stage 1 subprogram");
+    const int index=native_combat::DifficultyIndex(difficulty);
+    if(index<0)throw std::invalid_argument("Invalid Stage 1 difficulty");
+    difficultyIndex_=static_cast<unsigned>(index);
     context_.sub = sub; sourcePosition = source; health = maxHealth = sourceHealth;
     visited[sub]=true;
     random_ = seed ? seed : 1; mirrored_ = mirrored;
@@ -47,7 +51,7 @@ void ReferenceScript::Interpolate(int duration, Vector3 target, int power) {
 }
 void ReferenceScript::Update(float seconds, Vector3 player, BulletSystem& bullets) {
     if(!std::isfinite(seconds) || seconds<0)throw std::invalid_argument("Invalid Stage 1 delta time");
-    soundEvents.clear(); dropEvents.clear();
+    soundEvents.clear(); dropEvents.clear();effectEvents.clear();
     remainingFrames_ += static_cast<double>(seconds) * 60;
     while (remainingFrames_ + 0.00001 >= 1 && !finished && pendingCallback < 0) {
         remainingFrames_ -= 1; Tick(player,bullets);
@@ -79,13 +83,20 @@ void ReferenceScript::Tick(Vector3 player, BulletSystem& bullets) {
     // 循环可以在同一帧回到较早的脚本时间；预算防止损坏内容导致主线程永远无法返回。
     int budget = 2048;
     while (!finished && budget-- > 0) {
-        const auto instructions = reference::kPrograms.at(context_.sub);
+        const auto instructions = reference::ProgramsForDifficulty(difficultyIndex_)[context_.sub];
         if (context_.pc >= static_cast<int>(instructions.size())) break;
         const auto& instruction = instructions[context_.pc];
         if (instruction.frame > context_.frame) break;
-        ++context_.pc; Execute(instruction,player,bullets);
+        const auto color=reference::SourcesForDifficulty(difficultyIndex_)[context_.sub][context_.pc].effectColor;
+        ++context_.pc; Execute(instruction,player,bullets,color);
     }
     if (budget <= 0) throw std::runtime_error("Stage 1 instruction budget exhausted");
+    // 原生周期在当前指令执行后递增，达到周期就在本步末发射并归零。
+    if(emitterPeriod_>0&&++emitterCounter_>=emitterPeriod_) {
+        emitterCounter_=0;
+        if(!emitterConfigured_)throw std::runtime_error("Stage 1 emitter has no configuration");
+        Emit(emitter_,player,bullets);
+    }
     if (interpolating_) {
         --interpolationLeft_;
         const float remaining = std::max(0.0F,static_cast<float>(interpolationLeft_)/interpolationFrames_);
@@ -110,17 +121,12 @@ void ReferenceScript::Tick(Vector3 player, BulletSystem& bullets) {
     animationAge+=1.0/60;
     ++context_.frame; ++phaseFrames;
 }
-void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, BulletSystem& bullets) {
+void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, BulletSystem& bullets,std::uint32_t effectColor) {
     const auto& a = i.args;
     const auto v = [&](int n) { return Value(a[n]); };
     const auto jump = [&] { context_.frame = static_cast<int>(a[0]); context_.pc = static_cast<int>(a[1]); };
-    // 生命相关值只从统一目录读取；normalIndex 与当前解释器已核对的一面 570 条指令一一对应。
-    // 缺失目录数据不能回退旧硬编码，否则新增关卡会在数值尚未接通时被误判为已实现。
-    const auto healthValue=[&] {
-        const auto* record=native_combat::Instruction(1,context_.sub,context_.pc-1);
-        if(!record || record->opcode!=i.opcode || !record->value)throw std::logic_error("Missing native health instruction");
-        return Value(static_cast<float>(*record->value));
-    };
+    // 四难度过滤后局部序号不同，直接解释独立源表参数；不能以 Normal 索引查询另一分支。
+    const auto healthValue=[&] {return v(0);};
     switch (i.opcode) {
     case 0: break;
     case 1: finished = true; break;
@@ -157,9 +163,45 @@ void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, B
                 {std::cos(angle_)*speed_*a[0]/2,std::sin(angle_)*speed_*a[0]/2,0}),2); break;
     case 65: lower_ = {a[0],a[1]}; upper_ = {a[2],a[3]}; clamped_ = true; break;
     case 66: clamped_ = false; break;
-    case 67: case 68: case 69: case 70: Emit(i,player,bullets); break;
+    case 67: case 68: case 69: case 70:
+        emitter_=i;emitterConfigured_=true;
+        if(!suppressImmediateShot_)Emit(i,player,bullets);
+        break;
+    case 76: case 77: {
+        const int base=static_cast<int>(v(0));
+        emitterPeriod_=base+base/5-(2*(base/5)*rank_)/32;
+        emitterCounter_=0;
+        if(i.opcode==77&&emitterPeriod_>0) {
+            random_^=random_<<13;random_^=random_>>17;random_^=random_<<5;
+            emitterCounter_=static_cast<int>(random_%emitterPeriod_);
+        }
+        break;
+    }
     case 81: offset_ = {v(0),v(1),v(2)}; break;
     case 82: for (int n=0;n<8;++n) effects_[n]=v(n); break;
+    case 85: {
+        const Vector3 origin=ReferencePosition(Add(sourcePosition,offset_));
+        const float angle=v(2);const Vector3 direction{std::cos(angle),0,-std::sin(angle)};
+        Bullet* beam=bullets.SpawnBeam(origin,direction,v(6)*kReferenceScale,v(7)*kReferenceScale/2,
+                                       v(8)/60,v(9)/60,kColors[static_cast<int>(a[1])%16]);
+        if(beam) {
+            beam->visual=static_cast<VisualId>(kNativeLaserBase+static_cast<int>(a[1])%16);
+            beam->warningSeconds=v(11)/60;beam->dangerEndSeconds=(v(8)+v(9)-v(12))/60;
+            beam->maxAge=(v(8)+v(9)+v(10))/60;beam->beamGrowSeconds=v(8)/60;beam->beamFadeSeconds=v(10)/60;
+            beam->beamAnchor=origin;
+        }
+        beams_.at(beamSlot_)=bullets.MakeHandle(beam);beamAngles_.at(beamSlot_)=angle;
+        break;
+    }
+    case 87: beamSlot_=static_cast<int>(v(0));break;
+    case 88: {
+        const auto slot=static_cast<std::size_t>(v(0));
+        if(auto* beam=bullets.Resolve(beams_.at(slot))) {
+            auto& angle=beamAngles_.at(slot);angle+=v(1);
+            beam->beamDirection={std::cos(angle),0,-std::sin(angle)};
+        }
+        break;
+    }
     case 86: {
         const Vector3 origin = ReferencePosition(Add(sourcePosition,offset_));
         Bullet* beam = bullets.SpawnBeam(origin,BulletSystem::DirectionTo(origin,player),
@@ -184,9 +226,16 @@ void ReferenceScript::Execute(const reference::Instruction& i, Vector3 player, B
     case 97: SetAnimation(static_cast<int>(a[0])); break;
     case 100: deathEffect=static_cast<int>(a[0])&255;break;
     case 98: for(int n=0;n<5;++n)poses_[n]=static_cast<int>(a[n]);pose_=-1;break;
-    // 下列指令控制额外槽位特效、全局演出或掉落；其生命周期由 Game/renderer 管理。
-    case 76: case 78: case 79: case 96: case 101: case 102:
-    case 103: case 104: case 107: case 117: case 118: case 126:
+    case 102: {
+        constexpr std::array<std::uint32_t,3> colors{0xfff0f0f0U,0xfff0f0f0U,0xffffffffU};
+        effectEvents.push_back({13,1,colors.at(int(a[0])),sourcePosition,{v(1),v(2),v(3)},v(4)});break;
+    }
+    case 118:effectEvents.push_back({int(v(0)),int(v(1)),effectColor,sourcePosition});break;
+    // 下列指令控制全局演出或掉落；其生命周期由 Game/renderer 管理。
+    case 78: suppressImmediateShot_=true;break;
+    case 79: suppressImmediateShot_=false;break;
+    case 96: case 101:
+    case 103: case 104: case 107: case 117: case 126:
     break;
     case 131: for (int n=0;n<6;++n)rankInfluence_[n]=a[n]; break;
     default: throw std::runtime_error("Unsupported Stage 1 opcode: "+std::to_string(i.opcode));

@@ -221,7 +221,7 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                           std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
                           const SpriteShaders& shaders,
-                          const ActorEffectSystem& effects,std::span<const BombVolumeSprite> bombVolumes) const {
+                          const ActorEffectSystem& effects,std::span<const BombVolumeSprite> bombVolumes,const effects::ExternalEffectSystem* external) const {
     // 旧清单仍可持有 cutout/core shader；所有透明贴图改用连续 Alpha，不能让裁剪阈值切断柔边。
     (void)shaders;
     using Kind=TransparentDraw::Kind;
@@ -282,14 +282,26 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         const auto& visual=FindVisual(visuals,id);
         queue({Kind::Actor,0,index},spritePlane(visual,visual.worldHeight*appearance.scale,position,&animation));
     };
-    for(const auto* enemy:enemies)
+    const auto addAuxiliary=[&](std::span<const behavior::AuxiliaryAnimation> animations,Vector3 position,VisualId visual,float radius,ActorKind kind,ActorAppearance appearance) {
+        // 辅助公告板与本体进入同一透明排序队列，使用自己的ANM几何；不能额外画一遍无深度排序的光圈。
+        for(const auto& animation:animations)if(animation.script>=0&&animation.cursor.player.Source()&&!animation.cursor.player.Finished())
+            addActor(position,animation.visual==kInvalidVisualId?visual:animation.visual,radius,kind,appearance,animation.cursor.player.Sample());
+    };
+    for(const auto* enemy:enemies) {
         addActor(enemy->position,enemy->visual,enemy->hitRadius,ActorKind::Enemy,
                  enemy->presentation.Sample(),enemy->animation.player.Sample());
-    if(boss && boss->active)
+        addAuxiliary(enemy->auxiliaryAnimations,enemy->position,enemy->visual,enemy->hitRadius,ActorKind::Enemy,enemy->presentation.Sample());
+    }
+    if(boss && boss->active && boss->BodyVisible()) {
         addActor(boss->position,boss->visual,boss->hitRadius,ActorKind::Boss,
                  boss->presentation.Sample(),boss->animation.player.Sample());
+        addAuxiliary(boss->AuxiliaryAnimations(),boss->position,boss->visual,boss->hitRadius,ActorKind::Boss,boss->presentation.Sample());
+    }
     effects.Pool().ForEachActive([&](const ActorExitEffect& effect) {
         addActor(effect.position,effect.visual,effect.hitRadius,effect.kind,effect.Sample(),effect.animation);
+    });
+    if(external)external->ForEachActive([&](const effects::Particle& particle) {
+        addActor(particle.position,particle.visual,0,ActorKind::Enemy,{},particle.animation.Sample());
     });
     for(std::size_t index=0;index<pickups.size();++index) {
         const auto& pickup=pickups[index];const auto& visual=FindVisual(visuals,pickup.visual);
@@ -516,7 +528,7 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
         DrawLine3D(enemy->position, muzzle, YELLOW);
         DrawSphere(muzzle, 0.065F, MAGENTA);
     }
-    if (boss && boss->active) {
+    if (boss && boss->active && boss->BodyVisible()) {
         DrawSphereWires(boss->position, boss->hitRadius, 12, 16,
                         Color{65, 240, 250, 240});
         const Vector3 muzzle = boss->MuzzlePosition(playerPosition);

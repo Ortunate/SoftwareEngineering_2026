@@ -108,19 +108,21 @@ void RunSettingsTests() {
     // 全部开局选项组合均需跨文件往返；更新配置不能再次迁移 version=4 的自定义键位。
     for (int character : {0,1}) for (int shot : {0,1}) for (bool challenge : {false,true}) for (int phase : {2,4}) {
         auto settings = current;
-        settings.lastSelection = {shot,challenge,phase,1,character};
+        settings.lastSelection = {shot,challenge,phase,1,character,3};
         assert(SaveSettingsFile(path,settings));
         const auto loaded = LoadOrCreateSettings(path);
         assert(loaded.lastSelection.shot == shot && loaded.lastSelection.challenge == challenge);
         assert(loaded.lastSelection.character==character);
+        assert(loaded.lastSelection.difficulty==3);
         assert(loaded.lastSelection.practicePhase == phase && loaded.bindings.fire == KEY_Z);
     }
-    for (const char* fields : {"last_character=-1\nlast_shot=-1\nlast_challenge=2\nlast_practice_phase=3\n",
-                              "last_character=2\nlast_shot=2\nlast_challenge=-1\nlast_practice_phase=0\n",
+    for (const char* fields : {"last_character=-1\nlast_shot=-1\nlast_challenge=2\nlast_practice_phase=3\nlast_difficulty=-1\n",
+                              "last_character=2\nlast_shot=2\nlast_challenge=-1\nlast_practice_phase=0\nlast_difficulty=4\n",
                               "last_character=nan\nlast_shot=nan\nlast_challenge=true\nlast_practice_phase=4junk\n"}) {
         { std::ofstream out(path); out << "version=5\n" << fields; }
         const auto loaded = LoadOrCreateSettings(path);
         assert(loaded.lastSelection.character==0);
+        assert(loaded.lastSelection.difficulty==1);
         assert(loaded.lastSelection.shot == 0 && !loaded.lastSelection.challenge && loaded.lastSelection.practicePhase == 2);
     }
     { std::ofstream out(path); out << "version=4\nfocus=1003\nfire=90\nbomb=88\nbest_score=1234\n"; }
@@ -139,12 +141,15 @@ void RunSettingsTests() {
     assert(!records.stageHighScores.Record(false,1,-1));
     assert(records.stageHighScores.Best(false,0)==0 && records.stageHighScores.Best(true,7)==0);
     records.bestScore=2000000000;
+    assert(records.stageHighScores.Record(false,1,456,0));
+    assert(records.stageHighScores.Best(false,1,0)==456 && records.stageHighScores.Best(false,1,1)!=456);
     records.stageHighScores.scores[1][5]=std::numeric_limits<long long>::max();
     for(int stage=1;stage<=kStageScoreCount;++stage) {
         records.lastSelection.practiceStage=stage;
         assert(SaveSettingsFile(path,records));
         const auto loaded=LoadOrCreateSettings(path);
         assert(loaded.stageHighScores.scores==records.stageHighScores.scores);
+        assert(loaded.stageHighScores.difficultyScores==records.stageHighScores.difficultyScores);
         assert(loaded.lastSelection.practiceStage==stage);
     }
     for(const char* invalid : {"-1","9223372036854775808","120junk","nan"}) {
@@ -165,6 +170,10 @@ void RunSettingsTests() {
     spells.spellRecords.Begin(0,3,true);spells.spellRecords.Finish(0,3,true,true,8765432109LL);
     spells.spellRecords.Begin(1,7,false);spells.spellRecords.Finish(1,7,false,true,9999);
     spells.spellRecords.Begin(2,4,false);spells.spellRecords.Begin(3,131,false);
+    for(int character=0;character<4;++character)for(int number=132;number<=134;++number) {
+        spells.spellRecords.Begin(character,number,false);
+        spells.spellRecords.Finish(character,number,false,number!=133,9999);
+    }
     assert(SaveSettingsFile(path,spells));
     const auto restored=LoadOrCreateSettings(path);
     assert(restored.spellSelection.stage==3 && restored.spellSelection.group==15 && restored.spellSelection.character==3);
@@ -179,10 +188,17 @@ void RunSettingsTests() {
         assert(restored.spellRecords.Seen(character,131)==(character==3));
     }
     assert(restored.spellRecords.Get(1,3).attempts==0 && restored.stageHighScores.scores==previous.stageHighScores.scores);
+    for(int character=0;character<4;++character)for(int number=132;number<=134;++number) {
+        const auto& record=restored.spellRecords.Get(character,number);
+        assert(record.mainAttempts==1&&record.mainCaptured==(number!=133));
+        assert(record.attempts==0&&record.captured==0&&record.bestScore==0);
+    }
     {std::ofstream out(path);out<<"version=7\nlast_spell_stage=3\nlast_spell_group=99\nlast_spell_character=4\n"
         <<"spell_record_0_3=0 3 -1 1 1 0 0\nspell_record_1_7=1 7 100 1 2 0 0\n"
-        <<"spell_record_wrong=0 7 100 1 1 0 0\nspell_record_3_131=3 131 9999999999 2 1 0 0\n";}
+        <<"spell_record_wrong=0 7 100 1 1 0 0\nspell_record_3_131=3 131 9999999999 2 1 0 0\n"
+        <<"spell_record_0_132=0 132 5 1 1 1 1\nspell_record_0_135=0 135 0 0 0 1 1\n";}
     const auto invalidSpell=LoadOrCreateSettings(path);
+    assert(!invalidSpell.spellRecords.Seen(0,132)&&!invalidSpell.spellRecords.Seen(0,135));
     assert(invalidSpell.spellSelection.group==1 && invalidSpell.spellSelection.character==0);
     assert(invalidSpell.spellRecords.Get(0,3).attempts==0 && invalidSpell.spellRecords.Get(1,7).attempts==0);
     assert(invalidSpell.spellRecords.Get(0,7).attempts==0 && invalidSpell.spellRecords.Get(3,131).bestScore==9999999999LL);

@@ -113,7 +113,7 @@ void Game::DrawMainMenu(const ui::MenuMotion* motion) const {
         const float weight = animation.Weight(index);
         const float reveal = animation.Reveal(index*0.012F) * titleEntrance_.MenuProgress(index);
         if (reveal <= 0) continue;
-        const bool locked = index == 1 || index == 4;
+        const bool locked = index == 4;
         if (weight > 0.01F) {
             const auto center = canvas.Point(layout.menuLeft + 15 + 16*(1-reveal), rowY + 20);
             ui::YinYang(center,9.0F*canvas.scale,Fade(kScarlet,weight*reveal),

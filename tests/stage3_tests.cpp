@@ -3,7 +3,11 @@
 #include "stages/stage3/boss_config.hpp"
 #include "stages/stage3/behaviors.hpp"
 #include "gameplay/bosses/meiling.hpp"
+#include "actor_fixture.hpp"
+#include "stage3_reference_program.hpp"
+#include "stage3_spell_reference.hpp"
 #include "app/spell_practice.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <iostream>
@@ -18,63 +22,187 @@ void Near(float a,float b,float tolerance=5e-4F) {
 }
 unsigned Next(unsigned& state) {state^=state<<13;state^=state>>17;state^=state<<5;return state;}
 float Random(unsigned& state,float range) {return static_cast<float>(Next(state)>>8)/16777216.0F*range;}
-void TestBirthsAndMovement() {
-    stage3::Stage3Content content;assert(content.Events().size()==443);
-    std::vector<const native_combat::HealthRecord*> births;
-    for(const auto& r:native_combat::Stage(3)->health)
-        if(r.scope==native_combat::HealthScope::TimelineSpawn&&r.targetSub!=9&&r.targetSub!=21)births.push_back(&r);
-    assert(births.size()==437);std::size_t index=0;auto bullets=std::make_unique<BulletSystem>();
-    for(const auto& event:content.Events()) {
-        const auto* request=std::get_if<SpawnActors>(&event.action);if(!request)continue;
-        const auto& source=*births.at(index++);auto spawn=request->actor;
-        assert(request->count==1&&request->interval==0&&spawn.sourceHealth==*source.value&&spawn.sourceScore==source.score&&spawn.sourceItem==source.item);
-        assert(spawn.mirrored==(source.opcode==2||source.opcode==6)&&spawn.randomX==(source.position.x==-999));
-        if(source.frame<3474)assert(event.atFrame==source.frame);else assert(!event.atFrame);
-        spawn.retireOutside=false;spawn.pattern.spatialShots=false;behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Activate(spawn);
-        unsigned random=spawn.seed;const int sub=source.targetSub;
-        float x=source.position.x,y=source.position.y,vx=0,vy=0,angle=pi/2,speed=1.5F,accel=0,angular=0;
-        if(spawn.randomX)x=static_cast<float>((spawn.seed*1664525U+1013904223U)>>8)/16777216.0F*384;
-        if(sub<=1) {angle=0.52359879F;speed=4.5F;}
-        if(sub==2||sub==3) {angle=-1.04719758F;speed=4;}
-        int nextShot=-1;if(sub==6) {speed=2;nextShot=190-static_cast<int>(Next(random)%190)-1;}
-        if(sub==8)speed=2.5F;
-        float retreatAngle=0;
-        for(int frame=0;frame<500;++frame) {
-            x+=vx*(spawn.mirrored ? -1 : 1);y+=vy;
-            if(sub<=3) {
-                if(frame==30)angular=sub<=1 ? -0.0654498488F : 0.0349065848F;
-                if(frame==(sub<=1 ? 115 : 90))angular=0;
-            } else if(sub==6) {
-                if(frame==40)angular=-0.0245436933F;
-                if(frame==120)angular=0.0196349546F;
-                if(frame==220)angular=0;
-            } else {
-                if(frame==40)accel=sub==8 ? -0.0833333358F : -0.0500000007F;
-                if(frame==70) {
-                    accel=0;
-                    if(sub==5) {Random(random,1);retreatAngle=Random(random,pi/2)+pi/4;}
-                    if(sub==8) {for(int i=0;i<28;++i)Random(random,1);angle=Random(random,pi/2)+pi/4;speed=1.5F;}
-                }
-                if(sub==4&&frame==130) {angle=Random(random,pi/2)+pi/4;speed=1.5F;}
-                if(sub==5&&frame==100) {angle=retreatAngle;speed=-1.5F;}
-                if(sub==7&&frame==102) {angle=Random(random,pi/2)+pi/4;speed=-1.5F;}
-            }
-            angle+=angular;speed+=accel;vx=std::cos(angle)*speed;vy=std::sin(angle)*speed;
-            bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
-            Near(actor.position.x,(x-192)*scale);Near(actor.position.z,10-y*scale);Near(actor.position.y,spawn.position.y);
-            std::size_t count=0;
-            if(sub==4&&frame>=70&&frame<130&&(frame-70)%2==0)count=1;
-            if(sub==5&&frame==70)count=16;
-            if(sub==6&&frame==nextShot&&frame<220) {count=3;nextShot+=190;}
-            if(sub==7&&frame>=70&&frame<102&&(frame-70)%2==0)count=1;
-            if(sub==8&&frame==70)count=14;
-            if(bullets->Pool().ActiveCount()!=count) {std::cerr<<"Stage 3 ordinary shot frame "<<frame<<" sub "<<sub<<'\n';std::abort();}
+/// @brief 请求精确比较身份、数量及ARGB；位置与附着轴只在独立参考侧转换为世界坐标。
+void CompareStage3Effects(const behavior::Actor& actor,const std::vector<stage3::reference::ExternalEffect>& expected) {
+    if(actor.effectEvents.size()!=expected.size())std::cerr<<"Stage3 effect requests "<<actor.effectEvents.size()<<" vs "<<expected.size()<<" phase "<<actor.phaseFrames<<'\n';
+    assert(actor.effectEvents.size()==expected.size());
+    for(std::size_t n=0;n<expected.size();++n) {
+        const auto& a=actor.effectEvents[n];const auto& e=expected[n];assert(e.type==3||e.type==12||e.type==13||e.type==20);
+        const auto kind=e.type==3?effects::Kind::Burst:e.type==12?effects::Kind::Flash:e.type==13?effects::Kind::Attached:effects::Kind::Drift;
+        assert(a.kind==kind&&a.count==e.count&&a.color.r==((e.color>>16)&255)&&a.color.g==((e.color>>8)&255)&&a.color.b==(e.color&255)&&a.color.a==(e.color>>24));
+        Near(a.position.x,(e.position.x-192)*scale);Near(a.position.y,-e.position.z*scale);Near(a.position.z,10-e.position.y*scale);
+        if(e.type==13) {
+            assert(a.axis.x==e.axis.x&&a.axis.y==-e.axis.z&&a.axis.z==-e.axis.y);
+            const auto anchor=a.attachment.lock();assert(anchor);Near(anchor->Radius(),e.radius*scale,1e-5F);
         }
-        // 全部实际种子也走正式三维首轮；高位为 1 的种子不能经有符号转换变成非法采样编号。
-        auto spatial=spawn;spatial.pattern.spatialShots=true;behavior::Actor production;production.Activate(spatial);
-        bullets->Reset();production.Update(1.2F,{2,3,-6},*bullets);
     }
-    assert(index==437);
+}
+/// @brief 源99只重启指定辅助槽，精确比较编号/次数；年龄使用源帧独立换秒，不从生产时钟构造期望。
+void CompareStage3Auxiliary(const behavior::Actor& actor,const stage3::reference::SpellReference& source) {
+    for(std::size_t n=0;n<source.auxiliary.size();++n) {
+        const auto& actual=actor.auxiliaryAnimations[n];const auto& expected=source.auxiliary[n];
+        if(actual.script!=expected.script||actual.revision!=expected.revision)
+            std::cerr<<"Stage3 auxiliary slot "<<n<<" phase "<<actor.phaseFrames<<" source phase "<<source.phaseFrames
+                <<" script "<<actual.script<<'/'<<expected.script<<" revision "<<actual.revision<<'/'<<expected.revision<<'\n';
+        assert(actual.script==expected.script&&actual.revision==expected.revision);
+        assert(std::abs(actual.age-expected.frames/60.0)<1e-6);
+        assert(actual.visual==kInvalidVisualId&&!actual.interrupt);
+    }
+}
+/// @brief 入场有限窗及两路道中/最终退场独立验证请求、移动、声音与清弹存活；不扩大道中攻击解释范围。
+void TestMeilingEntranceAndRetirementEffects() {
+    using B=bosses::MeilingBoss::Behaviors;
+    struct Case {int source;behavior::Entry entry;int frames;};
+    const Case cases[]{{9,B::Midboss,130},{21,B::Entrance,130},{19,B::MidbossDefeated,181},
+        {20,B::MidbossTimeout,181},{48,B::Defeated,61}};
+    auto bullets=std::make_unique<BulletSystem>();
+    for(unsigned d=0;d<4;++d)for(unsigned seed:{7U,0x9e3779b9U})for(const auto& c:cases) {
+        stage3::reference::SpellReference source(d,c.source,{192,112,0},seed);
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,5},13000,seed);
+        actor.difficulty=*native_combat::DifficultyFromIndex(d);stage3::ConfigureBehavior(actor,false);
+        actor.motion.bounds={{-7.14285714F,3.57142857F},{7.14285714F,7.85714286F}};actor.motion.clamped=true;
+        if(c.source==9||c.source==21) {actor.Reset({7.14285714F,0,14.2857143F},13000,seed);actor.difficulty=*native_combat::DifficultyFromIndex(d);stage3::ConfigureBehavior(actor,false);}
+        actor.Start(c.entry(actor));int requests=0,particles=0;
+        for(int frame=0;frame<c.frames;++frame) {
+            bullets->Reset();auto* sentinel=bullets->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,stage3::kBlueBullet);assert(sentinel);
+            source.Tick({240,360,0});actor.Update(1.0F/60,{},*bullets);
+            CompareStage3Effects(actor,source.effects);CompareStage3Auxiliary(actor,source);
+            assert(sentinel->active==!source.clearBullets&&actor.soundEvents==source.sounds);
+            Near(actor.position.x,(source.position.x-192)*scale);Near(actor.position.z,10-source.position.y*scale);
+            for(const auto& e:actor.effectEvents){++requests;particles+=e.count;}
+        }
+        if(c.source==48) {
+            assert(requests==30&&particles==60&&actor.pendingCallback==B::End&&!actor.finished);
+            actor.Transition();actor.Update(1.0F/60,{},*bullets);assert(actor.finished&&actor.effectEvents.empty());
+        }
+        if(c.source==19||c.source==20)assert(requests==5&&particles==10&&actor.finished);
+        if(c.source==9) {
+            assert(requests==13&&particles==23);bool rejected=false;
+            try {source.Tick({});}catch(const std::logic_error&) {rejected=true;}assert(rejected);
+        }
+        assert(actor.Random(1)==source.Random(1));
+    }
+}
+/// @brief 两逻辑频率分别核对五显示FPS的请求时钟、同帧顺序和位置，涵盖低/高难准备、附着与退场。
+void TestMeilingEffectDisplayRates() {
+    using B=bosses::MeilingBoss::Behaviors;
+    const behavior::Entry entries[]{B::Midboss,B::Entrance,B::GorgeousSweetFlower,B::Selaginella,B::FirstNonspell,
+        B::RainbowWindChime,B::SummoningNonspell,B::FlowerDream,B::RainNonspell,B::ColorfulRain,B::ColorLightDance,
+        B::DazzlingColorTyphoon,B::MidbossTimeout,B::Defeated};
+    for(auto rate:{behavior::UpdateRate::Hz60,behavior::UpdateRate::Hz120})for(std::size_t route=0;route<std::size(entries);++route) {
+        std::vector<effects::Request> expected;
+        for(int fps:{120,30,60,144,240}) {
+            behavior::Actor actor(rate);actor.Reset({0,0,5},13000,7);stage3::ConfigureBehavior(actor,false);
+            actor.difficulty=route==3||route==7||route==10?native_combat::Difficulty::Hard:native_combat::Difficulty::Normal;
+            actor.Start(entries[route](actor));auto bullets=std::make_unique<BulletSystem>();std::vector<effects::Request> actual;
+            for(int frame=0;frame<fps*12;++frame) {
+                bullets->Reset();actor.Update(1.0F/fps,{2,0,-6},*bullets);
+                actual.insert(actual.end(),actor.effectEvents.begin(),actor.effectEvents.end());
+            }
+            assert(!actual.empty());
+            if(route==0||route==4) {
+                std::vector<effects::Request> attached;
+                for(const auto& r:actual)if(r.kind==effects::Kind::Attached)attached.push_back(r);
+                assert(attached.size()==4);
+                const auto program=stage3::reference::ProgramsForDifficulty(1)[route==0?9:22];
+                std::size_t index=0;
+                for(const auto& ins:program)if(ins.opcode==102) {
+                    const auto& r=attached.at(index++);const auto& a=ins.args;
+                    assert(r.contentFrame==ins.frame+(route==0?100:0));
+                    assert(r.axis.x==a[1]&&r.axis.y==-a[3]&&r.axis.z==-a[2]);
+                    const auto anchor=r.attachment.lock();assert(anchor);Near(anchor->Radius(),a[4]*scale,1e-5F);
+                    const auto color=int(a[0])==5?Color{255,224,224,255}:int(a[0])==6?Color{255,224,255,255}:Color{224,224,255,255};
+                    assert(r.color.r==color.r&&r.color.g==color.g&&r.color.b==color.b&&r.color.a==color.a);
+                }
+                assert(index==4);
+            }
+            if(route==13)assert(actual.size()==30);
+            if(fps==120)expected=actual;
+            else {
+                assert(actual.size()==expected.size());
+                for(std::size_t n=0;n<actual.size();++n) {
+                    const auto& a=actual[n];const auto& e=expected[n];assert(a.kind==e.kind&&a.count==e.count&&a.contentFrame==e.contentFrame);
+                    assert(a.color.r==e.color.r&&a.color.g==e.color.g&&a.color.b==e.color.b&&a.color.a==e.color.a);
+                    Near(a.position.x,e.position.x);Near(a.position.y,e.position.y);Near(a.position.z,e.position.z);
+                }
+            }
+        }
+    }
+}
+void TestBirthsAndMovement() {
+    for(int difficultyIndex=0;difficultyIndex<4;++difficultyIndex) {
+        stage3::Stage3Content content(*native_combat::DifficultyFromIndex(difficultyIndex));assert(content.Events().size()==443);
+        const auto programs=stage3::reference::ProgramsForDifficulty(difficultyIndex);
+        std::vector<const native_combat::HealthRecord*> births;
+        for(const auto& r:native_combat::Stage(3)->health)
+            if(r.scope==native_combat::HealthScope::TimelineSpawn&&r.targetSub!=9&&r.targetSub!=21)births.push_back(&r);
+        assert(births.size()==437);std::size_t index=0;auto bullets=std::make_unique<BulletSystem>();
+        for(const auto& event:content.Events()) {
+            const auto* request=std::get_if<SpawnActors>(&event.action);if(!request)continue;
+            const auto& source=*births.at(index++);auto spawn=content.ConfigureSpawn(request->actor);
+            assert(request->count==1&&request->interval==0&&spawn.sourceHealth==*source.value&&spawn.sourceScore==source.score&&spawn.sourceItem==source.item);
+            assert(spawn.mirrored==(source.opcode==2||source.opcode==6)&&spawn.randomX==(source.position.x==-999));
+            if(source.frame<3474)assert(event.atFrame==source.frame);else assert(!event.atFrame);
+            spawn.retireOutside=false;spawn.pattern.spatialShots=false;behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Activate(spawn);
+            unsigned random=spawn.seed;const int sub=source.targetSub;
+            float x=source.position.x,y=source.position.y,vx=0,vy=0,angle=pi/2,speed=1.5F,accel=0,angular=0;
+            if(spawn.randomX)x=static_cast<float>((spawn.seed*1664525U+1013904223U)>>8)/16777216.0F*384;
+            if(sub<=1) {angle=0.52359879F;speed=4.5F;}
+            if(sub==2||sub==3) {angle=-1.04719758F;speed=4;}
+            // 发射见证直接读取本关筛选后的源参数；120 Hz 生产路径另测，不从新配方反推答案。
+            int interval=0,nextShot=-1,automaticCount=0,streamCount=0,streamFan=0,openingRing=0,singleCount=0;
+            for(const auto& op:programs[sub]) {
+                if(op.frame==0&&(op.opcode==76||op.opcode==77)&&op.args[0]>0) {
+                    const int base=static_cast<int>(op.args[0]);interval=base+base/5-(base/5*2*16)/32;
+                    nextShot=interval-(op.opcode==77?static_cast<int>(Next(random)%interval):0)-1;
+                }
+                if(op.frame==0&&op.opcode>=67&&op.opcode<=75)automaticCount=static_cast<int>(op.args[2]*op.args[3]);
+                if(op.frame==70&&op.opcode==4&&op.args[0]==-10009)streamCount=static_cast<int>(op.args[1]);
+                if(op.frame==70&&op.opcode==68)streamFan=static_cast<int>(op.args[2]);
+                if(op.frame==70&&op.opcode==69)openingRing=static_cast<int>(op.args[2]*op.args[3]);
+                if(op.frame==70&&(op.opcode==67||op.opcode==75))singleCount=static_cast<int>(op.args[2]*op.args[3]);
+            }
+            if(sub==6)speed=2;
+            if(sub==8)speed=2.5F;
+            float retreatAngle=0;
+            for(int frame=0;frame<500;++frame) {
+                x+=vx*(spawn.mirrored ? -1 : 1);y+=vy;
+                if(sub<=3) {
+                    if(frame==30)angular=sub<=1 ? -0.0654498488F : 0.0349065848F;
+                    if(frame==(sub<=1 ? 115 : 90))angular=0;
+                } else if(sub==6) {
+                    if(frame==40)angular=-0.0245436933F;
+                    if(frame==120)angular=0.0196349546F;
+                    if(frame==220)angular=0;
+                } else {
+                    if(frame==40)accel=sub==8 ? -0.0833333358F : -0.0500000007F;
+                    if(frame==70) {
+                        accel=0;
+                        if(sub==5) {Random(random,1);retreatAngle=Random(random,pi/2)+pi/4;}
+                        if(sub==8) {for(int i=0;i<singleCount*2;++i)Random(random,1);angle=Random(random,pi/2)+pi/4;speed=1.5F;}
+                    }
+                    if(sub==4&&frame==70+streamCount*2) {angle=Random(random,pi/2)+pi/4;speed=1.5F;}
+                    if(sub==5&&frame==100) {angle=retreatAngle;speed=-1.5F;}
+                    if(sub==7&&frame==70+streamCount*2) {angle=Random(random,pi/2)+pi/4;speed=-1.5F;}
+                }
+                angle+=angular;speed+=accel;vx=std::cos(angle)*speed;vy=std::sin(angle)*speed;
+                bullets->Reset();actor.Update(1.0F/60,{2,3,-6},*bullets);
+                Near(actor.position.x,(x-192)*scale);Near(actor.position.z,10-y*scale);Near(actor.position.y,spawn.position.y);
+                std::size_t count=0;
+                if((sub==4||sub==7)&&frame>=70&&frame<70+streamCount*2&&(frame-70)%2==0)count=streamFan;
+                if((sub==4||sub==7)&&frame==70)count+=openingRing;
+                if((sub==5||sub==8)&&frame==70)count=singleCount;
+                const int stop=sub==6?220:sub<=1?115:90;
+                if(frame==nextShot&&frame<stop) {count=automaticCount;nextShot+=interval;}
+                if(bullets->Pool().ActiveCount()!=count) {std::cerr<<"Stage 3 difficulty "<<difficultyIndex<<" ordinary shot frame "<<frame<<" sub "<<sub<<'\n';std::abort();}
+            }
+            assert(actor.Random(1)==Random(random,1));
+            // 全部实际种子也走正式三维首轮；高位为 1 的种子不能经有符号转换变成非法采样编号。
+            auto spatial=spawn;spatial.pattern.spatialShots=true;behavior::Actor production;production.Activate(spatial);
+            bullets->Reset();production.Update(1.2F,{2,3,-6},*bullets);
+        }
+        assert(index==437);
+    }
 }
 /// @brief 帧号独立由源调用/回拨时钟展开：两个普通循环、三面非符两段循环及雨弹阶段。
 void TestAttackWitnesses() {
@@ -139,7 +267,7 @@ void TestAttackWitnesses() {
         const std::size_t count=choice==0 ? 36 : choice==1 ? 16 : 26;
         assert(bullets->Pool().ActiveCount()==count);
         // 召唤的独立种子不读取 Boss 攻击随机流；源发射按分支保留角度/速率读取的实际次数。
-        if(choice==0)Random(random,1);
+        if(choice==0) {Random(random,1);Random(random,1);}
         else {if(choice==2)Random(random,1);for(std::size_t i=0;i<count*2;++i)Random(random,1);}
         assert(actor.Random(1)==Random(random,1));
     }
@@ -216,19 +344,22 @@ void TestSpatialAndDisplayRates() {
         if(!duplicate)examples.push_back(&request->actor);
     }
     assert(examples.size()==8);auto bullets=std::make_unique<BulletSystem>();
-    for(const auto* example:examples) {
-        Vector3 position{};float random=0;std::vector<Bullet> expected;
-        for(int fps:{120,30,60,144,240}) {
-            auto spawn=*example;spawn.retireOutside=false;behavior::Actor actor;actor.Activate(spawn);bullets->Reset();
-            for(int i=0;i<fps*4;++i)actor.Update(1.0F/fps,{2,3,-6},*bullets);
-            std::vector<Bullet> shots;bullets->Pool().ForEachActive([&](const Bullet& b){shots.push_back(b);});const float next=actor.Random(1);
-            if(fps==120) {position=actor.Position();random=next;expected=shots;}
-            else {
-                Near(actor.Position().x,position.x,1e-5F);Near(actor.Position().z,position.z,1e-5F);assert(next==random&&shots.size()==expected.size());
-                for(std::size_t i=0;i<shots.size();++i) {
-                    assert(shots[i].nativeType==expected[i].nativeType&&shots[i].nativeColor==expected[i].nativeColor);
-                    Near(shots[i].position.x,expected[i].position.x,1e-5F);Near(shots[i].position.z,expected[i].position.z,1e-5F);
-                    Near(shots[i].velocity.x,expected[i].velocity.x,1e-5F);Near(shots[i].velocity.y,expected[i].velocity.y,1e-5F);Near(shots[i].velocity.z,expected[i].velocity.z,1e-5F);
+    for(int difficulty=0;difficulty<4;++difficulty) {
+        stage3::Stage3Content variant(*native_combat::DifficultyFromIndex(difficulty));
+        for(const auto* example:examples) {
+            Vector3 position{};float random=0;std::vector<Bullet> expected;
+            for(int fps:{120,30,60,144,240}) {
+                auto spawn=variant.ConfigureSpawn(*example);spawn.retireOutside=false;behavior::Actor actor;actor.Activate(spawn);bullets->Reset();
+                for(int i=0;i<fps*4;++i)actor.Update(1.0F/fps,{2,3,-6},*bullets);
+                std::vector<Bullet> shots;bullets->Pool().ForEachActive([&](const Bullet& b){shots.push_back(b);});const float next=actor.Random(1);
+                if(fps==120) {position=actor.Position();random=next;expected=shots;}
+                else {
+                    Near(actor.Position().x,position.x,1e-5F);Near(actor.Position().z,position.z,1e-5F);assert(next==random&&shots.size()==expected.size());
+                    for(std::size_t i=0;i<shots.size();++i) {
+                        assert(shots[i].nativeType==expected[i].nativeType&&shots[i].nativeColor==expected[i].nativeColor);
+                        Near(shots[i].position.x,expected[i].position.x,1e-5F);Near(shots[i].position.z,expected[i].position.z,1e-5F);
+                        Near(shots[i].velocity.x,expected[i].velocity.x,1e-5F);Near(shots[i].velocity.y,expected[i].velocity.y,1e-5F);Near(shots[i].velocity.z,expected[i].velocity.z,1e-5F);
+                    }
                 }
             }
         }
@@ -264,4 +395,276 @@ void TestEntranceAndDepartureSourceBoundaries() {
 }
 }
 /// @brief 独立三面测试入口，不依赖本机原典安装或一面旧解释器。
-void RunStage3Tests() {TestBirthsAndMovement();TestAttackWitnesses();TestBossTransitions();TestSceneAndTimelineWaits();TestSpatialAndDisplayRates();TestEntranceAndDepartureSourceBoundaries();}
+/// @brief 四难度首轮直接对照源 ECL 弹数，源世界采样保持 Hz60，生产频率不改变内容帧。
+void TestOrdinaryDifficultyFirstShots() {
+    using D=native_combat::Difficulty;
+    constexpr std::array difficulties{D::Easy,D::Normal,D::Hard,D::Lunatic};
+    constexpr std::array streams{1U,1U,19U,21U},rings{8U,16U,24U,72U},rain{8U,14U,20U,22U};
+    constexpr std::array sourceCounts{830,838,875,874};
+    for(std::size_t d=0;d<difficulties.size();++d) {
+      const auto programs=stage3::reference::ProgramsForDifficulty(d);
+      std::size_t total=0;for(const auto sub:programs)total+=sub.size();assert(total==sourceCounts[d]);
+      for(int pattern=0;pattern<3;++pattern) {
+        const auto sub=pattern==0?4:pattern==1?5:8;
+        std::size_t rawCount=0;
+        for(const auto& op:programs[sub])if(op.frame==70 && op.opcode>=67&&op.opcode<=75)
+            rawCount+=static_cast<std::size_t>(op.args[2]*op.args[3]);
+        assert(rawCount==(pattern==0?streams[d]:pattern==1?rings[d]:rain[d]));
+        auto spawn=testing::SpawnAt();spawn.difficulty=difficulties[d];
+        spawn.pattern=pattern==0?stage3::kAimedStreamOrb:pattern==1?stage3::kRetreatingRingOrb:stage3::kRainOrb;
+        spawn.pattern.spatialShots=false;auto actor=testing::MakeActor(spawn,behavior::UpdateRate::Hz60);
+        auto bullets=std::make_unique<BulletSystem>();
+        for(int frame=0;frame<=70;++frame) {bullets->Reset();actor->Update(1.0F/60,{2,3,-6},*bullets);}
+        assert(bullets->Pool().ActiveCount()==(pattern==0?streams[d]:pattern==1?rings[d]:rain[d]));
+      }
+      // 同一 120 Hz 行为步由不同显示频率分批交付，不能加速内容时钟或改变随机读取。
+      std::size_t expected=0;
+      for(int fps:{30,60,120,144,240}) {
+          auto spawn=testing::SpawnAt();spawn.difficulty=difficulties[d];spawn.pattern=stage3::kRainOrb;
+          spawn.pattern.spatialShots=false;auto actor=testing::MakeActor(spawn);
+          auto bullets=std::make_unique<BulletSystem>();
+          for(int frame=0;frame<fps*2;++frame)actor->Update(1.0F/fps,{2,3,-6},*bullets);
+          const auto actual=bullets->Pool().ActiveCount();
+          if(fps==30)expected=actual;else assert(actual==expected);
+          assert(actual==rain[d]);
+      }
+    }
+}
+/// @brief 四难度组合、正生命阈值和四机体击破/超时退场直接对照本关源指令。
+void TestDifficultyBossComposition() {
+    using S=bosses::MeilingBoss::Behavior;
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int d=0;d<4;++d) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(d);
+        const auto programs=stage3::reference::ProgramsForDifficulty(d);
+        const auto instruction=[&](int sub,int opcode,int frame=0) {
+            for(const auto& op:programs[sub])if(op.frame==frame&&op.opcode==opcode)return op.args[0];
+            throw std::logic_error("Missing Stage 3 source instruction");
+        };
+        const bool easy=d==0,hard=d>=2;
+        std::vector<float> health{instruction(22,111),instruction(22,113),instruction(24,111)};
+        std::vector<int> limits{int(instruction(22,115)),int(instruction(34,115)),int(instruction(24,115))};
+        std::vector<int> cards{0,25+d,0};
+        std::vector<S> skills{S::FirstNonspell,S::RainbowWindChime,S::SummoningNonspell};
+        if(hard) {
+            health.push_back(instruction(24,113));limits.push_back(int(instruction(37,115,1)));
+            cards.push_back(27+d);skills.push_back(S::FlowerDream);
+        }
+        health.insert(health.end(),{instruction(30,111),instruction(30,113)});
+        limits.insert(limits.end(),{int(instruction(30,115)),int(instruction(hard?43:40,115))});
+        cards.insert(cards.end(),{0,31+d});skills.insert(skills.end(),{S::RainNonspell,hard?S::ColorLightDance:S::ColorfulRain});
+        if(!easy) {
+            health.push_back(instruction(hard?42:39,113));limits.push_back(int(instruction(45,115)));
+            cards.push_back(34+d);skills.push_back(S::DazzlingColorTyphoon);
+        }
+        stage3::Stage3Content content(difficulty);
+        for(int shot=0;shot<4;++shot)for(bool damage:{false,true}) {
+            auto encounter=content.CreateBoss(stage3::kMeilingFinal,static_cast<ShotType>(shot));encounter->ResumeCombat();
+            for(std::size_t attack=0;attack<skills.size();++attack) {
+                assert(encounter->attack==int(attack)+1&&encounter->health==health[attack]);
+                bosses::MeilingBoss definitions;
+                const auto definition=definitions.DescribeSkill(skills[attack],static_cast<ShotType>(shot),difficulty);
+                assert(definition.NativeHealth()==health[attack]&&definition.spellCard==cards[attack]);
+                assert(definition.timeoutFrames==limits[attack]);
+                // 华想梦葛在第 1 内容帧才设置计时器，刚交接时 HUD 仍无时限。
+                assert(encounter->TimeLimit()==(definition.timeoutArmFrame>0?-1.0F/60:limits[attack]/60.0F));
+                if(skills[attack]==S::ColorfulRain||skills[attack]==S::ColorLightDance)
+                    assert(definition.thresholdDefeatsSpell==!easy&&definition.reserveHealth==(easy?0:2000));
+                bool complete=false;
+                for(int frame=0;frame<limits[attack]+180&&!complete;++frame) {
+                    bullets->Reset();complete=encounter->Update(1.0F/60,{2,3,-6},*bullets);
+                    if(damage&&encounter->CanTakeDamage()&&encounter->skillTimer>3) {
+                        encounter->health=definition.reserveHealth>0?definition.reserveHealth-1:0;
+                        assert(encounter->ShouldAdvanceFromDamage());complete=true;
+                    }
+                }
+                const bool defeated=damage&&(definition.reserveHealth==0||definition.thresholdDefeatsSpell);
+                assert(complete&&encounter->SkillDefeated()==defeated);
+                if(cards[attack]>0)assert(encounter->SpellCardNumber()==cards[attack]);
+                assert(encounter->AdvanceSkill()&&!encounter->CanTakeDamage());
+            }
+            for(int frame=0;frame<70&&encounter->active;++frame) {
+                bullets->Reset();if(encounter->Update(1.0F/60,{},*bullets))encounter->AdvanceSkill();
+            }
+            assert(!encounter->active&&encounter->Defeated()==damage);
+        }
+    }
+}
+/// @brief 独立展开 Sub18 的双方向与原样角度补偿，逐帧比较两种高难的实际弹数、速度和延迟转向。
+void TestSelaginellaSourceCycle() {
+    using S=bosses::MeilingBoss::Behavior;
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int d:{2,3}) {
+        const auto difficulty=*native_combat::DifficultyFromIndex(d);
+        const auto program=stage3::reference::ProgramsForDifficulty(d);
+        const auto& source=program[18];
+        std::vector<stage3::reference::Instruction> rings,turns;
+        for(const auto& op:source) {
+            if(op.opcode==70)rings.push_back(op);
+            if(op.opcode==82)turns.push_back(op);
+        }
+        assert(rings.size()==2&&turns.size()==2);
+        const auto aimed=std::find_if(source.begin(),source.end(),[](const auto& op){return op.opcode==69;});
+        assert(aimed!=source.end());
+        // 0x1f24 的目的寄存器确实为左方向；该非对称不变量不能由生产配方生成。
+        const auto compensation=std::find_if(source.begin(),source.end(),[](const auto& op){return op.offset==0x1f24;});
+        assert(compensation!=source.end()&&compensation->opcode==20&&compensation->args[0]==-10005);
+        bosses::MeilingBoss definitions;
+        const auto skill=definitions.DescribeSkill(S::Selaginella,ShotType::HomingAmulet,difficulty);
+        assert(skill.NativeHealth()==1300&&skill.timeoutFrames==1200&&skill.spellCard==d+21);
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({},1300,7);actor.difficulty=difficulty;
+        stage3::ConfigureBehavior(actor,false);actor.Start(bosses::MeilingBoss::Behaviors::Selaginella(actor));
+        float left=0,right=0;
+        for(int frame=0;frame<1200;++frame) {
+            bullets->Reset();actor.Update(1.0F/60,{},*bullets);
+            const bool burst=frame>=120&&(frame-120)%6==0;
+            const bool circle=frame>=120&&frame%120==0;
+            const int count=static_cast<int>(rings[0].args[2]);
+            assert(bullets->Pool().ActiveCount()==std::size_t((burst?count*2:0)+(circle?aimed->args[2]:0)));
+            int emitted=0;
+            bullets->Pool().ForEachActive([&](const Bullet& bullet) {
+                if(bullet.nativeColor!=13)return;
+                const int side=emitted/count,n=emitted%count;const auto& op=rings[side];
+                const float angle=(side?right:left)+n*2*pi/count;
+                Near(bullet.velocity.x,std::cos(angle)*op.args[4]*(60*scale),1e-5F);
+                Near(bullet.velocity.z,-std::sin(angle)*op.args[4]*(60*scale),1e-5F);
+                Near(bullet.turnDelaySeconds,turns[side].args[0]/60,1e-6F);
+                Near(bullet.turnAngle,turns[side].args[4],1e-6F);
+                Near(bullet.turnSpeed,turns[side].args[5]*(60*scale),1e-5F);++emitted;
+            });
+            assert(emitted==(burst?count*2:0));
+            if(burst) {
+                left+=0.1483529806137085F;right-=0.16580627858638763F;
+                if(left>pi)left-=2*pi;
+                if(right<pi)left+=2*pi;
+            }
+        }
+        // 初始方向全是常量，整张符卡不得消费演员随机流。
+        unsigned random=7;assert(actor.Random(1)==Random(random,1));
+    }
+}
+/// @brief 高难移动弹的固定周期从配置帧的步末开始计数，停止帧不得再次发射。
+void TestMovingEmitter() {
+    stage3::Stage3Content content(native_combat::Difficulty::Hard);
+    auto spawn=testing::SpawnAt();spawn.pattern=stage3::kBlueHookOrb;spawn.pattern.spatialShots=false;
+    spawn=content.ConfigureSpawn(spawn);
+    auto actor=testing::MakeActor(spawn,behavior::UpdateRate::Hz60);
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int frame=0;frame<125;++frame) {
+        bullets->Reset();actor->Update(1.0F/60,{2,3,-6},*bullets);
+        assert(bullets->Pool().ActiveCount()==(frame==59?1U:0U));
+    }
+}
+/// @brief 四难度弹流、非符及符卡按独立源上下文逐帧比较生成快照；星形另核对原生扩展几何。
+void TestHighSpellSourceExecution() {
+    using Entry=behavior::Entry;
+    struct Case {int source;Entry production;int frames;unsigned difficulties=15;};
+    const std::array cases{
+        Case{4,stage3::AcceleratingStream,500},
+        Case{7,stage3::RisingStream,500},
+        Case{22,bosses::MeilingBoss::Behaviors::FirstNonspell,1800},
+        Case{24,bosses::MeilingBoss::Behaviors::SummoningNonspell,2400},
+        Case{29,stage3::SummonedStream,1200},
+        Case{30,bosses::MeilingBoss::Behaviors::RainNonspell,2300},
+        Case{33,bosses::MeilingBoss::Behaviors::RainbowWindChime,1800},
+        Case{36,bosses::MeilingBoss::Behaviors::FlowerDream,1800,12},
+        Case{39,bosses::MeilingBoss::Behaviors::ColorfulRain,1800,3},
+        Case{42,bosses::MeilingBoss::Behaviors::ColorLightDance,1800,12},
+        Case{45,bosses::MeilingBoss::Behaviors::DazzlingColorTyphoon,2100,14}};
+    auto bullets=std::make_unique<BulletSystem>();
+    std::array<std::array<bool,61>,4> visited{};
+    for(int difficulty:{0,1,2,3})for(const auto& entry:cases)if(entry.difficulties&(1U<<difficulty))for(unsigned seed:{7U,0x9e3779b9U}) {
+        stage3::reference::SpellReference original(difficulty,entry.source,{192,96,0},seed);
+        behavior::Actor actor(behavior::UpdateRate::Hz60);actor.Reset({0,0,10-96*scale},1400,seed);
+        // 独立技能入口继承前一非符的战斗边界；源执行器使用同一已进入战斗的初始上下文。
+        actor.motion.bounds={{(32-192)*scale,10-144*scale},{(352-192)*scale,10-48*scale}};actor.motion.clamped=true;
+        actor.difficulty=*native_combat::DifficultyFromIndex(difficulty);stage3::ConfigureBehavior(actor,false);actor.Start(entry.production(actor));
+        if(entry.source==4||entry.source==7||entry.source==29) {
+            auto spawn=testing::SpawnAt(actor.Position());spawn.seed=seed;spawn.difficulty=actor.difficulty;
+            spawn.pattern=entry.source==4?stage3::kAimedStreamOrb:entry.source==7?stage3::kRisingStreamOrb:stage3::kSummonedStream;
+            spawn.pattern.spatialShots=false;spawn.retireOutside=false;actor.Activate(spawn);
+        }
+        for(int frame=0;frame<entry.frames;++frame) {
+            bullets->Reset();original.Tick({240,360,0});actor.Update(1.0F/60,{48*scale,0,10-360*scale},*bullets);
+            CompareStage3Effects(actor,original.effects);
+            const auto fail=[&](const char* field) {
+                std::cerr<<"Stage 3 spell difficulty "<<difficulty<<" source "<<entry.source<<" frame "<<frame<<" field "<<field<<'\n';std::abort();
+            };
+            CompareStage3Auxiliary(actor,original);
+            if(bullets->Pool().ActiveCount()!=original.emissions.size())fail("emission count");
+            const auto close=[&](float actual,float expected,float tolerance,const char* field) {
+                if(!std::isfinite(actual)||!std::isfinite(expected)||std::abs(actual-expected)>tolerance) {
+                    std::cerr<<"actual "<<actual<<" expected "<<expected<<" difference "<<actual-expected<<'\n';fail(field);
+                }
+            };
+            close(actor.Position().x,(original.position.x-192)*scale,5e-4F,"actor X");
+            close(actor.Position().z,10-original.position.y*scale,5e-4F,"actor Z");
+            std::size_t index=0;
+            bullets->Pool().ForEachActive([&](const Bullet& actual) {
+                const auto& expected=original.emissions.at(index++);
+                if(actual.nativeType!=expected.type||actual.nativeColor!=expected.color)fail("bullet identity");
+                close(actual.position.x,(expected.position.x-192)*scale,5e-4F,"bullet X");
+                close(actual.position.z,10-expected.position.y*scale,5e-4F,"bullet Z");
+                close(actual.velocity.x,expected.velocity.x*(60*scale),1e-4F,"velocity X");
+                close(actual.velocity.z,-expected.velocity.y*(60*scale),1e-4F,"velocity Z");
+                close(actual.acceleration.x,expected.acceleration.x*(3600*scale),1e-4F,"acceleration X");
+                close(actual.acceleration.z,-expected.acceleration.y*(3600*scale),1e-4F,"acceleration Z");
+                if(expected.flags&64) {
+                    close(actual.turnAngle,expected.turnAngle,1e-5F,"turn angle");
+                    close(actual.turnSpeed,expected.turnSpeed*(60*scale),1e-4F,"turn speed");
+                    close(actual.turnDelaySeconds,expected.turnDelay/60,1e-5F,"turn delay");
+                }
+            });
+            if(actor.spawnEvents.size()!=original.spawns.size())fail("summon count");
+            for(std::size_t i=0;i<original.spawns.size();++i) {
+                const auto& source=original.spawns[i];const auto& actual=actor.spawnEvents[i];
+                close(actual.position.x,(source.position.x-192)*scale,5e-4F,"summon X");
+                close(actual.position.z,10-source.position.y*scale,5e-4F,"summon Z");
+                if(actual.sourceHealth!=source.health||actual.sourceItem!=source.item||actual.sourceScore!=source.score)fail("summon metadata");
+            }
+            if(frame>1&&actor.damageable!=original.damageable)fail("damage switch");
+            if(actor.soundEvents!=original.sounds)fail("sound sequence");
+        }
+        for(std::size_t sub=0;sub<original.visited.size();++sub)visited[difficulty][sub]|=original.visited[sub];
+        if(actor.Random(1)!=original.Random(1)) {
+            std::cerr<<"Stage 3 spell difficulty "<<difficulty<<" source "<<entry.source<<" final random state differs\n";std::abort();
+        }
+    }
+    for(int d=0;d<4;++d) {
+        for(int sub:{26,27,28})assert(visited[d][sub]);
+        std::cout<<"Stage 3 difficulty "<<d<<" combat reference visited "<<std::count(visited[d].begin(),visited[d].end(),true)<<" subprograms\n";
+    }
+}
+/// @brief 新符卡在默认 120 Hz 下保持 60 Hz 发射节奏，并跨五种显示频率比较三维快照和随机流。
+void TestBossSpellDisplayRates() {
+    using Entry=behavior::Entry;
+    const std::array<Entry,3> entries{bosses::MeilingBoss::Behaviors::FlowerDream,
+        bosses::MeilingBoss::Behaviors::ColorLightDance,bosses::MeilingBoss::Behaviors::DazzlingColorTyphoon};
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int d:{2,3})for(const auto entry:entries) {
+        Vector3 position{};float random=0;std::vector<Bullet> expected;
+        for(int fps:{120,30,60,144,240}) {
+            behavior::Actor actor;actor.Reset({0,0,5.71428585F},1400,7);actor.difficulty=*native_combat::DifficultyFromIndex(d);
+            actor.motion.bounds={{-7.14285714F,3.57142857F},{7.14285714F,7.85714286F}};actor.motion.clamped=true;
+            stage3::ConfigureBehavior(actor);actor.Start(entry(actor));bullets->Reset();
+            for(int frame=0;frame<fps*8;++frame)actor.Update(1.0F/fps,{2,3,-6},*bullets);
+            assert(!bullets->Pool().DroppedSpawns());
+            std::vector<Bullet> actual;bullets->Pool().ForEachActive([&](const Bullet& bullet){actual.push_back(bullet);});
+            const float next=actor.Random(1);
+            if(fps==120) {position=actor.Position();random=next;expected=actual;}
+            else {
+                Near(actor.Position().x,position.x,1e-5F);Near(actor.Position().y,position.y,1e-5F);Near(actor.Position().z,position.z,1e-5F);
+                assert(next==random&&actual.size()==expected.size());
+                for(std::size_t i=0;i<actual.size();++i) {
+                    assert(actual[i].nativeType==expected[i].nativeType&&actual[i].nativeColor==expected[i].nativeColor);
+                    Near(actual[i].position.x,expected[i].position.x,1e-5F);Near(actual[i].position.y,expected[i].position.y,1e-5F);Near(actual[i].position.z,expected[i].position.z,1e-5F);
+                    Near(actual[i].velocity.x,expected[i].velocity.x,1e-5F);Near(actual[i].velocity.y,expected[i].velocity.y,1e-5F);Near(actual[i].velocity.z,expected[i].velocity.z,1e-5F);
+                }
+            }
+        }
+        assert(!expected.empty());
+    }
+}
+/// @brief 三面效果专项覆盖独立源请求、完整攻击及双频率显示节奏。
+void RunStage3EffectTests() {TestMeilingEntranceAndRetirementEffects();TestMeilingEffectDisplayRates();TestHighSpellSourceExecution();}
+void RunStage3Tests() {TestMeilingEntranceAndRetirementEffects();TestMeilingEffectDisplayRates();TestBirthsAndMovement();TestAttackWitnesses();TestBossTransitions();TestSceneAndTimelineWaits();TestSpatialAndDisplayRates();TestEntranceAndDepartureSourceBoundaries();TestOrdinaryDifficultyFirstShots();TestDifficultyBossComposition();TestSelaginellaSourceCycle();TestMovingEmitter();TestHighSpellSourceExecution();TestBossSpellDisplayRates();}

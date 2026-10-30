@@ -22,12 +22,15 @@ struct GameLifecycleProbe {
     static std::string Name(const Game& game){return game.scoreName_;}
     static bool SaveFailed(const Game& game){return !game.scoreSaveError_.empty();}
     static void Menu(Game& game){game.EnterMainMenu();game.titleEntrance_.Complete();}
-    /// @brief 模拟已依次通过前五面后的末关出口，排除战斗数值/时间轴，保留真实收尾和异步资源路径。
-    static void ClearMainline(Game& game,int shot,bool challenge,int misses,long long value=12345678) {
-        Menu(game);game.stageId_=StageId::Stage6;
+    /// @brief 模拟已按难度依次通过前置关卡后的出口，隔离战斗，保留真实收尾/异步资源及成绩写入。
+    static void ClearMainline(Game& game,int shot,bool challenge,int misses,long long value=12345678,int difficultyIndex=1) {
+        Menu(game);game.stageId_=difficultyIndex==0?StageId::Stage5:StageId::Stage6;
+        game.runDifficulty_=*native_combat::DifficultyFromIndex(difficultyIndex);game.selectedDifficulty_=(difficultyIndex+1)%4;
+        // 结算从内容读取源关卡号；隔离战斗仍须提供真实内容身份，不能仅写StageId后用空指针模拟通关。
+        game.stageContent_=CreateStageContent(game.stageId_,game.runDifficulty_);
         game.practiceMode_=game.spellPractice_=game.previewMode_=false;game.challengeMode_=challenge;
         game.player_.ConfigureRun(2,3,challenge,static_cast<ShotType>(shot));
-        game.clearedMainlineStages_=0x1f;game.missCount_=misses;game.bombCount_=2;game.graze_=321;game.score_=value;
+        game.clearedMainlineStages_=difficultyIndex==0?0x0f:0x1f;game.runInitialLives_=2;game.missCount_=misses;game.bombCount_=2;game.graze_=321;game.score_=value;
         game.stageGraze_=game.stagePointItems_=0;game.stageClearShown_=false;
         game.BeginStageClear();game.ContinueStageClear();
         assert(game.state_==RunState::Finishing && game.pendingEnding_);
@@ -67,6 +70,11 @@ struct GameLifecycleProbe {
                 assert(font.glyphs[GetGlyphIndex(font,codepoints[i])].value==codepoints[i]);
             UnloadCodepoints(codepoints);
         }
+    }
+    /// @brief 将已结束的本局成绩按实际难度命名保存；此前键鼠回放另行覆盖输入与失败恢复。
+    static void SaveDifficultyScore(Game& game,const std::string& name) {
+        assert(game.state_==RunState::ScoreSave&&game.scoreDifficulty_==native_combat::DifficultyIndex(game.runDifficulty_));
+        game.scoreName_=name;game.SaveNamedScore();assert(game.state_==RunState::Score);
     }
     static void FillHighScores(Game& game) {
         for(int i=0;i<10;++i)assert(game.scoreProfile_.Insert(false,1,1,{90000000+i,"EXISTING",0,0,0,0}));
@@ -173,7 +181,26 @@ void Run(Game& game,const std::filesystem::path& output) {
     assert(Probe::State(game)==RunState::ScoreSave);
     Key(game,KEY_Z);assert(Probe::State(game)==RunState::MainMenu);
     assert(Probe::Profile(game).Get(false,1)[0]->value==90000009);
-    std::cout<<"Six endings, resource handoff, localized glyphs, real name input, atomic-save retry and responsive score pages passed\n";
+    // 四难度×四御札×两模式分别经过真实末关出口、结局加载和命名保存；不能复用Normal成绩槽。
+    for(int d=0;d<4;++d)for(int shot=0;shot<4;++shot)for(bool challenge:{false,true}) {
+        const auto before=score::Load(score::kFilename);
+        const auto expected=d==0?(shot<2?ending::Id::ReimuBad:ending::Id::MarisaBad):static_cast<ending::Id>(shot);
+        Probe::ClearMainline(game,shot,challenge,2,100000000LL+d*1000000+shot*10000,d);WaitEnding(game);
+        Probe::CheckEnding(game,expected,before.endingsSeen[static_cast<std::size_t>(expected)]);Probe::CompleteEnding(game);
+        const auto name="D"+std::to_string(d)+"S"+std::to_string(shot)+(challenge?"C":"N");
+        Probe::SaveDifficultyScore(game,name);const auto after=score::Load(score::kFilename);
+        assert(after.Get(challenge,shot,d)[0]&&after.Get(challenge,shot,d)[0]->name==name);
+        for(int mode=0;mode<2;++mode)for(int otherShot=0;otherShot<4;++otherShot)for(int otherDifficulty=0;otherDifficulty<5;++otherDifficulty) {
+            if(mode==int(challenge)&&otherShot==shot&&otherDifficulty==d)continue;
+            const auto& old=before.Get(mode!=0,otherShot,otherDifficulty);const auto& now=after.Get(mode!=0,otherShot,otherDifficulty);
+            for(int index=0;index<score::kSlots;++index) {
+                assert(bool(old[index])==bool(now[index]));if(!old[index])continue;
+                const auto& a=*old[index];const auto& b=*now[index];
+                assert(a.value==b.value&&a.name==b.name&&a.misses==b.misses&&a.bombs==b.bombs&&a.graze==b.graze&&a.completedAt==b.completedAt);
+            }
+        }
+    }
+    std::cout<<"Six endings, four difficulties, isolated score groups, resource handoff, real name input and save retry passed\n";
 }
 } // namespace
 /// @brief argv[1] 为截图目录；配置和成绩全部隔离在新建临时目录，需本地图形会话，不初始化音频。

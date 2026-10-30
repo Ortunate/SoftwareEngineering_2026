@@ -2,6 +2,9 @@
 import importlib.util
 from pathlib import Path
 import struct
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -89,6 +92,21 @@ class StageScriptInspectionTests(unittest.TestCase):
         self.assertIsNone(spawn['health'])
         self.assertIsNone(spawn['item'])
         self.assertIsNone(spawn['score'])
+
+    def test_cli_all_preserves_single_difficulty_format(self):
+        # 同一源文件只生成一份原始记录；覆盖清单按 E/N/H/L 顺序分别保存。
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / 'fixture.ecl'
+            path.write_bytes(fixture([instruction(0)]))
+            script = Path(__file__).parents[1] / 'tools/inspect_stage_scripts.py'
+            for difficulty, masks in [('all', [0x100, 0x200, 0x400, 0x800]), ('H', [0x400])]:
+                output = root / difficulty
+                subprocess.run([sys.executable, str(script), str(path), '--output', str(output),
+                                '--difficulty', difficulty], check=True, capture_output=True)
+                report = json.loads((output / 'coverage.json').read_text())
+                self.assertEqual([entry['difficulty_mask'] for entry in report], masks)
+                self.assertTrue((output / 'fixture.json').exists())
 
     def test_invalid_inputs_fail_closed(self):
         valid = fixture([instruction(0)])

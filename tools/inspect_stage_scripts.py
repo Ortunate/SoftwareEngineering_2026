@@ -160,7 +160,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('inputs', type=Path, nargs='+')
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--difficulty', choices=('E', 'N', 'H', 'L'), default='N')
+    parser.add_argument('--difficulty', choices=('E', 'N', 'H', 'L', 'all'), default='N',
+                        help='选择单一难度或 all；默认 N，all 在同一清单输出四项')
     args = parser.parse_args()
     # 全部输入先通过校验，避免后一个损坏文件使本次报告混入上次遗留的完整性假象。
     sources = [read_ecl(path) for path in args.inputs]
@@ -174,12 +175,14 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     summaries = []
     for path, ecl in zip(args.inputs, sources):
-        summary = inspect(ecl, 0x100 << 'ENHL'.index(args.difficulty))
+        difficulties = 'ENHL' if args.difficulty == 'all' else args.difficulty
+        results = [inspect(ecl, 0x100 << 'ENHL'.index(difficulty)) for difficulty in difficulties]
         (args.output / f'{path.stem}.json').write_text(
             json.dumps(ecl, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-        summaries.append(summary)
-        print(f"{path.name}: {summary['timeline_spawn_records']} 条出生记录，"
-              f"{len(summary['conservative_reachable_subs'])} 个保守可达子程序")
+        summaries.extend(results)
+        for difficulty, summary in zip(difficulties, results):
+            print(f"{path.name} {difficulty}: {summary['timeline_spawn_records']} 条出生记录，"
+                  f"{len(summary['conservative_reachable_subs'])} 个保守可达子程序")
     (args.output / 'coverage.json').write_text(
         json.dumps(summaries, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 

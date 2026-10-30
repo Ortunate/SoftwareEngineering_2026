@@ -51,7 +51,17 @@ public:
     void Decelerate(int duration);
     /// @brief 返回当前插值的世界终点；未插值时返回当前位置，只借用数值、不推进时钟。
     [[nodiscard]] Vector3 Target() const;
+    /// @brief 为极坐标段启用独立float数值积分格；origin与unitSize均为世界量，X/Z格长绝对值须相同且非零。
+    /// 仅组件内部保存格内float位置，全部公开状态仍为世界单位；外部改写位置会重基准，Interpolate退出此模式。
+    /// 用于必须保留原作单精度累计及边界帧的段，不改变60Hz内容时间；负格长允许坐标轴反向。
+    void EnableFloatIntegration(Vector3 origin,Vector3 unitSize);
+    /// @brief 返回面向世界目标的X/Z弧度角；启用float积分格时在内部格内按float求差，重合返回pi/2。
+    [[nodiscard]] float AngleTo(Vector3 target) const;
 private:
+    struct FloatIntegration {
+        Vector3 origin,unitSize,point,displacement{},lastWorld{},lastVelocity{};
+    };
+    std::optional<FloatIntegration> floatIntegration_;
     bool interpolating_ = false;
     Vector3 start_{}, delta_{};
     int duration_ = 0, power_ = 1;

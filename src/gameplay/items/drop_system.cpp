@@ -112,6 +112,8 @@ void DropSystem::SpawnReferenceDrop(Vector3 position, int item, bool fullPower) 
         if(referenceDropIndex_++%3!=0)return;
         item=items[referenceItemIndex_++%items.size()];
     }
+    // 原生演员的非负掉落字节直接交给统一道具入口；Extra尾波的5是残机，不得丢弃或在满P时转分数。
+    if(item>=3&&item<=6) {SpawnNativeItem(position,item,fullPower);return;}
     if(item<0 || item>2)return;
     const bool score=item==1 || fullPower;
     Spawn(score ? PickupKind::Score : PickupKind::Power,position,

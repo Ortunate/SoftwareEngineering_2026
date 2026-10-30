@@ -5,9 +5,10 @@
 #include "stages/stage6/scenery.hpp"
 namespace koumakyou::stage6 {
 const StageAssetManifest& Stage6Content::Assets() const {return Stage6Manifest();}
-void Stage6Content::DrawScenery(float seconds) const {stage6::DrawScenery(seconds);}
+void Stage6Content::DrawScenery(float seconds,const AssetManager&) const {stage6::DrawScenery(seconds);}
 std::span<const StageEvent> Stage6Content::Events() const {return Stage6Timeline();}
 const bosses::Battle& Stage6Content::PracticeBoss() const {return kRemiliaFinal;}
+const bosses::Battle& Stage6Content::PracticeBoss(int spellCard) const {return Stage6SpellBattle(spellCard,Difficulty());}
 std::span<const DialogueLine> Stage6Content::Dialogue(bool after,ShotType shot) const {return SceneDialogue(DialogueScene::FinalBoss,after,shot);}
 std::span<const DialogueCue> Stage6Content::DialogueCues(bool after,ShotType shot) const {return SceneDialogueCues(DialogueScene::FinalBoss,after,shot);}
 std::span<const DialogueLine> Stage6Content::SceneDialogue(DialogueScene scene,bool after,ShotType shot) const {

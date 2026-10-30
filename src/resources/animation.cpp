@@ -101,6 +101,10 @@ void Player::SetRotationZ(float radians) {
     if(!std::isfinite(radians))throw std::invalid_argument("Non-finite animation rotation");
     frame_.rotation.z=radians;
 }
+void Player::SetScale(Vector2 scale) {
+    if(!std::isfinite(scale.x)||!std::isfinite(scale.y))throw std::invalid_argument("Invalid animation scale");
+    frame_.scale=scale;
+}
 void Player::Start(const Archive& archive,int id,int offset,int initial,std::uint32_t seed) {
     *this=Player{};archive_=&archive;script_=archive.FindScript(id);
     if(!script_)throw std::runtime_error("Unknown ANM script: "+std::to_string(id));

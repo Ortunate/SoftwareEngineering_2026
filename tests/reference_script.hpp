@@ -1,20 +1,24 @@
-// 本文件保留重构前的一面 Normal ECL 解释器，仅作为测试差分基准，不链接到生产引擎。
+// 本文件保留一面 ECL 测试解释器，仅作为独立差分基准，不链接到生产引擎。
 #pragma once
 #include "reference_program.hpp"
+#include "gameplay/data/native_combat.hpp"
 #include "reference_coordinates.hpp"
 #include "gameplay/bullets/system.hpp"
 #include <array>
 #include <cstdint>
 #include <vector>
 namespace koumakyou::stage1 {
-/// @brief 单个演员的 Normal ECL 上下文；固定 60 Hz，调用栈最多 32 层，寄存器属于各层而非演员共享。
+/// @brief 一次源102/118请求；位置/半径为像素、axis为源XYZ，color为原始整数ARGB，不执行粒子运动。
+struct ReferenceEffect {int type,count;std::uint32_t color;Vector3 position;Vector3 axis{};float radius=0;};
+/// @brief 单个演员的 ECL 上下文；固定 60 Hz，调用栈最多 32 层，寄存器属于各层而非演员共享。
 /// 移动在原作像素坐标求解，发弹保留 X/Z 投影，并沿 Y 增加朝玩家的高度速度；不增加弹数或改变投影角间距。
 class ReferenceScript {
 public:
     std::array<bool,38> visited{}; // 仅测试覆盖率观测，不影响解释器执行、时钟或随机序列。
-    /// @brief 初始化 Normal 子程序、像素出生点、原作 HP 与独立随机种子；mirrored 仅反转移动的 X 分量。
-    /// 越界编号抛 invalid_argument；表中未用于 Normal 的特殊指令在执行时抛 runtime_error。
-    void Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored = false);
+    /// @brief 初始化子程序、像素出生点、原作 HP 与独立随机种子；mirrored 仅反转移动的 X 分量。
+    /// 越界编号或难度抛 invalid_argument；尚未支持的指令在执行时抛 runtime_error。
+    void Reset(int sub, Vector3 source, float sourceHealth, std::uint32_t seed, bool mirrored = false,
+               native_combat::Difficulty difficulty=native_combat::Difficulty::Normal);
     /// @brief 推进非负秒数；跨帧补算 60 Hz 指令，回调到期后停止，等待 Transition。
     void Update(float seconds, Vector3 player, BulletSystem& bullets);
     /// @brief 切换到生命/超时回调，保留演员位置与发弹属性，清空旧调用栈并重新计时。
@@ -32,6 +36,7 @@ public:
     std::vector<int> soundEvents;
     /// @brief 本次更新 ins_119 的散落道具数量；下一次更新清空，Game 负责按当前 Power 实际生成。
     std::vector<int> dropEvents;
+    std::vector<ReferenceEffect> effectEvents; // 本次Update逐步追加的独立源请求，不借用生产配方。
     int deathEffect = 0; // ECL 100 打包参数的低字节，0/1/2 对应小爆散/旋转爆散/大爆散。
     int animationScript = -1; // 原 ECL 97/98 选择的主动画，编号属于当前敌人/Boss 图集。
     double animationAge = 0; // 本次脚本启动后的秒数；ECL 子程序跳转不重置它。
@@ -52,11 +57,18 @@ private:
     int lifeCallback_ = -1, deathCallback_ = -1, timerCallback_ = -1;
     std::array<float,8> effects_{};
     int rank_ = 16;
+    unsigned difficultyIndex_=1; // 四份独立源指令表的 E/N/H/L 下标；不等于自适应 rank。
+    reference::Instruction emitter_{};
+    int emitterPeriod_=0,emitterCounter_=0;
+    bool emitterConfigured_=false,suppressImmediateShot_=false;
+    std::array<BulletSystem::Handle,16> beams_{};
+    std::array<float,16> beamAngles_{};
+    int beamSlot_=0;
     std::array<int,5> poses_{-1,-1,-1,-1,-1}; // 待机、左收势、右收势、左移、右移。
     int pose_ = -1; // -1 尚未首次选择；0 静止、-2 左移、2 右移。
     std::array<float,6> rankInfluence_{-0.5F,0.5F,0,0,0,0};
     void Tick(Vector3 player, BulletSystem& bullets);
-    void Execute(const reference::Instruction& instruction, Vector3 player, BulletSystem& bullets);
+    void Execute(const reference::Instruction& instruction, Vector3 player, BulletSystem& bullets,std::uint32_t effectColor);
     void Call(int sub, float integer, float floating);
     void Interpolate(int duration, Vector3 target, int power);
     void Emit(const reference::Instruction& instruction, Vector3 player, BulletSystem& bullets);

@@ -24,7 +24,7 @@ void Game::UpdateActors(float deltaTime) {
         children.insert(children.end(),enemy.spawnEvents.begin(),enemy.spawnEvents.end());
         defeatActors|=enemy.defeatActors;
     });
-    if(defeatActors)actors_.ForEachActive([](behavior::Actor& actor){actor.health=0;});
+    if(defeatActors)actors_.ForEachActive([](behavior::Actor& actor){actor.ClearFromStage();});
     SpawnBehaviorActors(children,deltaTime);
 }
 
@@ -32,6 +32,7 @@ void Game::UpdateActor(behavior::Actor& enemy,float deltaTime) {
     enemy.SetRank(referenceRank_);
     enemy.phaseClockPaused=WorldTimeStopped();
     enemy.Update(deltaTime, player_.Position(), bullets_);
+    for(const auto& request:enemy.effectEvents)externalEffects_.Spawn(request);
     // 普通演员的命名行为可交接击破/寿命回调；不在行为 Update 内重入协程所有权操作。
     if(enemy.pendingCallback)enemy.Transition();
     for(int id:enemy.soundEvents)assets_.PlaySoundEffect("reference_"+std::to_string(id));
@@ -44,6 +45,10 @@ void Game::UpdateActor(behavior::Actor& enemy,float deltaTime) {
         enemy.animation.Sync(*visual.archive,selected,enemy.animationAge>=0 ? enemy.animationAge : enemy.age,enemy.animationRevision,
             enemy.animationInterrupt ? &*enemy.animationInterrupt : nullptr);
         if(enemy.rotateAnimation)enemy.animation.player.SetRotationZ(enemy.motion.angle+std::numbers::pi_v<float>/2);
+        for(auto& animation:enemy.auxiliaryAnimations)if(animation.script>=0) {
+            const auto& auxiliary=assets_.GetVisual(animation.visual==kInvalidVisualId?enemy.visual:animation.visual);
+            if(auxiliary.archive)animation.Sync(*auxiliary.archive,auxiliary.animation);
+        }
     }
     // 只处理本帧仍活动到失活的跃迁，快照不延长 Actor 的槽位寿命。
     if (!enemy.active && !enemy.retiring && enemy.visible)
@@ -54,10 +59,11 @@ void Game::SpawnBehaviorActors(std::span<const behavior::Spawn> requests,float d
     // 请求按值复制，槽位复用不能使输入 span 或挂起协程引用失效；新演员在本内容步执行出生行为。
     std::vector<behavior::Spawn> pending(requests.begin(),requests.end());
     for(std::size_t index=0;index<pending.size();++index) {
-        const auto request=pending[index];
+        auto request=pending[index];
+        request.difficulty=stageContent_->Difficulty();
         if(auto* actor=actors_.Spawn(request)) {
             UpdateActor(*actor,deltaTime);
-            if(actor->defeatActors)actors_.ForEachActive([](behavior::Actor& target){target.health=0;});
+            if(actor->defeatActors)actors_.ForEachActive([](behavior::Actor& target){target.ClearFromStage();});
             pending.insert(pending.end(),actor->spawnEvents.begin(),actor->spawnEvents.end());
         }
     }
@@ -69,16 +75,14 @@ void Game::UpdateBoss(float deltaTime) {
         boss_->SetPlayerBombActive(playerBomb_.Active());
         const int previousSpell=boss_->SpellCardNumber();
         const bool ended=boss_->Update(deltaTime,player_.Position(),bullets_);
+        for(const auto& request:boss_->EffectEvents())externalEffects_.Spawn(request);
         // 部分遭遇在同一阶段内先等待再宣告符卡；按真实宣告时刻记录及切入，不能提前到阶段交接。
-        if(!ended&&previousSpell==0&&boss_->SpellCardNumber()>0) {
-            spellStartMisses_=missCount_;spellStartBombs_=bombCount_;spellCutInTimer_=kSpellCutInDuration;
-            BeginSpellRecord();assets_.PlaySoundEffect("spell");
-        }
+        if(!ended&&previousSpell==0&&boss_->SpellCardNumber()>0)OnSpellDeclared();
         for(int id:boss_->SoundEvents())assets_.PlaySoundEffect("reference_"+std::to_string(id));
         for(int count:boss_->DropEvents())drops_.SpawnReferenceBurst(boss_->position,count,
                                             player_.Power()==Player::kMaxPower);
         for(int item:boss_->ItemEvents())drops_.SpawnNativeItem(boss_->position,item,player_.Power()==Player::kMaxPower);
-        if(boss_->DefeatActorsRequested())actors_.ForEachActive([](behavior::Actor& actor){actor.health=0;});
+        if(boss_->DefeatActorsRequested())actors_.ForEachActive([](behavior::Actor& actor){actor.ClearFromStage();});
         SpawnBehaviorActors(boss_->SpawnEvents(),deltaTime);
         if(ended)AdvanceBossSkill();
     }
@@ -94,13 +98,20 @@ void Game::ResolveCollisions() {
                 playerWasHit = true;
                 break;
             }
-            case PlayerContact::Graze:
-                ++graze_;
-                ++stageGraze_;
-                AdjustReferenceRank(6);
-                score_ += 100;
+            case PlayerContact::Graze: {
+                // 新典普通弹/光束的擦弹事件均加500分，关内/全局计数分别饱和于99999/999999。
+                // 事件分支不写rank；不能沿用旧兼容规则每次额外增加6 subrank。
+                if(graze_<999999)++graze_;
+                if(stageGraze_<99999)++stageGraze_;
+                score_ += 500;
                 assets_.PlaySoundEffect("graze");
+                // 普通弹取自机与弹体的三维中点；光束原生请求取自机位置，不能改成光束起点。
+                const auto player=player_.Position();
+                const Vector3 origin=bullet.IsBeam()?player:Vector3{(player.x+bullet.position.x)*.5F,
+                    (player.y+bullet.position.y)*.5F,(player.z+bullet.position.z)*.5F};
+                externalEffects_.Spawn({effects::Kind::Graze,origin,1,WHITE});
                 break;
+            }
             case PlayerContact::None:
                 break;
         }
@@ -192,7 +203,7 @@ void Game::UpdatePickups(float deltaTime) {
     score_ += reward.score;
     pointItems_ += reward.pointItems;
     stagePointItems_ += reward.pointItems;
-    AdjustReferenceRank(reward.pointItems*3 + reward.power*3);
+    // 源七种拾取分派及其清弹/计分辅助只更新奖励，不向全局rank追加旧兼容的每点3 subrank。
     if (reward.power != 0 || reward.score != 0 || reward.bombs || reward.lives) assets_.PlaySoundEffect("pickup");
 }
 
@@ -205,7 +216,7 @@ void Game::AdjustPlayerPower(int delta) {
 
 void Game::ApplyBombEffect() {
     ++bombCount_;
-    AdjustReferenceRank(-200);
+    // 原生Bomb受理及四机体回调不修改全局rank，不能在扣库存之外额外降低两级。
     ClearPlayerBomb();
     const auto visuals=stageContent_->PlayerBombVisuals(player_.Shot());
     const anm::Archive* archive=nullptr;
@@ -294,7 +305,7 @@ void Game::PausePlayerBombSounds(bool paused) {
 
 void Game::HandlePlayerHit() {
     ClearPlayerBomb();
-    AdjustReferenceRank(-1600);
+    // 原生Miss确认更新净Miss、Power与复活状态，不附加旧兼容规则的16级rank惩罚。
     ++missCount_;
     assets_.PlaySoundEffect("hit");
     const bool survived = player_.TakeHit();
@@ -308,12 +319,18 @@ void Game::HandlePlayerHit() {
     }
 }
 
+void Game::OnSpellDeclared() {
+    spellStartMisses_=missCount_;spellStartBombs_=bombCount_;spellCutInTimer_=kSpellCutInDuration;
+    BeginSpellRecord();assets_.PlaySoundEffect("spell");
+}
+
 void Game::AdvanceBossSkill() {
     if (!boss_ || !boss_->active) return;
     BeginSpellRecord();
-    const bool captured=boss_->SpellName() && boss_->SkillDefeated() && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_;
-    // 捕获奖励只在符卡击破时结算；退场回调仍保留 phase，必须用 SpellName 排除重复结算。
+    const bool captured=boss_->SpellName() && boss_->SpellSucceeded() && missCount_==spellStartMisses_ && bombCount_==spellStartBombs_;
+    // 成功条件由技能区分伤害击破与生存超时；退场回调仍保留phase，用SpellName排除重复结算。
     if(captured) {
+        if(!spellPractice_)stageSpellCaptures_=stageContent_->CaptureProgress(stageSpellCaptures_,boss_->SpellCardNumber());
         const int seconds=static_cast<int>(std::max(0.0F,boss_->TimeLimit()-boss_->skillTimer));
         spellBonus_=200000+20000*seconds; score_+=spellBonus_;
         spellBonusTimer_=280.0F/60;
@@ -323,7 +340,7 @@ void Game::AdvanceBossSkill() {
         EndStage(RunState::Won);
         return;
     }
-    bullets_.ClearEnemyBullets();
+    if(boss_->ClearsBulletsOnSkillEnd())bullets_.ClearEnemyBullets();
     const int completedAttack = boss_->attack;
     const bool hasNextPhase = boss_->AdvanceSkill();
     const ActorExitReason exitReason = boss_->Defeated()

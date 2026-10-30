@@ -21,6 +21,8 @@ public:
     const char* DisplayName() const override {return "Koakuma";}
 protected:
     SkillDefinition ResolveSkill(BehaviorId id,ShotType shot) const override;
+    /// @brief 道中本体四难度共用生命与时限，召唤体弹数由同局 difficulty 决定；非法身份抛异常。
+    SkillDefinition ResolveSkillForDifficulty(BehaviorId id,ShotType shot,native_combat::Difficulty difficulty) const override;
     Attack ResolveBehavior(BehaviorId id) const override;
 };
 }

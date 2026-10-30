@@ -10,11 +10,14 @@ namespace koumakyou::stage1 {
 /// @brief 第一面完整内容定义；新关卡实现 StageContent 即可接入总控。
 class Stage1Content final : public stage_assets::NativeBattleContent {
 public:
+    using NativeBattleContent::NativeBattleContent;
+    [[nodiscard]] behavior::Spawn ConfigureSpawn(const behavior::Spawn& spawn) const override;
     [[nodiscard]] const native_combat::StageData* CombatData() const override { return native_combat::Stage(1); }
     [[nodiscard]] const StageAssetManifest& Assets() const override;
-    void DrawScenery(float seconds) const override;
+    void DrawScenery(float seconds,const AssetManager& assets) const override;
     [[nodiscard]] std::span<const StageEvent> Events() const override;
     const bosses::Battle& PracticeBoss() const override;
+    const bosses::Battle& PracticeBoss(int spellCard) const override;
     [[nodiscard]] std::span<const DialogueLine> Dialogue(bool afterBattle = false, ShotType shot=ShotType::HomingAmulet) const override;
     [[nodiscard]] std::span<const DialogueCue> DialogueCues(bool afterBattle, ShotType shot) const override;
     [[nodiscard]] float DialogueLineDuration() const override { return 5.0F; }
@@ -23,7 +26,7 @@ public:
     [[nodiscard]] VisualId SpellPortraitVisual() const override { return BossPortraitVisual(2); }
     [[nodiscard]] std::array<std::string_view,2> BossIntroduction() const override { return {"宵暗的妖怪","露米娅"}; }
     [[nodiscard]] const char* StartTitle() const override {
-        return "Stage 1  Mystic Flier  Normal";
+        return "Stage 1  Mystic Flier";
     }
     [[nodiscard]] StageDisplayInfo DisplayInfo() const override {
         return {"STAGE 01", "梦幻夜行绘卷", "Mystic Flier"};

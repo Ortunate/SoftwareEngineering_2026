@@ -6,6 +6,7 @@
 #include "rlgl.h"
 #include <array>
 #include <bit>
+#include <cassert>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -75,6 +76,17 @@ void CheckOverlaps(Fixture& f) {
     Image image=f.Render("pickup-front",actors,pickups);
     Expect(image,173,128,kRed,"transparent pickup border hid enemy");
     Expect(image,128,128,{127,128,0,255},"pickup Alpha did not blend over enemy");UnloadImage(image);
+    // 辅助槽指定另一外观时必须选它的纹理，不能只更换ANM游标后仍绘制本体红色材质。
+    auto auxiliaryArchive=std::make_shared<anm::Archive>(*f.archive);
+    auxiliaryArchive->scripts[0].instructions.back().frame=600;f.visuals[2].archive=auxiliaryArchive;
+    // 原夹具的15指令在零帧结束，适合本体静帧却会使辅助槽立即退出；此处须保持脚本活动。
+    enemy.AnimateAuxiliary(0,0,2);enemy.auxiliaryAnimations[0].Sync(*auxiliaryArchive,{battle::Atlas::Bullets,0});
+    assert(!enemy.auxiliaryAnimations[0].cursor.player.Finished());
+    image=f.Render("auxiliary-own-material",actors);
+    Expect(image,128,128,{127,0,128,255},"auxiliary used body material");UnloadImage(image);
+    enemy.auxiliaryAnimations[0].age=11;enemy.auxiliaryAnimations[0].Sync(*auxiliaryArchive,{battle::Atlas::Bullets,0});
+    image=f.Render("auxiliary-finished",actors);Expect(image,128,128,kRed,"finished auxiliary remained visible");UnloadImage(image);
+    enemy.auxiliaryAnimations={};f.visuals[2].archive=f.archive;
     f.visuals[1].archive.reset();image=f.Render("png-pickup-front",actors,pickups);
     Expect(image,173,128,kRed,"PNG pickup transparent border hid enemy");
     Expect(image,128,128,{127,128,0,255},"PNG pickup soft Alpha was clipped");UnloadImage(image);

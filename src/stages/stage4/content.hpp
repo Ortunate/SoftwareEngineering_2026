@@ -1,4 +1,4 @@
-// 本文件声明四面 Normal 静态内容；活动对象由游戏拥有，资源和对话表借用程序静态存储。
+// 本文件声明四面四难度静态内容；活动对象由游戏拥有，资源和对话表借用程序静态存储。
 #pragma once
 #include "stages/common/content.hpp"
 #include "stages/stage4/ids.hpp"
@@ -6,11 +6,14 @@ namespace koumakyou::stage4 {
 /// @brief 图书馆关卡的素材、时间轴、Boss 工厂与两角色对白，四机体战斗分支由 Boss 接收机体后选择。
 class Stage4Content final : public stage_assets::NativeBattleContent {
 public:
+    using NativeBattleContent::NativeBattleContent;
     const native_combat::StageData* CombatData() const override {return native_combat::Stage(4);}
     const StageAssetManifest& Assets() const override;
-    void DrawScenery(float seconds) const override;
+    void DrawScenery(float seconds,const AssetManager& assets) const override;
     std::span<const StageEvent> Events() const override;
     const bosses::Battle& PracticeBoss() const override;
+    /// @brief 按本局难度选择只含目标技能的静态练习遭遇，不匹配编号抛 invalid_argument；展开编号为 1。
+    const bosses::Battle& PracticeBoss(int spellCard) const override;
     std::span<const DialogueLine> Dialogue(bool afterBattle=false,ShotType shot=ShotType::HomingAmulet) const override;
     std::span<const DialogueCue> DialogueCues(bool afterBattle,ShotType shot) const override;
     float DialogueLineDuration() const override {return 5;}

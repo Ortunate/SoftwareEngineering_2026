@@ -2,7 +2,9 @@
 #pragma once
 #include "gameplay/actors/skill.hpp"
 #include "gameplay/data/native_sizes.hpp"
+#include "gameplay/data/native_combat.hpp"
 #include "gameplay/effects/actor_effects.hpp"
+#include "gameplay/effects/external_effects.hpp"
 #include <coroutine>
 #include <exception>
 #include <vector>
@@ -20,6 +22,9 @@ class Routine;
 using Entry=Routine(*)(Actor&);
 /// @brief 待交接回调的实际原因；阈值钳制 HP 后仍可区分伤害完成与超时，不编码关卡或脚本编号。
 enum class CallbackCause { None, HealthThreshold, Defeat, Timeout };
+/// @brief 普通演员对关卡清场请求的响应；Remove用于无奖励、无死亡演出的逻辑发射体。
+/// Defeat保留现有扣至零生命及正常奖励/死亡行为，不能因不可交互而隐式改用Remove。
+enum class StageClearResponse { Defeat, Remove };
 /// @brief 可共享的行为配方；时间为出生起算的 60 Hz 帧，配置按值复制，执行状态由 Actor 独占。
 struct Pattern {
     movement::Path movement;
@@ -32,13 +37,19 @@ struct Pattern {
     Entry routine=nullptr;
     Entry onDefeated=nullptr; // 普通演员击破后的命名行为；奖励只结算一次，回调期间本体不参与接触。
     bool rotateAnimation=false; // 将路径的 X/Z 方向写入公告板局部 Z 旋转；不改变移动或碰撞几何。
+    // 关卡可按运行难度调整出生副本；函数不得保留引用，调用后仍须通过 Valid。
+    void (*configureDifficulty)(Pattern&,native_combat::Difficulty)=nullptr;
+    std::optional<skill::PolarSweep> polarSweep; // 可选命名协程参数，按值交给演员；只允许与routine组合。
+    std::optional<skill::SpiralTrail> spiralTrail; // 分层发射快照，按值复制；只允许与routine组合。
 };
 /// @brief 时间轴直接提交的行为演员配置；position/半径为世界单位，生命与分数为原始点数。
-/// sourceItem=-2 不掉落、-1 全关轮换、0/1/2 小P/分数/大P；randomX 按 seed 在 randomXRange 世界区间取值一次。
+/// sourceItem=-2不掉落、-1全关轮换、0/1/2小P/分数/大P、3/4/5/6为Bomb/满P/残机/星点。
+/// randomX按seed在randomXRange世界区间取值一次；固定道具不推进全关轮换计数。
 /// visual 及素材基址属于当前关卡；retireOutside 须先进入 retirementBounds 及可选 retirementHeights 才允许越界回收。
 struct Spawn {
     Vector3 position{};
     Pattern pattern;
+    native_combat::Difficulty difficulty=native_combat::Difficulty::Normal; // 本局难度按值传递，独立于自适应 rank。
     bool mirrored=false,randomX=false;
     float sourceHealth=32;
     int sourceScore=300;
@@ -53,6 +64,8 @@ struct Spawn {
     bool damageable=true; // 初始受伤开关；阶段行为仍可在运行中修改。
     std::optional<Vector2> retirementHeights; // 可选世界 Y 回收闭区间，与 X/Z 同时入场后才允许越界回收。
     int initialAnimation=-1; // 可选的实例外观脚本，非负时覆盖配方初始动画；同一路线/技能可独立选色，不产生行为分支。
+    bool visible=true; // 初始本体可见性；隐藏逻辑发射体须从出生起关闭，避免首个Update前闪现。
+    StageClearResponse stageClearResponse=StageClearResponse::Defeat;
 };
 class Actor;
 /// @brief 一段独占的行为协程；初始挂起，交给 Actor 后由 Actor 持有并销毁，不能复制。
@@ -62,7 +75,7 @@ public:
     struct promise_type {
         Actor* owner=nullptr;
         double frame=0; // 60 Hz 局部内容帧；120 Hz 每次更新前进 0.5 帧。
-        int due=0;
+        double due=0; // 可等待半内容帧，逐步行为在120 Hz下不能退化成60 Hz回调。
         std::exception_ptr failure;
         Routine get_return_object() { return Routine{std::coroutine_handle<promise_type>::from_promise(*this)}; }
         std::suspend_always initial_suspend() noexcept { return {}; }
@@ -87,18 +100,32 @@ private:
     Handle Release() { auto h=handle_;handle_=nullptr;return h; }
     Handle handle_;
 };
-/// @brief 等待当前行为达到指定 60 Hz 局部内容帧；已到期时同一更新步继续，不累加显示帧误差。
+/// @brief 等待当前行为达到指定60 Hz局部内容帧，可含半帧；已到期时同一步继续，不累加显示帧误差。
 struct AtFrame {
     Actor& owner;
-    int frame;
+    double frame;
     bool await_ready() const;
     void await_suspend(Routine::Handle handle) const { handle.promise().due=frame; }
     void await_resume() const noexcept {}
+};
+/// @brief 独立辅助动画；age为动画启动后的秒数，生命周期不改变演员判定或行为时钟。
+/// 游标只借用当前关卡CPU档案，Actor重置/清池必须先于资源卸载；负script表示空槽。
+struct AuxiliaryAnimation {
+    int script=-1;double age=0;std::uint32_t revision=0;
+    VisualId visual=kInvalidVisualId; // invalid沿用本体外观，否则借用当前关卡的独立图集/材质槽。
+    battle::Cursor cursor;
+    std::optional<battle::AnimationInterrupt> interrupt;
+    /// @brief 借用调用方按visual选择的图集同步当前槽；空槽无动作，同龄重复调用不推进。
+    void Sync(const anm::Archive& archive,battle::Selection selection) {
+        if(script<0)return;selection.script=script;
+        cursor.Sync(archive,selection,age,revision,interrupt?&*interrupt:nullptr);
+    }
 };
 /// @brief 一名敌人/Boss 的行为状态，不依赖具体关卡或 ECL 指令；位置、HP 与发弹属性跨阶段保留。
 /// 每个演员至多持有 32 层独占行为；Reset/Start/Transition 和销毁须发生在 Update 之外，不支持重入。
 class Actor {
 public:
+    native_combat::Difficulty difficulty=native_combat::Difficulty::Normal; // Reset 后由出生配置或 Boss 启动配置设置。
     /// @brief 固定该实例的更新频率；仅接受 Hz60/Hz120，其他枚举值抛 invalid_argument。
     /// Reset/Activate 保留频率，避免池复用或阶段交接时悄然改变积分步长。
     explicit Actor(UpdateRate rate=UpdateRate::Hz120);
@@ -120,16 +147,37 @@ public:
     /// @brief 普通演员的击破交接；首次调用返回 true，立即关闭伤害/接触并进入击破行为或回收。
     /// 调用方仅在 true 时结算分数、掉落和效果；须在 Update 之外调用，不能用于 Boss 阶段切换。
     bool Defeat();
+    /// @brief 应用关卡清场请求；Remove立即释放协程并回收，无奖励/退场效果，Defeat仅把HP置零。
+    /// 必须在Update外调用；保留其他演员原有的碰撞结算及死亡行为时序。
+    void ClearFromStage();
+    /// @brief 安装每个固定步的末尾效果，在移动参数/自动姿态更新后、动画和内容时钟推进前执行。
+    /// 仅在行为Update内设置；回调可借用本步弹池，不得重入Update/Start/Transition或保留借用引用。
+    /// Start/Reset及Remove清场解除回调，子行为调用不解除；nullptr停止后续效果。
+    void SetStepEffect(void (*effect)(Actor&));
+    /// @brief 在当前位置提交独立演出粒子；count须为正，不消耗攻击随机数，仅可在Update行为中调用。
+    /// 请求按值保存至下次Update，Game须在交接/销毁演员前交付；资源由独立效果池借用。
+    void EmitEffect(effects::Kind kind,int count,Color color);
+    /// @brief 在Update内安装/解除环境粒子末尾更新，不覆盖SetStepEffect；隐藏时冻结独立时钟。
+    /// 技能交接/Start保留策略与发射器状态，Reset/Remove清场解除并重置；Living检查本步结束HP。
+    void SetAmbientEffects(effects::AmbientMode mode);
+    /// @brief 在Update内附着一条轨道；axis为无量纲世界方向，radius为非负世界半径，零轴合法。
+    /// 所有已附着轨道共享最后设置的目标半径；Start/Transition保留，隐藏/击破/超时/回收时淡出。
+    void AttachEffect(Vector3 axis,float radius,Color color);
+    /// @brief 释放本演员全部附着关系，粒子按冻结轨道淡出；可在Update外的Boss交接调用，不借用效果池。
+    void ReleaseAttachedEffects() {attachedEffects_.reset();}
     /// @brief 设置 HP≤0 的后继阶段，nullptr 关闭该回调；回调实际启动由调用方 Transition 决定。
     void SetDeathCallback(Entry entry) { deathCallback=entry; }
     /// @brief 设置 10…32 范围的自适应难度；越界值钳制，影响后续发射。
     void SetRank(int rank) { skills.rank=std::clamp(rank,10,32); }
     /// @brief 当前三维世界位置，直接返回运动状态，不执行坐标转换。
     [[nodiscard]] Vector3 Position() const { return motion.position; }
+    /// @brief 返回本实例每个固定步推进的60 Hz内容帧数；生产120 Hz为0.5，源差分60 Hz为1。
+    /// 用于连续旋转/跟随的半帧等待，不得用显示帧的deltaTime代替。
+    [[nodiscard]] double ContentStepFrames() const { return 60.0/updateHz_; }
     /// @brief 当前最深层行为的 60 Hz 局部内容帧，120 Hz 时可含半帧；仅在已启动且尚未返回的行为中查询。
     [[nodiscard]] double Frame() const { return stack_.back().promise().frame; }
-    /// @brief 构造非负局部帧的等待点，仅供当前行为 co_await；不会推进阶段总时钟。
-    [[nodiscard]] AtFrame At(int frame) { return {*this,frame}; }
+    /// @brief 构造非负有限局部内容帧的等待点，可含半帧，仅供当前行为co_await；不推进阶段总时钟。
+    [[nodiscard]] AtFrame At(double frame) { return {*this,frame}; }
     /// @brief 循环回到局部 frame，在本帧继续执行；不能改成等待剩余时长，否则循环周期会偏移。
     void Rewind(int frame) {
         // 旧等待点已消费；回拨后若立即调用子行为，返回时不能再被上一轮的 due 挡住。
@@ -153,6 +201,11 @@ public:
     /// @brief 在当前动画年龄提交本体中断，保留动画后续淡出/收势；同一固定步多次提交取最后一次。
     /// 必须已有活动动画；命令按 revision/id 排除重启后的旧中断，只保存值，不借用资源。
     void InterruptAnimation(int label);
+    /// @brief 在0…7槽重启非负脚本；visual为当前关卡外观槽，invalid沿用本体；不消费随机流。
+    /// 非法槽/负脚本抛invalid_argument；脚本须存在于所选图集，缺失时由后续Sync报告错误。
+    void AnimateAuxiliary(int slot,int script,VisualId visual=kInvalidVisualId);
+    /// @brief 向已启动的0…7辅助槽提交中断，保留其淡出；空槽抛logic_error，非法槽抛out_of_range。
+    void InterruptAuxiliary(int slot,int label);
     /// @brief 更换待机/收势/移动五个图集内脚本，并使本步末重新选择姿态；负值槽表示关闭。
     /// 阶段更换姿态组时必须重选，不能因移动方向未变而保留上一阶段的符卡动作。
     void SetPoses(std::array<int,5> scripts) { poses=scripts;pose_=-1; }
@@ -200,6 +253,8 @@ public:
     ActorPresentation presentation;
     battle::Cursor animation; // 借用当前关卡 ANM，清池必须先于关卡资源卸载。
     std::optional<battle::AnimationInterrupt> animationInterrupt;
+    // 八个独立槽对应原型初始化的八组ANM；不共享本体游标、年龄或中断状态，复用演员须全部重置。
+    std::array<AuxiliaryAnimation,8> auxiliaryAnimations;
     /// @brief 返回受伤开关；战斗调用方先筛选 active，免伤不会关闭本体接触。
     [[nodiscard]] bool CanTakeDamage() const { return damageable&&!retiring&&interactable&&visible; }
     /// @brief 自机弹和追踪可接触的活动本体；受伤保护不关闭弹接触，隐藏/非交互演员不吸收玩家弹。
@@ -215,17 +270,21 @@ public:
     std::uint32_t spatialIndex=1; // 独立高度采样序号，来自固定出生种子，不消耗攻击/分支随机源。
     std::uint32_t spawnIndex=1; // 子演员独立种子的递增序号；Reset 固定初值，不消耗攻击随机流或空间采样序号。
     skill::State skills;
+    std::optional<skill::PolarSweep> polarSweep; // 本次配方的独立参数副本；Reset清空，运行中的扫描状态由协程持有。
+    std::optional<skill::SpiralTrail> spiralTrail; // 本次分层发射快照；Reset清空，不借用父演员或出生请求。
     float health=1,maxHealth=1,lifeThreshold=-1; // 原始 HP，阈值为负关闭；生命回调优先于击破回调。
     bool damageable=true,finished=false,retiring=false;
     bool interactable=true; // 瞬移/隐藏窗口可同时关闭受击和接触；不修改可受伤开关或生命。
     bool visible=true,contactEnabled=true; // 隐藏保留行为/槽位；关闭本体接触仍允许玩家弹命中，与伤害保护分开。
     bool rotateAnimation=false;
+    StageClearResponse stageClearResponse=StageClearResponse::Defeat;
     Entry pendingCallback=nullptr,lifeCallback=nullptr,deathCallback=nullptr,timeoutCallback=nullptr;
     CallbackCause callbackCause=CallbackCause::None;
     double phaseFrames=0; // 60 Hz 阶段内容帧；120 Hz 更新时每步增加 0.5。
     /// @brief 安排延迟启用的超时；frames=-1 禁用，armFrame 为不重置总时钟的 60 Hz 帧号。
     void ScheduleTimeout(int frames,int armFrame=0);
     int scheduledTimeout=-1,timeoutArmFrame=-1; // 每次 Transition 清除，避免上一攻击的延迟定时污染下一阶段。
+    std::vector<effects::Request> effectEvents; // 本次Update的按值世界坐标请求，不借用演员或效果池。
     int timeoutFrames=-1,deathEffect=0; // timeoutFrames 为 60 Hz 内容帧，负值关闭超时。
     std::vector<int> soundEvents,dropEvents,itemEvents; // 本次 Update 的音效/散落数量/原生道具号，下次 Update 清空，调用方只即时借用。
     std::vector<Spawn> spawnEvents; // 本次 Update 请求的独立子演员；接收方复制后生成，不在 ActorPool 遍历中重入出怪。
@@ -246,6 +305,10 @@ private:
     int pose_=-1;
     Vector3 player_{};
     BulletSystem* bullets_=nullptr;
+    void (*stepEffect_)(Actor&)=nullptr; // 不拥有状态；内容命名函数借用当前Actor，生命周期跟随根行为。
+    effects::AmbientEmitter ambientEffects_;
+    effects::AmbientMode ambientMode_=effects::AmbientMode::Disabled;
+    std::shared_ptr<effects::AttachmentAnchor> attachedEffects_; // 独占生命周期；请求与粒子均不延长此状态的寿命。
     bool entered_=false,retireOutside_=false;
     movement::Bounds retirementBounds_;
     std::optional<Vector2> retirementHeights_;

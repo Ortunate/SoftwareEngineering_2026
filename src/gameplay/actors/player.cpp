@@ -73,6 +73,7 @@ void Player::ConfigureRun(int extraLives, int bombs, bool challenge, ShotType sh
     bombs_ = std::clamp(bombs, 0, 3);
     challenge_ = challenge;
     shot_ = shot;
+    netMisses_ = 0;
 }
 
 void Player::ResetPose() {
@@ -192,8 +193,7 @@ PlayerContact Player::ContactEnemyBullet(Bullet& bullet) const {
                                           : PlayerContact::None;
     }
     const float grazeDistance = bullet.radius + kGrazeRadius;
-    if (!bullet.grazed && distanceSquared <= grazeDistance * grazeDistance) {
-        bullet.grazed = true;
+    if (distanceSquared <= grazeDistance * grazeDistance && bullet.ConsumeGraze()) {
         return PlayerContact::Graze;
     }
     return PlayerContact::None;
@@ -206,6 +206,7 @@ bool Player::ContactEnemyBody(Vector3 position,float radius) const {
 }
 
 bool Player::TakeHit() {
+    ++netMisses_;
     if (!challenge_) --lives_;
     AdjustPower(-16);
     bombs_ = std::max(bombs_, 2);
@@ -223,7 +224,10 @@ void Player::SyncCamera(Camera3D& camera) const {
 int Player::RemainingLives() const { return std::max(0, lives_ + 1); }
 void Player::CollectResources(int extraLives,int bombs) {
     if(extraLives<0||bombs<0)throw std::invalid_argument("Negative resource pickup");
-    lives_=std::min(8,lives_+std::min(extraLives,8));bombs_=std::min(8,bombs_+std::min(bombs,8));
+    // 原生Challenge用残机抵扣已确认的Miss，不能套库存上限或把负数钳至零。
+    if(challenge_)netMisses_-=extraLives;
+    else lives_=std::min(8,lives_+std::min(extraLives,8));
+    bombs_=std::min(8,bombs_+std::min(bombs,8));
 }
 
 Vector3 Player::Forward() const {

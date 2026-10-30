@@ -16,6 +16,7 @@
 #include "stage/system.hpp"
 #include "stages/stage1/content.hpp"
 #include "stages/stage1/behaviors.hpp"
+#include "app/spell_practice.hpp"
 
 #include <array>
 #include <cassert>
@@ -216,6 +217,8 @@ void TestInvalidEvents() {
     assert(rejects({.action=WaitDialogueSignal{}}));
     assert(rejects({.action=WaitDialogueSignal{-1},.id=1}));
     assert(rejects({.action=StartDialogue{false,DialogueScene::FinalBoss,static_cast<DialogueClearPolicy>(99)},.id=20}));
+    assert(rejects({.action=StartDialogue{false,static_cast<DialogueScene>(99)},.id=20}));
+    assert(!rejects({.action=StartDialogue{false,DialogueScene::EncoreBoss,DialogueClearPolicy::PreserveWorld},.id=20}));
     assert(rejects({.action = StartBoss{nullptr}, .id = 1}));
     const bosses::Battle emptyBattle{};
     assert(rejects({.action = StartBoss{&emptyBattle}, .id = 1}));
@@ -261,6 +264,75 @@ struct EventProbe final : StageEventSink {
         ++messages;
     }
 };
+
+/// @brief 独立核对源 ECL Sub3/4 的难度掩码参数；同一出生配置不得因其他实例修改。
+void TestStage1DarkFairyDifficulty() {
+    using D=native_combat::Difficulty;
+    constexpr std::array difficulties{D::Easy,D::Normal,D::Hard,D::Lunatic};
+    constexpr std::array counts{3,7,9,11};
+    constexpr std::array layers{1,1,2,2};
+    constexpr std::array spacing{0.7853982F,0.62831855F,0.3926991F,0.157079637F};
+    auto spawn=testing::SpawnAt();spawn.pattern=stage1::kShootingDarkFairy;
+    for(std::size_t i=0;i<difficulties.size();++i) {
+        const stage1::Stage1Content content(difficulties[i]);
+        const auto configured=content.ConfigureSpawn(spawn);
+        const auto& shot=*configured.pattern.skill;
+        assert(configured.difficulty==difficulties[i]&&shot.frame==70);
+        assert(shot.shot.count==counts[i]&&shot.shot.layers==layers[i]);
+        assert(std::abs(shot.shot.spacing-spacing[i])<1e-6F);
+        assert(shot.shot.lastSpeed==(i>=2?1.33928573F:0));
+        assert(behavior::Valid(configured));
+    }
+    assert(spawn.pattern.skill->shot.count==7);
+    spawn.pattern=stage1::kPassingDarkFairy;
+    for(auto difficulty:difficulties) {
+        const auto configured=stage1::ConfigureSpawn(spawn,difficulty);
+        if(difficulty==D::Lunatic) {
+            assert(configured.pattern.skill&&configured.pattern.skill->shot.count==5);
+            assert(configured.pattern.skill->frame==70);
+        } else assert(!configured.pattern.skill);
+    }
+}
+/// @brief Easy 首非符的死亡与超时均转到第二组；符卡编号随源难度独立绑定。
+void TestRumiaDifficultyConfig() {
+    using D=native_combat::Difficulty;using S=bosses::RumiaBoss::Behavior;
+    const auto easy=stage1::RumiaFinalConfig(ShotType::HomingAmulet,D::Easy);
+    assert(easy.difficulty==D::Easy&&easy.phases.size()==2);
+    assert(easy.phases[0].skills.size()==1&&easy.phases[0].skills[0].id==S::FirstNonspell);
+    bosses::RumiaBoss boss;
+    const auto first=boss.DescribeSkill(S::FirstNonspell,ShotType::HomingAmulet,D::Easy);
+    assert(first.NativeHealth()==7000&&first.reserveHealth==0&&first.timeoutFrames==2100);
+    for(auto difficulty:{D::Easy,D::Normal,D::Hard,D::Lunatic}) {
+        const int index=native_combat::DifficultyIndex(difficulty);
+        assert(boss.DescribeSkill(S::Demarcation,ShotType::HomingAmulet,difficulty).spellCard==index+6);
+        if(index>0)assert(boss.DescribeSkill(S::NightBird,ShotType::HomingAmulet,difficulty).spellCard==index+2);
+    }
+    bool rejected=false;
+    try {boss.DescribeSkill(S::NightBird,ShotType::HomingAmulet,D::Easy);}catch(const std::invalid_argument&) {rejected=true;}
+    assert(rejected);
+    for(auto difficulty:{D::Hard,D::Lunatic}) {
+        const auto mid=stage1::RumiaMidbossConfig(ShotType::HomingAmulet,difficulty);
+        assert(mid.phases.size()==1&&mid.phases[0].skills.size()==2);
+        assert(mid.phases[0].skills[0].onTimeout.kind==bosses::Transition::Kind::Exit);
+        assert(mid.phases[0].skills[1].onTimeout.kind==bosses::Transition::Kind::ExitDefeated);
+        const auto firstMid=boss.DescribeSkill(S::Midboss,ShotType::HomingAmulet,difficulty);
+        const auto spell=boss.DescribeSkill(S::MoonlightRay,ShotType::HomingAmulet,difficulty);
+        assert(firstMid.NativeHealth()==6000&&firstMid.reserveHealth==500&&firstMid.timeoutFrames==1440);
+        assert(spell.NativeHealth()==500&&spell.timeoutFrames==1320&&spell.spellCard==native_combat::DifficultyIndex(difficulty)-1);
+    }
+    // 原道中普通攻击阈值接符卡；符卡超时仍走 Sub7 击破式退场，但不视作捕获。
+    auto mid=stage1::RumiaMidbossConfig(ShotType::HomingAmulet,D::Hard);
+    auto bullets=std::make_unique<BulletSystem>();boss.StartBoss(mid);
+    for(int i=0;i<61;++i)boss.Update(1.0F/60,{},*bullets);
+    boss.health=499;assert(boss.Update(1.0F/60,{},*bullets));assert(boss.AdvanceSkill());
+    assert(boss.attack==2&&boss.health==500&&!boss.CanTakeDamage());
+    bool timedOut=false;
+    for(int i=0;i<1330&&!timedOut;++i)timedOut=boss.Update(1.0F/60,{},*bullets);
+    assert(timedOut&&!boss.SkillDefeated());assert(boss.AdvanceSkill()&&boss.Defeated());
+    assert(boss.CompletionScore()==100000);
+    for(int i=0;i<170&&boss.active;++i)if(boss.Update(1.0F/60,{},*bullets))boss.AdvanceSkill();
+    assert(!boss.active);
+}
 
 /// @brief 验证 Stage1 波次人数、Boss/对话依赖、行为演员池与素材契约。
 void TestStage1Content() {
@@ -392,6 +464,22 @@ void TestStage1Content() {
 }
 /// @brief 六关必须同时可选、可构造且按闯关顺序衔接；非法编号不得别名到已有内容。
 void TestPlayableCatalog() {
+    auto bullets=std::make_unique<BulletSystem>();
+    // 独立目录编号必须实际到达同一符卡；覆盖道中入口、Easy 缩短组合及四种御札。
+    for(const auto& card:spell::Cards())if(spell::Playable(&card,0))for(int shot=0;shot<4;++shot) {
+        const auto difficulty=card.stage==6?native_combat::Difficulty::Normal:*native_combat::DifficultyFromIndex(card.difficulty);
+        const auto content=CreateStageContent(*SpellPracticeStage(card.stage),difficulty,StageEntry::SpellPractice);
+        auto boss=content->CreateBoss(content->PracticeBoss(card.number),static_cast<ShotType>(shot));
+        if(boss->attack==0)boss->ResumeCombat();
+        for(int skipped=1;skipped<card.phase;++skipped)assert(boss->AdvanceSkill());
+        assert(boss->attack==card.phase);
+        for(int frame=0;frame<180&&!boss->SpellName();++frame)boss->Update(1.0F/60,{},*bullets);
+        assert(boss->SpellCardNumber()==card.number&&std::string_view(boss->SpellName())==card.name);
+        assert(!bullets->Pool().DroppedSpawns());bullets->Reset();
+        bool rejectedCard=false;
+        try {(void)content->PracticeBoss(132);}catch(const std::invalid_argument&){rejectedCard=true;}
+        assert(rejectedCard);
+    }
     constexpr std::array<StageId,6> expected{StageId::Stage1,StageId::Stage2,StageId::Stage3,
         StageId::Stage4,StageId::Stage5,StageId::Stage6};
     for(std::size_t index=0;index<expected.size();++index) {
@@ -435,7 +523,7 @@ void TestPlayableCatalog() {
 /// @brief 测试角色把血量绑定在自己的技能目录中，公共执行器只接收引用及显式血条外观。
 class ConfigTestBoss final : public bosses::ConfiguredBoss {
 public:
-    enum class Behavior {First,Second,Third,Timed,Exit};
+    enum class Behavior {First,Second,Third,Timed,Survival,ThresholdOnly,ZeroHealth,NegativeHealth,Exit};
     const char* DisplayName() const override {return "Config test";}
 protected:
     bosses::Attack ResolveBehavior(bosses::BehaviorId id) const override {
@@ -450,9 +538,19 @@ protected:
             case Behavior::Second:p.health=4;p.timeoutFrames=12;break;
             case Behavior::Third:p.health=20;p.timeoutFrames=18;break;
             case Behavior::Timed:p.health=10;p.timeoutArmFrame=2;break;
+            case Behavior::Survival:p.health=10;p.survival=true;p.spellName="生存测试";break;
+            case Behavior::ThresholdOnly:p.health=0;p.reserveHealth=1000;break;
+            case Behavior::ZeroHealth:p.health=0;break;
+            case Behavior::NegativeHealth:p.health=-1;p.reserveHealth=1000;break;
             default:throw std::invalid_argument("Not a test skill");
         }
         return p;
+    }
+    bosses::SkillDefinition ResolveSkillForDifficulty(bosses::BehaviorId id,ShotType shot,native_combat::Difficulty difficulty) const override {
+        auto result=ResolveSkill(id,shot);
+        if(difficulty==native_combat::Difficulty::Hard)result.health+=100;
+        else if(difficulty!=native_combat::Difficulty::Normal)throw std::invalid_argument("Unsupported test difficulty");
+        return result;
     }
 private:
     static behavior::Routine Wait(behavior::Actor& actor) {actor.damageable=true;co_await actor.At(100000);}
@@ -465,6 +563,10 @@ void TestBossStartupConfig() {
     config.phases={{{S::First,S::Second},{{{1,0.75F,GREEN},{0,0.25F,BLUE}}}},{{S::Third},{{{0,1,RED}}}}};
     config.intro={};config.defeated=config.retreat=S::Exit;config.defeatScore=77;config.retreatScore=11;
     config.phases[0].healthBar.background=BLACK;
+    ConfigTestBoss restartBoss;
+    restartBoss.StartBoss(config);assert(restartBoss.health==10);
+    config.difficulty=native_combat::Difficulty::Hard;restartBoss.StartBoss(config);assert(restartBoss.health==110);
+    config.difficulty=native_combat::Difficulty::Normal;restartBoss.StartBoss(config);assert(restartBoss.health==10);
     ConfigTestBoss boss;boss.StartBoss(config);auto bullets=std::make_unique<BulletSystem>();
     config.phases[0].healthBar.segments[0].ratio=0.1F;config.phases.clear(); // 容器复制后不再借用调用方。
     auto bar=boss.HealthBar();assert(ColorToInt(bar.background)==ColorToInt(BLACK));assert(boss.health==10&&boss.phase==1&&boss.skill==1&&boss.attack==1);
@@ -496,19 +598,67 @@ void TestBossStartupConfig() {
         assert(!boss.active&&!boss.Defeated()&&boss.CompletionScore()==11);
         assert(std::abs(elapsed-12.0/60)<=2.0/fps+1.0/120);
     }
+    // 超时也可按内容指定击破式退场和奖励；技能捕获仍依据真实超时，不跟随退场外观。
+    config.phases[0].skills[0].onTimeout=Transition::ExitDefeated();boss.StartBoss(config);
+    bool timedOut=false;
+    for(int i=0;i<20&&!timedOut;++i)timedOut=boss.Update(1.0F/120,{},*bullets);
+    assert(timedOut&&!boss.SkillDefeated());
+    assert(boss.AdvanceSkill()&&boss.Defeated()&&boss.CompletionScore()==77);
+    for(int i=0;i<20&&boss.active;++i)if(boss.Update(1.0F/120,{},*bullets))boss.AdvanceSkill();
+    assert(!boss.active);
     config.phases={{{S::Timed,S::Second},{{{0,0.5F,RED},{1,0.5F,BLUE}}}},{{S::Third},{{{0,1,GREEN}}}}};
     config.phases[0].skills[0].onTimeout=Transition::Jump(1,0);boss.StartBoss(config);
     for(int i=0;i<20&&boss.phase==1;++i)if(boss.Update(1.0F/120,{},*bullets))boss.AdvanceSkill();
     assert(boss.phase==2&&boss.skill==1&&boss.attack==3);
+    // 原生命打到零可跳过预留符卡；阈值及超时各自保留默认/显式路径，配置按值复制。
+    auto split=config;split.phases[0].skills[0].id=S::First;
+    split.phases[0].skills[0].onDefeat=Transition::Jump(1,0);
+    split.phases[0].skills[0].onTimeout=Transition{};
+    for(bool zero:{false,true}) {
+        ConfigTestBoss routed;routed.StartBoss(split);routed.Update(1.0F/120,{},*bullets);routed.health=zero?0:3;
+        assert(routed.AdvanceSkill()&&routed.attack==(zero?3:2));
+    }
+    // 指定击破式超时奖励不会改变真实完成原因；重开必须清除上次原因。
+    auto forced=split;forced.phases={{{S::Timed},{{{0,1,WHITE}}}}};forced.phases[0].skills[0].onTimeout=Transition::ExitDefeated();
+    ConfigTestBoss reason;reason.StartBoss(forced);
+    for(int i=0;i<30;++i)if(reason.Update(1.0F/120,{},*bullets)) {assert(reason.AdvanceSkill());break;}
+    assert(reason.Defeated()&&reason.RetirementFromTimeout());reason.StartBoss(split);assert(!reason.RetirementFromTimeout());
     const auto rejects=[&](StartConfig invalid) {try {boss.StartBoss(invalid);}catch(const std::invalid_argument&){return true;}return false;};
     auto invalid=config;invalid.phases.clear();assert(rejects(invalid));
     invalid=config;invalid.phases[0].skills[0].onTimeout=Transition::Jump(9,0);assert(rejects(invalid));
+    invalid=config;invalid.phases[0].skills[0].onDefeat=Transition::Jump(9,0);assert(rejects(invalid));
     invalid=config;invalid.phases[0].skills[0].id=RumiaBoss::Behavior::Midboss;assert(rejects(invalid));
     invalid=config;invalid.phases[0].healthBar.segments[0].ratio=std::numeric_limits<float>::quiet_NaN();assert(rejects(invalid));
     invalid=config;invalid.phases[0].healthBar.segments[0].ratio=0.1F;assert(rejects(invalid));
     invalid=config;invalid.phases[0].healthBar.segments[0].skillIndex=9;assert(rejects(invalid));
     invalid=config;invalid.phases[0].healthBar.segments[0].skillIndex=1;assert(rejects(invalid));
     assert(boss.phase==2&&boss.attack==3); // 非法新配置不能破坏仍在运行的旧战斗。
+    for(const auto id:{S::ZeroHealth,S::NegativeHealth}) {
+        invalid=config;invalid.phases[0].skills[0].id=id;assert(rejects(invalid));
+    }
+    // 原寄存器仅剩阈值的过渡可以启动，但血条不能除以零；前后技能仍按显式比例和顺序交接。
+    config.phases={{{S::First,S::ThresholdOnly,S::Second},{{{0,.4F,WHITE},{1,.1F,WHITE},{2,.5F,PINK}}}}};
+    boss.StartBoss(config);assert(boss.HealthBar().segments[1].remaining==0);
+    boss.AdvanceSkill();bar=boss.HealthBar();assert(boss.health==1000&&bar.segments[1].remaining==0&&bar.segments[2].remaining==.5F);
+    assert(!boss.ShouldAdvanceFromDamage());boss.Update(1.0F/120,{},*bullets);boss.health=999;
+    assert(boss.ShouldAdvanceFromDamage()&&boss.AdvanceSkill()&&boss.health==4&&boss.attack==3);
+    // 准备项可显式不占段，后继仍显示完整血条；省略与实际段引用相矛盾必须拒绝。
+    config.phases={{{S::ThresholdOnly,S::Second},{{{1,1,PINK}}}}};config.phases[0].skills[0].omitHealthBarSegment=true;
+    boss.StartBoss(config);assert(boss.HealthBar().count==1&&boss.HealthBar().segments[0].remaining==1);
+    auto badBar=config;badBar.phases[0].healthBar.segments[0].skillIndex=0;assert(rejects(badBar));
+    badBar=config;badBar.phases[0].skills[0].omitHealthBarSegment=false;assert(rejects(badBar));
+    // 生存成功条件与伤害完成分离；普通超时仍失败，清场差异只在实际生存超时交接时生效。
+    for(auto id:{S::Survival,S::Second}) {
+        config.phases={{{id,S::Second},{{{0,.5F,WHITE},{1,.5F,PINK}}}}};boss.StartBoss(config);
+        assert(!boss.SpellSucceeded()&&boss.ClearsBulletsOnSkillEnd());
+        bool ready=false;for(int tick=0;tick<30&&!ready;++tick)ready=boss.Update(1.0F/120,{},*bullets);
+        assert(ready&&!boss.SkillDefeated()&&boss.SpellSucceeded()==(id==S::Survival));
+        assert(boss.ClearsBulletsOnSkillEnd()==(id!=S::Survival));
+        assert(boss.AdvanceSkill()&&boss.ClearsBulletsOnSkillEnd()&&!boss.SpellSucceeded());
+    }
+    config.phases={{{S::Survival,S::Second},{{{0,.5F,WHITE},{1,.5F,PINK}}}}};boss.StartBoss(config);
+    boss.Update(1.0F/120,{},*bullets);boss.health=0;
+    assert(boss.ShouldAdvanceFromDamage()&&boss.SkillDefeated()&&!boss.SpellSucceeded()&&boss.ClearsBulletsOnSkillEnd());
 }
 }  // namespace
 
@@ -519,6 +669,8 @@ void RunStageTests() {
     TestSpawnCancellation();
     TestInvalidEvents();
     TestStage1Content();
+    TestStage1DarkFairyDifficulty();
+    TestRumiaDifficultyConfig();
     TestPlayableCatalog();
     TestBossStartupConfig();
 }

@@ -6,23 +6,23 @@ namespace koumakyou::bosses {
 behavior::Routine SkillComplete(behavior::Actor&) {co_return;}
 namespace {
 void Validate(const StartConfig& c) {
-    if(c.phases.empty()||!c.configure||!c.defeated||!c.retreat||static_cast<unsigned>(c.shot)>3||
+    if(native_combat::DifficultyIndex(c.difficulty)<0||c.phases.empty()||!c.configure||!c.defeated||!c.retreat||static_cast<unsigned>(c.shot)>3||
        !std::isfinite(c.hitRadius)||c.hitRadius<=0||!std::isfinite(c.position.x)||!std::isfinite(c.position.y)||!std::isfinite(c.position.z))
         throw std::invalid_argument("Invalid Boss start configuration");
     for(const auto entry:c.resumeSteps)if(!entry||!c.intro)throw std::invalid_argument("Invalid Boss resume step");
     for(const auto& p:c.phases) {
-        if(p.skills.empty()||p.healthBar.segments.size()!=p.skills.size())throw std::invalid_argument("Invalid Boss phase composition");
+        if(p.skills.empty()||p.healthBar.segments.size()!=static_cast<std::size_t>(std::ranges::count_if(p.skills,[](const SkillSlot& slot){return !slot.omitHealthBarSegment;})))throw std::invalid_argument("Invalid Boss phase composition");
         std::vector<bool> used(p.skills.size());double sum=0;
         for(const auto& segment:p.healthBar.segments) {
-            if(segment.skillIndex>=p.skills.size()||used[segment.skillIndex]||!std::isfinite(segment.ratio)||segment.ratio<=0||segment.ratio>1)
+            if(segment.skillIndex>=p.skills.size()||p.skills[segment.skillIndex].omitHealthBarSegment||used[segment.skillIndex]||!std::isfinite(segment.ratio)||segment.ratio<=0||segment.ratio>1)
                 throw std::invalid_argument("Invalid Boss health bar segment");
             used[segment.skillIndex]=true;sum+=segment.ratio;
         }
         if(std::abs(sum-1)>1e-5)throw std::invalid_argument("Boss health bar ratios must sum to one");
         for(const auto& slot:p.skills) {
             if(!slot.id)throw std::invalid_argument("Missing Boss skill");
-            for(const auto transition:{slot.onDamage,slot.onTimeout})switch(transition.kind) {
-                case Transition::Kind::Next:case Transition::Kind::Exit:break;
+            for(const auto transition:{slot.onDamage,slot.onTimeout,slot.onDefeat.value_or(slot.onDamage)})switch(transition.kind) {
+                case Transition::Kind::Next:case Transition::Kind::Exit:case Transition::Kind::ExitDefeated:break;
                 case Transition::Kind::Jump:
                     if(transition.phase>=c.phases.size()||transition.skill>=c.phases[transition.phase].skills.size())
                         throw std::invalid_argument("Invalid Boss skill transition");
@@ -33,10 +33,12 @@ void Validate(const StartConfig& c) {
     }
 }
 void Validate(const SkillDefinition& p) {
-    if(!p.behavior||!std::isfinite(p.health)||p.health<=0||!std::isfinite(p.reserveHealth)||p.reserveHealth<0||
+    if(p.bombRecoveryPoses&&std::ranges::any_of(*p.bombRecoveryPoses,[](int script){return script< -1;}))
+        throw std::invalid_argument("Invalid Boss Bomb recovery poses");
+    if(!p.behavior||!std::isfinite(p.health)||p.health<0||(p.health==0&&p.reserveHealth<=0)||!std::isfinite(p.reserveHealth)||p.reserveHealth<0||
        !std::isfinite(p.NativeHealth())||!std::isfinite(p.entranceHealth)||p.entranceHealth<0||
        p.timeoutFrames< -1||p.timeoutArmFrame<0||!std::isfinite(p.initialFrame)||p.initialFrame<0||
-       !std::isfinite(p.hitRadius)||p.hitRadius<0||p.spellRevealFrame<0)
+       !std::isfinite(p.hitRadius)||p.hitRadius<0||p.spellRevealFrame<0||p.bombReactionFrame<0)
         throw std::invalid_argument("Invalid Boss skill definition");
 }
 }
@@ -46,7 +48,7 @@ void ConfiguredBoss::StartBoss(const StartConfig& config) {
     // 在更换旧状态前完成引用解析；外部容器、机体参数和血条颜色后续变化都不能污染活动战斗。
     for(const auto& p:copy.phases) {
         ResolvedPhase phase;
-        for(const auto& slot:p.skills) {auto definition=ResolveSkill(slot.id,copy.shot);Validate(definition);phase.skills.push_back(std::move(definition));}
+        for(const auto& slot:p.skills) {auto definition=ResolveSkillForDifficulty(slot.id,copy.shot,copy.difficulty);Validate(definition);phase.skills.push_back(std::move(definition));}
         parsed.push_back(std::move(phase));
     }
     auto intro=copy.intro ? ResolveBehavior(copy.intro) : Attack{};
@@ -57,7 +59,9 @@ void ConfiguredBoss::StartBoss(const StartConfig& config) {
     const auto& first=parsed.front().skills.front();const float hp=first.entranceHealth>0 ? first.entranceHealth : first.NativeHealth();
     actor_.Reset(copy.position,hp,copy.seed); // 旧协程先于旧技能闭包销毁，保留借用期。
     config_=std::move(copy);resolved_=std::move(parsed);intro_=std::move(intro);defeat_=std::move(defeated);retreat_=std::move(retreat);resumeSteps_=std::move(resume);
-    config_.configure(actor_,spatial_);active=true;phase=skill=attack=0;waiting_=static_cast<bool>(intro_);retiring_=defeated_=false;notifications_=0;
+    // 子演员可显式继承角色外观；Actor与Boss共用当前关卡内的VisualId借用期。
+    actor_.difficulty=config_.difficulty;actor_.visual=config_.visual;
+    config_.configure(actor_,spatial_);active=true;phase=skill=attack=0;waiting_=static_cast<bool>(intro_);retiring_=defeated_=retirementTimedOut_=false;notifications_=0;
     stage_=skill_=0;presentation.Reset(ActorKind::Boss);animation={};animationScript=-1;animationAge=0;animationRevision=0;
     skillTimer=0;skillElapsed_=0;visual=config_.visual;hitRadius=actor_.hitRadius=config_.hitRadius;
     actor_.damageable=config_.initialDamageable;actor_.contactEnabled=config_.initialContact;
@@ -104,21 +108,34 @@ bool ConfiguredBoss::SkillDefeated() const {
     const auto* p=CurrentSkill();return health<=0||(p&&p->thresholdDefeatsSpell&&
         (health<p->reserveHealth||actor_.callbackCause==behavior::CallbackCause::HealthThreshold));
 }
+bool ConfiguredBoss::SpellSucceeded() const {
+    const auto* p=CurrentSkill();
+    return p&&p->survival ? actor_.callbackCause==behavior::CallbackCause::Timeout : SkillDefeated();
+}
+bool ConfiguredBoss::ClearsBulletsOnSkillEnd() const {
+    const auto* p=CurrentSkill();
+    return !(p&&p->survival&&actor_.callbackCause==behavior::CallbackCause::Timeout);
+}
 bool ConfiguredBoss::AdvanceSkill() {
     if(!active)return false;
     if(waiting_)throw std::logic_error("Cannot advance Boss before dialogue notification");
     actor_.health=health;
     if(retiring_||actor_.finished) {active=false;phase=skill=attack=0;return false;}
     const bool timedOut=actor_.callbackCause==behavior::CallbackCause::Timeout;
-    const auto& slot=config_.phases[stage_].skills[skill_];const auto next=timedOut ? slot.onTimeout : slot.onDamage;
+    // 碰撞可能在下一次Actor::Tick前交接；生命归零/超时释放附着，正生命预留阈值继续跟随。
+    if(timedOut||health<=0||actor_.callbackCause==behavior::CallbackCause::Defeat)actor_.ReleaseAttachedEffects();
+    const auto& slot=config_.phases[stage_].skills[skill_];
+    // 原生命归零可跳过当前预留符卡；普通阈值与超时仍进入各自后继，不能统一成一个伤害出口。
+    const auto next=timedOut ? slot.onTimeout : (health<=0||actor_.callbackCause==behavior::CallbackCause::Defeat) ? slot.onDefeat.value_or(slot.onDamage) : slot.onDamage;
     std::size_t stage=stage_,index=skill_+1;
     if(next.kind==Transition::Kind::Jump) {stage=next.phase;index=next.skill;}
     else if(index>=resolved_[stage].skills.size()) {++stage;index=0;}
-    if(next.kind!=Transition::Kind::Exit&&stage<resolved_.size()) {StartSkill(stage,index);return true;}
+    if(next.kind!=Transition::Kind::Exit&&next.kind!=Transition::Kind::ExitDefeated&&stage<resolved_.size()) {StartSkill(stage,index);return true;}
     // 最后一张可在正生命寄存器阈值处完成；击破依据技能实际剩余 HP，不能只检查原寄存器是否归零。
     const auto& definition=resolved_[stage_].skills[skill_];
-    defeated_=!timedOut&&(health<=definition.reserveHealth||actor_.callbackCause==behavior::CallbackCause::HealthThreshold);
-    retiring_=true;actor_.phaseClockPaused=false;
+    defeated_=next.kind==Transition::Kind::ExitDefeated||
+        (!timedOut&&(health<=definition.reserveHealth||actor_.callbackCause==behavior::CallbackCause::HealthThreshold));
+    retiring_=true;retirementTimedOut_=timedOut;actor_.phaseClockPaused=false;
     actor_.pendingCallback=SkillComplete;actor_.Transition();actor_.Start((defeated_ ? defeat_ : retreat_)(actor_,*this));
     actor_.damageable=false;actor_.contactEnabled=false;actor_.lifeThreshold=-1;actor_.timeoutFrames=-1;Sync();return true;
 }
@@ -133,7 +150,7 @@ BossHealthBar ConfiguredBoss::HealthBar() const {
     const auto& p=config_.phases[stage_];result.background=p.healthBar.background;
     for(const auto& segment:p.healthBar.segments) {
         const auto& definition=resolved_[stage_].skills[segment.skillIndex];
-        const float fill=segment.skillIndex<skill_ ? 0 : segment.skillIndex>skill_ ? 1 :
+        const float fill=segment.skillIndex<skill_||definition.health==0 ? 0 : segment.skillIndex>skill_ ? 1 :
             std::clamp((health-definition.reserveHealth)/definition.health,0.0F,1.0F);
         result.segments.push_back({segment.ratio,segment.ratio*fill,segment.color});
     }

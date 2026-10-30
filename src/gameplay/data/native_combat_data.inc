@@ -3620,7 +3620,7 @@ constexpr std::array<StageData,7> kStages{{
     {4,Integration::Playable,"09744169b7ec3e6525e5cd2ff6e3c1c970cbcde4c8d0d772891aa38fc654bb09",kHealth4},
     {5,Integration::Playable,"09b6a12c36069ac6caa320ca400ba70897f74ab6a7f04081076442cb5abc5276",kHealth5},
     {6,Integration::Playable,"bc8013a2461b1e93ecc36acca8f2a81d948e0561e82bcde4176a6268b6985dce",kHealth6},
-    {7,Integration::DataOnly,"d6eae42d8d8eb669573b8004ba130f818374edc84ec35ccd0eda39eb6627a2eb",kHealth7},
+    {7,Integration::Playable,"d6eae42d8d8eb669573b8004ba130f818374edc84ec35ccd0eda39eb6627a2eb",kHealth7},
 }};
 constexpr std::array<ShotChannel,1> kShot0Power0{{
     {5,0,0,0,1120,0,0.0F,0.0F,12.0F,12.0F,-1.57079637F,12.0F,48.0F,0x4274c8},

@@ -17,5 +17,9 @@ struct PostgameLayout {
     [[nodiscard]] Rectangle ShotArrow(int direction) const {
         return canvas.Rect(direction<0?350:680,compact?124:116,32,32);
     }
+    /// @brief 排行榜底部难度切换命中区；与当前表的难度标题同行。
+    [[nodiscard]] Rectangle DifficultyArrow(int direction) const {
+        return canvas.Rect(direction<0?48:canvas.width-80,canvas.height-104,32,32);
+    }
 };
 } // namespace koumakyou::menu

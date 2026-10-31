@@ -31,6 +31,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
+# 第三方公开头文件按系统头传递，避免 raymath.h 的 C 风格初始化在每个 C++ 使用方重复报警。
+# 仅改变 raylib 头文件的诊断边界；项目源码仍使用原有警告选项，兼容 CMake 3.20。
+get_target_property(koumakyou_raylib_include_dirs raylib INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(raylib SYSTEM INTERFACE ${koumakyou_raylib_include_dirs})
+
 # 通用 UI 可独立链接和测试，不依赖 Game、关卡、配置或素材管理器。
 add_library(koumakyou_ui STATIC src/ui/components.cpp src/ui/command_bar.cpp)
 target_include_directories(koumakyou_ui PUBLIC src)
@@ -196,7 +201,6 @@ target_sources(koumakyou_engine PRIVATE
  src/render/projectiles/collection_renderer.cpp
  src/render/projectiles/laser_renderer.cpp
  src/render/projectiles/spawn_renderer.cpp)
-target_include_directories(koumakyou_engine PRIVATE "${raylib_SOURCE_DIR}/src")
 
 add_executable(koumakyou src/main.cpp)
 target_link_libraries(koumakyou PRIVATE koumakyou_engine)

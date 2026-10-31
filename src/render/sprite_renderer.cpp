@@ -537,7 +537,7 @@ void SpriteRenderer::DrawDebugGeometry(const BulletSystem& bullets,
             auto binding=ProjectileFrameBuilder::Resolve(bullet,visuals[bullet.visual]);
             if(!binding.asset.empty()){
                 const auto&r=models->Get(binding.asset);
-                if(r.collision){auto pose=ProjectileFrameBuilder::Pose(bullet,binding,*models);auto point=[&](Vector3 v){return Vector3Add(pose.position,Vector3RotateByQuaternion(Vector3Scale(v,pose.scale),pose.rotation));};
+                if(r.collision){auto pose=ProjectileFrameBuilder::CollisionPose(bullet,binding,*models);auto point=[&](Vector3 v){return Vector3Add(pose.position,Vector3RotateByQuaternion(Vector3Scale(v,pose.scale),pose.rotation));};
                     for(auto&part:r.collision->Parts())for(auto&t:part.triangles){auto a=point(t.a),b=point(t.b),c=point(t.c);DrawLine3D(a,b,YELLOW);DrawLine3D(b,c,YELLOW);DrawLine3D(c,a,YELLOW);}return;}
             }
         }

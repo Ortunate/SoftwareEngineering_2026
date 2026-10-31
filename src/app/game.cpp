@@ -684,11 +684,13 @@ void Game::UpdateState(float deltaTime) {
         return;
     }
 
-    // 对话的返回操作打开暂停菜单；普通战斗右键仍是可配置的低速移动。
+    // MenuInput::back 同时包含 X、Esc 和右键；对话期间只屏蔽右键，保留键盘返回与独立暂停绑定。
     const auto dialogueInput = ui::MenuInput::Read();
-    const bool pauseBinding = BindingPressed(bindings_.pause) &&
+    const bool dialogueRightClick=dialogueActive_&&IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+    const bool pauseBinding = !dialogueRightClick&&BindingPressed(bindings_.pause) &&
         (!dialogueActive_ || (!dialogueInput.confirm && !dialogueInput.click));
-    if (replayMode_!=replay::Mode::Playback && (IsKeyPressed(KEY_ESCAPE) || pauseBinding || (dialogueActive_ && dialogueInput.back))) {
+    const bool dialogueKeyboardBack=dialogueActive_&&dialogueInput.back&&!dialogueRightClick;
+    if (replayMode_!=replay::Mode::Playback && (IsKeyPressed(KEY_ESCAPE) || pauseBinding || dialogueKeyboardBack)) {
         TogglePause();
         return;
     }

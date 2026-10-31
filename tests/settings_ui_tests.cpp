@@ -822,7 +822,8 @@ void TestUnifiedUiInputs() {
             if(id==2 || id==5 || id==8 || (id>=9 && id<=11) || id==16 || id==17)
                 Check(Probe::MainMenu(game),"UI return did not reach title");
             else if(id==3)Check(Probe::General(game),"binding return did not reach options");
-            else if(id==13)Check(Probe::State(game)==RunState::Paused,"dialogue return did not pause");
+            else if(id==13)Check(Probe::State(game)==(cancel<0?RunState::Playing:RunState::Paused),
+                cancel<0?"dialogue right click unexpectedly paused":"dialogue keyboard return did not pause");
             else if(id==15)Check(Probe::Playing(game),"pause return did not resume");
             else Check(Probe::SetupStep(game)==(id==6?StartSetupStep::Character:id==7?StartSetupStep::Shot:
                         id==21?StartSetupStep::Difficulty:StartSetupStep::Mode),"setup return skipped a step");

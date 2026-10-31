@@ -14,7 +14,7 @@ public:
   if(binding.asset.empty())return -1;
   if(binding.beam){float distance=std::max(0.F,std::sqrt(b.DistanceSquaredTo(point))-b.radius);return distance*distance;}
   const auto&r=assets->Get(binding.id);if(!r.collision)return -1;
-  auto pose=ProjectileFrameBuilder::Pose(b,binding,*assets);Vector3 local=Vector3Scale(Vector3RotateByQuaternion(Vector3Subtract(point,pose.position),QuaternionInvert(pose.rotation)),1/pose.scale);
+  auto pose=ProjectileFrameBuilder::CollisionPose(b,binding,*assets);Vector3 local=Vector3Scale(Vector3RotateByQuaternion(Vector3Subtract(point,pose.position),QuaternionInvert(pose.rotation)),1/pose.scale);
   // 包围球先排除远目标；只在接近实体时查询已加载的 BVH。远距离返回保守下界。
   float lower=std::max(0.F,Vector3Length(local)-r.collision->BoundingRadius())*pose.scale;
   if(lower>queryRadius)return INFINITY;

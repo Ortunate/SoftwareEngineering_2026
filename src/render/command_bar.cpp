@@ -66,7 +66,10 @@ void Game::DrawCommandBar() const {
         case RunState::Finishing:add("","等待",false);add("Esc / "+KeyLabel(bindings_.pause),"暂停");break;
         case RunState::Playing:
             if(dialogueActive_) {
-                add("Z / Space / 左键","继续");add("Ctrl","跳过");add("X / Esc / 右键","暂停");
+                std::string pauseKeys="X / Esc";
+                if(bindings_.pause!=KEY_X&&bindings_.pause!=MouseBinding(MOUSE_BUTTON_RIGHT))
+                    pauseKeys+=" / "+KeyLabel(bindings_.pause);
+                add("Z / Space / 左键","继续");add("Ctrl","跳过");add(std::move(pauseKeys),"暂停");
             } else {
                 add(KeyLabel(bindings_.forward)+" / "+KeyLabel(bindings_.backward)+" / "+KeyLabel(bindings_.moveLeft)+" / "+KeyLabel(bindings_.moveRight),"移动");
                 add(KeyLabel(bindings_.ascend)+" / "+KeyLabel(bindings_.descend),"升降");

@@ -70,4 +70,4 @@
 - [ ] 本类所有有效颜色、深浅背景、常用镜头尺寸及放大视图均检查
 - [ ] 独立碰撞单显与叠加已检查，明确同意本件通过
 
-使用根目录 Review-Projectiles.cmd 选择本件。参数、接口及统一测试记录见 [全组交付说明](../../../docs/PROJECTILE_COLLECTION_REVIEW.md)。本轮人工验收尚未通过，自动检查不能代签。
+使用 tools/windows/Review-Projectiles.cmd 选择本件。参数、接口及统一测试记录见 [全组交付说明](../../../docs/PROJECTILE_COLLECTION_REVIEW.md)。本轮人工验收尚未通过，自动检查不能代签。

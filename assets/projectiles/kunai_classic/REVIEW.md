@@ -6,7 +6,7 @@
 
 ## 人工查看
 
-双击根目录 `Review-Kunai.cmd`，独立于游戏和玩家数据。
+双击`tools/windows/Review-Kunai.cmd`，独立于游戏和玩家数据。
 
 | 操作 | 功能 |
 | --- | --- |
@@ -23,7 +23,7 @@
 
 绿色 CLEAR 表示无接触，橙色 CONTACT 表示接触。本体碰撞是三个闭合部件的实体并集，环中心保留孔洞，不使用整个外包盒作为精确碰撞。16 色总览不显示单件探针。
 
-截图：`Review-Kunai.cmd -Action capture`，输出 `output/projectile-review/classic/` 的正侧背面、灰模、碰撞、孔洞/环接触、16 色及光效/背景图。人工重点检查轮廓是否贴近参考，远看是否仍能区分颜色，侧面是否有厚度，环孔是否真实为空，光效是否过强。
+截图：`tools/windows/Review-Kunai.cmd -Action capture`，输出 `output/projectile-review/classic/` 的正侧背面、灰模、碰撞、孔洞/环接触、16 色及光效/背景图。人工重点检查轮廓是否贴近参考，远看是否仍能区分颜色，侧面是否有厚度，环孔是否真实为空，光效是否过强。
 
 2026-10-27，用户明确反馈“我和 leader 都觉得行”，本版美术人工验收通过。自动检查不代替美术验收；后续修改或重新生成模型仍需重新验收。
 
@@ -53,7 +53,7 @@ EndMode3D();
 
 ## 性能测试与预算
 
-根目录 `Stress-Kunai.cmd` 或 `Review-Kunai.cmd -Action stress`。运行约 8.5 分钟，需保持窗口可见且不最小化。无 MSAA、关闭垂直同步和帧率限制，1920×1080，13 个场景各预热 3 秒、采样 10 秒、重复 3 次。测试结束后查看 `output/projectile-review/performance/results.csv` 与 `hardware.txt`。
+`tools/windows/Stress-Kunai.cmd` 或 `tools/windows/Review-Kunai.cmd -Action stress`。运行约 8.5 分钟，需保持窗口可见且不最小化。无 MSAA、关闭垂直同步和帧率限制，1920×1080，13 个场景各预热 3 秒、采样 10 秒、重复 3 次。测试结束后查看 `output/projectile-review/performance/results.csv` 与 `hardware.txt`。
 
 场景覆盖 1024/4096/8192 发，静态/运动、单色/16 色、光效关闭/开启、密集重叠、极近屏幕覆盖、75% 显示剔除、8192 个碰撞候选，以及同数量的简化二维 sprite 基线。为控制总时长采用代表性组合，不是所有维度的完整笛卡尔积。CPU 更新为合成运动，不包含真实技能脚本；碰撞为每帧对一个球体查询。
 
@@ -61,4 +61,4 @@ CSV 分别记录整帧、更新、碰撞、打包上传、绘制 CPU、异步 GP
 
 普通 8192 场景目标为整帧 P95≤16.7 ms、GPU P95≤6 ms、更新与碰撞 CPU 合计≤2 ms。极端场景单列，不偷减数量。当前仓库未声明最低硬件，因此测试只验证所记录机器；低端 GPU 和完整游戏需另行实测。面数只是预算一部分，透明覆盖率、提交方式、碰撞候选数同样决定压力。
 
-重建：`Review-Kunai.cmd -Action generate-classic` 后运行 `Review-Kunai.cmd -Action test`。重新生成会将资产状态重置为待验收。依赖、构建与运行数据全部留在项目目录。
+重建：`tools/windows/Review-Kunai.cmd -Action generate-classic` 后运行 `tools/windows/Review-Kunai.cmd -Action test`。重新生成会将资产状态重置为待验收。依赖、构建与运行数据全部留在项目目录。

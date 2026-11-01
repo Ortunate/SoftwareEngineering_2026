@@ -10,9 +10,9 @@
 
 ## 审阅入口
 
-双击根目录 `Review-Items.cmd`：TAB 选择、V 切换总览、空格暂停、1 贴图/2 实体/3 线框、F/S/B 正面/侧面/背面、R 归零。检查固定方向时先暂停。总览和单款均按自身 Y 轴旋转，不绕中心公转。
+双击`tools/windows/Review-Items.cmd`：TAB 选择、V 切换总览、空格暂停、1 贴图/2 实体/3 线框、F/S/B 正面/侧面/背面、R 归零。检查固定方向时先暂停。总览和单款均按自身 Y 轴旋转，不绕中心公转。
 
-`Review-Items.cmd -Capture` 重新渲染，`Review-Items.cmd -Generate -Capture` 从原图重建后渲染。工具、依赖和临时环境均在项目根目录隔离；Windows PowerShell 启动脚本使用 UTF-8 BOM。
+`tools/windows/Review-Items.cmd -Capture` 重新渲染，`tools/windows/Review-Items.cmd -Generate -Capture` 从原图重建后渲染。工具、依赖和临时环境均在项目根目录隔离；Windows PowerShell 启动脚本使用 UTF-8 BOM。
 
 输出 `output/projectile-review/items/overview.gif` 和七款同名 GIF。每张四秒、100 帧、25 fps、无限循环；另有 front/side/back PNG。帧序列由 raylib 加载正式 glTF 输出，再使用项目内 Pillow 编码。GIF 合成同时检查资源路径、面预算与实体闭合边拓扑。
 
@@ -22,7 +22,7 @@
 
 DropSystem 使用每个 Pickup 的模拟年龄计算绕本地 +Y 长轴的旋转：90 度/秒，四秒一圈，出生和池复用从零开始。旋转不依赖相机，不改变上抛、下落、追踪和拾取半径；暂停不推进年龄，因此姿态冻结。模型按照原外观世界高度缩放，保留动画不透明度，参加现有统一透明排序。资源随关卡逐款加载，取消/失败和卸载统一释放；正式打包只复制 glTF/bin、PNG 和 asset.json。
 
-运行 Run-Model-Game.cmd 在游戏中查看；output/projectile-review/items/items-runtime.png 是正式绘制接口的七款集成截图。
+运行 tools/windows/Run-Model-Game.cmd 在游戏中查看；output/projectile-review/items/items-runtime.png 是正式绘制接口的七款集成截图。
 
 ## 局内 GIF
 

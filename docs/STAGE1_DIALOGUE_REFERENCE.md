@@ -22,7 +22,7 @@
 | 4 | `face00c_0.png` | `face01c_0.png` | — |
 | 5 | `face00c_1.png` | `face01c_1.png` | — |
 
-灵梦与露米娅引用 `stages/stage1/portraits`，魔理沙引用 `common/portraits/marisa`，均由关卡拥有加载后的资源。魔理沙六张重绘都是全身构图，对话统一取上部，避免偶数差分显示整个人、奇数差分只显示上部而产生尺寸跳变。未被一面脚本引用的差分仍保留，不用自编表情替换原指令。
+灵梦引用 `common/portraits/reimu`，魔理沙引用 `common/portraits/marisa`，露米娅引用 `stages/stage1/portraits/rumia`。对话立绘均由关卡拥有加载后的资源，菜单后景另由通用资源独立持有。魔理沙六张重绘都是全身构图，对话统一取上部，避免偶数差分显示整个人、奇数差分只显示上部而产生尺寸跳变。未被一面脚本引用的差分仍保留，不用自编表情替换原指令。
 
 ## 灵梦战前
 

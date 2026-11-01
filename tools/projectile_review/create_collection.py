@@ -223,7 +223,7 @@ for kind,name,colors,limit,description,danger in SPECS:
     (out/'asset.json').write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding='utf-8')
     checks='\n'.join('- [ ] '+c for c in CHECKS[kind])
     composition='\n'.join(f"| {p['name']} | {p['triangles']} | {'实体碰撞' if p['collision'] else '显示装饰'} |" for p in info['parts'])
-    (out/'REVIEW.md').write_text(f'''# {description}\n\n状态：待人工验收。Type {kind}，{colors} 个有效颜色，共享一个网格，代表色 C{info['representativeColor']:02}。\n\n几何总数 {info['triangles']} 三角形，实体碰撞 {info['collisionTriangles']} 三角形。预算硬上限 {limit}。\n\n| 部件 | 三角形 | 碰撞角色 |\n| --- | ---: | --- |\n{composition}\n\n碰撞约定：{danger}。颜色、透明度和外部光效不改变碰撞。\n\n无拉伸原精灵贴图；纯色、顶点亮面遮罩与独立程序化表面着色。源文件保留分部件及材质预览，glTF 合并网格，角色由 COLOR_0.g 编码，需配套运行时着色器解释。\n\n## 本件人工检查\n\n{checks}\n- [ ] 本类所有有效颜色、深浅背景、常用镜头尺寸及放大视图均检查\n- [ ] 独立碰撞单显与叠加已检查，明确同意本件通过\n\n使用根目录 Review-Projectiles.cmd 选择本件。参数、接口及统一测试记录见 [全组交付说明](../../../docs/PROJECTILE_COLLECTION_REVIEW.md)。本轮人工验收尚未通过，自动检查不能代签。\n''',encoding='utf-8')
+    (out/'REVIEW.md').write_text(f'''# {description}\n\n状态：待人工验收。Type {kind}，{colors} 个有效颜色，共享一个网格，代表色 C{info['representativeColor']:02}。\n\n几何总数 {info['triangles']} 三角形，实体碰撞 {info['collisionTriangles']} 三角形。预算硬上限 {limit}。\n\n| 部件 | 三角形 | 碰撞角色 |\n| --- | ---: | --- |\n{composition}\n\n碰撞约定：{danger}。颜色、透明度和外部光效不改变碰撞。\n\n无拉伸原精灵贴图；纯色、顶点亮面遮罩与独立程序化表面着色。源文件保留分部件及材质预览，glTF 合并网格，角色由 COLOR_0.g 编码，需配套运行时着色器解释。\n\n## 本件人工检查\n\n{checks}\n- [ ] 本类所有有效颜色、深浅背景、常用镜头尺寸及放大视图均检查\n- [ ] 独立碰撞单显与叠加已检查，明确同意本件通过\n\n使用 tools/windows/Review-Projectiles.cmd 选择本件。参数、接口及统一测试记录见 [全组交付说明](../../../docs/PROJECTILE_COLLECTION_REVIEW.md)。本轮人工验收尚未通过，自动检查不能代签。\n''',encoding='utf-8')
     print('CREATED',kind,name,info['triangles'])
 
 # 每类独立保存原目录预览；不是模型贴图。来源固定到已阅读的目录提交。

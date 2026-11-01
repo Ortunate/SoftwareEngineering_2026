@@ -230,16 +230,3 @@
 ![player01 图集总览](images/projectiles/atlas-player01.png)
 
 图集中还包含自机身体、道具或其他动画；本目录没有将这些内容计为弹体。全部战斗图集的加载和生命周期约定见 [原始战斗素材接口](NATIVE_BATTLE_ASSETS.md)。
-
-## 8. 仓库保留的旧版弹体 PNG
-
-仓库还有两款旧版弹体各自的源图和运行时 PNG，共四个文件。当前战斗素材清单不再引用它们；保留在这里供历史素材查找，不计入当前敌弹的有效颜色数量。
-
-![旧版白珠与红弹源图、运行时图](images/projectiles/legacy-bullets.png)
-
-| 素材 | 源图 | 运行时图 |
-|---|---|---|
-| 白珠弹 | [bullet_pearl.png](../assets/source/bullet_pearl.png)，1254 × 1254 | [bullet_pearl_runtime.png](../assets/runtime/stages/stage1/bullet_pearl_runtime.png)，512 × 512 |
-| 红弹 | [bullet_red.png](../assets/source/bullet_red.png)，1254 × 1254 | [bullet_red_runtime.png](../assets/runtime/stages/stage1/bullet_red_runtime.png)，512 × 512 |
-
-`kBlueBullet`、`kRedBullet`、`kGreenSphere` 目前均绑定 Type 3 的不同颜色，不对应三套独立弹体原图。

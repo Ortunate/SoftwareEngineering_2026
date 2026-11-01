@@ -61,5 +61,5 @@ for index,name in enumerate(names):
     bpy.ops.export_scene.gltf(filepath=str(out/(name+'.gltf')),export_format='GLTF_SEPARATE',use_selection=True)
     meta=dict(asset=name,source=json.loads((out/'source.json').read_text()),height=1,thickness=.06,bevel=.01,triangles=triangles,localUp=[0,1,0],surfaceFront=[0,0,1],rotationAxis=[0,1,0],collision='none; pickup radius remains gameplay-owned',humanAcceptance='pending')
     (out/'asset.json').write_text(json.dumps(meta,indent=2)+'\n')
-    (out/'REVIEW.md').write_text('# 道具验收\n\n待人工验收。运行根目录 Review-Items.cmd；旋转 GIF 位于 output/projectile-review/items。\n',encoding='utf-8')
+    (out/'REVIEW.md').write_text('# 道具验收\n\n待人工验收。运行 tools/windows/Review-Items.cmd；旋转 GIF 位于 output/projectile-review/items。\n',encoding='utf-8')
     print(name,triangles)

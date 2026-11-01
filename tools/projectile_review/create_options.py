@@ -84,4 +84,4 @@ for star,name in enumerate(('reimu_option','marisa_option')):
     carry_acceptance(meta,out/'asset.json',[ROOT/'tools/projectile_review/options_inspector.cpp'])
     (out/'asset.json').write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
     if meta['humanAcceptance']!='approved':
-        (out/'REVIEW.md').write_text('# 副机验收\n\n待人工验收；运行根目录 Review-Options.cmd。\n',encoding='utf-8')
+        (out/'REVIEW.md').write_text('# 副机验收\n\n待人工验收；运行 tools/windows/Review-Options.cmd。\n',encoding='utf-8')

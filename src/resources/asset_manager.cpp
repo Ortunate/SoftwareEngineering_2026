@@ -231,7 +231,7 @@ void AssetManager::LoadCommon() {
         GenTextureMipmaps(&common_.titleLogo);
         SetTextureFilter(common_.titleLogo, TEXTURE_FILTER_TRILINEAR);
     }
-    common_.reimuPortrait = LoadTextureAsset(root_ / "stages/stage1/portraits/reimu/face00a_1.png");
+    common_.reimuPortrait = LoadTextureAsset(root_ / "common/portraits/reimu/face00a_1.png");
     common_.marisaBackdrop = LoadTextureAsset(root_ / "common/portraits/marisa/face01a_1.png");
     if(IsTextureValid(common_.marisaBackdrop)) {
         GenTextureMipmaps(&common_.marisaBackdrop);

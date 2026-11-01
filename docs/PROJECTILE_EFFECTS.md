@@ -21,7 +21,7 @@ spawn.Draw(model, p);
 
 SpawnParams 的位置使用世界单位，rotation 为单位四元数，scale 是模型正常统一缩放。age>=0、duration>0，以秒计；startMultiplier>=endMultiplier>0，opacity 在 [0,1]。采样采用平滑缩放曲线，alpha 单调上升（透明度下降）；结束后保持最终状态继续绘制，或由调用方切回正常绘制，避免重复绘制两份。颜色 tint 默认白色乘数。projectileMask 默认关闭，仅展示本仓库普通敌弹时开启，以解释 COLOR_0 高光与部件遮罩；普通带贴图模型保持默认。
 
-Review-Effects.cmd 用十款已建模敌弹作为实际 Model 入参展示。Tab 切换、V 总览、Space 暂停、R 重播、G 对照原模型、B 背景、鼠标拖动/滚轮改变相机，1/2/3 设置 10/16/32 帧时长，F12 截图。默认 0.65 秒用于看清过程。
+tools/windows/Review-Effects.cmd 用十款已建模敌弹作为实际 Model 入参展示。Tab 切换、V 总览、Space 暂停、R 重播、G 对照原模型、B 背景、鼠标拖动/滚轮改变相机，1/2/3 设置 10/16/32 帧时长，F12 截图。默认 0.65 秒用于看清过程。
 
 capture-effects 渲染原帧，encode_native_effects.py ROOT effects-3d 编码 output/projectile-review/effects-3d/spawn-model-reveal.gif。GIF 中模型自身从大缩小、从透明变得不透明并保持显示，3 秒循环。不生成额外三维资产，不做性能测试。
 

@@ -7,4 +7,4 @@
 - [x] 实体碰撞，装饰无碰撞
 - [x] 深浅背景及动画关键帧
 
-通过根目录 Review-Marisa.cmd 查看。
+通过tools/windows/Review-Marisa.cmd 查看。

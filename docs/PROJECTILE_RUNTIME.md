@@ -53,12 +53,12 @@ spawn 直接变换目标模型本身：从大缩至正常大小，同时透明�
 
 ## 运行与检查
 
-双击 Run-Model-Game.cmd，或用 tools/run_model_game.ps1 -BuildOnly 仅构建。首次缺工具时先运行 Setup-Projectile-Tools.cmd。所有工具、依赖和临时环境保持项目内隔离。
+双击 tools/windows/Run-Model-Game.cmd，或用 tools/run_model_game.ps1 -BuildOnly 仅构建。首次缺工具时先运行 tools/windows/Setup-Projectile-Tools.cmd。所有工具、依赖和临时环境保持项目内隔离。
 
 - 核心游戏和方向测试：构建 koumakyou_tests、projectile_direction_tests 后执行对应 CTest。
 - 模型集成：构建 projectile_runtime_tests，参数为素材根目录和可选截图目录，检查 24 款资源、方向、真实孔洞、批次渲染、损坏文件拒绝、逐步加载取消/重试和重复卸载。
 - 实际游戏：koumakyou_lifecycle_tests 的 --player-shots-only、--marisa-only、--bomb-only，以及 koumakyou_loading_tests；默认不执行历史计时段。
-- 独立工具：Review-Projectiles/Lasers/Reimu/Marisa/Bombs/Options/Effects.cmd 均继续可用，run.ps1 -Action test 执行几何与渲染正确性检查。
+- 独立审阅入口统一位于 `tools/windows/`，`tools/projectile_review/run.ps1 -Action test` 执行几何与渲染正确性检查。
 
 本轮截图位于 output/projectile-review/runtime：enemy-models-runtime.png、player-shots-*.png、marisa-*.png、bomb-bomb-*-1100.png。没有新增模型性能压测；历史计时段只有显式设置 KOUMAKYOU_RUN_PERF_TESTS=1 才启用。
 

@@ -16,7 +16,7 @@
 
 ## 独立查看
 
-双击 `Review-Lasers.cmd`；不启动关卡、不改现有游戏渲染或碰撞。
+双击 `tools/windows/Review-Lasers.cmd`；不启动关卡、不改现有游戏渲染或碰撞。
 
 - Tab 选套组，C 切颜色，T 展示 16 色，V 同色并排，O 多束交叉。
 - 1成品、2灰模、3主体、5外光；4碰撞叠加，6仅胶囊。绿色表示当前危险，灰色表示当前无害。
@@ -25,13 +25,13 @@
 - H 循环端帽/外光/轴身探针位置，方向键与 PgUp/PgDn 移探针。橙色 CONTACT，绿色 CLEAR；预警与退场均 CLEAR。
 - G 光效，B 背景，F12 截图。
 
-`Review-Lasers.cmd -Action capture-lasers` 输出 32 张固定审阅图到 output/projectile-review/lasers，包括两套、正侧端视、分层、碰撞、色表、预警/展开/持续/收束、浅底、交叉与入束。
+`tools/windows/Review-Lasers.cmd -Action capture-lasers` 输出 32 张固定审阅图到 output/projectile-review/lasers，包括两套、正侧端视、分层、碰撞、色表、预警/展开/持续/收束、浅底、交叉与入束。
 
 ## 生成与检查
 
-`Review-Lasers.cmd -Action generate-lasers` 用项目内 Blender 生成两套资产；重新生成保留已确认的人工验收记录。`-Action test` 统一构建和检查当前普通弹、苦无及激光：闭合网格、面预算、有限坐标、角色分层、胶囊轴身/端帽/外光探针、旋转、非法输入、时窗边界和游戏视觉宽度一致性。
+`tools/windows/Review-Lasers.cmd -Action generate-lasers` 用项目内 Blender 生成两套资产；重新生成保留已确认的人工验收记录。`-Action test` 统一构建和检查当前普通弹、苦无及激光：闭合网格、面预算、有限坐标、角色分层、胶囊轴身/端帽/外光探针、旋转、非法输入、时窗边界和游戏视觉宽度一致性。
 
-`Stress-Lasers.cmd` 跑完整实验：两套各 32/128/512 束、两套极近、512 束交叉、512 束加 7680 普通弹混合、8192 束容量极限；11 场景各三次，1920×1080、无 MSAA/垂直同步/限帧，预热 3 秒采样 10 秒。记录整帧、运动和胶囊探针 CPU、异步 GPU 均值/P50/P95/P99，调用和 GPU 查询跳过数。极近和 8192 束是单列压力，不能当作正常关卡数量。
+`tools/windows/Stress-Lasers.cmd` 跑完整实验：两套各 32/128/512 束、两套极近、512 束交叉、512 束加 7680 普通弹混合、8192 束容量极限；11 场景各三次，1920×1080、无 MSAA/垂直同步/限帧，预热 3 秒采样 10 秒。记录整帧、运动和胶囊探针 CPU、异步 GPU 均值/P50/P95/P99，调用和 GPU 查询跳过数。极近和 8192 束是单列压力，不能当作正常关卡数量。
 
 原始结果及报告在 output/projectile-review/lasers/{performance.csv,performance.md,hardware.txt}；普通目标整帧 P95≤16.7 ms、GPU≤6 ms、更新/碰撞 CPU≤2 ms。本轮完整 33 次实验已完成，普通场景全部通过；套组 0/1 的 512 束整帧 P95 为 0.211/0.246 ms，极近为 2.318/2.522 ms，混合场景 0.752 ms，8192 束极限 3.546 ms。该测量使用默认收束时长 1 秒，后续接口将收束时长独立为 fadeSeconds，默认表现不变；最终接口另已完成时序回归。不能用短时诊断代替完整结果。工具、依赖、缓存继续隔离在项目根目录。
 

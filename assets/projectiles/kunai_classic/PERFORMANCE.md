@@ -26,6 +26,6 @@
 
 二维基线使用 raylib billboard 批处理，三维使用持久缓冲的实例绘制，CPU 提交方式不同；不能根据整帧时间声称三维比二维更快。此实验的运动是合成运动，每帧只对一个球体做离散碰撞，没有关卡脚本、角色、场景、后处理或其他游戏系统。
 
-完整原始分布、每帧候选数量、GPU 样本/跳过数保存在本机 `output/projectile-review/performance/results.csv`，硬件记录见同目录 `hardware.txt`，自动汇总见 `summary.md`。这些运行产物不纳入素材提交。重新运行根目录 `Stress-Kunai.cmd` 可复现实验；`-Action stress-quick` 只做短时冒烟检查。
+完整原始分布、每帧候选数量、GPU 样本/跳过数保存在本机 `output/projectile-review/performance/results.csv`，硬件记录见同目录 `hardware.txt`，自动汇总见 `summary.md`。这些运行产物不纳入素材提交。重新运行`tools/windows/Stress-Kunai.cmd` 可复现实验；`-Action stress-quick` 只做短时冒烟检查。
 
 结论：146 面可作为高密度苦无的当前预算，接入完整游戏及验证低端硬件后再确定最终性能承诺。模型美术已于 2026-10-27 经用户与 leader 人工验收通过。

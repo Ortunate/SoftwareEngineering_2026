@@ -13,6 +13,6 @@
 
 成品为真正 RGBA 透明 PNG，保留生成文件的分辨率与透明通道，未二次放大。`CommonAssets::spellPortraits` 加载它们用于 Start／Practice Start 的前景和 Spell Practice，灵／梦共用灵梦图、魔／恋共用魔理沙图；纹理由通用素材模块持有并释放，缩小时使用 mipmap 和三线性过滤。首页背景和关卡对话差分仍使用各自素材。
 
-Start／Practice Start 的半透明后层独立使用不同姿势的图：灵梦继续使用原有 `face00a_1.png`，保留裁法、色调和透明度；魔理沙使用 `assets/runtime/common/portraits/marisa/face01a_1.png` 的现代提围裙姿势，不是骑扫帚前景的放大版。两位角色的后层均以 27% 透明度绘制上部。
+Start／Practice Start 的半透明后层独立使用不同姿势的图：灵梦使用 `assets/runtime/common/portraits/reimu/face00a_1.png`，保留裁法、色调和透明度；魔理沙使用 `assets/runtime/common/portraits/marisa/face01a_1.png` 的现代提围裙姿势，不是骑扫帚前景的放大版。两位角色的后层均以 27% 透明度绘制上部。
 
 魔理沙原典后层按 `slpl01a.anm` 的 sprite 0 从 `slpl01a_4k.dds` 提取，保留为本目录 `marisa_backdrop_original.png`，不再用于运行时。其尺寸、坐标和校验信息在 `prompts.json` 的 `backdrops` 中；魔理沙六张对话差分及完整提示词另见 `assets/source/portraits/marisa/README.md`。

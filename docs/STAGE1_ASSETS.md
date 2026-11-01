@@ -10,7 +10,7 @@
 | `assets/runtime/common/title_layers/moon.png` | 红月和半透明云雾，周围保留 Alpha |
 | `assets/runtime/common/title_layers/shrine.png` | 神社、鸟居、石阶与植被，不含人物或月亮 |
 | `assets/runtime/common/title_layers/reimu.png` | 独立灵梦透明层，托腮及膝上手部已按反馈重绘；完整提示见 `TITLE_BACKGROUND_LAYERS.md` |
-| `assets/runtime/stages/stage1/portraits/reimu/*.png` | 灵梦 6 张原动作/表情的现代重绘，使用自然手指比例；a1 全身图保留为开局选择的半透明后景 |
+| `assets/runtime/common/portraits/reimu/*.png` | 灵梦 6 张原动作/表情的现代重绘，使用自然手指比例；a1 全身图保留为开局选择的半透明后景 |
 | `assets/runtime/stages/stage1/portraits/rumia/*.png` | 露米娅 4 张差分，保留金发、红结、黑白服装及平伸双臂；a0 用于默认对话，b0 用于符卡 |
 
 PNG 保留透明通道，生成方式为内置 ImageGen。立绘的原始 DDS 作为重绘参考，运行时立绘使用新绘制的 PNG；完整提示词保存在 `assets/source/portraits/prompts.json`。一面根目录中已被替代的立绘、妖精、弹体、御札和道具 PNG 及其旧原图已移除；战斗使用原始 DDS/ANM，演出使用 `portraits` 中的差分。

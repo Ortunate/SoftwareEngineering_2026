@@ -43,11 +43,11 @@
 
 ## 独立查看与制作
 
-双击 `Review-Projectiles.cmd` 查看全组，`Review-Kunai.cmd` 查看苦无单件。查看器不启动游戏。Tab 选类型，C 切颜色，T 全色，A 十类总览，V 三种 orb 等尺寸/原图比例对照。鼠标旋转，滚轮缩放。
+双击 `tools/windows/Review-Projectiles.cmd` 查看全组，`tools/windows/Review-Kunai.cmd` 查看苦无单件。查看器不启动游戏。Tab 选类型，C 切颜色，T 全色，A 十类总览，V 三种 orb 等尺寸/原图比例对照。鼠标旋转，滚轮缩放。
 
 1/2/3 为成品/灰模/线框，4/5 为碰撞单显/叠加，6 为本体，7 为全部装饰，8 为球壳，9 为尖丝/火焰。G 开关光效，B 切背景，O 看重叠。P 开关探针，H 置于中心或柄孔，J 切泡弹内部体积/白光圈/外部（默认探针预期 CONTACT/CLEAR/CLEAR）。方向键与 PgUp/PgDn 移探针，+/- 调半径。Space 暂停，逗号/句号逐帧，F12 截图。
 
-`Review-Projectiles.cmd -Action capture-collection` 导出 209 张审阅截图；`-Action test` 构建并执行资产检查及两项 CTest；`Stress-Projectiles.cmd` 跑完整压测。输出均在忽略的 `output/projectile-review/` 和 `build/projectile-review/`。
+`tools/windows/Review-Projectiles.cmd -Action capture-collection` 导出 209 张审阅截图；`-Action test` 构建并执行资产检查及两项 CTest；`tools/windows/Stress-Projectiles.cmd` 跑完整压测。输出均在忽略的 `output/projectile-review/` 和 `build/projectile-review/`。
 
 制作脚本位于 `tools/projectile_review/`：`create_classic.py` 制作苦无，`create_collection.py` 制作其余九类，后者支持 `--only-bubble` 单件返修。全组重新生成会重置对应人工验收状态。工具依赖保存在项目 `.tools/`、`.deps/`，缓存位于 `.cache/`，启动器在子进程设置环境。
 

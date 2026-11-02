@@ -18,6 +18,13 @@ public:
  void DrawGroup(int group);
  /// @brief 合并统一队列内连续的模型命令；不能跨越演员/道具的透明绘制命令。
  void DrawGroups(std::span<const std::size_t> groups);
+ /// @brief Prepare 后开始透明阶段收集，清除上次的批次句柄；仅借用本帧素材。
+ void BeginGroups();
+ /// @brief 素材须 Available；groups 使用本帧 TransparentGroups 的索引，返回本阶段句柄。
+ /// 调用序列为 BeginGroups → PrepareGroup（可多次）→ UploadGroups → DrawPreparedGroup（按原透明顺序）。
+ std::size_t PrepareGroup(std::span<const std::size_t> groups);
+ void UploadGroups();
+ void DrawPreparedGroup(std::size_t batch);
  bool DrawBullet(const Bullet&,const VisualResource&);
  bool DrawBeam(const Bullet&,const VisualResource&,float from,float to);
  /// @brief 已绑定原始 Item(0…6) 时绘制共享薄板；未知外观返回 false。
@@ -29,5 +36,10 @@ private:
  std::vector<projectiles::CollectionInstance> opaque_;
  std::vector<projectiles::CollectionInstance> transparent_,grouped_,spawning_;
  std::vector<float> depths_;
+ struct PreparedGroup {std::size_t body,decoration;};
+ std::vector<PreparedGroup> preparedGroups_;
+ std::vector<projectiles::LaserInstance> lasers_;
+ // 按 std::less 排序的本帧 Bullet 借用地址 → 激光输入索引；每次 Prepare 清空，不改变弹池顺序。
+ std::vector<std::pair<const Bullet*,std::size_t>> laserIndices_;
 };
 }

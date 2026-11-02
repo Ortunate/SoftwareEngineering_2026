@@ -417,14 +417,27 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     // 沿视线投影的深度才决定遮挡；到相机的欧氏距离会在斜视/大公告板重叠时反转顺序。
     std::stable_sort(transparentDraws_.begin(),transparentDraws_.end(),
                      [](const auto& left,const auto& right){return left.depth>right.depth;});
+    if(models){
+        // 先规划连续模型区间并一次上传，随后严格沿原排序绘制；不能跨越演员、道具或激光合并。
+        models->BeginGroups();std::size_t write=0;
+        for(std::size_t read=0;read<transparentDraws_.size();){
+            auto command=transparentDraws_[read++];
+            if(command.kind==Kind::ModelGroup){
+                modelCommands_.clear();modelCommands_.push_back(command.index);
+                while(read<transparentDraws_.size()&&transparentDraws_[read].kind==Kind::ModelGroup)modelCommands_.push_back(transparentDraws_[read++].index);
+                command.index=models->PrepareGroup(modelCommands_);
+            }
+            transparentDraws_[write++]=command;
+        }
+        transparentDraws_.resize(write);models->UploadGroups();
+    }
     rlDrawRenderBatchActive();rlDisableDepthMask();rlDisableBackfaceCulling();
     BeginBlendMode(BLEND_ALPHA);
     modelCommands_.clear();
     for(const auto& command:transparentDraws_) {
         // 原生激光保留当前混合模式，相邻加色片段可合批；其他绘制入口仍以 Alpha 为默认状态。
         if(command.kind!=Kind::Beam)BeginBlendMode(BLEND_ALPHA);
-        if(command.kind==Kind::ModelGroup){modelCommands_.push_back(command.index);continue;}
-        if(!modelCommands_.empty()){models->DrawGroups(modelCommands_);modelCommands_.clear();}
+        if(command.kind==Kind::ModelGroup){models->DrawPreparedGroup(command.index);continue;}
         if(command.kind==Kind::Actor) {
             const auto& actor=translucentActors_[command.index];const auto& appearance=actor.appearance;
             const auto& visual=FindVisual(visuals,actor.visual);
@@ -512,7 +525,6 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             }
         }
     }
-    if(!modelCommands_.empty()){models->DrawGroups(modelCommands_);modelCommands_.clear();}
     EndBlendMode();
     // rlgl 批次延迟提交，必须先 flush 再恢复深度写入/剔除，否则最后一批透明矩形会污染深度。
     rlDrawRenderBatchActive();rlEnableDepthMask();rlEnableBackfaceCulling();

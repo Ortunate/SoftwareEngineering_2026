@@ -8,13 +8,49 @@
 #include <source_location>
 #include <iostream>
 #include <fstream>
+#include <cstring>
 #include "resources/projectile_paths.hpp"
 using namespace koumakyou;
 void Require(bool v,std::source_location at=std::source_location::current()){if(!v)throw std::runtime_error("Projectile runtime integration failed at line "+std::to_string(at.line()));}
+/// @brief 比较立即提交和帧内批次的像素，覆盖类型重排、半透明主体、空批次和片段索引。
+void CheckFrameBatches(ProjectileAssets& assets){
+ for(auto shader:{assets.Marisa(),assets.Bomb(),assets.Needle()})for(const char* name:{"kind","eye","opacity","not_a_uniform"})Require(assets.UniformLocation(shader,name)==GetShaderLocation(shader,name));
+ Camera3D camera{{0,0,6},{0,0,0},{0,1,0},42,CAMERA_PERSPECTIVE};
+ std::array<projectiles::CollectionInstance,6> items{};
+ for(size_t i=0;i<items.size();++i){auto& item=items[i];item.type=std::array{9,7,4,1,3,0}[i];item.transform.position={float(i%3-1.F)*.5F,float(i/3)*.6F-.3F,float(i)*.1F};item.transform.scale=.8F;item.transform.appearance=projectiles::AppearanceFor(item.type,int(i));if(i%2)item.transform.appearance.bodyColor.a=128;}
+ auto target=LoadRenderTexture(256,256);auto& renderer=assets.Collection();
+ const auto render=[&](bool prepared){
+  BeginTextureMode(target);ClearBackground({15,21,33,255});BeginMode3D(camera);
+  if(prepared){
+   renderer.BeginFrame(camera,1);auto empty=renderer.Append({});auto first=renderer.Append(std::span(items).first(3));auto last=renderer.Append(std::span(items).last(3));
+   bool rejected=false;try{renderer.Select(first);}catch(const std::logic_error&){rejected=true;}Require(rejected);
+   renderer.Upload();renderer.Select(empty);renderer.Draw(1);
+   for(auto id:{first,last}){renderer.Select(id);renderer.Draw(1);}
+  }else for(int i=0;i<2;++i){renderer.Prepare(std::span(items).subspan(i*3,3),camera,1);renderer.Draw(1);}
+  EndMode3D();EndTextureMode();return LoadImageFromTexture(target.texture);
+ };
+ auto immediate=render(false),prepared=render(true);auto a=LoadImageColors(immediate),b=LoadImageColors(prepared);Require(std::memcmp(a,b,256*256*sizeof(Color))==0);UnloadImageColors(a);UnloadImageColors(b);UnloadImage(immediate);UnloadImage(prepared);
+ // 两个 variant 以相反输入次序出现，片段句柄必须仍指向原输入激光，不能误用分组后的索引。
+ std::array<projectiles::LaserInstance,2> beams{};beams[0].variant=1;beams[0].origin={-.3F,-1,0};beams[1].origin={.3F,-1,0};
+ auto& lasers=assets.Lasers();
+ const auto renderLasers=[&](bool cached){
+  BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(camera);
+  if(cached){lasers.Prepare(beams,camera,1);for(size_t i=0;i<2;++i)lasers.DrawPrepared(i,.2F,.8F);}
+  else for(size_t i=0;i<2;++i)lasers.Draw(std::span(beams).subspan(i,1),camera,1,0,true,.2F,.8F);
+  EndMode3D();EndTextureMode();return LoadImageFromTexture(target.texture);
+ };
+ immediate=renderLasers(false);prepared=renderLasers(true);a=LoadImageColors(immediate);b=LoadImageColors(prepared);Require(std::memcmp(a,b,256*256*sizeof(Color))==0);UnloadImageColors(a);UnloadImageColors(b);UnloadImage(immediate);UnloadImage(prepared);
+ // 手工敌激光没有有效图集编号时也必须沿用默认模型，不能因帧内预收集漏掉而消失。
+ BulletSystem manual;auto* beam=manual.SpawnBeam({0,-1,0},{0,1,0},2,.1F,0,10,WHITE);beam->visual=kInvalidVisualId;beam->age=1;
+ CombatRenderer combat;combat.Prepare(&assets,manual,{},camera,1);BeginTextureMode(target);BeginMode3D(camera);Require(combat.DrawBeam(*beam,{},0,1));EndMode3D();EndTextureMode();Require(assets.Lasers().Stats().drawCalls==3);
+ // 正式批次必须容纳整个弹池，而不是到 8193 才抛出运行时异常。
+ std::vector<projectiles::CollectionInstance> full(BulletSystem::kCapacity);for(auto& item:full)item.transform.scale=.01F;
+ renderer.Prepare(full,camera,1);Require(renderer.Stats().submitted==BulletSystem::kCapacity);UnloadRenderTexture(target);
+}
 int main(int argc,char**argv){try{
  if(argc<2)throw std::runtime_error("Asset root required");SetConfigFlags(FLAG_WINDOW_HIDDEN);InitWindow(1280,800,"Projectile runtime integration");
  for(int cycle=0;cycle<2;cycle++){
-  ProjectileAssets assets(argv[1]);for(const auto&d:ProjectileModels)Require(assets.Get(d.name).layers[0].meshCount>0);
+  ProjectileAssets assets(argv[1]);CheckFrameBatches(assets);for(const auto&d:ProjectileModels)Require(assets.Get(d.name).layers[0].meshCount>0);
   // DropSystem 模拟年龄决定旋转，相同模拟时间不依赖帧率；零步长冻结，池复用恢复零角。
   DropSystem drops(7);drops.SpawnFixedPower({0,0,0},1);drops.Update(1,{0,-9,-8});
   drops.ForEachActive([](const Pickup&p){Require(std::abs(p.RotationRadians()-PI/2)<1e-5F);Require(p.NativeItemType()==0);});

@@ -27,6 +27,11 @@ public:
     /// @brief mode 0成品、1灰模、2主体、3外光；在 BeginMode3D 内调用。
     /// 每帧复用实例缓冲，长度仅伸缩中段，透明层不写深度。
     void Draw(std::span<const LaserInstance>,const Camera3D&,float aspect,int mode=0,bool glow=true,float clipFrom=0,float clipTo=1);
+    /// @brief 校验并一次上传本帧所有敌激光；DrawPrepared 的索引沿用输入顺序，直到下次 Prepare/Draw 失效。
+    void Prepare(std::span<const LaserInstance>,const Camera3D&,float aspect);
+    /// @brief 绘制已上传激光的片段；保留整束 UV 和端帽，以原透明队列顺序调用。
+    void DrawPrepared(std::size_t index,float clipFrom,float clipTo);
+    /// @brief submitted/visible 来自最近 Prepare；绘制计数由实际 Draw 更新，整帧汇总须另行累计。
     const BatchStats& Stats()const;
 private:struct Impl;std::unique_ptr<Impl> p_;
 };

@@ -37,3 +37,6 @@ koumakyou_scores.dat.tmp
 /output/stage1-timeline-review/
 # 本地录像与未完成的原子保存文件
 /replays/
+
+# 渲染压测的逐帧数据、截图和本机环境记录
+/output/render-performance/

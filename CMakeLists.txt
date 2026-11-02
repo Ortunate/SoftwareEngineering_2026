@@ -212,6 +212,12 @@ target_link_libraries(generate_skybox PRIVATE raylib)
 add_executable(sprite_benchmark EXCLUDE_FROM_ALL tools/sprite_benchmark.cpp)
 target_link_libraries(sprite_benchmark PRIVATE koumakyou_engine)
 
+# 正式模型与透明队列的窗口压测仅按需运行，不进入普通 CTest。
+if(UNIX)
+    add_executable(render_benchmark EXCLUDE_FROM_ALL tools/render_benchmark.cpp)
+    target_link_libraries(render_benchmark PRIVATE koumakyou_engine)
+endif()
+
 add_custom_target(copy_assets
     COMMAND ${CMAKE_COMMAND} -E rm -rf
             $<TARGET_FILE_DIR:koumakyou>/assets

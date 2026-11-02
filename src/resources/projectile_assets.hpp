@@ -4,6 +4,7 @@
 #include "render/projectiles/collection_renderer.hpp"
 #include "render/projectiles/laser_renderer.hpp"
 #include <array>
+#include <map>
 namespace koumakyou {
 struct ProjectileModelResource {
  std::array<Model,3> layers{};
@@ -30,6 +31,9 @@ public:
  /// @brief 原始 Item 编号 0…6；关卡卸载后失效，不得由调用方释放。
  const Model& Item(int type)const;
  Texture2D OptionHalo()const{return optionHalo_;}
+ /// @brief 返回本对象所持 shader 的已缓存 uniform 位置；被优化掉的名称为 -1，外部 shader 抛异常。
+ /// 缓存随着色器一起加载/释放，避免 GL 复用 program ID 后读取上一关的旧位置。
+ int UniformLocation(Shader,std::string_view name)const;
  Shader Marisa()const{return marisa_;} Shader Bomb()const{return bomb_;} Shader Needle()const{return needle_;}
 private:
  void Release();
@@ -42,5 +46,7 @@ private:
  std::unique_ptr<projectiles::LaserRenderer> lasers_;
  Texture2D optionHalo_{};
  Shader marisa_{},bomb_{},needle_{};
+ // 顺序对应 marisa_/bomb_/needle_；缓存拥有名称，在 Release 时清空，禁止跨 shader 生命周期复用。
+ std::array<std::map<std::string,int,std::less<>>,3> uniforms_;
 };
 }

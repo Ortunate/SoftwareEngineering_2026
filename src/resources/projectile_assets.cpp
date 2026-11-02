@@ -1,9 +1,11 @@
 // 本文件加载一次共享模型和着色器，显式释放 glTF 引用的独立纹理，避免关卡重试泄漏。
 #include "projectile_assets.hpp"
+#include "gameplay/bullets/system.hpp"
 #include "resources/projectile_paths.hpp"
 #include <unordered_set>
 #include <cmath>
 #include "rlgl.h"
+#include "external/glad.h"
 #include "external/cgltf.h"
 namespace koumakyou {
 namespace {
@@ -45,6 +47,10 @@ bool ProjectileAssets::AdvanceLoad(){
  if(loadStep_==LoadSteps)return true;
  try{
   if(loadStep_==0){auto shaders=projectiles::ProjectileShaderDirectory(root_);marisa_=Load(shaders,"marisa");bomb_=Load(shaders,"bombs");needle_=Load(shaders,"reimu_cone");
+   const std::array shadersToCache{marisa_,bomb_,needle_};
+   for(size_t i=0;i<shadersToCache.size();++i){GLint count=0;glGetProgramiv(shadersToCache[i].id,GL_ACTIVE_UNIFORMS,&count);
+    for(GLint j=0;j<count;++j){std::array<char,256> name{};GLsizei length=0;GLint size=0;GLenum type=0;glGetActiveUniform(shadersToCache[i].id,j,name.size(),&length,&size,&type,name.data());uniforms_[i].emplace(std::string(name.data(),length),GetShaderLocation(shadersToCache[i],name.data()));}
+   }
    // 副机外辉光复用一张柔边纹理，不加载原精灵，也不为左右实例重复创建纹理。
    Image halo=GenImageColor(256,256,BLANK);
    for(int y=0;y<256;y++)for(int x=0;x<256;x++){float dx=(x-127.5F)/127.5F,dy=(y-127.5F)/127.5F;float a=std::pow(std::max(0.F,1-dx*dx-dy*dy),3);ImageDrawPixel(&halo,x,y,{255,255,255,static_cast<unsigned char>(a*110)});}
@@ -58,13 +64,13 @@ bool ProjectileAssets::AdvanceLoad(){
    auto file=base/names[index]/(std::string(names[index])+".gltf");
    ValidateModel(file);items_[index]=LoadModel(file.string().c_str());ValidateGeometry(items_[index]);
   }
-  else{collection_=std::make_unique<projectiles::CollectionRenderer>(root_,8192);lasers_=std::make_unique<projectiles::LaserRenderer>(root_,8192);}
+  else{collection_=std::make_unique<projectiles::CollectionRenderer>(root_,BulletSystem::kCapacity);lasers_=std::make_unique<projectiles::LaserRenderer>(root_,BulletSystem::kCapacity);}
   ++loadStep_;return loadStep_==LoadSteps;
  }catch(...){failed_=true;Release();throw;}
 }
 ProjectileAssets::~ProjectileAssets(){Release();}
 void ProjectileAssets::Release(){
- collection_.reset();lasers_.reset();if(optionHalo_.id)UnloadTexture(optionHalo_);optionHalo_={};std::unordered_set<unsigned int> textures;
+ collection_.reset();lasers_.reset();for(auto& cache:uniforms_)cache.clear();if(optionHalo_.id)UnloadTexture(optionHalo_);optionHalo_={};std::unordered_set<unsigned int> textures;
  for(auto&r:resources_)for(auto&m:r.layers)if(m.meshCount){for(int i=0;i<m.materialCount;i++)for(int j=0;j<12;j++){auto t=m.materials[i].maps[j].texture;if(t.id>1&&textures.insert(t.id).second)UnloadTexture(t);}UnloadModel(m);m={};}
  for(auto&m:items_)if(m.meshCount){for(int i=0;i<m.materialCount;i++)for(int j=0;j<12;j++){auto t=m.materials[i].maps[j].texture;if(t.id>1&&textures.insert(t.id).second)UnloadTexture(t);}UnloadModel(m);m={};}
  if(marisa_.id)UnloadShader(marisa_);if(bomb_.id)UnloadShader(bomb_);if(needle_.id)UnloadShader(needle_);marisa_={};bomb_={};needle_={};for(auto&r:resources_)r.collision.reset();
@@ -72,4 +78,11 @@ void ProjectileAssets::Release(){
 const Model& ProjectileAssets::Item(int type)const{if(!Ready())throw std::logic_error("Items are still loading");if(type<0||type>6)throw std::invalid_argument("Invalid Item type");return items_[type];}
 const ProjectileModelResource& ProjectileAssets::Get(std::string_view name)const{return Get(DescribeProjectileModel(name).id);}
 const ProjectileModelResource& ProjectileAssets::Get(ProjectileAssetId id)const{if(!Ready())throw std::logic_error("Projectile assets are still loading");auto index=static_cast<std::size_t>(id);if(index>=resources_.size())throw std::invalid_argument("Unknown projectile resource ID");return resources_[index];}
+}
+
+namespace koumakyou {
+int ProjectileAssets::UniformLocation(Shader shader,std::string_view name)const{
+ const std::array shaders{marisa_,bomb_,needle_};for(size_t i=0;i<shaders.size();++i)if(shader.id&&shader.id==shaders[i].id){const auto found=uniforms_[i].find(name);return found==uniforms_[i].end()?-1:found->second;}
+ throw std::invalid_argument("Shader not owned by projectile assets");
+}
 }

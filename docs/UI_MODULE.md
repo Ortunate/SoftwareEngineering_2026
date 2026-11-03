@@ -34,13 +34,21 @@
 
 ## Score 查询
 
-从主菜单进入Score先显示Easy、Normal、Hard、Lunatic、Extra五种难度札，使用`ui::DifficultyCard`，名称、配色、中文说明、面数和花饰与Start／Extra Start保持一致。五张卡片错峰滑入，确认后进入该难度成绩页；查询不要求已有成绩或关卡解锁。返回先退到难度选择，再返回主菜单。成绩浏览使用公用箭头翻页及全局按键提示。
+从主菜单进入Score先显示Easy、Normal、Hard、Lunatic、Extra五种难度札，复用`ui::DifficultyCard`，与Start／Extra Start共用名称、配色、中文说明、面数和花饰。五张卡片错峰滑入，确认后进入该难度成绩页；查询不要求已有成绩或关卡解锁。返回先退到难度选择，再返回主菜单。成绩浏览使用公用箭头翻页及全局按键提示。
 
 成绩页按灵梦·灵之御札、灵梦·梦之御札、魔理沙·魔之御札、魔理沙·恋之御札顺序分为四页。每页并排展示该机体的标准模式与挑战模式前十名，完整机体名和各自模式名显示在对应列表上方。左右方向键、A/D及列表两侧垂直居中的公用箭头循环翻页，底部显示当前页码；没有机体选项卡或模式切换。难度只在上一层选择，查询不改开局记忆、实际自机或存档。
 
 `render/score_layout.hpp`统一双栏表格、上方信息、页码和箭头的布局及命中区域。`ScoreViewStep`区分难度选择与成绩查看；本局命名保存后的成绩页直接显示本局难度和机体，并仅高亮本局模式的保存名次，确认／返回继续原Demo选存流程。
 
 `koumakyou_postgame_lifecycle_tests <截图目录> --score-only`验证五难度×四页×两模式、真实菜单入口、键鼠循环翻页、逐级返回、只读存档与六种窗口比例；`--names-only`继续覆盖命名后直接查看成绩及Demo交接。
+
+## 首页子页过渡
+
+Start、Extra Start、Practice Start和Spell Practice沿用`StartSetupMotion`的连续层混合。Replay、Score、Music Room、Credit、Option及按键设置通过`ui::PageMotion`在0.30秒内淡入淡出；Score难度札与四机体页也参与混合。各页面保留独立的`MenuMotion`快照，快速返回或重新进入从当前权重继续，不因首页选择重置退场页的展示。
+
+过渡只在`UpdateUiMotion`推进，输入立即交给当前业务页；绘制借用常驻字体及纹理，不截图、不创建额外渲染目标，也不延迟音频卸载。全局按键栏始终只绘制当前页的一份提示。窗口调整后按新尺寸重算所有布局，保持过渡进度。
+
+`koumakyou_settings_ui_tests <截图目录> --title-transitions-only`检查Replay起五个首页入口的进入、退场、零时间画面连续、快速反向及中途缩放，并复查Start卡片和连续步骤动画；独立UI用例检查权重守恒、帧率一致和共用卡片零透明度。
 
 ## 公用命名界面
 

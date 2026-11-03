@@ -569,6 +569,17 @@ void Game::UpdateUiMotion(float deltaTime) {
     if(state_==RunState::Credit)selection=0;
     // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
     menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
+    int titlePage=-2;
+    if(state_==RunState::MainMenu)titlePage=-1;
+    else if(state_==RunState::ReplayList)titlePage=static_cast<int>(TitlePage::Replay);
+    else if(state_==RunState::Score && !scorePageFromRun_)titlePage=static_cast<int>(TitlePage::ScoreDifficulty)+
+        (scoreViewStep_==ScoreViewStep::Difficulty?0:1+scoreShot_);
+    else if(state_==RunState::MusicRoom)titlePage=static_cast<int>(TitlePage::Music);
+    else if(state_==RunState::Credit)titlePage=static_cast<int>(TitlePage::Credit);
+    else if(state_==RunState::Options)titlePage=static_cast<int>(optionsPage_==OptionsPage::General?TitlePage::Options:TitlePage::Bindings);
+    // 退场页面保留自身选择与进场快照；新的业务状态立即接管输入，展示权重独立追随。
+    if(titlePage>=0)titlePageLayers_[titlePage]=menuMotion_;
+    titlePageMotion_.Advance(titlePage,deltaTime);
     startSetupMotion_.Advance(state_==RunState::MainMenu?-1:state_==RunState::StartSetup?static_cast<int>(setupStep_):-2,deltaTime);
     for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Stage}) {
         if(startSetupMotion_.Layer(step)<=0 && !(state_==RunState::StartSetup && setupStep_==step))continue;

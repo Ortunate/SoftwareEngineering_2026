@@ -120,6 +120,24 @@ void TestLayoutAndMotion() {
     motion.Advance(1,2,0);assert(motion.Phase()==phase && motion.Weight(2)==weight);
     motion.Advance(1,3,0.01F);assert(motion.Weight(2)>0 && motion.Weight(3)>0);
 }
+/// @brief 过渡守恒且不依赖帧率；快速反向和零时间换页不得重置已显现的页面。
+void TestPageMotion() {
+    PageMotion<3> slow,fast;
+    assert(slow.Title()==1 && !slow.Visible());
+    for(int i=0;i<5;++i)slow.Advance(0,1.0F/30);
+    for(int i=0;i<40;++i)fast.Advance(0,1.0F/240);
+    assert(std::abs(slow.Layer(0)-fast.Layer(0))<1e-5F);
+    const float previous=slow.Layer(0),title=slow.Title();
+    slow.Advance(1,0);assert(slow.Layer(0)==previous && slow.Title()==title && slow.Layer(1)==0);
+    slow.Advance(1,.08F);
+    const float next=slow.Layer(1);slow.Advance(-1,0);assert(slow.Layer(1)==next);
+    for(int i=0;i<10;++i) {
+        slow.Advance(-1,.03F);
+        assert(std::abs(slow.Title()+slow.Layer(0)+slow.Layer(1)+slow.Layer(2)-1)<1e-5F);
+    }
+    slow.Advance(-1,1);assert(slow.Title()==1 && !slow.Visible());
+    slow.Advance(2,.1F);slow.Advance(-2,0);assert(slow.Title()==1 && slow.Layer(2)==0);
+}
 /// @brief 横条在极小、宽、窄窗口均保持单行，提示数量不改变高度，各项横向排列且不重叠。
 void TestCommandBar() {
     for(Vector2 size:{Vector2{1,1},{320,180},{320,240},{390,844},{900,900},{1280,720},{1600,400},{3840,2160}}) {
@@ -138,6 +156,6 @@ void TestCommandBar() {
 }
 }
 int main() {
-    TestSelection();TestComponents();TestNameEntry();TestLayoutAndMotion();TestCommandBar();
+    TestSelection();TestComponents();TestNameEntry();TestLayoutAndMotion();TestPageMotion();TestCommandBar();
     std::puts("Independent UI selection, components, cancellation, layout and motion passed.");
 }

@@ -7,6 +7,7 @@
 #include "render/menu_layout.hpp"
 #include "render/start_setup_layout.hpp"
 #include "render/postgame_layout.hpp"
+#include "render/score_layout.hpp"
 #include "render/spell_practice_layout.hpp"
 #include "ui/ui.hpp"
 #include "resources/music_catalog.hpp"
@@ -14,6 +15,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <array>
 #include <cmath>
@@ -122,6 +124,17 @@ struct GameLifecycleProbe {
     static StartSetupStep SetupStep(const Game& game) { return game.setupStep_; }
     /// @brief 动画测试只推进展示时钟；换页仍使用正式展示状态，不推进关卡或伪造输入队列。
     static void Motion(Game& game,float seconds) { game.UpdateUiMotion(seconds); }
+    /// @brief 从真实首页候选建立稳定的进入起点；Replay测试使用临时目录内的损坏文件验证可浏览错误槽。
+    static void TitleItem(Game& game,int item) {
+        game.EnterMainMenu();game.titleEntrance_.Complete();game.selectedMenuItem_=item;game.UpdateUiMotion(1);
+    }
+    static float TitleWeight(const Game& game){return game.titlePageMotion_.Title();}
+    static float StartTitleWeight(const Game& game){return game.startSetupMotion_.Title();}
+    static float PageWeight(const Game& game,int item) {
+        const auto page=item==4?Game::TitlePage::Replay:item==5?Game::TitlePage::ScoreDifficulty:
+            item==6?Game::TitlePage::Music:item==7?Game::TitlePage::Credit:Game::TitlePage::Options;
+        return game.titlePageMotion_.Layer(static_cast<int>(page));
+    }
     static void MotionStep(Game& game,StartSetupStep step,float seconds) {
         game.setupStep_=step;game.UpdateUiMotion(seconds);
     }
@@ -355,6 +368,66 @@ void Capture(koumakyou::Game& game, const char* path, int settleFrames = 24, boo
     }
     Check(ExportImage(image, path), "screenshot export failed");
     UnloadImage(image);
+}
+
+/// @brief 真实首页入口验证各信息页的淡入/退场、零时间连续、快速反向和窗口缩放，不加载战斗关卡。
+void TestTitlePageAnimations(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;using Probe=GameLifecycleProbe;
+    const int width=GetScreenWidth(),height=GetScreenHeight();SetWindowSize(1100,760);
+    std::filesystem::create_directories("replays");
+    {std::ofstream replay("replays/transition-invalid.krep");replay<<"invalid replay for browser transition";}
+    Game game;SetTargetFPS(0);
+    const auto press=[&](int key,float seconds) {
+        Event(2,key);game.Update(seconds);BeginDrawing();game.Draw();EndDrawing();
+        Event(1,key);game.Update(0);BeginDrawing();game.Draw();EndDrawing();
+    };
+    const auto sameContent=[&](Image a,Image b) {
+        const int rows=static_cast<int>(ui::CommandBar::ContentHeight(GetScreenWidth(),GetScreenHeight()))-1;
+        Check(a.width==b.width && a.format==b.format && std::memcmp(a.data,b.data,GetPixelDataSize(a.width,rows,a.format))==0,
+              "zero-time title page entry changed visible content");
+    };
+    for(int item:{0,1,2,3}) {
+        Probe::TitleItem(game,item);Event(7,0,0);game.Update(0);
+        Image before=ReadFrame(game);press(KEY_ENTER,0);Image boundary=ReadFrame(game);
+        Check(Probe::Setup(game) && Probe::StartTitleWeight(game)==1,"Start-family entry lost its title origin");
+        sameContent(before,boundary);UnloadImage(before);UnloadImage(boundary);
+        Probe::Motion(game,.12F);Check(Probe::StartTitleWeight(game)>0 && Probe::StartTitleWeight(game)<1,"Start-family entry lacks transition");
+        Capture(game,(screenshots/("title-page-"+std::to_string(item)+"-enter.png")).string().c_str(),0);
+        Probe::Motion(game,1);Capture(game,(screenshots/("title-page-"+std::to_string(item)+"-full.png")).string().c_str(),1);
+        press(KEY_ESCAPE,0);Check(Probe::MainMenu(game) && Probe::StartTitleWeight(game)==0,"Start-family return discarded its outgoing page");
+        Probe::Motion(game,1);Check(Probe::StartTitleWeight(game)==1,"Start-family return failed to settle");
+    }
+    for(int item:{4,5,6,7,8}) {
+        Probe::TitleItem(game,item);Event(7,0,0);game.Update(0);
+        Image before=ReadFrame(game);press(KEY_ENTER,0);Image boundary=ReadFrame(game);
+        Check(!Probe::MainMenu(game) && Probe::TitleWeight(game)==1 && Probe::PageWeight(game,item)==0,"submenu blocked input or reset transition origin");
+        sameContent(before,boundary);UnloadImage(before);UnloadImage(boundary);
+        Probe::Motion(game,.12F);
+        Check(Probe::TitleWeight(game)>0 && Probe::TitleWeight(game)<1 && Probe::PageWeight(game,item)>0,"submenu missing partial transition");
+        Capture(game,(screenshots/("title-page-"+std::to_string(item)+"-enter.png")).string().c_str(),0);
+        const float progress=Probe::PageWeight(game,item);
+        SetWindowSize(390,844);Capture(game,(screenshots/("title-page-"+std::to_string(item)+"-resize.png")).string().c_str(),0);
+        Check(Probe::PageWeight(game,item)==progress,"draw or resize advanced title page transition");SetWindowSize(1100,760);
+        Probe::Motion(game,1);Check(Probe::PageWeight(game,item)==1,"submenu entry did not settle");
+        Capture(game,(screenshots/("title-page-"+std::to_string(item)+"-full.png")).string().c_str(),1);
+        press(KEY_ESCAPE,0);Check(Probe::MainMenu(game) && Probe::PageWeight(game,item)==1,"return discarded outgoing page");
+        Probe::Motion(game,.10F);Check(Probe::PageWeight(game,item)>0 && Probe::PageWeight(game,item)<1,"submenu missing exit transition");
+        Capture(game,(screenshots/("title-page-"+std::to_string(item)+"-exit.png")).string().c_str(),0);
+        const float outgoing=Probe::PageWeight(game,item);press(KEY_ENTER,0);
+        Check(!Probe::MainMenu(game) && Probe::PageWeight(game,item)==outgoing,"interrupted return reset page opacity");
+        Probe::Motion(game,1);press(KEY_ESCAPE,0);Probe::Motion(game,1);
+        Check(Probe::MainMenu(game) && Probe::TitleWeight(game)==1,"submenu did not return fully to title");
+    }
+    // 按键设置同样保留Option的退场层，零时间确认与返回都不能改动画起点。
+    Probe::TitleItem(game,8);press(KEY_ENTER,0);Probe::Motion(game,1);
+    press(KEY_UP,0);press(KEY_UP,0);Image options=ReadFrame(game);
+    press(KEY_ENTER,0);Check(!Probe::General(game),"Option failed to open bindings");
+    Image bindingsBoundary=ReadFrame(game);sameContent(options,bindingsBoundary);UnloadImage(options);UnloadImage(bindingsBoundary);
+    Probe::Motion(game,.12F);Capture(game,(screenshots/"title-bindings-enter.png").string().c_str(),0);
+    Probe::Motion(game,1);press(KEY_ESCAPE,0);Check(Probe::General(game),"bindings return skipped Option");Probe::Motion(game,1);
+    press(KEY_ESCAPE,0);Probe::Motion(game,1);
+    std::filesystem::remove("replays/transition-invalid.krep");std::filesystem::remove("replays");SetWindowSize(width,height);
+    std::puts("All nine title entries, Replay/Score/Music/Credit/Option exit, zero-time continuity, resize and interrupted transitions passed.");
 }
 
 /// @brief 导出实际首页到难度及后续步骤的连续帧，验证卡片真实淡入、零时间换页无闪变和人物连续性。
@@ -1528,7 +1601,8 @@ int main(int argc, char** argv) {
             // 组件绘制可单独回归，不初始化 Game 或加载生产素材。
         } else if(argc>2 && std::string(argv[2])=="--start-characters-only") {
             TestStartCharacters(screenshots);
-
+        } else if(argc>2 && std::string(argv[2])=="--title-transitions-only") {
+            TestTitlePageAnimations(screenshots);TestStartAnimations(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--start-memory-only") {
             TestStartSelectionMemory(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--start-cards-only") {

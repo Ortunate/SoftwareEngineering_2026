@@ -25,6 +25,7 @@
 #include "gameplay/collision/projectile_collision.hpp"
 #include "ui/motion.hpp"
 #include "ui/name_entry.hpp"
+#include "ui/page_motion.hpp"
 #include "render/start_setup_motion.hpp"
 #include "render/dialogue_motion.hpp"
 #include "render/title_entrance.hpp"
@@ -294,14 +295,16 @@ private:
     void DrawLoading() const;
     /// @brief 在最终叠加层统一展示当前页面的功能按键；战斗键位读取本机设置，横条不接收点击。
     void DrawCommandBar() const;
-    /// @brief 绘制启动选择、音乐、成绩或制作信息页，保持通用素材生命周期。
-    void DrawMenuPage() const;
+    /// @brief 绘制指定音乐或制作信息页；opacity为0～1，motion可借用退场页展示，不访问已卸载的音频。
+    void DrawMenuPage(RunState page,float opacity=1,const ui::MenuMotion* motion=nullptr) const;
+    /// @brief 按各子页当前权重混合首页与页面；只读展示快照，不创建离屏资源或修改业务状态。
+    void DrawTitlePages() const;
     /// @brief 绘制开局的难度、人物、选择及确认层；只借用通用纹理，不提前加载关卡资源。
     void DrawStartSetup() const;
     /// @brief 绘制 FPS、音量、灵敏度、开局资源和按键设置入口。
-    void DrawOptions() const;
+    void DrawOptions(float opacity=1,const ui::MenuMotion* motion=nullptr) const;
     /// @brief 绘制可重新绑定的战斗按键列表。
-    void DrawKeyBindings() const;
+    void DrawKeyBindings(float opacity=1,const ui::MenuMotion* motion=nullptr) const;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     /// @brief 进入禁用关卡时间轴、只有固定靶怪的射击调试场地。
     void StartShotTest();
@@ -485,7 +488,12 @@ private:
     std::string message_;
     int selectedMenuItem_ = 0; // 首页选项在本次运行中保留；首次启动默认 Start，返回首页不重置。
     ui::MenuMotion menuMotion_{}; // 当前页面的局部选择强度和进场时钟；Draw 只读取。
-    ui::MenuMotion titleMenuMotion_{}; // 首页离开前的选择与展开状态，供 Start 过渡期间继续绘制首页。
+    ui::MenuMotion titleMenuMotion_{}; // 首页离开前的选择与展开状态，供首页各子界面过渡时继续绘制首页。
+    // 编号仅属于首页展示，不是RunState；四机体各有一层，难度/设置子页换页也保持旧层退场。
+    enum class TitlePage { Replay, ScoreDifficulty, ScoreFirst, ScoreSecond, ScoreThird, ScoreFourth, Music, Credit, Options, Bindings, Count };
+    static constexpr int kTitlePages=static_cast<int>(TitlePage::Count);
+    ui::PageMotion<kTitlePages> titlePageMotion_{};
+    std::array<ui::MenuMotion,kTitlePages> titlePageLayers_{}; // 各页独立的选择与进场时钟，退出后不被首页选择覆盖。
     ui::StartSetupMotion startSetupMotion_{}; // 首页及 Start 页面连续混合；只推进展示，不阻塞选择输入。
     std::array<ui::MenuMotion,static_cast<int>(StartSetupStep::Count)> setupChoiceMotion_{}; // 各步骤独立保留行强调，快速确认/返回不把正在变化的亮度重置。
     ui::TitleEntrance titleEntrance_{}; // 首次首页的五段顺序展示，完成前屏蔽首页输入。

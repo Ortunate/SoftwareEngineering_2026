@@ -26,7 +26,9 @@ using namespace game_math;
 void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
-    if(state_==RunState::ReplayList) { DrawReplayList(); }
+    if(state_==RunState::ReplayList || (state_==RunState::Score && !scorePageFromRun_) ||
+        state_==RunState::Options || state_==RunState::MusicRoom || state_==RunState::Credit ||
+        (state_==RunState::MainMenu && titlePageMotion_.Visible())) { DrawTitlePages(); }
     else if(state_==RunState::Ending) {
         DrawEnding();
     } else if(state_==RunState::ScoreSave || state_==RunState::ScoreName) {
@@ -39,10 +41,6 @@ void Game::Draw() const {
         DrawLoading();
     } else if (state_ == RunState::MainMenu) {
         DrawMainMenu();
-    } else if (state_ == RunState::Options) {
-        DrawOptions();
-    } else if (state_ == RunState::MusicRoom || state_ == RunState::Credit) {
-        DrawMenuPage();
     } else {
         DrawWorld();
         DrawHud();
@@ -348,22 +346,23 @@ void Game::DrawStageClear() const {
                      center,canvas.Point(0,493).y,18*s,ivory);
 }
 
-void Game::DrawKeyBindings() const {
+void Game::DrawKeyBindings(float opacity,const ui::MenuMotion* motion) const {
+    const auto& animation=motion?*motion:menuMotion_;
     const Font font=assets_.Common().uiFont;
     const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto& canvas=layout.canvas;
     const float scale=canvas.scale;
     const Color gold=ui::kPageGold;
-    ui::DrawPageSurface(canvas,menuMotion_);
-    ui::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","KEYBINDINGS");
+    ui::DrawPageSurface(canvas,animation,opacity);
+    ui::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","KEYBINDINGS",opacity);
     const int resetIndex=static_cast<int>(kBindingNames.size());
     for(int index=0;index<=resetIndex;++index) {
         const auto row=layout.Row(index);
-        const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.012F);
+        const float weight=animation.Weight(index),reveal=opacity*animation.Reveal(index*0.012F);
         const auto label=layout.LabelOrigin(index);
-        ui::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
+        ui::DrawPageRowRule(canvas,row,animation,weight,reveal);
         ui::DrawPageChoiceText(canvas,font,index==resetIndex?"恢复默认键位":kBindingNames[index],label.x,label.y,layout.compact?24:22,
-                               Color{177,150,143,255},gold,weight,reveal,menuMotion_.Pulse());
+                               Color{177,150,143,255},gold,weight,reveal,animation.Pulse());
         if(index==resetIndex)continue;
         const bool capturing=waitingForBinding_ && index==selectedBinding_;
         const auto key=capturing?std::string("请按下新键"):KeyLabel(BindingAt(index));
@@ -371,7 +370,7 @@ void Game::DrawKeyBindings() const {
         const Color grey{145,145,150,255};
         ui::DrawPageChoiceText(canvas,font,key.c_str(),layout.compact?552:795,label.y,keySize,
                                capturing?grey:ui::kPageIvory,capturing?grey:gold,weight,reveal,
-                               capturing?0:menuMotion_.Pulse()+menuMotion_.Flash(),true);
+                               capturing?0:animation.Pulse()+animation.Flash(),true);
     }
 }
 

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <limits>
+#include <fstream>
 
 int main() {
     using namespace koumakyou;
@@ -85,5 +86,30 @@ int main() {
     assert(loaded.result==result&&loaded.frames.size()==2);
     assert(!loaded.frames[0].player.aimAssistEnabled&&loaded.frames[1].player.aimAssistEnabled);
     assert(loaded.frames[1].player.mouseDelta.y==-2&&loaded.frames[1].confirm);
+    // 槽位发布必须先完整写入，未确认、无效槽或目标为目录都不能破坏既有录像。
+    data.name="  Name ";assert(replay::SaveSlot(directory,data,1,false,file,error));
+    assert(file.filename()=="th6_01.krep");replay::Summary summary;
+    assert(replay::ReadSummary(file,summary,error) && summary.name==data.name && summary.recordedAt==data.recordedAt);
+    assert(summary.result==data.result && summary.stage=="stage1" && summary.shot=="reimu-a");
+    auto replacement=data;replacement.name="NEW";
+    assert(!replay::SaveSlot(directory,replacement,1,false,file,error));
+    assert(replay::Load(replay::SlotPath(directory,1),loaded,error) && loaded.name==data.name);
+    assert(!replay::SaveSlot(directory,replacement,0,true,file,error));
+    assert(!replay::SaveSlot(directory,replacement,61,true,file,error));
+    assert(replay::SaveSlot(directory,replacement,1,true,file,error));
+    assert(replay::Load(file,loaded,error) && loaded.name=="NEW");
+    auto damaged=replacement;damaged.frames[0].dt=std::numeric_limits<float>::quiet_NaN();
+    assert(!replay::SaveSlot(directory,damaged,1,true,file,error));
+    assert(replay::Load(replay::SlotPath(directory,1),loaded,error) && loaded.name=="NEW");
+    assert(std::filesystem::create_directory(replay::SlotPath(directory,60)));
+    assert(!replay::SaveSlot(directory,replacement,60,true,file,error));
+    assert(replay::Load(replay::SlotPath(directory,1),loaded,error) && loaded.name=="NEW");
+    // 摘要读取只验证头及声明长度，真正播放前的完整Load仍拦截负载损坏。
+    const auto corrupt=replay::SlotPath(directory,1);
+    {std::fstream stream(corrupt,std::ios::binary|std::ios::in|std::ios::out);
+        stream.seekg(-5,std::ios::end);char byte=0;stream.get(byte);stream.seekp(-5,std::ios::end);stream.put(byte^1);}
+    assert(replay::ReadSummary(corrupt,summary,error));assert(!replay::Load(corrupt,loaded,error));
+    {std::ofstream stream(directory/"bad.krep");stream<<"bad";}
+    summary.name="keep";assert(!replay::ReadSummary(directory/"bad.krep",summary,error) && summary.name=="keep");
     std::filesystem::remove_all(directory);
 }

@@ -17,6 +17,8 @@ struct Entry {
     std::string name="PLAYER";
     int misses=0,bombs=0,graze=0;
     std::int64_t completedAt=0;
+    int stage=0; // 到达关卡1～7（7为Extra）；旧记录未知为0，不能按当前菜单补造。
+    bool cleared=false;
 };
 using Table=std::array<std::optional<Entry>,kSlots>;
 /// @brief groups 按 [标准=0/挑战=1][灵/梦/魔/恋=0～3][Easy～Extra=0～4] 保存，分数降序、空槽在后。
@@ -24,7 +26,8 @@ using Table=std::array<std::optional<Entry>,kSlots>;
 struct Profile {
     std::array<std::array<std::array<Table,kDifficulties>,kShots>,2> groups{};
     std::array<bool,6> endingsSeen{};
-    std::string lastName="PLAYER";
+    // 分数与Demo共用最近成功保存的8字符名称；空串表示首次命名，Demo单独保存也可更新。
+    std::string lastName;
     /// @brief 无效组返回借用的空表；引用随 Profile 赋值/销毁失效。
     [[nodiscard]] const Table& Get(bool challenge,int shot,int difficulty=1) const;
     /// @brief 返回待插入的 0～9 排名；无效组、负分或未进入前十返回空，不改变记录。
@@ -36,6 +39,7 @@ struct Profile {
 [[nodiscard]] bool ValidName(std::string_view name);
 /// @brief 缺失或损坏行使用默认值；读取不重写文件，不把旧设置或原作 score.dat 当成本存档。
 [[nodiscard]] Profile Load(const std::filesystem::path& path);
-/// @brief 先写同目录临时文件再替换；创建/写入/替换失败返回 false，保留原文件，调用方应保留待保存内容。
+/// @brief 先写同目录临时文件再替换；lastName允许为空以便首次命名前保存结局标记，实际成绩名称仍不能为空。
+/// 创建/写入/替换失败返回false，保留原文件，调用方应保留待保存内容。
 [[nodiscard]] bool Save(const std::filesystem::path& path,const Profile& profile);
 } // namespace koumakyou::score

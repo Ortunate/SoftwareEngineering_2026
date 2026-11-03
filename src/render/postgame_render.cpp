@@ -1,7 +1,9 @@
-// 本文件绘制原生结局背景/中文文本及响应式的前十成绩、选存和八字符命名页面。
+// 本文件绘制原生结局背景/中文文本及响应式的前十成绩、选存和公用命名界面。
 #include "app/game.hpp"
 #include "render/postgame_layout.hpp"
+#include "render/score_layout.hpp"
 #include "ui/page.hpp"
+#include "ui/difficulty_card.hpp"
 #include "ui/typography.hpp"
 #include <algorithm>
 #include <array>
@@ -29,23 +31,26 @@ std::vector<std::string> Wrap(std::string_view text,Font font,float fontSize,flo
     lines.push_back(current);return lines;
 }
 void Label(const menu::Canvas& canvas,Font font,const char* text,float x,float y,float width,float size,Color color,
-           ui::TextAlign align=ui::TextAlign::Left) {
-    ui::Label{canvas.Rect(x,y,width,size+12),size,align}.Draw({font,canvas.scale},text,color);
+           ui::TextAlign align=ui::TextAlign::Left,float opacity=1) {
+    ui::Label{canvas.Rect(x,y,width,size+12),size,align}.Draw({font,canvas.scale,opacity},text,color);
 }
 /// @brief 表内记录已按分数排序；highlight 为待插入或最近保存的 0～9 排名，-1 不强调。
-void Ranking(const menu::Canvas& canvas,Font font,const score::Table& table,float x,float y,float width,float step,int highlight) {
-    Label(canvas,font,"排名",x,y-34,width*0.13F,18,kGold);
-    Label(canvas,font,"NAME",x+width*0.15F,y-34,width*0.34F,18,kGold);
-    Label(canvas,font,"SCORE",x+width*0.49F,y-34,width*0.48F,18,kGold,ui::TextAlign::Right);
+void Ranking(const menu::Canvas& canvas,Font font,const score::Table& table,float x,float y,float width,float step,int highlight,float opacity=1) {
+    Label(canvas,font,"排名",x,y-34,width*0.10F,18,kGold,ui::TextAlign::Left,opacity);
+    Label(canvas,font,"NAME",x+width*0.12F,y-34,width*0.28F,18,kGold,ui::TextAlign::Left,opacity);
+    Label(canvas,font,"SCORE",x+width*0.42F,y-34,width*0.38F,18,kGold,ui::TextAlign::Right,opacity);
+    Label(canvas,font,"STAGE",x+width*0.83F,y-34,width*0.17F,17,kGold,ui::TextAlign::Right,opacity);
     for(int i=0;i<score::kSlots;++i) {
         const float top=y+i*step;
         const bool chosen=i==highlight;
-        if(chosen)DrawRectangleRec(canvas.Rect(x-8,top-2,width+16,step-2),Color{116,57,42,140});
+        if(chosen)DrawRectangleRec(canvas.Rect(x-8,top-2,width+16,step-2),ui::WithOpacity(Color{116,57,42,140},opacity));
         const Color color=chosen?kGold:table[i]?kIvory:kMuted;
-        Label(canvas,font,TextFormat("%02d",i+1),x,top,width*0.13F,21,color);
-        Label(canvas,font,table[i]?table[i]->name.c_str():"--------",x+width*0.15F,top,width*0.34F,21,color);
+        Label(canvas,font,TextFormat("%02d",i+1),x,top,width*0.10F,21,color,ui::TextAlign::Left,opacity);
+        Label(canvas,font,table[i]?table[i]->name.c_str():"--------",x+width*0.12F,top,width*0.28F,21,color,ui::TextAlign::Left,opacity);
         const std::string value=table[i]?std::to_string(table[i]->value):"---------";
-        Label(canvas,font,value.c_str(),x+width*0.49F,top,width*0.48F,21,color,ui::TextAlign::Right);
+        Label(canvas,font,value.c_str(),x+width*0.42F,top,width*0.38F,21,color,ui::TextAlign::Right,opacity);
+        const auto progress=!table[i] || table[i]->stage==0?"--":table[i]->cleared?"ALL":table[i]->stage==7?"EX":std::to_string(table[i]->stage);
+        Label(canvas,font,progress.c_str(),x+width*0.83F,top,width*0.17F,19,color,ui::TextAlign::Right,opacity);
     }
 }
 } // namespace
@@ -88,8 +93,14 @@ void Game::DrawScoreEntry() const {
     const menu::PostgameLayout layout(GetScreenWidth(),GetScreenHeight());const auto& c=layout.canvas;
     const bool compact=layout.compact;const Font font=assets_.Common().uiFont;
     ui::DrawPageSurface(c,menuMotion_);
-    Label(c,font,state_==RunState::ScoreName?"为成绩命名":"保存最高分",40,48,c.width-80,36,kIvory,ui::TextAlign::Center);
     const auto description=std::string(scoreMode_?"挑战模式":"标准模式")+"  ·  "+kShotNames[scoreShot_]+"  ·  "+std::array<const char*,5>{"EASY","NORMAL","HARD","LUNATIC","EXTRA"}[scoreDifficulty_];
+    if(state_==RunState::ScoreName) {
+        const auto subtitle=description+" · SCORE "+std::to_string(pendingScore_.value);
+        ui::NameEntry({GetScreenWidth(),GetScreenHeight()}).Draw({font,c.scale},scoreName_,scoreNameEditor_,{score::kNameLength},
+            {"为成绩命名",subtitle.c_str(),"保存成绩",scoreSaveError_.c_str()});
+        return;
+    }
+    Label(c,font,"保存最高分",40,48,c.width-80,36,kIvory,ui::TextAlign::Center);
     Label(c,font,description.c_str(),40,112,c.width-80,19,kGold,ui::TextAlign::Center);
     const auto rank=scoreProfile_.Position(scoreMode_!=0,scoreShot_,scoreDifficulty_,pendingScore_.value);
     Ranking(c,font,scoreProfile_.Get(scoreMode_!=0,scoreShot_,scoreDifficulty_),48,compact?212:202,compact?664:560,compact?29:35,rank?*rank:-1);
@@ -100,41 +111,41 @@ void Game::DrawScoreEntry() const {
         Label(c,font,rank?TextFormat("可登记至第 %d 位",*rank+1):"本次分数未进入前十",x,compact?645:300,width,20,kGold);
         const ui::DrawContext context{font,c.scale};
         ui::Button{layout.Choice(0),rank.has_value()}.Draw(context,"保存并命名",{selectedScoreSave_==0?1.0F:0.0F,1});
-        ui::Button{layout.Choice(1)}.Draw(context,rank?"不保存，返回主菜单":"返回主菜单",{selectedScoreSave_==1?1.0F:0.0F,1});
-    } else {
-        Label(c,font,"NAME · 八字符命名",x,compact?565:265,width,20,kGold);
-        const float top=compact?608:310,cell=compact?56.0F:39.0F;
-        for(int i=0;i<score::kNameLength;++i) {
-            const auto bounds=c.Rect(x+i*cell,top,cell-5,42);
-            DrawRectangleRec(bounds,replaceScoreName_?Color{100,55,49,180}:Color{34,20,29,230});
-            DrawRectangleLinesEx(bounds,c.scale,Color{149,113,84,180});
-            const char value[2]={i<static_cast<int>(scoreName_.size())?scoreName_[i]:'_',0};
-            ui::Label{bounds,25,ui::TextAlign::Center}.Draw({font,c.scale},value,kIvory);
-        }
-        Label(c,font,"可直接键盘输入",x,compact?675:380,width,19,kIvory);
-        Label(c,font,"Enter 保存 · Backspace 删除",x,compact?719:424,width,18,kMuted);
-        Label(c,font,"Ctrl+A 重新输入",x,compact?761:466,width,18,kMuted);
+        ui::Button{layout.Choice(1)}.Draw(context,CanSaveReplay()?"不保存分数，继续":"返回主菜单",{selectedScoreSave_==1?1.0F:0.0F,1});
     }
     if(!scoreSaveError_.empty())Label(c,font,scoreSaveError_.c_str(),compact?48:665,compact?1006:666,compact?664:370,18,{255,147,130,255});
-    Label(c,font,"确认保存后才写入排行榜",48,c.height-57,c.width-96,17,kMuted,ui::TextAlign::Center);
+    Label(c,font,CanSaveReplay()?"分数登记后可继续保存 Replay":"确认保存后才写入排行榜",48,c.height-57,c.width-96,17,kMuted,ui::TextAlign::Center);
 }
 
-void Game::DrawScorePage() const {
-    const menu::PostgameLayout layout(GetScreenWidth(),GetScreenHeight());const auto& c=layout.canvas;
+void Game::DrawScorePage(float opacity,const ui::MenuMotion* motion,int page) const {
+    const auto& animation=motion?*motion:menuMotion_;
+    const bool difficulty=page<0?scoreViewStep_==ScoreViewStep::Difficulty:page==0;
+    const int shot=page<=0?scoreShot_:page-1;
+    const menu::ScoreLayout layout(GetScreenWidth(),GetScreenHeight());const auto& c=layout.canvas;
     const Font font=assets_.Common().uiFont;
-    ui::DrawPageSurface(c,menuMotion_);
-    Label(c,font,scorePageFromRun_?"成绩已保存":"最高分排行榜",40,48,c.width-80,36,kIvory,ui::TextAlign::Center);
-    Label(c,font,scoreMode_?"挑战模式":"标准模式",88,layout.compact?124:116,160,20,kGold,ui::TextAlign::Center);
-    Label(c,font,kShotNames[scoreShot_],389,layout.compact?124:116,280,20,kGold,ui::TextAlign::Center);
-    const ui::DrawContext context{font,c.scale};
-    for(int direction:{-1,1}) {
-        ui::ArrowButton{layout.ModeArrow(direction),direction}.Draw(context);
-        ui::ArrowButton{layout.ShotArrow(direction),direction}.Draw(context);
+    const ui::DrawContext context{font,c.scale,opacity,animation.Phase(),animation.Pulse()};
+    ui::DrawPageSurface(c,animation,opacity);
+    if(difficulty) {
+        ui::DrawPageHeader(c,font,"SCORE","请选择要查看的难度。","",opacity);
+        for(int i=0;i<score::kDifficulties;++i) {
+            const float entry=animation.Reveal(i*0.07F);
+            auto card=layout.Difficulty(i);card.x+=40*c.scale*(1-entry);
+            auto paint=context;paint.opacity*=entry;
+            ui::DifficultyCard{card,i}.Draw(paint,i==scoreDifficulty_);
+        }
+        ui::DrawPageFooter(c,font,"选择难度后查看四种机体的成绩","",opacity);return;
     }
-    Ranking(c,font,scoreProfile_.Get(scoreMode_!=0,scoreShot_,scoreDifficulty_),64,layout.compact?225:215,c.width-128,layout.compact?49:38,scoreHighlight_);
-    const auto difficultyLabel=std::string(std::array<const char*,5>{"EASY","NORMAL","HARD","LUNATIC","EXTRA"}[scoreDifficulty_])+" · 本局记录";
-    Label(c,font,difficultyLabel.c_str(),48,c.height-104,c.width-96,19,kGold,ui::TextAlign::Center);
-    for(int direction:{-1,1})ui::ArrowButton{layout.DifficultyArrow(direction),direction}.Draw(context);
-    Label(c,font,"Q / E 切换难度 · 各模式与御札分别记录",48,c.height-60,c.width-96,17,kMuted,ui::TextAlign::Center);
+    const auto heading=std::string(scorePageFromRun_?"成绩已保存":"SCORE")+" · "+spell::kDifficulties[scoreDifficulty_];
+    Label(c,font,heading.c_str(),40,48,c.width-80,36,kIvory,ui::TextAlign::Center,opacity);
+    for(int mode=0;mode<2;++mode) {
+        ui::Label{layout.ShotLabel(mode),24,ui::TextAlign::Center}.Draw(context,kShotNames[shot],kIvory);
+        ui::Label{layout.ModeLabel(mode),20,ui::TextAlign::Center}.Draw(context,mode==0?"标准模式":"挑战模式",kGold);
+        const auto table=layout.TableDesign(mode);
+        // 成绩保存后的高亮仅属于本局模式，不能同时强调另一栏相同名次。
+        Ranking(c,font,scoreProfile_.Get(mode!=0,shot,scoreDifficulty_),table.x,table.y,table.width,layout.RowStep(),mode==scoreMode_ && shot==scoreShot_?scoreHighlight_:-1,opacity);
+    }
+    for(int direction:{-1,1})ui::ArrowButton{layout.Arrow(direction),direction}.Draw(context);
+    ui::Label{layout.Page(),18,ui::TextAlign::Center}.Draw(context,TextFormat("%d / %d",shot+1,score::kShots),kGold);
+    ui::DrawPageFooter(c,font,scorePageFromRun_?(CanSaveReplay()?"确认后继续保存 Replay":"确认后返回主菜单"):"返回可重新选择难度","",opacity);
 }
 } // namespace koumakyou

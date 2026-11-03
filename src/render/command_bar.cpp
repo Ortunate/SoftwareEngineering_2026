@@ -22,7 +22,8 @@ void Game::DrawCommandBar() const {
     if(replayMode_==replay::Mode::Playback) {
         add(KeyLabel(bindings_.bomb),replayPaused_?"继续回放":"暂停回放");add("Esc","返回录像列表");
     } else switch(state_) {
-        case RunState::ReplayList:menu("播放");break;
+        case RunState::ReplayList:
+            add("W / S / ↑↓","选择槽位");add("A / D / ←→","翻页");add("Z / Space / 左键","播放");add("X / Esc / 右键","返回");break;
         case RunState::MainMenu:menu("确认","选择退出",titleEntrance_.Finished());break;
         case RunState::Options:
             if(waitingForBinding_) {add("键盘 / 鼠标","修改");add("X / Esc / 右键","取消");}
@@ -46,11 +47,16 @@ void Game::DrawCommandBar() const {
             add("W / S / ↑↓","选择曲目");add("A / D / ←→","翻页");add("鼠标 / 滚轮","选择");
             add("Z / Space / 左键","播放");add("X / Esc / 右键","返回");break;
         case RunState::Score:
-            add("W / S / ↑↓","切换模式");add("A / D / ←→","切换御札");add("X / Esc / 右键","返回");break;
+            if(scoreViewStep_==ScoreViewStep::Difficulty)menu("查看成绩","返回");
+            else {
+                add("A / D / ←→","翻页");add("左右箭头 / 左键","翻页");
+                if(scorePageFromRun_)add("Z / Enter / Space","继续");
+                add("X / Esc / 右键",scorePageFromRun_?"继续":"选择难度");
+            }
+            break;
         case RunState::ScoreSave:menu("确认","选择放弃");break;
         case RunState::ScoreName:
-            add("键盘字符","输入名字");add("Enter","保存");add("Ctrl+A","重新输入");
-            add("Backspace","删除");add("Esc / 右键","返回选存");break;
+            ui::NameEntry({GetScreenWidth(),GetScreenHeight()}).DrawHints({assets_.Common().uiFont});return;
         case RunState::Ending:
             add("Z / Space / 左键","继续");add("Ctrl","快进",endingPlayer_.SeenBefore());
             add("X / Esc / 右键","跳过",endingPlayer_.SeenBefore());break;

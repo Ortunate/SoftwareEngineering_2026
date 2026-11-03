@@ -1,5 +1,6 @@
 // 本文件实现带校验和、兼容标识与长度限制的录像二进制格式；整数统一小端，浮点保留 IEEE 位模式。
 #include "replay/replay.hpp"
+#include "platform/file_publish.hpp"
 #include "stage/catalog.hpp"
 #include "app/spell_practice.hpp"
 #include "gameplay/combat/rank.hpp"
@@ -14,6 +15,7 @@
 #include <iomanip>
 #include <sstream>
 #include <ctime>
+#include <algorithm>
 
 namespace koumakyou::replay {
 namespace {
@@ -22,11 +24,20 @@ constexpr std::uint32_t kMagic=0x3152504b, kVersion=2;
 constexpr std::size_t kMaxBytes=65536+512+kMaxFrames*24;
 struct Codec {
     Bytes bytes; std::size_t offset=0;
+    // 仅目录摘要绑定流并按需补齐头部，完整Load仍使用已校验的内存快照；不能预读每份录像的全部输入。
+    std::istream* source=nullptr;std::size_t sourceLimit=0;
+    void Ensure(std::size_t count) {
+        if(offset+count<=bytes.size())return;
+        if(!source || offset+count>sourceLimit)throw std::runtime_error("录像文件截断");
+        const auto previous=bytes.size();bytes.resize(offset+count);
+        source->read(reinterpret_cast<char*>(bytes.data()+previous),static_cast<std::streamsize>(bytes.size()-previous));
+        if(!*source)throw std::runtime_error("录像读取失败");
+    }
     void Put(std::uint32_t x) { for(int i=0;i<4;++i)bytes.push_back(static_cast<std::uint8_t>(x>>(8*i))); }
-    std::uint32_t Get() { if(offset+4>bytes.size())throw std::runtime_error("录像文件截断"); std::uint32_t x=0;for(int i=0;i<4;++i)x|=std::uint32_t(bytes[offset++])<<(8*i);return x; }
+    std::uint32_t Get() { Ensure(4); std::uint32_t x=0;for(int i=0;i<4;++i)x|=std::uint32_t(bytes[offset++])<<(8*i);return x; }
     void String(const std::string& value) { RequireString(value.size());Put(static_cast<std::uint32_t>(value.size()));bytes.insert(bytes.end(),value.begin(),value.end()); }
     static void RequireString(std::size_t n) { if(n>512)throw std::runtime_error("录像字符串过长"); }
-    std::string String() { const auto n=Get();RequireString(n);if(offset+n>bytes.size())throw std::runtime_error("录像字符串截断");std::string s(bytes.begin()+offset,bytes.begin()+offset+n);offset+=n;return s; }
+    std::string String() { const auto n=Get();RequireString(n);Ensure(n);std::string s(bytes.begin()+offset,bytes.begin()+offset+n);offset+=n;return s; }
     void Float(float x) { Put(std::bit_cast<std::uint32_t>(x)); }
     float Float() { return std::bit_cast<float>(Get()); }
 };
@@ -50,6 +61,21 @@ void Validate(const Data& d) {
     Require(!d.frames.empty() && d.frames.size()<=kMaxFrames,"录像步数无效");
     Require(d.result.score<=std::uint64_t(std::numeric_limits<long long>::max()) && d.result.power>=8 && d.result.power<=128,"录像结果无效");
     for(const auto& f:d.frames)Require(std::isfinite(f.dt) && f.dt>0 && f.dt<=0.05F && std::isfinite(f.player.mouseDelta.x) && std::isfinite(f.player.mouseDelta.y) && std::isfinite(f.player.mouseSensitivityScale) && f.player.mouseSensitivityScale>=0.1F && f.player.mouseSensitivityScale<=3,"录像时间或输入无效");
+}
+// 共用头部解码，摘要与完整加载必须保持字段顺序及长度限制一致。
+std::uint32_t DecodeHeader(Codec& c,Data& d) {
+    d.name=c.String();d.route=c.String();d.character=c.String();d.shot=c.String();d.rules=c.String();d.simulation=c.String();d.content=c.String();d.build=c.String();d.continues=c.Get();
+    const auto segments=c.Get();Require(segments<=64,"录像片段过多");
+    for(unsigned i=0;i<segments;++i) { Segment s;s.stage=c.String();s.entry=c.String();s.target=c.String();s.difficulty=static_cast<Difficulty>(c.Get());s.begin=c.Get();s.end=c.Get();s.seed=c.Get();s.lives=c.Get();s.bombs=c.Get();s.power=c.Get();s.rank=c.Get();const auto low=c.Get();s.score=low|(std::uint64_t(c.Get())<<32);const auto exitLow=c.Get();s.result.score=exitLow|(std::uint64_t(c.Get())<<32);s.result.lives=c.Get();s.result.power=c.Get();s.result.misses=c.Get();s.result.bombs=c.Get();const auto won=c.Get();Require(won<2,"片段结果无效");s.result.won=won;d.segments.push_back(s); }
+    const auto extensions=c.Get();Require(extensions<=64,"录像扩展过多");
+    for(unsigned i=0;i<extensions;++i) {
+        const auto type=c.Get(),length=c.Get();Require(!(type&0x80000000u),"录像需要不支持的扩展");Require(length<=65536,"录像扩展过长");c.Ensure(length);
+        if(type==1) {Require(length==8 && d.recordedAt==0,"录像时间扩展无效");const auto low=c.Get();d.recordedAt=low|(std::uint64_t(c.Get())<<32);Require(d.recordedAt>0 && d.recordedAt<=253402300799ULL,"录像时间超出范围");}
+        else c.offset+=length;
+    }
+    auto& h=d.header;h.seed=c.Get();h.shot=c.Get();h.lives=c.Get();h.bombs=c.Get();h.phase=c.Get();auto flags=c.Get();Require(flags<8,"录像模式无效");h.practice=flags&1;h.spell=flags&2;h.challenge=flags&4;
+    const auto count=c.Get();Require(count>0 && count<=kMaxFrames,"录像步数无效");auto& r=d.result;const auto low=c.Get();r.score=low|(std::uint64_t(c.Get())<<32);r.lives=c.Get();r.power=c.Get();r.misses=c.Get();r.bombs=c.Get();const auto won=c.Get();Require(won<2,"录像结果无效");r.won=won;
+    return count;
 }
 Codec Encode(const Data& d) {
     Validate(d);Codec c;c.Put(kMagic);c.Put(kVersion);
@@ -93,6 +119,36 @@ bool Save(const std::filesystem::path& directory,const Data& data,std::filesyste
         Require(bool(stream),"录像写入失败");std::filesystem::rename(temporary,target);saved=target;error.clear();return true;
     } catch(const std::exception& e) { error=e.what();if(ownsTemporary){std::error_code ec;std::filesystem::remove(temporary,ec);}return false; }
 }
+std::filesystem::path SlotPath(const std::filesystem::path& directory,int slot) {
+    if(slot<1 || slot>kSlotCount)throw std::out_of_range("录像槽位超出范围");
+    std::ostringstream name;name<<"th6_"<<std::setw(2)<<std::setfill('0')<<slot<<".krep";return directory/name.str();
+}
+bool SaveSlot(const std::filesystem::path& directory,const Data& data,int slot,bool overwrite,std::filesystem::path& saved,std::string& error) {
+    std::filesystem::path fresh;
+    try {
+        const auto target=SlotPath(directory,slot);
+        Require(!std::filesystem::exists(target) || (overwrite && std::filesystem::is_regular_file(target)),"录像槽已占用，请先确认覆盖");
+        if(!Save(directory,data,fresh,error))return false;
+        // 临时文件已完成写入；替换由操作系统原子发布，禁止先删除旧槽位再重命名。
+        platform::PublishFile(fresh,target,overwrite);
+        saved=target;error.clear();return true;
+    } catch(const std::exception& e) {if(!fresh.empty()){std::error_code ignored;std::filesystem::remove(fresh,ignored);}error=e.what();return false;}
+}
+bool ReadSummary(const std::filesystem::path& file,Summary& out,std::string& error) {
+    try {
+        const auto size=std::filesystem::file_size(file);Require(size>=64 && size<=kMaxBytes,"录像文件长度无效");
+        std::ifstream stream(file,std::ios::binary);Require(bool(stream),"录像读取失败");
+        Codec c;c.source=&stream;c.sourceLimit=static_cast<std::size_t>(size)-4;
+        Require(c.Get()==kMagic && c.Get()==kVersion,"录像格式不兼容");
+        const auto build=c.Get();Require(build<=512,"录像版本标识无效");c.Ensure(build);c.offset+=build;
+        Data data;const auto count=DecodeHeader(c,data);std::string name;
+        Require(NormalizeName(data.name,name) && !data.segments.empty(),"录像名称或关卡无效");
+        Require(c.offset+std::size_t(count)*20+4==size,"录像步数与文件长度不符");
+        for(const auto& segment:data.segments)Require(static_cast<unsigned>(segment.difficulty)<=4,"录像难度无效");
+        const auto& first=data.segments.front();const auto& last=data.segments.back();
+        out={data.name,data.shot,data.route,last.stage,first.target,first.difficulty,data.recordedAt,data.result,data.simulation,data.content};error.clear();return true;
+    } catch(const std::exception& e){error=e.what();return false;}
+}
 bool Load(const std::filesystem::path& file,Data& out,std::string& error) {
     try {
         const auto size=std::filesystem::file_size(file);Require(size>=64 && size<=kMaxBytes,"录像文件长度无效");
@@ -100,19 +156,9 @@ bool Load(const std::filesystem::path& file,Data& out,std::string& error) {
         c.offset=c.bytes.size()-4;const auto checksum=c.Get();Require(checksum==Hash(c.bytes,c.bytes.size()-4),"录像校验失败");c.offset=0;
         Require(c.Get()==kMagic,"不是录像文件");const auto version=c.Get();Require(version!=1,"旧版录像请使用对应旧构建观看");Require(version==kVersion,"录像格式不兼容");const auto n=c.Get();Require(n<=512 && c.offset+n<=c.bytes.size(),"录像版本标识无效");
         std::string id(c.bytes.begin()+c.offset,c.bytes.begin()+c.offset+n);c.offset+=n;
-        Data d;d.name=c.String();d.route=c.String();d.character=c.String();d.shot=c.String();d.rules=c.String();d.simulation=c.String();d.content=c.String();d.build=c.String();d.continues=c.Get();
-        const auto segments=c.Get();Require(segments<=64,"录像片段过多");
-        for(unsigned i=0;i<segments;++i) { Segment s;s.stage=c.String();s.entry=c.String();s.target=c.String();s.difficulty=static_cast<Difficulty>(c.Get());s.begin=c.Get();s.end=c.Get();s.seed=c.Get();s.lives=c.Get();s.bombs=c.Get();s.power=c.Get();s.rank=c.Get();const auto low=c.Get();s.score=low|(std::uint64_t(c.Get())<<32);const auto exitLow=c.Get();s.result.score=exitLow|(std::uint64_t(c.Get())<<32);s.result.lives=c.Get();s.result.power=c.Get();s.result.misses=c.Get();s.result.bombs=c.Get();const auto won=c.Get();Require(won<2,"片段结果无效");s.result.won=won;d.segments.push_back(s); }
-        const auto extensions=c.Get();Require(extensions<=64,"录像扩展过多");
-        for(unsigned i=0;i<extensions;++i) {
-            const auto type=c.Get(),length=c.Get();Require(!(type&0x80000000u),"录像需要不支持的扩展");Require(length<=65536 && c.offset+length<=c.bytes.size(),"录像扩展截断");
-            if(type==1) {Require(length==8 && d.recordedAt==0,"录像时间扩展无效");const auto low=c.Get();d.recordedAt=low|(std::uint64_t(c.Get())<<32);Require(d.recordedAt>0 && d.recordedAt<=253402300799ULL,"录像时间超出范围");}
-            else c.offset+=length;
-        }
-        auto& h=d.header;h.seed=c.Get();h.shot=c.Get();h.lives=c.Get();h.bombs=c.Get();h.phase=c.Get();auto flags=c.Get();Require(flags<8,"录像模式无效");h.practice=flags&1;h.spell=flags&2;h.challenge=flags&4;
-        const auto count=c.Get();Require(count>0 && count<=kMaxFrames,"录像步数无效");auto& r=d.result;const auto low=c.Get();r.score=low|(std::uint64_t(c.Get())<<32);r.lives=c.Get();r.power=c.Get();r.misses=c.Get();r.bombs=c.Get();const auto won=c.Get();Require(won<2,"录像结果无效");r.won=won;
+        Data d;const auto count=DecodeHeader(c,d);
         Require(c.offset+std::size_t(count)*20+4==c.bytes.size(),"录像步数与文件长度不符");d.frames.resize(count);
-        for(auto& f:d.frames) { f.dt=c.Float();f.player.mouseDelta.x=c.Float();f.player.mouseDelta.y=c.Float();f.player.mouseSensitivityScale=c.Float();flags=c.Get();Require(flags<4096,"录像输入标志无效");auto& p=f.player;p.forward=flags&1;p.backward=flags&2;p.moveLeft=flags&4;p.moveRight=flags&8;p.ascend=flags&16;p.descend=flags&32;p.focus=flags&64;p.fire=flags&128;p.bomb=flags&256;f.confirm=flags&512;f.fast=flags&1024;p.aimAssistEnabled=flags&2048; }
+        for(auto& f:d.frames) { f.dt=c.Float();f.player.mouseDelta.x=c.Float();f.player.mouseDelta.y=c.Float();f.player.mouseSensitivityScale=c.Float();const auto flags=c.Get();Require(flags<4096,"录像输入标志无效");auto& p=f.player;p.forward=flags&1;p.backward=flags&2;p.moveLeft=flags&4;p.moveRight=flags&8;p.ascend=flags&16;p.descend=flags&32;p.focus=flags&64;p.fire=flags&128;p.bomb=flags&256;f.confirm=flags&512;f.fast=flags&1024;p.aimAssistEnabled=flags&2048; }
         Validate(d);out=std::move(d);error.clear();return true;
     } catch(const std::exception& e) { error=e.what();return false; }
 }

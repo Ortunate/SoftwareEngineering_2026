@@ -45,27 +45,27 @@ inline void DrawPageSurface(const Canvas& canvas,const ui::MenuMotion& motion,fl
     DrawPageFrame(canvas,ui::WithOpacity(Color{149,113,84,180},opacity),canvas.width,canvas.height);
 }
 
-/// @brief 页面统一页眉及左下角题签；font 借用，title/subtitle/watermark 为 UTF-8 文本，字号等比。
-inline void DrawPageHeader(const Canvas& canvas,Font font,const char* title,const char* subtitle,const char* watermark) {
+/// @brief 页面统一页眉及左下角题签；font借用，文本为UTF-8，字号等比；opacity为整层0～1透明度。
+inline void DrawPageHeader(const Canvas& canvas,Font font,const char* title,const char* subtitle,const char* watermark,float opacity=1) {
     const bool compact=canvas.width<1000;
     const float center=canvas.Point(canvas.width/2,0).x;
     ui::DrawCentered(font,title,center,canvas.Point(0,compact?90:72).y,
-                     ui::FittedSize(font,title,35*canvas.scale,(canvas.width-120)*canvas.xScale),kPageIvory);
+                     ui::FittedSize(font,title,35*canvas.scale,(canvas.width-120)*canvas.xScale),WithOpacity(kPageIvory,opacity));
     ui::DrawCentered(font,subtitle,center,canvas.Point(0,compact?146:116).y,
-                     ui::FittedSize(font,subtitle,17*canvas.scale,(canvas.width-120)*canvas.xScale),kPageGold);
+                     ui::FittedSize(font,subtitle,17*canvas.scale,(canvas.width-120)*canvas.xScale),WithOpacity(kPageGold,opacity));
     ui::DrawText(font,watermark,canvas.Point(compact?64:100,canvas.height-186),
-                 ui::FittedSize(font,watermark,52*canvas.scale,(canvas.width-120)*canvas.xScale),Color{173,61,65,255});
+                 ui::FittedSize(font,watermark,52*canvas.scale,(canvas.width-120)*canvas.xScale),WithOpacity(Color{173,61,65,255},opacity));
 }
 
-/// @brief 通用说明文字页脚；secondLine 可为空，不依赖列表高度；应用功能按键统一使用 CommandBar。
-inline void DrawPageFooter(const Canvas& canvas,Font font,const char* firstLine,const char* secondLine="") {
+/// @brief 通用说明文字页脚；secondLine可为空，opacity为整层0～1透明度；功能按键统一使用CommandBar。
+inline void DrawPageFooter(const Canvas& canvas,Font font,const char* firstLine,const char* secondLine="",float opacity=1) {
     const float center=canvas.Point(canvas.width/2,0).x;
     for(int index=0;index<2;++index) {
         const char* text=index==0 ? firstLine : secondLine;
         const float size=(index==0?18:15)*canvas.scale;
         ui::DrawCentered(font,text,center,canvas.Point(0,canvas.height-(index==0?64:31)).y,
                          ui::FittedSize(font,text,size,(canvas.width-80)*canvas.xScale),
-                         index==0?kPageGold:Color{163,133,121,255});
+                         WithOpacity(index==0?kPageGold:Color{163,133,121,255},opacity));
     }
 }
 

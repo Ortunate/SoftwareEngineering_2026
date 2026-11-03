@@ -4334,11 +4334,14 @@ struct GameLifecycleProbe {
         game.UpdatePlayer(0,{.aimAssistEnabled=true});assert(!game.player_.Aim().assisted);
         targetActor->visible=true;targetActor->health=0;
         game.UpdatePlayer(0,{.aimAssistEnabled=true});assert(!game.player_.Aim().assisted);
-        // 失败收尾不能因完整关卡分支新增的结局/成绩分流而漏掉已封存录像的保存询问。
+        // 失败保留结果菜单；返回菜单先登记成绩，拒绝分数后仍须提供已封存录像的保存询问。
         game.replayData_=data;game.replayMode_=replay::Mode::Idle;
         game.replaySaveState_=Game::ReplaySaveState::Ready;
         game.EndStage(RunState::GameOver);game.actorEffects_.Clear();game.externalEffects_.Clear();
-        game.UpdateState(0);assert(game.state_==RunState::GameOver&&game.ReplaySaveModalOpen());
+        game.UpdateState(0);assert(game.state_==RunState::GameOver&&!game.ReplaySaveModalOpen());
+        game.BeginScoreSave();game.selectedScoreSave_=1;
+        PlayAutomationEvent({0,2,{KEY_ENTER,0,0,0}});game.UpdateScoreSave();
+        PlayAutomationEvent({0,1,{KEY_ENTER,0,0,0}});assert(game.ReplaySaveModalOpen());
         game.EnterMainMenu();
         // 实际资源入口覆盖主线四难度、后续关卡、Extra，以及共享phase的不同符卡。
         const auto checkEntry=[&](StageId stage,int difficulty,bool practice,const spell::Card* card=nullptr) {
@@ -4353,9 +4356,9 @@ struct GameLifecycleProbe {
             auto recorded=game.replayData_;replay::FinishSession(recorded,game.ReplayResult());
             std::string error;assert(replay::CanPlay(recorded,error));
             if(stage==StageId::Extra && !card) {
-                // 胜利直达成绩页的路线也必须先选存录像，不能被后续菜单清空。
+                // Extra胜利先登记成绩，退场期间封存的录像不能被后续成绩入口清空。
                 game.BeginStageClear();game.stageClearSeconds_=10;game.Update(1.0F/120);
-                assert(game.ReplaySaveModalOpen() && game.CanSaveReplay() && game.replayData_.result.won);
+                assert(!game.ReplaySaveModalOpen() && game.CanSaveReplay() && game.replayData_.result.won);
                 game.EnterMainMenu();
             }
             if(stage==StageId::Stage2 && difficulty==0 && !card) {

@@ -37,7 +37,7 @@ get_target_property(koumakyou_raylib_include_dirs raylib INTERFACE_INCLUDE_DIREC
 target_include_directories(raylib SYSTEM INTERFACE ${koumakyou_raylib_include_dirs})
 
 # 通用 UI 可独立链接和测试，不依赖 Game、关卡、配置或素材管理器。
-add_library(koumakyou_ui STATIC src/ui/components.cpp src/ui/command_bar.cpp)
+add_library(koumakyou_ui STATIC src/ui/components.cpp src/ui/command_bar.cpp src/ui/name_entry.cpp src/ui/difficulty_card.cpp)
 target_include_directories(koumakyou_ui PUBLIC src)
 target_link_libraries(koumakyou_ui PUBLIC raylib)
 
@@ -103,6 +103,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/effects/player_bomb.cpp
     src/gameplay/effects/bomb_volume.cpp
     src/gameplay/items/drop_system.cpp
+    src/platform/file_publish.cpp
     src/platform/window_input.cpp
     src/render/menu_render.cpp
     src/render/start_setup_render.cpp

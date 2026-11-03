@@ -138,7 +138,7 @@ void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
         stageId_==StageId::Extra ? StageEntry::Extra : StageEntry::Campaign;
     if(!requestedDifficulty||!SupportsStage(stageId_,*requestedDifficulty,entry))
         throw std::invalid_argument("Unsupported run identity");
-    if(!continuingStage && replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear(); replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
+    if(!continuingStage && replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear();replayNamePrepared_=false; replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
     replayEnded_=false;
     playerBodyAnimation_={};playerBodyAction_=0;playerBodySince_=0;
     FinishSpellRecord(false);
@@ -287,7 +287,7 @@ void Game::EnterMainMenu() {
     continuingStage_=false;
     pendingEnding_.reset();endingPlayer_=ending::Player{};clearedMainlineStages_=0;runContinues_=0;
     scorePageFromRun_=false;scoreHighlight_=-1;
-    replaySaveState_=ReplaySaveState::None;replayName_.clear();replayAfterSave_=ReplayAction::Stay;
+    replaySaveState_=ReplaySaveState::None;replayName_.clear();replayNamePrepared_=false;replayAfterSave_=ReplayAction::Stay;
     (void)DisableWindowInputMethods(GetWindowHandle());
     RefreshReplayAvailability(0,true);
     FinishSpellRecord(false);
@@ -562,7 +562,11 @@ void Game::UpdateUiMotion(float deltaTime) {
     }
     else if (state_ == RunState::Paused) selection = selectedPauseItem_;
     else if (state_ == RunState::Won || state_ == RunState::GameOver) selection = selectedResultItem_;
-    if (state_ == RunState::Score || state_ == RunState::Credit) selection = 0;
+    if(state_==RunState::Score) {
+        detail=scoreViewStep_==ScoreViewStep::Difficulty?0:1+scoreShot_;
+        selection=scoreViewStep_==ScoreViewStep::Difficulty?scoreDifficulty_:-1;
+    }
+    if(state_==RunState::Credit)selection=0;
     // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
     menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
     startSetupMotion_.Advance(state_==RunState::MainMenu?-1:state_==RunState::StartSetup?static_cast<int>(setupStep_):-2,deltaTime);
@@ -637,11 +641,11 @@ void Game::UpdateState(float deltaTime) {
             return;
         }
         if (input.back) {
-            if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
+            if(!practiceMode_ && !previewMode_)BeginScoreSave();
             else RequestReplayAction(practiceMode_?ReplayAction::StageSelection:ReplayAction::Menu);
             return;
         }
-        if(IsKeyPressed(KEY_M)) {if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();else RequestReplayAction(ReplayAction::Menu);return;}
+        if(IsKeyPressed(KEY_M)) {if(!practiceMode_ && !previewMode_)BeginScoreSave();else RequestReplayAction(ReplayAction::Menu);return;}
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         std::array<ui::Item,menu::kResultCount> items{};
         for (int index = 0; index < menu::kResultCount; ++index)
@@ -654,7 +658,7 @@ void Game::UpdateState(float deltaTime) {
             assets_.PlaySoundEffect("menu_confirm");
             if(selectedResultItem_==2)RequestReplayAction(ReplayAction::Stay);
             else if (selectedResultItem_ == 0) RequestReplayAction(ReplayAction::Retry);
-            else if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
+            else if(!practiceMode_ && !previewMode_)BeginScoreSave();
             else RequestReplayAction(practiceMode_?ReplayAction::StageSelection:ReplayAction::Menu);
         }
         return;
@@ -710,10 +714,7 @@ void Game::UpdateState(float deltaTime) {
             if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
             else if(finishResult_==RunState::Won && pendingEnding_)BeginEnding();
             else if(finishResult_==RunState::Won && stageId_==StageId::Extra && !previewMode_ && !spellPractice_)BeginScoreSave();
-            else {
-                state_ = finishResult_; EnableCursor();
-                if(!practiceMode_ && CanSaveReplay())RequestReplayAction(ReplayAction::Stay);
-            }
+            else {state_=finishResult_;EnableCursor();}
         }
         return;
     }

@@ -88,7 +88,7 @@ struct GameLifecycleProbe {
             case 26:
                 game.state_=RunState::Paused; game.pausedState_=RunState::Playing; game.practiceMode_=true; break;
             case 9: game.state_=RunState::MusicRoom; break;
-            case 10: game.state_=RunState::Score; break;
+            case 10: game.state_=RunState::Score;game.scoreViewStep_=Game::ScoreViewStep::Difficulty;game.scorePageFromRun_=false; break;
             case 11: game.state_=RunState::Credit; break;
             case 12: game.state_=RunState::Playing; break;
             case 13:
@@ -1150,6 +1150,7 @@ void TestUiModuleDrawing(const std::filesystem::path& screenshots) {
     const float phase=motion.Phase(),weight=motion.Weight(0);
     const Color background{11,22,33,255};
     const auto target=LoadRenderTexture(320,240);
+    const NameEntry naming({320,240});const NameEntryState nameState;const std::string name="PUBLIC";
     const auto draw=[&](float opacity) {
         const DrawContext context{GetFontDefault(),1,opacity,motion.Phase(),motion.Pulse()};
         Modal{{0,0,320,240},{8,8,304,224},{160,14}}.Draw(context,"UI MODULE",WHITE,20);
@@ -1165,6 +1166,8 @@ void TestUiModuleDrawing(const std::filesystem::path& screenshots) {
         auto barContext=context;barContext.scale=bar.Scale();
         const std::array<KeyHint,3> hints{{{"W/S","Select"},{"Z","Confirm"},{"X/Esc","Back"}}};
         bar.Draw(barContext,hints);
+        naming.Draw(context,name,nameState,{8},{"Name","ASCII","Save",""});naming.DrawHints(context);
+        DifficultyCard{{24,40,272,104},4}.Draw(context,true);
     };
     BeginTextureMode(target);ClearBackground(background);draw(0);EndTextureMode();
     Image transparent=LoadImageFromTexture(target.texture);
@@ -1179,6 +1182,7 @@ void TestUiModuleDrawing(const std::filesystem::path& screenshots) {
     const auto center=GetImageColor(visible,160,80);
     Check(center.r!=background.r || center.g!=background.g || center.b!=background.b,"UI components did not render");
     UnloadImage(visible);UnloadRenderTexture(target);
+    Check(name=="PUBLIC" && nameState.selected==NameEntryState::kSave && !nameState.replaceOnType,"name entry drawing changed editor state");
     Check(motion.Phase()==phase && motion.Weight(0)==weight && GetMousePosition().x==pointer.x && GetMousePosition().y==pointer.y,
           "component drawing changed motion or pointer");
     std::puts("Independent UI component drawing, zero opacity and read-only presentation passed.");
@@ -1524,6 +1528,7 @@ int main(int argc, char** argv) {
             // 组件绘制可单独回归，不初始化 Game 或加载生产素材。
         } else if(argc>2 && std::string(argv[2])=="--start-characters-only") {
             TestStartCharacters(screenshots);
+
         } else if(argc>2 && std::string(argv[2])=="--start-memory-only") {
             TestStartSelectionMemory(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--start-cards-only") {
@@ -1536,6 +1541,7 @@ int main(int argc, char** argv) {
             TestUnifiedUiInputs();
         } else if(argc>2 && std::string(argv[2])=="--practice-only") {
             TestPracticeStages(screenshots);
+
         } else if(argc>2 && std::string(argv[2])=="--spell-only") {
             TestSpellPractice(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--extra-spells-only") {

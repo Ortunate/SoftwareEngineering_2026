@@ -62,6 +62,22 @@ const char* BuildId();
 /// @brief 模拟和内容版本分别用于播放资格，显示和镜头改动不计入模拟版本。
 const char* SimulationId();
 const char* ContentId();
+/// @brief 原作式固定录像槽1～60；.krep沿用本项目协议，不冒充原作.rpy格式。
+inline constexpr int kSlotCount=60;
+/// @brief 返回th6_01～60.krep的路径；slot越界抛out_of_range，不访问文件系统。
+std::filesystem::path SlotPath(const std::filesystem::path& directory,int slot);
+/// @brief 展示专用元数据，读取不含逐步输入；不能据此判定可播放，启动前仍须Load和CanPlay。
+struct Summary {
+    std::string name,shot,route,stage,target;
+    Difficulty difficulty=Difficulty::Normal;
+    std::uint64_t recordedAt=0;
+    Result result;
+    std::string simulation,content; // 列表可提前说明版本不兼容；仍不能代替完整Load和CanPlay。
+};
+/// @brief 有界读取文件头并检查声明长度；不验证全文件校验和，失败不修改out。
+bool ReadSummary(const std::filesystem::path& file,Summary& out,std::string& error);
+/// @brief 发布到指定槽；已有文件仅在overwrite=true时原子替换，失败保留原录像。slot须为1～60。
+bool SaveSlot(const std::filesystem::path& directory,const Data& data,int slot,bool overwrite,std::filesystem::path& saved,std::string& error);
 /// @brief 原子发布唯一文件，失败返回 false 和中文错误；不覆盖已有录像。
 bool Save(const std::filesystem::path& directory,const Data& data,std::filesystem::path& saved,std::string& error);
 /// @brief 完整校验后替换 out；失败保持 out 不变，并返回中文错误。

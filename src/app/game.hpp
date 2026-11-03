@@ -24,6 +24,7 @@
 #include "render/combat_renderer.hpp"
 #include "gameplay/collision/projectile_collision.hpp"
 #include "ui/motion.hpp"
+#include "ui/name_entry.hpp"
 #include "render/start_setup_motion.hpp"
 #include "render/dialogue_motion.hpp"
 #include "render/title_entrance.hpp"
@@ -131,11 +132,10 @@ private:
     /// @brief 处理选存、ASCII 命名与成绩页筛选；输入、存盘与绘制互相独立。
     void UpdateScoreSave();
     void UpdateScoreName();
+    /// @brief 查询先选难度，按四机体翻页并列查看标准/挑战成绩；返回逐级退回，本局保存后仍继续Demo选存。
     void UpdateScorePage();
     /// @brief 确认名字后尝试原子保存；失败保留成绩及名字并提示重试，成功后转到对应排行榜。
     void SaveNamedScore();
-    /// @brief 追加一个可打印 ASCII 字符，首次输入替换上次名字，最多八字符。
-    void AppendScoreName(char value);
     /// @brief 把有效主线整关成绩写入对应模式的历史最高分；通关或失败时调用，Extra使用独立命名表。
     void RecordStageScore();
     /// @brief 保存有效整关的分模式最高分并播放退场效果；池空并卸载素材后才进入结局或结算出口。
@@ -272,7 +272,8 @@ private:
     void DrawEnding() const;
     /// @brief 绘制选存/命名或浏览页；布局与命中区域共用，函数不推进输入或写入存档。
     void DrawScoreEntry() const;
-    void DrawScorePage() const;
+    /// @brief opacity为整页透明度，motion借用该页独立展示；page=0为难度札，1～4为机体页，-1采用当前身份。
+    void DrawScorePage(float opacity=1,const ui::MenuMotion* motion=nullptr,int page=-1) const;
     /// @brief 在窗口右侧等比滑入完整符卡立绘，独立横幅显示名称。
     void DrawSpellCutIn() const;
     /// @brief Bomb 背景压暗在透明战斗对象之前绘制，保持原生加色光效；须在 BeginMode3D 内调用。
@@ -319,8 +320,16 @@ private:
     void OpenReplayList();
     /// @brief 处理列表分页选择、播放及返回；坏文件不允许启动。
     void UpdateReplayList();
-    /// @brief 只在选择变化时读取并缓存录像，避免每帧访问磁盘。
+    /// @brief 根据缓存头部说明所选槽的版本错误；选择不加载逐步输入，启动前才完整读取。
     void RefreshReplaySelection();
+    /// @brief 扫描60个固定槽并追加旧命名文件；列表只缓存有界元数据，启动仍须完整校验。
+    void ReadReplayDirectory();
+    /// @brief 保存选槽与播放列表共享键鼠导航；返回本帧是否确认，不处理外层取消。
+    bool UpdateReplayTable(const ui::MenuInput& input,bool saving);
+    /// @brief 绘制槽号、名称、日期、机体、难度、分数及进度；只读缓存，不访问文件。
+    void DrawReplayTable(bool saving,float opacity=1,const ui::MenuMotion* motion=nullptr) const;
+    /// @brief 已成功写入Demo后记住共享名称；记忆文件失败仍保留会话内初值并返回false。
+    bool RememberName(const std::string& name);
     /// @brief 绘制缓存的录像元数据，不在绘制路径访问文件系统。
     void DrawReplayList() const;
     /// @brief 从已校验文件启动关卡；退出时恢复原本的开局设置。
@@ -337,11 +346,12 @@ private:
     StageId replayOriginalStage_=StageId::Stage1;
     int replayOriginalDifficulty_=1;
     spell::Selection replayOriginalSpell_{};
+    // 四个并行数组下标一致：前60项为固定槽，后续为旧文件；选槽只允许前60项。
     std::vector<std::filesystem::path> replayFiles_;
-    std::vector<std::string> replayLabels_; // 列表名称缓存；选中后仍须完整校验文件。
+    std::vector<std::optional<replay::Summary>> replayRows_;
+    std::vector<std::string> replayRowErrors_; // 占用而无法解析的槽也不能未经确认覆盖。
+    std::vector<bool> replayOccupied_;
     int selectedReplay_=0;
-    std::optional<replay::Data> replaySelected_;
-    std::string replayDescription_;
     bool replayOriginalDebug_=false;
     std::size_t replayCursor_=0;
     double replayBudget_=0; // 秒；只累计未暂停的真实播放时间，不能跳过录像步骤。
@@ -355,11 +365,14 @@ private:
     std::size_t replayTarget_=0;
     bool replaySeeking_=false,replayFinished_=false;
     // Ready 只在最终步骤封存后设置；Declined 可手动重开询问，Saved 不得重复保存。
-    enum class ReplaySaveState { None, Ready, Ask, Naming, Failed, Declined, Saved };
+    enum class ReplaySaveState { None, Ready, Ask, Slots, Overwrite, Naming, Failed, Declined, Saved };
     enum class ReplayAction { Retry, Menu, StageSelection, SpellSelection, ContinueStage, Stay };
     ReplaySaveState replaySaveState_=ReplaySaveState::None;
     ReplayAction replayAfterSave_=ReplayAction::Stay;
-    int replayChoice_=0,replayChar_=0,replayNameChoice_=0;
+    int replayChoice_=0;
+    int replaySaveSlot_=0; // 1～60，0表示尚未选择；只有Overwrite确认后才允许替换已有文件。
+    bool replayOverwrite_=false,replayNamePrepared_=false;
+    ui::NameEntryState replayNameEditor_{};
     ui::MenuMotion replaySaveMotion_{};
     bool replayAvailable_=false,replayMenuFocused_=false;
     float replayScanSeconds_=1;
@@ -491,11 +504,14 @@ private:
     score::Profile scoreProfile_{};
     score::Entry pendingScore_{}; // 结局结束时固定，命名/选存期间不得再次加分或改变统计。
     int scoreShot_=0,scoreMode_=0,scoreDifficulty_=1,selectedScoreSave_=0;
+    enum class ScoreViewStep { Difficulty, Records };
+    ScoreViewStep scoreViewStep_=ScoreViewStep::Difficulty; // 仅控制查询层级；本局成绩保存后直接进入Records。
     native_combat::Difficulty runDifficulty_=native_combat::Difficulty::Normal; // 本局身份，独立于自适应 rank。
     int runInitialLives_=2; // 固定本局开局额外残机，跨关保留，供结算倍率使用。
     int scoreHighlight_=-1; // 最近一次成功保存的排名，浏览其他分组后清除。
     std::string scoreName_,scoreSaveError_;
-    bool replaceScoreName_=true,scorePageFromRun_=false;
+    ui::NameEntryState scoreNameEditor_{};
+    bool scorePageFromRun_=false;
     StartSelection lastSelection_{}; // 仅由开局页选择更新，不随本局 challengeMode_ 等运行状态重置。
     StartSetupStep setupStep_ = StartSetupStep::Difficulty; // 只接受目录中已开放的难度和入口。
     int selectedDifficulty_=1; // UI 0～3 索引；开始战斗时转换为独立运行身份。

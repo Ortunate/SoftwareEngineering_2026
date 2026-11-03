@@ -40,3 +40,6 @@ koumakyou_scores.dat.tmp
 
 # 渲染压测的逐帧数据、截图和本机环境记录
 /output/render-performance/
+
+# 公用命名界面测试截图与日志
+/output/name-entry-review/

@@ -61,6 +61,56 @@ void TestComponents() {
     right.vertical=1;assert(value.Update(right,true)==0);
     assert(value.Update(back,true)==0);
 }
+/// @brief 同一组件覆盖8/32字符约束、ASCII过滤、取消优先、字符按钮及保存意图，无需窗口或游戏。
+void TestNameEntry() {
+    const NameEntryLayout layout(1100,760);const NameEntry editor(layout);
+    for(std::size_t limit:{8u,32u}) {
+        const NameEntryConfig config{limit};NameEntryState state;std::string value;
+        NameEntryInput typed;typed.text=U"WZX Az09-_!";
+        auto result=editor.Update(value,state,config,typed);
+        assert(result.edited && value==std::string("WZX Az09-_!").substr(0,limit));
+        assert(state.selected==NameEntryState::kSave && NameEntry::Valid(value,config));
+        typed.text=std::u32string(40,U'Q');editor.Update(value,state,config,typed);assert(value.size()==limit);
+        typed={};typed.selectAll=true;typed.text=U"A";editor.Update(value,state,config,typed);assert(state.replaceOnType && value.size()==limit);
+        typed={};typed.text=U"中\n\x7f\u0080😀";result=editor.Update(value,state,config,typed);assert(!result.edited && state.replaceOnType);
+        typed={};typed.text=U"New";editor.Update(value,state,config,typed);assert(value=="New" && !state.replaceOnType);
+        typed={};typed.erase=true;editor.Update(value,state,config,typed);assert(value=="Ne");
+        typed={};typed.controls.confirm=true;result=editor.Update(value,state,config,typed);assert(result.action==NameEntryAction::Submit && value=="Ne");
+        typed.text=U"BAD";typed.controls.back=true;typed.erase=true;
+        result=editor.Update(value,state,config,typed);assert(result.action==NameEntryAction::Cancel && value=="Ne");
+        // 屏幕字符、空格、删除与操作按钮和物理输入使用同一编辑状态。
+        const auto click=[&](Rectangle rect) {NameEntryInput input;input.controls=Pointer(rect.x+rect.width/2,rect.y+rect.height/2,true);return editor.Update(value,state,config,input);};
+        state.replaceOnType=true;click(layout.Character(0));assert(value=="A");
+        click(layout.Character(NameEntryState::kKeyCount-1));assert(value=="A ");click(layout.Action(2));assert(value=="A");
+        result=click(layout.Action(0));assert(result.action==NameEntryAction::Submit);
+        result=click(layout.Action(1));assert(result.action==NameEntryAction::Cancel);
+        assert(!NameEntry::Valid("",config) && !NameEntry::Valid("   ",config) && !NameEntry::Valid("中文",config));
+        assert(!NameEntry::Valid(std::string(limit+1,'A'),config) && !NameEntry::Valid("A\t",config));
+        // 初次按Enter只提交默认保存焦点；键盘直接打字后不会激活先前选择的字符按钮。
+        state.selected=2;typed={};typed.text=U"Z";typed.controls.confirm=true;
+        result=editor.Update(value,state,config,typed);assert(result.action==NameEntryAction::Submit && value=="AZ");
+    }
+    // 鼠标字符表完整覆盖95个可打印ASCII，方向键按行列而非串行编号移动。
+    std::string characters;NameEntryState keys;
+    for(int i=0;i<NameEntryState::kKeyCount;++i) {
+        std::string value;NameEntryInput click;const auto rect=layout.Character(i);
+        click.controls=Pointer(rect.x+rect.width/2,rect.y+rect.height/2,true);editor.Update(value,keys,{8},click);
+        assert(value.size()==1 && characters.find(value)==std::string::npos);characters+=value;
+    }
+    assert(characters.size()==95);
+    keys.selected=0;NameEntryInput arrows;arrows.controls.horizontal=-1;std::string value;
+    editor.Update(value,keys,{8},arrows);assert(keys.selected==15);
+    arrows.controls={};arrows.controls.vertical=1;editor.Update(value,keys,{8},arrows);assert(keys.selected==31);
+    for(Vector2 size:{Vector2{390,844},{800,600},{1100,760},{3440,1440}}) {
+        const NameEntryLayout responsive(size.x,size.y);const auto panel=responsive.Panel();
+        const auto inside=[&](Rectangle rect) {
+            assert(rect.x>=panel.x && rect.y>=panel.y && rect.x+rect.width<=panel.x+panel.width+.001F && rect.y+rect.height<=panel.y+panel.height+.001F);
+        };
+        inside(responsive.Field());for(int i=0;i<NameEntryState::kKeyCount;++i)inside(responsive.Character(i));
+        for(int i=0;i<3;++i)inside(responsive.Action(i));
+        assert(panel.y+panel.height<=CommandBar::ContentHeight(size.x,size.y)+.001F);
+    }
+}
 void TestLayoutAndMotion() {
     const Canvas minimized(0,0);assert(std::isfinite(minimized.scale));
     const auto canvas=Canvas::Full(800,600,400,400);
@@ -88,6 +138,6 @@ void TestCommandBar() {
 }
 }
 int main() {
-    TestSelection();TestComponents();TestLayoutAndMotion();TestCommandBar();
+    TestSelection();TestComponents();TestNameEntry();TestLayoutAndMotion();TestCommandBar();
     std::puts("Independent UI selection, components, cancellation, layout and motion passed.");
 }

@@ -48,7 +48,7 @@ void Player::Reset() { *this = Player{}; }
 
 void Player::ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot) {
     lives_ = std::clamp(extraLives, 1, 5);
-    bombs_ = std::clamp(bombs, 0, 3);
+    bombs_ = respawnBombs_ = std::clamp(bombs, 0, 3);
     challenge_ = challenge;
     shot_ = shot;
     netMisses_ = 0;
@@ -191,7 +191,7 @@ bool Player::TakeHit() {
     ++netMisses_;
     if (!challenge_) --lives_;
     AdjustPower(-16);
-    bombs_ = std::max(bombs_, 2);
+    bombs_ = respawnBombs_;
     ResetPose();
     invulnerableTimer_ = 2.8F;
     return lives_ >= 0;

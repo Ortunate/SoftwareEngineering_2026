@@ -697,7 +697,7 @@ void RunPlayerTests() {
     assert(!hit.active);
     assert(player.TakeHit());
     assert(player.RemainingLives() == 3);
-    assert(player.Bombs() == 2);
+    assert(player.Bombs() == 3);
     assert(player.Power() == Player::kMinPower);
     Bullet protectedHit{};
     protectedHit.active = true;

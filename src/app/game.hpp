@@ -505,7 +505,7 @@ private:
     int mouseSensitivity_ = 100;
     bool aimAssistEnabled_ = true;
     int soundVolume_ = 60;
-    int initialLives_ = 2;
+    int initialLives_ = 3;
     int initialBombs_ = 3;
     int bestScore_ = 0;
     StageHighScores stageHighScores_{}; // 标准/挑战分开记录整关通关及失败分数，符卡练习和预览不写入。

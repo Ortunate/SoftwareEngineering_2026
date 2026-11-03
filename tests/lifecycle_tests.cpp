@@ -456,10 +456,10 @@ struct GameLifecycleProbe {
             bool CanTakeDamage() const override {return false;}
         };
         game.StartPreview();game.stage_=StageDirector{};
-        const auto reset=[&] {
+        const auto reset=[&](int bombs=3,bool challenge=false) {
             game.ClearPlayerBomb();game.actors_.Clear();game.boss_.reset();game.bullets_.Reset();
             game.actorEffects_.Clear();game.drops_.Clear();game.dialogueActive_=false;game.state_=RunState::Playing;
-            game.player_.Reset();game.player_.ConfigureRun(3,3,false,ShotType::HomingAmulet);
+            game.player_.Reset();game.player_.ConfigureRun(3,bombs,challenge,ShotType::HomingAmulet);
             game.player_.SetInvulnerability(0);game.player_.AdjustPower(72);game.player_.SyncCamera(game.camera_);
             game.missCount_=game.graze_=0;game.score_=0;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -501,7 +501,15 @@ struct GameLifecycleProbe {
             assert(shot->active==(mode!=0));
             if(mode==1) {game.ClearActorsWithEffects();assert(game.actorEffects_.Pool().ActiveCount()==0);}
         }
-        game.Reset();std::cout<<"Player/enemy/Boss body contacts and protection gates passed\n";
+        // 经过真实碰撞/Miss结算恢复本局Bomb设置，包括零库存及高于设置值的拾取库存。
+        for(bool challenge:{false,true})for(int stock=0;stock<=3;++stock) {
+            reset(stock,challenge);game.player_.CollectResources(0,8);
+            auto* hit=game.bullets_.Spawn(BulletOwner::Enemy,game.player_.Position(),{},.1F,RED,stage1::kBlueBullet);assert(hit);
+            game.ResolveCollisions();
+            assert(game.missCount_==1&&game.player_.Bombs()==stock);
+            assert(game.player_.RemainingLives()==(challenge?4:3));
+        }
+        game.Reset();std::cout<<"Player/enemy/Boss body contacts, configured respawn Bombs and protection gates passed\n";
     }
 
     /// @brief 独立绘制世界，检查四边没有留黑，左右边缘随镜头变化，防止旧侧栏或裁切恢复。

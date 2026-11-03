@@ -38,18 +38,37 @@ void TestChallengeLifeCredits() {
         player.CollectResources(1,1);
         assert(player.NetMisses()==(challenge?-1:0)&&player.RemainingLives()==(challenge?3:4)&&player.Bombs()==2);
         assert(player.TakeHit());assert(player.NetMisses()==(challenge?0:1));
-        assert(player.RemainingLives()==3);
+        assert(player.RemainingLives()==3&&player.Bombs()==1);
         player.CollectResources(2,0);assert(player.NetMisses()==(challenge?-2:1));
         const auto count=player.NetMisses();const auto lives=player.RemainingLives();
         player.ResetPose();assert(player.NetMisses()==count&&player.RemainingLives()==lives);
         for(const auto reward:{std::array{-1,1},std::array{1,-1}}) {
             bool rejected=false;try {player.CollectResources(reward[0],reward[1]);}catch(const std::invalid_argument&) {rejected=true;}
-            assert(rejected&&player.NetMisses()==count&&player.RemainingLives()==lives&&player.Bombs()==2);
+            assert(rejected&&player.NetMisses()==count&&player.RemainingLives()==lives&&player.Bombs()==1);
         }
         player.CollectResources(20,20);
         assert(player.NetMisses()==(challenge?-22:1)&&player.RemainingLives()==(challenge?3:9)&&player.Bombs()==8);
         player.ConfigureRun(2,1,challenge,ShotType::Needle);assert(player.NetMisses()==0);
         player.CollectResources(1,0);player.Reset();assert(player.NetMisses()==0);
+    }
+}
+
+/// @brief 四机体、双模式及0～3配置均按本局设置恢复Bomb；验证高库存截回、消耗后补回和姿态重置保留。
+void TestRespawnBombStock() {
+    using namespace koumakyou;
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int shot=0;shot<4;++shot)for(bool challenge:{false,true})for(int stock=0;stock<=3;++stock) {
+        Player player;player.ConfigureRun(3,stock,challenge,static_cast<ShotType>(shot));
+        assert(player.Bombs()==stock);
+        player.CollectResources(0,8);assert(player.Bombs()==8);
+        assert(player.TakeHit()&&player.Bombs()==stock);
+        const bool used=player.Update(0,{.bomb=true},*bullets,0,1,true);
+        assert(used==(stock>0)&&player.Bombs()==std::max(0,stock-1));
+        const auto remaining=player.Bombs();player.ResetPose();assert(player.Bombs()==remaining);
+        assert(player.TakeHit()&&player.Bombs()==stock);
+        player.ConfigureRun(3,(stock+1)%4,challenge,static_cast<ShotType>(shot));
+        assert(player.TakeHit()&&player.Bombs()==(stock+1)%4);
+        player.Reset();assert(player.Bombs()==3&&player.TakeHit()&&player.Bombs()==3);
     }
 }
 
@@ -280,6 +299,7 @@ void TestEnemyBodyContacts() {
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
     TestChallengeLifeCredits();
+    TestRespawnBombStock();
     TestBossHealthGroups();
     TestBeamContacts();
     TestBeamRepeatGraze();

@@ -26,7 +26,7 @@ void RunSettingsTests() {
         { std::ofstream out(path);out<<config; }
         assert(LoadOrCreateSettings(path).aimAssistEnabled);
     }
-    assert(defaults.soundVolume == 60 && defaults.initialLives == 2 && defaults.initialBombs == 3);
+    assert(defaults.soundVolume == 60 && defaults.initialLives == 3 && defaults.initialBombs == 3);
     assert(defaults.lastSelection.character == 0 && defaults.lastSelection.shot == 0 && !defaults.lastSelection.challenge && defaults.lastSelection.practicePhase == 2);
     assert(defaults.bindings.focus == MouseBinding(MOUSE_BUTTON_RIGHT));
     assert(defaults.bindings.descend == KEY_LEFT_SHIFT);
@@ -91,7 +91,7 @@ void RunSettingsTests() {
     assert(repaired.bindings.forward == KEY_W); // 与射击主键重复，回退键位组。
     { std::ofstream out(path); out << "version=3\nsound_volume=101\ninitial_lives=0\ninitial_bombs=4\nbest_score=-1\n"; }
     const auto stock = LoadOrCreateSettings(path);
-    assert(stock.soundVolume == 60 && stock.initialLives == 2 && stock.initialBombs == 3 && stock.bestScore == 0);
+    assert(stock.soundVolume == 60 && stock.initialLives == 3 && stock.initialBombs == 3 && stock.bestScore == 0);
     // 完整旧默认配置升级，同时清除备用字段；新版自定义旧默认键码必须能往返保存。
     { std::ofstream out(path); out << "version=3\nfocus=1003\nfire=90\nbomb=88\npause=80\nfire_alt=1000\nbomb_alt=1001\n"; }
     const auto migrated = LoadOrCreateSettings(path);

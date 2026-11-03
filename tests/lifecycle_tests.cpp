@@ -4284,7 +4284,7 @@ struct GameLifecycleProbe {
         game.StartPreview();
     }
 
-    /// @brief 对照混合显示步长下的真实输入轨迹与回放，检查单关录制边界及非一面入口拒绝录制。
+    /// @brief 对照混合显示步长下的真实输入轨迹与回放，检查单关录制边界、多关卡入口恢复和跨关录制生命周期。
     /// 短轨迹只验证输入、种子和120Hz缓存一致性，不代替完整通关录像的终局验收。
     static void TestReplayAdaptation(Game& game) {
         game.EnterMainMenu();game.stageId_=StageId::Stage1;game.selectedDifficulty_=1;
@@ -4340,13 +4340,75 @@ struct GameLifecycleProbe {
         game.EndStage(RunState::GameOver);game.actorEffects_.Clear();game.externalEffects_.Clear();
         game.UpdateState(0);assert(game.state_==RunState::GameOver&&game.ReplaySaveModalOpen());
         game.EnterMainMenu();
-        for(const auto stage:{StageId::Stage1,StageId::Stage2}) {
-            game.stageId_=stage;game.selectedDifficulty_=stage==StageId::Stage1?2:1;
+        // 实际资源入口覆盖主线四难度、后续关卡、Extra，以及共享phase的不同符卡。
+        const auto checkEntry=[&](StageId stage,int difficulty,bool practice,const spell::Card* card=nullptr) {
+            std::cout<<"Replay entry: stage "<<StageNumber(stage)<<", difficulty "<<difficulty<<", spell "<<(card?card->number:0)<<"\n";
+            game.EnterMainMenu();game.stageId_=stage;game.selectedDifficulty_=difficulty;
+            game.practiceMode_=practice;game.spellPractice_=card!=nullptr;game.challengeMode_=false;
+            if(card)game.spellSelection_={.stage=card->stage,.group=card->group,.difficulty=card->difficulty,.character=0};
             game.StartRun(false,true);game.captureCursor_=true;game.PrepareReplay();
-            assert(game.replayMode_==replay::Mode::Idle&&!game.CanSaveReplay());
+            assert(game.replayMode_==replay::Mode::Recording);
+            for(int frame=0;frame<48;++frame)game.Update(steps[frame%4]);
+            const auto position=game.player_.Position();const auto power=game.player_.Power();
+            auto recorded=game.replayData_;replay::FinishSession(recorded,game.ReplayResult());
+            std::string error;assert(replay::CanPlay(recorded,error));
+            if(stage==StageId::Extra && !card) {
+                // 胜利直达成绩页的路线也必须先选存录像，不能被后续菜单清空。
+                game.BeginStageClear();game.stageClearSeconds_=10;game.Update(1.0F/120);
+                assert(game.ReplaySaveModalOpen() && game.CanSaveReplay() && game.replayData_.result.won);
+                game.EnterMainMenu();
+            }
+            if(stage==StageId::Stage2 && difficulty==0 && !card) {
+                game.EndStage(RunState::GameOver);replay::FinishSession(game.replayData_,game.ReplayResult());
+                game.replayMode_=replay::Mode::Idle;game.replaySaveState_=Game::ReplaySaveState::Ready;game.state_=RunState::GameOver;
+                PlayAutomationEvent({0,2,{KEY_ESCAPE,0,0,0}});game.UpdateState(0);
+                PlayAutomationEvent({0,1,{KEY_ESCAPE,0,0,0}});
+                assert(game.ReplaySaveModalOpen() && game.replayAfterSave_==Game::ReplayAction::StageSelection);
+                game.EnterMainMenu();
+            }
+            game.PlayReplay(recorded);game.StartRun(false,true);
+            assert(game.stageId_==stage && game.selectedDifficulty_==difficulty);
+            if(card)assert(spell::Find(game.spellSelection_.stage,game.spellSelection_.group,game.spellSelection_.difficulty)->number==card->number);
+            for(int guard=0;game.replayCursor_<recorded.frames.size();++guard) {
+                assert(guard<1000);game.Update(1.0F/60,1.0F/60);
+            }
+            assert(BulletSystem::Length(game_math::Subtract(game.player_.Position(),position))<1e-5F);
+            assert(game.player_.Power()==power);
+        };
+        for(int difficulty=0;difficulty<4;++difficulty) {
+            checkEntry(StageId::Stage1,difficulty,false);
+            checkEntry(StageId::Stage2,difficulty,true);
         }
+        checkEntry(StageId::Stage6,3,true);checkEntry(StageId::Extra,1,false);
+        checkEntry(StageId::Stage1,2,true,spell::Find(0,1,2));
+        checkEntry(StageId::Stage5,1,true,spell::Find(4,1,1));
+        checkEntry(StageId::Extra,1,true,spell::Find(6,12,4));
+        // 模拟真实结算出口，确认结算等待输入属于旧关、加载不录制、次关保留累计库存和输入。
         game.EnterMainMenu();game.stageId_=StageId::Stage1;game.selectedDifficulty_=1;
-        std::cout<<"Replay fixed-step inputs, seeded trajectory and unsupported-entry guards passed\n";
+        game.practiceMode_=game.spellPractice_=false;game.StartRun(false,true);game.captureCursor_=true;game.PrepareReplay();
+        game.Update(1.0F/120);game.BeginStageClear();assert(!game.replayEnded_);
+        game.stageClearSeconds_=10;game.Update(1.0F/120);
+        assert(game.state_==RunState::Loading && game.replayMode_==replay::Mode::Recording);
+        assert(game.replayData_.segments.size()==1 && game.replayData_.segments[0].end==game.replayData_.frames.size());
+        const auto boundary=game.replayData_.frames.size();const auto exit=game.replayData_.segments[0].result;
+        game.assets_.LoadStage(game.stageContent_->Assets());game.CompleteStartRun();
+        assert(game.stageId_==StageId::Stage2 && game.replayData_.segments.size()==2);
+        const auto& second=game.replayData_.segments[1];
+        assert(second.begin==boundary && second.score==exit.score && second.lives+1==exit.lives && second.power==exit.power);
+        game.Update(1.0F/120);assert(game.replayData_.frames.size()==boundary+1);
+        // 后退定位必须恢复首关，而不是从当前二面重新开始。
+        auto multiple=game.replayData_;replay::FinishSession(multiple,game.ReplayResult());
+        game.PlayReplay(multiple);game.StartRun(false,true);
+        // 隔离长战斗，将播放推进到同一个真实结算出口；仍由Update消费录制的切关步骤。
+        game.BeginStageClear();game.stageClearSeconds_=10;game.replayCursor_=boundary-1;
+        game.Update(1.0F/120,1.0F/120);
+        assert(game.state_==RunState::Loading && game.replaySegment_==1 && !game.replayFinished_);
+        assert(game.replayCursor_==boundary);
+        game.assets_.LoadStage(game.stageContent_->Assets());game.CompleteStartRun();
+        assert(game.stageId_==StageId::Stage2 && !game.replayFinished_);
+        game.SeekReplay(0);assert(game.stageId_==StageId::Stage1 && game.replayCursor_==0 && game.replaySegment_==0);
+        game.EnterMainMenu();game.stageId_=StageId::Stage1;game.selectedDifficulty_=1;
+        std::cout<<"Replay fixed-step inputs, all entry identities and campaign boundaries passed\n";
     }
 
     /// @brief 以正式玩家更新、原 ANM 和 Game::Draw 录制两款副机；8 秒包含 Focus 按下和松开。

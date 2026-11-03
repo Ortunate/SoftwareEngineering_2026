@@ -127,7 +127,8 @@ void Game::SeekReplay(double seconds) {
     if(target==replayCursor_) {replaySeeking_=false;return;}
     if(target<replayCursor_) {
         assets_.SetMusicVolumePercent(0);assets_.SetSoundVolumePercent(0);replayAudioMuted_=true;
-        // 当前仅有一面；未来解析片段后使用目标关入口资源，仍走同一初始化和输入推进路径。
+        // 从整轮首入口重算，确保跨关库存、rank和种子走相同路径。
+        RestoreReplayEntry();replaySegment_=0;
         StartRun(false,true);replayCursor_=0;replayMusicSince_=0;replayMusicSlot_=assets_.MusicIdentity();
     }
     replayTarget_=target;replaySeeking_=true;replayFinished_=false;replayEnded_=false;replayBudget_=0;replayStatus_.clear();

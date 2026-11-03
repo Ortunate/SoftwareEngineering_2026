@@ -1,5 +1,8 @@
 // 本文件实现带校验和、兼容标识与长度限制的录像二进制格式；整数统一小端，浮点保留 IEEE 位模式。
 #include "replay/replay.hpp"
+#include "stage/catalog.hpp"
+#include "app/spell_practice.hpp"
+#include "gameplay/combat/rank.hpp"
 #include <bit>
 #include <cmath>
 #include <fstream>
@@ -39,7 +42,7 @@ void Validate(const Data& d) {
     for(const auto& segment:d.segments) {
         Require(segment.begin==boundary && segment.end>segment.begin && segment.end<=d.frames.size() && static_cast<unsigned>(segment.difficulty)<=4,"录像片段边界无效");
         Require(segment.lives<=1000 && segment.bombs<=1000 && segment.power>=8 && segment.power<=128 && segment.rank<=32,"录像入口资源无效");
-        Require((d.route=="extra")== (segment.difficulty==Difficulty::Extra),"录像路线与难度不匹配");boundary=segment.end;
+        Require((segment.stage=="extra")== (segment.difficulty==Difficulty::Extra),"录像关卡与难度不匹配");boundary=segment.end;
     }
     Require(d.segments.empty() || boundary==d.frames.size(),"录像片段不完整");
     const auto& h=d.header;
@@ -131,15 +134,58 @@ void BeginSession(Data& data,const Header& header) { data={};data.header=header;
 void BeginStage(Data& data,Segment s) { if(!data.segments.empty() && data.segments.back().end==0)throw std::invalid_argument("上一片段未结束");s.begin=static_cast<unsigned>(data.frames.size());s.end=0;data.segments.push_back(s); }
 void EndStage(Data& data,const Result& result) { if(data.segments.empty() || data.segments.back().end!=0)throw std::invalid_argument("没有打开的片段");data.segments.back().end=static_cast<unsigned>(data.frames.size());data.segments.back().result=result; }
 void FinishSession(Data& data,const Result& result) { if(!data.segments.empty() && data.segments.back().end==0)EndStage(data,result);data.result=result; }
+bool ResolveEntry(const Segment& segment,Entry& entry) {
+    Entry resolved;resolved.stage=-1;resolved.difficulty=static_cast<int>(segment.difficulty);
+    for(int i=0;i<7;++i)if(segment.stage==(i==6?"extra":"stage"+std::to_string(i+1)))resolved.stage=i;
+    if(resolved.stage<0 || resolved.difficulty<0 || resolved.difficulty>4 ||
+       ((resolved.stage==6)!=(resolved.difficulty==4)))return false;
+    if(segment.entry=="spell") {
+        for(const auto& card:spell::Cards()) {
+            // 兼容早期一面录像的语义名称；新录像统一保存原典符卡编号。
+            const bool legacy=(card.stage==0 && card.difficulty==1 &&
+                ((card.phase==2 && segment.target=="rumia-night-bird") || (card.phase==4 && segment.target=="rumia-demarcation")));
+            if(card.stage==resolved.stage && card.difficulty==resolved.difficulty &&
+               (segment.target=="spell-"+std::to_string(card.number) || legacy)) {
+                resolved.spellNumber=card.number;resolved.group=card.group;resolved.phase=card.phase;
+                entry=resolved;return true;
+            }
+        }
+        return false;
+    }
+    if(segment.entry!="stage" || !segment.target.empty())return false;
+    entry=resolved;return true;
+}
 bool CanPlay(const Data& d,std::string& error) {
     try {Validate(d);}catch(const std::exception& e){error=e.what();return false;}
     if(d.simulation!=SimulationId() || d.content!=ContentId()){error="模拟或内容版本不兼容";return false;}
-    if(d.segments.size()!=1 || d.segments[0].stage!="stage1" || d.segments[0].difficulty!=Difficulty::Normal || (d.route!="stage1-prototype" && d.route!="stage-practice" && d.route!="spell-practice")){error="录像内容尚未实现";return false;}
-    const auto& h=d.header;const auto& segment=d.segments.front();
-    const auto expectedShot=std::array<const char*,4>{"reimu-a","reimu-b","marisa-a","marisa-b"}.at(h.shot);
-    if(d.shot!=expectedShot || d.character!=(h.shot<2?"reimu":"marisa") || d.rules!=(h.challenge?"challenge":"standard") ||
-       d.continues!=0 || d.route!=(h.spell?"spell-practice":h.practice?"stage-practice":"stage1-prototype") || h.lives>5 || h.bombs>3 || (h.phase!=2 && h.phase!=4) || segment.seed!=h.seed || segment.lives!=h.lives || segment.bombs!=h.bombs || segment.score!=0 ||
-       segment.power!=(h.spell?128u:8u) || segment.rank!=16 || segment.target!=(h.spell?(h.phase==2?"rumia-night-bird":"rumia-demarcation"):"") || segment.entry!=(h.spell?"spell":"stage")) {error="录像入口配置与当前内容不匹配";return false;}
+    const auto reject=[&](){error="录像入口配置与当前内容不匹配";return false;};
+    const auto& h=d.header;const auto& first=d.segments.front();
+    const bool legacy=d.route=="stage1-prototype";
+    const bool campaign=d.route=="campaign";
+    const auto expectedRoute=h.spell?"spell-practice":h.practice?"stage-practice":first.stage=="extra"?"extra":"campaign";
+    if((!legacy && d.route!=expectedRoute) || (legacy && (h.practice || first.stage!="stage1" || first.difficulty!=Difficulty::Normal || d.segments.size()!=1)) ||
+       d.shot!=std::array<const char*,4>{"reimu-a","reimu-b","marisa-a","marisa-b"}.at(h.shot) ||
+       d.character!=(h.shot<2?"reimu":"marisa") || d.rules!=(h.challenge?"challenge":"standard") ||
+       d.continues!=0 || h.lives>5 || h.bombs>3 || first.seed!=h.seed || first.lives!=h.lives || first.bombs!=h.bombs ||
+       first.score!=0 || first.power!=(h.spell?128u:8u) || (!campaign && d.segments.size()!=1))return reject();
+    for(std::size_t i=0;i<d.segments.size();++i) {
+        const auto& segment=d.segments[i];Entry entry;
+        if(segment.seed!=h.seed || !ResolveEntry(segment,entry) || (h.spell!=(entry.spellNumber!=0)))return reject();
+        const auto stage=*SpellPracticeStage(entry.stage);
+        const auto difficulty=entry.stage==6?native_combat::Difficulty::Normal:*native_combat::DifficultyFromIndex(entry.difficulty);
+        const auto kind=h.spell?StageEntry::SpellPractice:h.practice?StageEntry::Practice:entry.stage==6?StageEntry::Extra:StageEntry::Campaign;
+        if(!SupportsStage(stage,difficulty,kind) || (h.spell && (!spell::Playable(spell::Find(entry.stage,entry.group,entry.difficulty),h.shot) || h.phase!=static_cast<unsigned>(entry.phase))))return reject();
+        if(i==0 && segment.rank!=static_cast<unsigned>(rank::Initial(StageNumber(stage),difficulty)) &&
+           !(segment.stage=="stage1" && segment.difficulty==Difficulty::Normal && segment.rank==16))return reject();
+        if(campaign && (entry.stage!=static_cast<int>(i) || segment.difficulty!=first.difficulty))return reject();
+        if(i>0) {
+            const auto& previous=d.segments[i-1];
+            if(!previous.result.won || segment.score!=previous.result.score || segment.lives!=(previous.result.lives?previous.result.lives-1:0) || segment.power!=previous.result.power)return reject();
+        }
+    }
+    if(campaign && (d.segments.size()>(first.difficulty==Difficulty::Easy?5u:6u) ||
+       (d.result.won && d.segments.size()!=(first.difficulty==Difficulty::Easy?5u:6u))))return reject();
+    if(d.segments.back().result!=d.result)return reject();
     error.clear();return true;
 }
 }

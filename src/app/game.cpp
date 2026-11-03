@@ -138,7 +138,7 @@ void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
         stageId_==StageId::Extra ? StageEntry::Extra : StageEntry::Campaign;
     if(!requestedDifficulty||!SupportsStage(stageId_,*requestedDifficulty,entry))
         throw std::invalid_argument("Unsupported run identity");
-    if(replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear(); replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
+    if(!continuingStage && replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear(); replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
     replayEnded_=false;
     playerBodyAnimation_={};playerBodyAction_=0;playerBodySince_=0;
     FinishSpellRecord(false);
@@ -208,7 +208,6 @@ void Game::UpdateLoading(float deltaTime) {
 void Game::CompleteStartRun() {
     const auto& particle=assets_.GetVisual(stage_assets::kExternalParticle);
     if(particle.archive)externalEffects_.Bind(*particle.archive,stage_assets::kExternalParticle);
-    PrepareReplay();
     assets_.PlayStageMusic();
     state_ = RunState::Playing;
     playerOptionAnimations_ = {};
@@ -232,6 +231,7 @@ void Game::CompleteStartRun() {
     stage_.Reset();
     battleTicks_=0;pendingPlayerInput_={};pendingDialogueConfirm_=false;
     stageGraze_=stagePointItems_=0;
+    PrepareReplay();
     continuingStage_=false;
     screenFlashTimer_ = 0.0F;
     spellCutInTimer_ = 0.0F;
@@ -349,8 +349,8 @@ void Game::AwardStageClear() {
 void Game::BeginStageClear() {
     if(state_==RunState::StageClear)return;
     AwardStageClear();
-    // 当前录像以单关内容为边界；先封存一面结果，后续连续闯关不写进一面输入流。
-    if(replayMode_!=replay::Mode::Idle)replayEnded_=true;
+    // 练习按单关封存；主线和Extra保留结算输入，直到整轮胜负确定。旧一面录像保持原边界。
+    if(replayMode_!=replay::Mode::Idle && (practiceMode_ || replayData_.route=="stage1-prototype"))replayEnded_=true;
     bullets_.Reset(); drops_.Clear();ClearPlayerBomb();
     spellCutInTimer_=screenFlashTimer_=0;
     state_=RunState::StageClear;
@@ -635,10 +635,10 @@ void Game::UpdateState(float deltaTime) {
         }
         if (input.back) {
             if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
-            else if(practiceMode_ && !spellPractice_)ReturnToPracticeStage(); else EnterMainMenu();
+            else RequestReplayAction(practiceMode_?ReplayAction::StageSelection:ReplayAction::Menu);
             return;
         }
-        if(IsKeyPressed(KEY_M)) {if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();else EnterMainMenu();return;}
+        if(IsKeyPressed(KEY_M)) {if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();else RequestReplayAction(ReplayAction::Menu);return;}
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         std::array<ui::Item,menu::kResultCount> items{};
         for (int index = 0; index < menu::kResultCount; ++index)
@@ -652,8 +652,7 @@ void Game::UpdateState(float deltaTime) {
             if(selectedResultItem_==2)RequestReplayAction(ReplayAction::Stay);
             else if (selectedResultItem_ == 0) RequestReplayAction(ReplayAction::Retry);
             else if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
-            else if(practiceMode_ && !spellPractice_)ReturnToPracticeStage();
-            else EnterMainMenu();
+            else RequestReplayAction(practiceMode_?ReplayAction::StageSelection:ReplayAction::Menu);
         }
         return;
     }

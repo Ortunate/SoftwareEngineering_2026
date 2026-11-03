@@ -45,9 +45,12 @@ std::string ReplayDetails(const replay::Data& data) {
     for(std::size_t i=0;i<shots.size();++i)if(data.shot==shots[i] && data.character==(i<2?"reimu":"marisa")) {
         const auto& character=spell::Characters()[i];machine=std::string(character.displayName)+" · "+character.shot;break;
     }
-    const auto mode=data.route=="spell-practice"?"符卡练习":data.route=="stage-practice"?"整关练习":data.route=="stage1-prototype"?"普通流程":data.route.c_str();
+    const auto mode=data.route=="campaign"?"普通流程":data.route=="extra"?"Extra Start":data.route=="spell-practice"?"符卡练习":data.route=="stage-practice"?"整关练习":data.route=="stage1-prototype"?"普通流程":data.route.c_str();
     const auto rules=data.rules=="challenge"?"挑战模式":data.rules=="standard"?"标准模式":data.rules.c_str();
-    const auto target=entry.target=="rumia-night-bird"?"夜符 Night Bird":entry.target=="rumia-demarcation"?"暗符 Demarcation":entry.target.c_str();
+    std::string target=entry.target=="rumia-night-bird"?"夜符 Night Bird":entry.target=="rumia-demarcation"?"暗符 Demarcation":entry.target.c_str();
+    replay::Entry resolved;
+    if(replay::ResolveEntry(entry,resolved) && resolved.spellNumber)
+        target=spell::Find(resolved.stage,resolved.group,resolved.difficulty)->name;
     std::ostringstream out;
     out<<data.name<<"\n关卡 "<<stages<<"\n难度 "<<difficulties<<"\n"<<machine
        <<"\n"<<mode<<" · "<<rules;
@@ -77,26 +80,42 @@ replay::Header Game::ReplayHeader() const {
     return {1,static_cast<unsigned>(selectedCharacter_*2+selectedShot_),static_cast<unsigned>(initialLives_),static_cast<unsigned>(initialBombs_),static_cast<unsigned>(spellPractice_?practiceAttack_:2),practiceMode_,spellPractice_,challengeMode_};
 }
 replay::Result Game::ReplayResult() const {
-    return {static_cast<std::uint64_t>(std::max(0LL,score_)),static_cast<unsigned>(std::max(0,player_.RemainingLives())),static_cast<unsigned>(player_.Power()),static_cast<unsigned>(missCount_),static_cast<unsigned>(bombCount_),(state_==RunState::StageClear || finishResult_==RunState::Won)};
+    return {static_cast<std::uint64_t>(std::max(0LL,score_)),static_cast<unsigned>(std::max(0,player_.RemainingLives())),static_cast<unsigned>(player_.Power()),static_cast<unsigned>(missCount_),static_cast<unsigned>(bombCount_),(state_==RunState::StageClear || state_==RunState::Won || (state_==RunState::Finishing && finishResult_==RunState::Won))};
 }
 void Game::PrepareReplay() {
     if(replayMode_!=replay::Mode::Playback) {
-        auto header=ReplayHeader();header.seed=std::random_device{}();replay::BeginSession(replayData_,header);
-        replayData_.route=spellPractice_?"spell-practice":practiceMode_?"stage-practice":"stage1-prototype";
+        if(!continuingStage_) {
+            auto header=ReplayHeader();header.seed=std::random_device{}();replay::BeginSession(replayData_,header);
+            replayData_.route=spellPractice_?"spell-practice":practiceMode_?"stage-practice":stageId_==StageId::Extra?"extra":"campaign";
+            replaySaveState_=ReplaySaveState::None;
+            bool eligible=captureCursor_ && !previewMode_;
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+            eligible=eligible && !debugInvincible_ && !loadingShotTest_;
+#endif
+            replayMode_=eligible?replay::Mode::Recording:replay::Mode::Idle;
+        }
+        // 入口快照在库存/rank初始化后采样；符卡开局火力在Boss定位后补满，快照仍描述战斗入口。
         replay::Segment segment;
-        // 身份始终来自当前入口；录制资格单独限制，不能将未支持的关卡伪装为一面。
         segment.stage=stageId_==StageId::Extra?"extra":"stage"+std::to_string(StageNumber(stageId_));
         segment.difficulty=stageId_==StageId::Extra?replay::Difficulty::Extra:static_cast<replay::Difficulty>(native_combat::DifficultyIndex(runDifficulty_));
-        segment.seed=header.seed;segment.lives=header.lives;segment.bombs=header.bombs;segment.power=spellPractice_?128:8;segment.entry=spellPractice_?"spell":"stage";segment.target=spellPractice_?(practiceAttack_==2?"rumia-night-bird":"rumia-demarcation"):"";replay::BeginStage(replayData_,segment);
-        replaySaveState_=ReplaySaveState::None;
-        // 录像解析器尚只支持一面 Normal；其他正式关卡继续可玩，但不能生成身份不实的录像。
-        bool eligible=captureCursor_ && !previewMode_ && stageId_==StageId::Stage1 &&
-            runDifficulty_==native_combat::Difficulty::Normal && (!spellPractice_ || practiceAttack_==2 || practiceAttack_==4);
-#ifdef KOUMAKYOU_DEBUG_FEATURES
-        eligible=eligible && !debugInvincible_ && !loadingShotTest_;
-#endif
-        replayMode_=eligible?replay::Mode::Recording:replay::Mode::Idle;
+        segment.seed=replayData_.header.seed;segment.lives=std::max(0,player_.RemainingLives()-1);segment.bombs=player_.Bombs();
+        segment.power=spellPractice_?128:player_.Power();segment.rank=referenceRank_;segment.score=score_;
+        segment.entry=spellPractice_?"spell":"stage";
+        if(spellPractice_)segment.target="spell-"+std::to_string(spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty)->number);
+        // 未录制的预览跨关不需要保留片段生命周期。
+        if(replayMode_==replay::Mode::Idle && continuingStage_)replayData_.segments.clear();
+        replay::BeginStage(replayData_,segment);
     }
+    if(replayMode_==replay::Mode::Playback) {
+        const auto& segment=replayData_.segments[replaySegment_];
+        if(segment.stage!=(stageId_==StageId::Extra?"extra":"stage"+std::to_string(StageNumber(stageId_))) ||
+           segment.lives!=static_cast<unsigned>(std::max(0,player_.RemainingLives()-1)) || segment.bombs!=static_cast<unsigned>(player_.Bombs()) ||
+           segment.power!=static_cast<unsigned>(spellPractice_?128:player_.Power()) || segment.score!=static_cast<std::uint64_t>(score_) ||
+           (segment.rank!=static_cast<unsigned>(referenceRank_) && !(replaySegment_==0 && segment.rank==16))) {
+            replayStatus_="回放异常 · 关卡入口资源不一致";replayFinished_=replayPaused_=true;
+        }
+    }
+    // 每关重置掉落随机流，首种子由会话固定；关卡脚本自己的固定种子仍由内容管理。
     drops_.ResetRun(replayData_.header.seed);
 }
 replay::Frame Game::ReadRunInput(float dt) const {
@@ -147,12 +166,23 @@ void Game::Update(float dt,float playbackElapsed) {
             const auto& frame=replayData_.frames[replayCursor_];
             if(!replaySeeking_ && replayBudget_<frame.dt)break;
             runInput_=frame;if(!replaySeeking_)replayBudget_-=frame.dt;++replayCursor_;StepRun(frame.dt);
+            const auto& segment=replayData_.segments[replaySegment_];
+            if(replayCursor_==segment.end) {
+                auto result=ReplayResult();
+                if(state_==RunState::Loading && continuingStage_)result.won=true;
+                const bool last=replaySegment_+1==replayData_.segments.size();
+                if(result!=segment.result || (!last && (state_!=RunState::Loading || !continuingStage_))) {
+                    replayStatus_="回放异常 · 关卡边界不一致";replayFinished_=replayPaused_=true;break;
+                }
+                if(!last)++replaySegment_;
+            }
             if(assets_.MusicIdentity()!=replayMusicSlot_) {replayMusicSlot_=assets_.MusicIdentity();replayMusicSince_=replayTimes_[replayCursor_];}
             if(replayEnded_ || replayCursor_==replayData_.frames.size()) {
                 const bool matches=replayEnded_ && replayCursor_==replayData_.frames.size() && ReplayResult()==replayData_.result;
                 replayStatus_=matches?"回放完成 · 结果一致":"回放异常 · 终局或结果不一致";
                 replayFinished_=true;replayPaused_=true;break;
             }
+            if(state_==RunState::Loading)break;
             if(std::chrono::steady_clock::now()-began>std::chrono::milliseconds(6))break;
         }
         if(replaySeeking_ && replayCursor_>=replayTarget_) { replaySeeking_=false;replayBudget_=0; }
@@ -174,11 +204,19 @@ void Game::Update(float dt,float playbackElapsed) {
     // 打开暂停的步骤没有推进战斗；恢复暂停的步骤也不能当作有效输入录制。
     if(recording && state_!=RunState::Paused) {
         replayData_.frames.push_back(runInput_);
+        if(state_==RunState::Loading && continuingStage_) {
+            auto result=ReplayResult();result.won=true;replay::EndStage(replayData_,result);
+        }
         if(replayEnded_) {
             replay::FinishSession(replayData_,ReplayResult());
             replaySaveState_=ReplaySaveState::Ready;
             replayStatus_="Replay 等待保存";
             replayMode_=replay::Mode::Idle;
+            // 主线胜利会直接进入结局/成绩页，必须在这些页面释放本局前完成录像选存。
+            if(!practiceMode_ && state_==RunState::Finishing && finishResult_==RunState::Won) {
+                if(IsCursorHidden())ShowCursor();
+                RequestReplayAction(ReplayAction::Stay);
+            }
         }
     }
 }
@@ -192,15 +230,23 @@ void Game::RestoreReplaySettings() {
     debugInvincible_=replayOriginalDebug_;
 #endif
 }
+void Game::RestoreReplayEntry() {
+    replay::Entry entry;
+    if(!replay::ResolveEntry(replayData_.segments.front(),entry))throw std::logic_error("Invalid replay entry");
+    stageId_=*SpellPracticeStage(entry.stage);
+    selectedDifficulty_=entry.difficulty==4?1:entry.difficulty;
+    spellSelection_={.stage=entry.stage,.group=entry.group,.difficulty=entry.difficulty,.character=static_cast<int>(replayData_.header.shot)};
+    practiceAttack_=entry.phase;
+}
 void Game::PlayReplay(replay::Data data) {
     std::string error;if(!replay::CanPlay(data,error)){replayStatus_=error;return;}
     FinishSpellRecord(false);replayOriginal_=ReplayHeader();
     replayOriginalStage_=stageId_;replayOriginalDifficulty_=selectedDifficulty_;replayOriginalSpell_=spellSelection_;replayData_=std::move(data);
     const auto h=replayData_.header;selectedCharacter_=static_cast<int>(h.shot/2);selectedShot_=static_cast<int>(h.shot%2);
     initialLives_=static_cast<int>(h.lives);initialBombs_=static_cast<int>(h.bombs);practiceAttack_=static_cast<int>(h.phase);
-    practiceMode_=h.practice;spellPractice_=h.spell;challengeMode_=h.challenge;stageId_=StageId::Stage1;
-    selectedDifficulty_=1;spellSelection_={.stage=0,.group=h.phase==2?1:2,.difficulty=1,.character=static_cast<int>(h.shot)};
-    replayMode_=replay::Mode::Playback;replayCursor_=0;replayBudget_=0;replayPaused_=false;replayStatus_.clear();
+    practiceMode_=h.practice;spellPractice_=h.spell;challengeMode_=h.challenge;
+    RestoreReplayEntry();
+    replayMode_=replay::Mode::Playback;replaySegment_=0;replayCursor_=0;replayBudget_=0;replayPaused_=false;replayStatus_.clear();
 #ifdef KOUMAKYOU_DEBUG_FEATURES
     replayOriginalDebug_=debugInvincible_;debugInvincible_=false;
 #endif

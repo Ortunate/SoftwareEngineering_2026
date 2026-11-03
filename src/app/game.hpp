@@ -327,6 +327,9 @@ private:
     void PlayReplay(replay::Data data);
     /// @brief 退出播放或加载失败时还原开局配置；未播放时无副作用。
     void RestoreReplaySettings();
+    /// @brief 从录像首片段恢复入口，倒带时必须先恢复再重新加载，不能从当前关卡重开。
+    void RestoreReplayEntry();
+    std::size_t replaySegment_=0; // 播放中的片段索引；加载时间不占输入步，跨关后递增。
     replay::Mode replayMode_=replay::Mode::Idle;
     replay::Data replayData_{};
     replay::Frame runInput_{};

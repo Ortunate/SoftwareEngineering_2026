@@ -2,6 +2,8 @@
 #include "app/game.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
+#include "resources/music_catalog.hpp"
+#include "ui/components.hpp"
 #include "ui/page.hpp"
 #include "ui/typography.hpp"
 #include "ui/effects.hpp"
@@ -167,18 +169,23 @@ void Game::DrawMenuPage() const {
     ui::DrawPageSurface(canvas,menuMotion_);
     if (state_ == RunState::MusicRoom) {
         Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);
-        constexpr std::array<const char*, 3> names{"比赤色更鲜红的梦", "宛如鬼灯的鲜红之魂", "妖魔夜行"};
-        constexpr std::array<const char*, 3> roles{"Title", "Stage 1", "Rumia"};
-        for (int index = 0; index < 3; ++index) {
-            const auto row=layout.Track(index);
-            const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.025F);
-            DrawRectangleRec(row,Fade(Color{55,30,29,100},reveal));
-            ui::GlowText(font,names[index],{row.x+20*canvas.scale,row.y+14*canvas.scale},26*canvas.scale,
-                         Fade(ui::Blend(kIvory,kGold,weight),reveal),kGold,weight*menuMotion_.Pulse());
-            ui::DrawText(font,roles[index],{row.x+row.width-135*canvas.scale,row.y+(compact?60:25)*canvas.scale},19*canvas.scale,Fade(kGold,reveal));
-            ui::FocusLine({row.x,row.y+row.height},{row.x+row.width,row.y+row.height},canvas.scale,
-                          kGold,weight*reveal,menuMotion_.Phase());
+        constexpr int count=static_cast<int>(music::kTracks.size()),pageSize=menu::PageLayout::kTracksPerPage;
+        const int first=selectedTrack_/pageSize*pageSize;
+        const ui::DrawContext context{font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()};
+        for(int index=first;index<std::min(first+pageSize,count);++index) {
+            const int rowIndex=index-first;const auto row=layout.Track(rowIndex);
+            const float weight=menuMotion_.Weight(rowIndex),reveal=menuMotion_.Reveal(rowIndex*0.025F);
+            auto rowContext=context;rowContext.opacity=reveal;
+            const auto color=ui::SelectableRow{row,index}.Draw(rowContext,weight);
+            const auto& track=music::kTracks[index];
+            const auto title=std::to_string(index+1)+". "+track.title;
+            const auto role=std::string(track.role)+(assets_.MusicRoomTrack()==index?" · 播放中":"");
+            ui::Label{{row.x+16*canvas.scale,row.y,row.width-32*canvas.scale,row.height*0.55F},24}.Draw(rowContext,title.c_str(),color);
+            ui::Label{{row.x+16*canvas.scale,row.y+row.height*0.55F,row.width-32*canvas.scale,row.height*0.4F},17}.Draw(rowContext,role.c_str(),kGold);
         }
+        for(int direction:{-1,1})ui::ArrowButton{layout.TrackPageArrow(direction),direction,direction<0?first>0:first+pageSize<count}.Draw(context);
+        const auto page=std::to_string(first/pageSize+1)+" / "+std::to_string((count+pageSize-1)/pageSize);
+        ui::Label{canvas.Rect(canvas.width/2-80,compact?1010:675,160,42),22,ui::TextAlign::Center}.Draw(context,page.c_str(),kGold);
     } else {
         Text(canvas, font, "CREDIT", canvas.width/2, 110, 50, kGold, true);
         Text(canvas, font, "原作 · 东方红魔乡：新典", canvas.width/2, compact?330:260, 30, kIvory, true);

@@ -63,8 +63,14 @@ struct PageLayout {
     [[nodiscard]] Rectangle Forward() const { return canvas.Rect(compact?380:775,compact?1010:675,compact?340:250,42); }
     /// @brief 选择卡片的设计矩形，index 为 0/1；动画和文字使用它的设计坐标，输入转换后命中。
     [[nodiscard]] Rectangle Choice(int index) const { return {compact?48.0F:640.0F,(compact?680.0F:300.0F)+index*125,compact?664.0F:385.0F,105}; }
-    /// @brief 音乐行的屏幕矩形，index 为 0～2。
-    [[nodiscard]] Rectangle Track(int index) const { return canvas.Rect(compact?48:280,(compact?280:260)+index*(compact?150:95),compact?664:680,compact?100:70); }
+    /// @brief 音乐列表每页六首；Track接受页内0～5编号，输入、绘制和翻页共享此布局。
+    static constexpr int kTracksPerPage=6;
+    [[nodiscard]] Rectangle Track(int index) const { return canvas.Rect(compact?80:150,(compact?210:180)+index*(compact?120:75),compact?600:800,compact?108:66); }
+    /// @brief 公用翻页箭头的屏幕命中区；direction为-1/1，位于页面左右并在内容区垂直居中，避开曲目列表。
+    [[nodiscard]] Rectangle TrackPageArrow(int direction) const {
+        const float inset=compact?22.0F:44.0F;
+        return canvas.Rect(direction<0?inset:canvas.width-inset-44,canvas.height/2-30,44,60);
+    }
 };
 
 /// @brief 改键列表布局；录入提示直接替换对应行的键名，构造参数为窗口逻辑像素。

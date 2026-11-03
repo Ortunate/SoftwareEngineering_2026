@@ -5,7 +5,7 @@
 #include "ui/components.hpp"
 #include "config/settings.hpp"
 #include "render/menu_layout.hpp"
-#include "stages/stage1/content.hpp"
+#include "resources/music_catalog.hpp"
 
 #include <algorithm>
 #include <array>
@@ -64,10 +64,9 @@ void Game::UpdateMainMenu() {
             scoreDifficulty_=lastSelection_.difficulty;
             scorePageFromRun_=false;scoreHighlight_=-1;state_=RunState::Score;break;
         case 6: {
-            // 音乐页借用 Stage 1 的流，离开时 EnterMainMenu 统一停止并释放。
-            stage1::Stage1Content content;
-            assets_.LoadStage(content.Assets());
+            // 试听独立加载音频，避免仅为浏览曲目加载一整关的模型和纹理。
             selectedTrack_ = 0;
+            assets_.PlayMusicRoomTrack(0);
             state_ = RunState::MusicRoom;
             break;
         }
@@ -101,16 +100,28 @@ void Game::UpdateMenuPage() {
         }
         return;
     }
-    // 返回不占据曲目槽位，导航只循环三首曲目。
-    const std::array<ui::Item,3> items{{{0,layout.Track(0)},{1,layout.Track(1)},{2,layout.Track(2)}}};
-    const auto selection=ui::UpdateSelection(items,input,selectedTrack_);
+    constexpr int count=static_cast<int>(music::kTracks.size()),pageSize=menu::PageLayout::kTracksPerPage;
+    const int first=selectedTrack_/pageSize*pageSize;
+    for(int direction:{-1,1}) {
+        const bool enabled=direction<0?first>0:first+pageSize<count;
+        if((enabled && input.horizontal==direction) || ui::ArrowButton{layout.TrackPageArrow(direction),direction,enabled}.Update(input).activated) {
+            selectedTrack_=std::clamp(first+direction*pageSize,0,count-1);
+            assets_.PlaySoundEffect("menu_move");return;
+        }
+    }
+    // 左右只负责翻页；边界处也消费输入，不能退化成选曲或让同帧确认播放旧页曲目。
+    if(input.horizontal!=0)return;
+    std::array<ui::Item,count> items{};
+    for(int index=0;index<count;++index)
+        items[index]={index,index>=first && index<first+pageSize?layout.Track(index-first):Rectangle{-100,-100,0,0}};
+    auto navigation=input;
+    const float wheel=GetMouseWheelMove();
+    if(wheel!=0)navigation.vertical=wheel>0?-1:1;
+    const auto selection=ui::UpdateSelection(items,navigation,selectedTrack_,ui::Navigation::Vertical);
     if(selection.changed)assets_.PlaySoundEffect("menu_move");
     if(!selection.confirmed)return;
     menuMotion_.Confirm();
-    assets_.PlaySoundEffect("menu_confirm");
-    if (selectedTrack_ == 0) assets_.PlayMenuMusic();
-    else if (selectedTrack_ == 1) assets_.PlayStageMusic();
-    else if (selectedTrack_ == 2) assets_.PlayBossMusic();
+    assets_.PlaySoundEffect(assets_.PlayMusicRoomTrack(selectedTrack_)?"menu_confirm":"menu_cancel");
 }
 
 void Game::UpdateOptions() {

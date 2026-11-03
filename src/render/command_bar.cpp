@@ -42,7 +42,9 @@ void Game::DrawCommandBar() const {
                 add("Z / Space / 左键","开始游戏");add("X / Esc / 右键","返回");
             } else menu();
             break;
-        case RunState::MusicRoom:menu("播放");break;
+        case RunState::MusicRoom:
+            add("W / S / ↑↓","选择曲目");add("A / D / ←→","翻页");add("鼠标 / 滚轮","选择");
+            add("Z / Space / 左键","播放");add("X / Esc / 右键","返回");break;
         case RunState::Score:
             add("W / S / ↑↓","切换模式");add("A / D / ←→","切换御札");add("X / Esc / 右键","返回");break;
         case RunState::ScoreSave:menu("确认","选择放弃");break;

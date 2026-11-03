@@ -1,6 +1,7 @@
 // 本文件负责实现通用与关卡素材的加载、音频播放和资源卸载。
 
 #include "resources/asset_manager.hpp"
+#include "resources/music_catalog.hpp"
 #include "gameplay/data/native_sizes.hpp"
 #include "resources/projectile_assets.hpp"
 #include "resources/projectile_paths.hpp"
@@ -445,9 +446,10 @@ void AssetManager::UnloadStage() {
     projectileAssets_.reset();
     // 等待唯一的在途 CPU 解码；随后才能释放清单字符串或销毁图形上下文。
     stageLoad_.reset();
-    if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss || activeMusic_ == MusicSlot::Event) {
+    if (activeMusic_ == MusicSlot::Stage || activeMusic_ == MusicSlot::Boss || activeMusic_ == MusicSlot::Event || activeMusic_ == MusicSlot::Room) {
         SwitchMusic(MusicSlot::None);
     }
+    UnloadMusicAsset(roomMusic_);musicRoomTrack_=-1;
     UnloadSounds(stageSounds_);
     UnloadMusicAsset(stageMusic_);
     UnloadMusicAsset(bossMusic_);
@@ -498,6 +500,7 @@ Music* AssetManager::MusicFor(MusicSlot slot) {
         case MusicSlot::Stage: return &stageMusic_;
         case MusicSlot::Boss: return &bossMusic_;
         case MusicSlot::Event: return &eventMusic_;
+        case MusicSlot::Room: return &roomMusic_;
         case MusicSlot::None: return nullptr;
     }
     return nullptr;
@@ -514,6 +517,17 @@ void AssetManager::SwitchMusic(MusicSlot slot) {
         PlayMusicStream(*next);
         activeMusic_ = slot;
     }
+}
+
+bool AssetManager::PlayMusicRoomTrack(std::size_t index) {
+    const auto& track=music::kTracks.at(index);
+    if(MusicRoomTrack()==static_cast<int>(index))return true;
+    // 先验证新流，失败时不打断旧曲；随后停旧曲再释放，避免音频回调访问失效句柄。
+    Music next=LoadMusicAsset(root_/track.path);
+    if(!IsMusicValid(next))return false;
+    SwitchMusic(MusicSlot::None);UnloadMusicAsset(roomMusic_);
+    roomMusic_=next;musicRoomTrack_=static_cast<int>(index);
+    SetMusicVolumePercent(musicVolumePercent_);SwitchMusic(MusicSlot::Room);return true;
 }
 
 void AssetManager::PlayMenuMusic() { SwitchMusic(MusicSlot::Menu); }
@@ -550,7 +564,7 @@ void AssetManager::ResumeMusic() {
 
 void AssetManager::SetMusicVolumePercent(int percent) {
     musicVolumePercent_ = std::clamp(percent, 0, 100);
-    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_, &eventMusic_}) {
+    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_, &eventMusic_, &roomMusic_}) {
         if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F*musicGain_);
     }
 }

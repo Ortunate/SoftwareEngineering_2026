@@ -9,6 +9,7 @@
 #include "render/postgame_layout.hpp"
 #include "render/spell_practice_layout.hpp"
 #include "ui/ui.hpp"
+#include "resources/music_catalog.hpp"
 #include "raylib.h"
 #include <chrono>
 #include <cstdio>
@@ -44,6 +45,7 @@ struct GameLifecycleProbe {
         for(const char* name:kBindingNames)if(!contains(name))return false;
         for(int key=KEY_SPACE;key<=MouseBinding(MOUSE_BUTTON_BACK);++key)
             if(IsValidBinding(key) && !contains(Game::KeyLabel(key).c_str()))return false;
+        for(const auto& track:music::kTracks)if(!contains(track.title) || !contains(track.role))return false;
         for(const auto& card:spell::Cards())if(!contains(card.name) || !contains(card.user))return false;
         for(const auto& character:spell::Characters())if(!contains(character.name) || !contains(character.title))return false;
         return contains("《》未解锁符卡需以当前组合在关卡内遇见；尚未实现符卡仅供浏览。") && contains("按键设置") && contains("恢复默认键位") && contains("请按下新键") && contains("梦幻夜行绘卷") &&
@@ -124,6 +126,11 @@ struct GameLifecycleProbe {
         game.setupStep_=step;game.UpdateUiMotion(seconds);
     }
     static float CharacterVisibility(const Game& game) { return game.startSetupMotion_.Character(); }
+    /// @brief 从真实首页入口进入Music Room，供分页与资源生命周期回归使用。
+    static void MusicTitle(Game& game) {game.EnterMainMenu();game.selectedMenuItem_=6;game.titleEntrance_.Complete();}
+    static bool MusicOnly(const Game& game) {return !game.assets_.HasStage() && game.assets_.MusicRoomTrack()>=0;}
+    static int PlayingTrack(const Game& game) {return game.assets_.MusicRoomTrack();}
+    static bool MusicReleased(const Game& game) {return !IsMusicValid(game.assets_.roomMusic_);}
     static bool MainMenu(const Game& game) { return game.state_==RunState::MainMenu; }
     static bool EntranceComplete(const Game& game) { return game.titleEntrance_.Finished(); }
     static int MenuSelection(const Game& game) { return game.selectedMenuItem_; }
@@ -694,6 +701,48 @@ void AllPageSizes(koumakyou::Game& game,const std::filesystem::path& screenshots
     SetWindowSize(900,620); Event(7,0,0); Frame(game);
 }
 
+/// @brief 回放完整曲目导航、跨页点击和返回，横竖屏截图共用生产布局；试听不能加载关卡图形。
+void TestMusicRoom(const std::filesystem::path& screenshots) {
+    using namespace koumakyou;using Probe=GameLifecycleProbe;
+    Game game;SetTargetFPS(0);Probe::MusicTitle(game);Event(7,0,0);Frame(game);Key(game,KEY_ENTER);
+    Check(Probe::State(game)==RunState::MusicRoom && Probe::MusicOnly(game),"music room loaded stage graphics or failed entry");
+    Check(Probe::HasLocalizedGlyphs(game),"music room title glyph missing");
+    for(int index=0;index<static_cast<int>(music::kTracks.size());++index) {
+        Check(Probe::UiSelection(game)==index,"music room keyboard skipped a track");
+        Key(game,KEY_ENTER);Check(Probe::PlayingTrack(game)==index,"music room played the wrong track");Key(game,KEY_DOWN);
+    }
+    Check(Probe::UiSelection(game)==0,"music room did not wrap to title");
+    for(const auto size:std::array<Vector2,3>{{{1100,760},{800,600},{390,844}}}) {
+        SetWindowSize(size.x,size.y);Frame(game);
+        const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
+        const auto click=[&](Rectangle row){Click(game,row.x+row.width/2,row.y+row.height/2);};
+        // 两组水平键与屏幕箭头使用相同页边界；翻页仅改变选择，不自动开始播放。
+        const int playing=Probe::PlayingTrack(game);
+        Event(7,0,0);Frame(game);
+        for(const auto keys:std::array<std::array<int,2>,2>{{{KEY_LEFT,KEY_RIGHT},{KEY_A,KEY_D}}}) {
+            Key(game,keys[0]);Check(Probe::UiSelection(game)==0,"music room left edge changed track");
+            Key(game,keys[1]);Check(Probe::UiSelection(game)==6,"music room horizontal key did not advance page");
+            Key(game,keys[1]);Check(Probe::UiSelection(game)==12,"music room horizontal key skipped last page");
+            Key(game,keys[1]);Check(Probe::UiSelection(game)==12,"music room horizontal key wrapped last page");
+            Key(game,keys[0]);Check(Probe::UiSelection(game)==6,"music room horizontal key did not go back");
+            Key(game,keys[0]);Check(Probe::UiSelection(game)==0,"music room horizontal key did not reach first page");
+            Check(Probe::PlayingTrack(game)==playing,"music room page navigation changed playback");
+        }
+        click(layout.TrackPageArrow(1));Check(Probe::UiSelection(game)==6,"music room next page failed");
+        // 原文字按钮的位置不再翻页；左右公用箭头之外的空白区域不能残留命中。
+        for(int direction:{-1,1})click(layout.canvas.Rect(direction<0?48:layout.canvas.width-218,layout.compact?1010:675,170,42));
+        Check(Probe::UiSelection(game)==6,"removed music page button retained a click target");
+        click(layout.Track(5));Check(Probe::UiSelection(game)==11 && Probe::PlayingTrack(game)==11,"music room page click failed");
+        click(layout.TrackPageArrow(1));Check(Probe::UiSelection(game)==12,"music room last page failed");
+        click(layout.Track(4));Check(Probe::PlayingTrack(game)==16,"music room ending track failed");
+        Capture(game,(screenshots/("music-last-"+std::to_string(int(size.x))+".png")).string().c_str());
+        click(layout.TrackPageArrow(1));Check(Probe::UiSelection(game)==16,"music room advanced beyond last page");
+        click(layout.TrackPageArrow(-1));click(layout.TrackPageArrow(-1));Check(Probe::UiSelection(game)==0,"music room previous page failed");
+        Capture(game,(screenshots/("music-first-"+std::to_string(int(size.x))+".png")).string().c_str());
+    }
+    Key(game,KEY_ESCAPE);Check(Probe::MainMenu(game) && Probe::MusicReleased(game),"music room preview survived return");
+}
+
 /// @brief 通过正式更新入口逐页验证键鼠等价、返回优先级、静止指针及确认不穿透。
 void TestUnifiedUiInputs() {
     using namespace koumakyou;
@@ -712,21 +761,23 @@ void TestUnifiedUiInputs() {
         Event(7,bounds.x+bounds.width/2,bounds.y+bounds.height/2); Frame(game);
     };
     const auto show=[&](int id) { Probe::Show(game,id); Event(7,0,0); Frame(game); };
-    // 每个有多项选择的页面都检查八个方向别名；设置数值页的左右键单独用于调值。
-    for(const auto spec : {std::array<int,2>{3,11},{6,2},{7,2},{9,3},{15,3},{16,2},{17,2}}) {
+    // 检查两组方向别名；音乐页左右翻页，其余列表按单项选择，设置数值页另行检查。
+    for(const auto spec : {std::array<int,2>{3,11},{6,2},{7,2},{9,static_cast<int>(music::kTracks.size())},{15,3},{16,2},{17,2}}) {
         for(const auto key : {KEY_W,KEY_UP,KEY_A,KEY_LEFT,KEY_S,KEY_DOWN,KEY_D,KEY_RIGHT}) {
             show(spec[0]);
             const int before=Probe::UiSelection(game);
             const int direction=key==KEY_W || key==KEY_UP || key==KEY_A || key==KEY_LEFT?-1:1;
             Key(game,key);
-            Check(Probe::UiSelection(game)==(before+spec[1]+direction)%spec[1],"UI direction alias failed");
+            const bool pageKey=spec[0]==9 && (key==KEY_A || key==KEY_LEFT || key==KEY_D || key==KEY_RIGHT);
+            const int expected=pageKey?(direction<0?0:menu::PageLayout::kTracksPerPage):(before+spec[1]+direction)%spec[1];
+            Check(Probe::UiSelection(game)==expected,"UI direction alias failed");
         }
         show(spec[0]);
         const auto target=spec[0]==3?bindings.Row(1):spec[0]==9?page.Track(1):
             spec[0]==15?overlay.PauseRow(1):spec[0]>=16?overlay.ResultRow(1):setup.Choice(1);
         move(target);
         Check(Probe::UiSelection(game)==1,"mouse movement did not select UI item");
-        Key(game,KEY_A);
+        Key(game,spec[0]==9?KEY_W:KEY_A);
         Check(Probe::UiSelection(game)==0,"stationary mouse overrode keyboard selection");
         Click(game,1,1);
         Check(Probe::UiSelection(game)==0,"blank click changed UI selection");
@@ -800,7 +851,7 @@ void TestUnifiedUiInputs() {
     Event(2,KEY_SPACE); Frame(game); Frame(game);
     Check(Probe::Waiting(game),"held Space was captured as binding");
     Event(1,KEY_SPACE); Frame(game); Key(game,KEY_ESCAPE);
-    show(9); Key(game,KEY_W); Check(Probe::UiSelection(game)==2,"music navigation retained a removed return item");
+    show(9); Key(game,KEY_W); Check(Probe::UiSelection(game)==static_cast<int>(music::kTracks.size())-1,"music navigation retained a removed return item");
     Key(game,KEY_SPACE); Check(Probe::State(game)==RunState::MusicRoom,"music playback unexpectedly returned");
     Key(game,KEY_X);Check(Probe::MainMenu(game),"music return key failed");
     game.StartPreview();
@@ -1479,6 +1530,8 @@ int main(int argc, char** argv) {
             TestStartCards(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--extra-only") {
             TestExtraStart(screenshots);
+        } else if(argc>2 && std::string(argv[2])=="--music-only") {
+            TestMusicRoom(screenshots);
         } else if(argc>2 && std::string(argv[2])=="--inputs-only") {
             TestUnifiedUiInputs();
         } else if(argc>2 && std::string(argv[2])=="--practice-only") {

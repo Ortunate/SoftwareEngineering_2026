@@ -91,6 +91,11 @@ public:
     /// @brief 切换本关音乐：0道中、1Boss、2事件，-1停止当前音乐；其他索引抛invalid_argument。
     /// 未加载的槽会停止旧曲但不播放；重复选择当前槽不重启。暂停、音量和卸载与其他关卡流一致。
     void PlayStageTrack(int index);
+    /// @brief 按music::kTracks下标试听，按需独占一条流，不加载关卡图形；越界抛out_of_range。
+    /// 无音频设备或解码失败返回false且保持旧曲；重复选择当前曲不重启，离开时由UnloadStage释放。
+    bool PlayMusicRoomTrack(std::size_t index);
+    /// @brief 当前试听的曲目下标；未试听时返回-1，不转移流所有权。
+    int MusicRoomTrack() const { return activeMusic_==MusicSlot::Room?musicRoomTrack_:-1; }
     /// @brief 游戏暂停时暂停当前 BGM。
     /// @brief 观战定位使用当前音乐身份与秒偏移；不加载或切换素材，未知/无音频时无副作用。
     int MusicIdentity() const { return static_cast<int>(activeMusic_); }
@@ -123,7 +128,7 @@ private:
     struct StageLoad; // 独占后台任务与 CPU 图片；取消/析构时等待当前解码完成，再释放结果。
     /// @brief 在纹理缓存已备好后绑定外观、着色器与音频；只允许在主线程调用。
     void FinishStageLoad(const StageAssetManifest& manifest);
-    enum class MusicSlot : std::uint8_t { None, Menu, Stage, Boss, Event };
+    enum class MusicSlot : std::uint8_t { None, Menu, Stage, Boss, Event, Room };
 
     /// @brief 切换 BGM，并在播放新曲之前停止旧曲。
     void SwitchMusic(MusicSlot slot);
@@ -140,6 +145,8 @@ private:
     Music menuMusic_{};
     Music stageMusic_{};
     Music bossMusic_{};
+    Music roomMusic_{}; // 试听仅保留当前曲；退出页面或切入关卡时随UnloadStage释放。
+    int musicRoomTrack_=-1;
     Music eventMusic_{}; // 管理器独占的可选第三流，随本关卸载；不能继续借用上一个关卡的流。
     std::unordered_map<std::string, Sound> commonSounds_;
     std::unordered_map<std::string, Sound> stageSounds_;

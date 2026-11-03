@@ -412,7 +412,7 @@ endif()
 # 真实音频设备回归按需运行；静音验证中文文件名和 MP3 流，不依赖图形窗口。
 if(BUILD_TESTING)
     add_executable(koumakyou_music_tests EXCLUDE_FROM_ALL tests/music_tests.cpp)
-    target_link_libraries(koumakyou_music_tests PRIVATE raylib)
+    target_link_libraries(koumakyou_music_tests PRIVATE koumakyou_engine)
     add_dependencies(koumakyou_music_tests copy_assets)
     if(MSVC)
         target_compile_options(koumakyou_music_tests PRIVATE /utf-8)

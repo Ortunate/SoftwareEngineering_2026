@@ -556,7 +556,10 @@ void Game::UpdateUiMotion(float deltaTime) {
             selection=spellSelection_.page==spell::Page::Stage?spellSelection_.stage:
                 spellSelection_.page==spell::Page::Group?spellSelection_.group:spellSelection_.difficulty;
         }
-    } else if (state_ == RunState::MusicRoom) selection = selectedTrack_;
+    } else if (state_ == RunState::MusicRoom) {
+        detail=selectedTrack_/menu::PageLayout::kTracksPerPage;
+        selection=selectedTrack_%menu::PageLayout::kTracksPerPage;
+    }
     else if (state_ == RunState::Paused) selection = selectedPauseItem_;
     else if (state_ == RunState::Won || state_ == RunState::GameOver) selection = selectedResultItem_;
     if (state_ == RunState::Score || state_ == RunState::Credit) selection = 0;

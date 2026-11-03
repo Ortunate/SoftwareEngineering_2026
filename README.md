@@ -17,6 +17,10 @@ Windows 启动入口统一位于 `tools/windows/`；下文启动路径均相对�
 
 Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Practice 各可玩符卡结束后可询问保存并命名录像；主线按整轮、关卡练习按单关、符卡练习按单符保存，从主菜单 Replay 选择播放；支持暂停、定位、倍速和三种观察视角。文件保存在启动目录的 `replays/`，仅支持相同构建。实现边界与验证方式见 [Replay 说明](docs/REPLAY.md)。
 
+## Music Room
+
+已接入现有全部 17 首 BGM，按标题、Stage 1～6（道中/Boss）、Extra（道中/Boss/事件）、结局排序。每页 6 首，左右方向键 / A、D 或页面两侧公用箭头翻页，上下方向键 / W、S 与滚轮选择曲目；确认试听，X / Esc / 右键返回。试听按需加载单首音频，不加载关卡图形。
+
 ## 已实现
 
 - 尺寸 20×20×23（X×Y×Z）的全三维长方体战场，Z 为长轴

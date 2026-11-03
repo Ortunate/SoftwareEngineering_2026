@@ -192,7 +192,15 @@ void TestResponsiveLayouts() {
         for(int index=0;index<2;++index) {
             const auto r=page.Choice(index);fits(page.canvas.Rect(r.x,r.y,r.width,r.height));
         }
-        for(int index=0;index<3;++index)fits(page.Track(index));
+        for(int index=0;index<koumakyou::menu::PageLayout::kTracksPerPage;++index)fits(page.Track(index));
+        for(int direction:{-1,1}) {
+            const auto arrow=page.TrackPageArrow(direction);fits(arrow);
+            const auto center=page.canvas.Point(page.canvas.width/2,page.canvas.height/2);
+            assert(std::abs(arrow.y+arrow.height/2-center.y)<0.001F);
+            assert(direction<0?arrow.x+arrow.width<center.x:arrow.x>center.x);
+            for(int index=0;index<koumakyou::menu::PageLayout::kTracksPerPage;++index)
+                assert(!CheckCollisionRecs(arrow,page.Track(index)));
+        }
         const koumakyou::menu::OverlayLayout overlay(size.x,size.y);
         fits(overlay.PausePanel()); fits(overlay.ClearPanel());
         fits(overlay.PausePanel(static_cast<int>(koumakyou::menu::PauseLabels(true).size())));

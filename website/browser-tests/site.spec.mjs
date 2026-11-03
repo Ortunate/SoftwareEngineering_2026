@@ -4,6 +4,8 @@ test('首页、移动布局与深层页面可直接访问', async ({ page }) => 
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('./')
+  await expect(page).toHaveTitle(/东方红魔乡：异典/)
+  await expect(page.locator('.VPNavBarTitle')).toContainText('东方红魔乡：异典')
   await expect(page.getByRole('heading', { level: 1 })).toContainText('弹幕的距离')
   await page.screenshot({ path: '.vitepress/qa/home-desktop.png', fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
@@ -13,6 +15,11 @@ test('首页、移动布局与深层页面可直接访问', async ({ page }) => 
   await expect(page.getByText('下载待提供', { exact: true })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('获取与开始')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.getByRole('link', { name: '开发进度', exact: true }).first().click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('开发进度')
+  expect(await page.locator('.VPContent').evaluate(el => el.getAnimations().length)).toBe(0)
   expect(errors).toEqual([])
 })
 test('进度页筛选与分页', async ({ page }) => {

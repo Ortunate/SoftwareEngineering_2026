@@ -15,13 +15,13 @@ const cards = [
       <img class="hero-moon" :src="withBase('/media/moon.png')" alt="" aria-hidden="true">
       <img class="hero-reimu" :src="withBase('/media/reimu.png')" alt="项目标题页灵梦立绘" fetchpriority="high">
       <div class="hero-copy">
-        <p class="eyebrow">KOUMAKYOU / PROJECT WIKI</p>
+        <p class="eyebrow">东方红魔乡：异典 / PROJECT WIKI</p>
         <h1>红雾之中，<br>重新感受<span>弹幕的距离。</span></h1>
         <p class="hero-description">从二维轨迹到三维空间。<br>一场基于 C++20 与 raylib 的第一人称弹幕实践。</p>
         <div class="hero-actions"><a class="primary-action" :href="withBase('/guide/start.html')">开始探索 <span>↗</span></a><a class="secondary-action" :href="withBase('/development.html')">阅读开发 Wiki →</a></div>
         <p class="hero-caption">视觉素材：项目标题立绘与月亮图层 · 非实机截图</p>
       </div>
-      <div class="hero-bottom"><span>东方红魔乡：新典 · 三维改造课设</span><span>WINDOWS / macOS</span></div>
+      <div class="hero-bottom"><span>东方红魔乡：异典 · 三维弹幕课设</span><span>WINDOWS / macOS</span></div>
     </section>
     <section class="home-intro"><p class="eyebrow">A DIFFERENT PERSPECTIVE</p><h2>熟悉的红雾，新的视角。</h2><p>保留关卡、角色与符卡的辨识度，在三轴移动与自由观察中探索新的躲避方式。这里记录游戏，也记录它如何被构建。</p></section>
     <section class="home-cards" aria-label="探索入口"><article v-for="card in cards" :key="card[0]"><span class="card-number">{{ card[0] }}</span><h3>{{ card[1] }}</h3><p>{{ card[2] }}</p><a :href="withBase(card[3] + '.html')">{{ card[4] }} ↗</a></article></section>

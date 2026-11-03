@@ -1,6 +1,6 @@
 // 集中定义网站来源、部署路径和下载信息；下载条目仅填写已发布的真实安装包。
 export const site = {
-  name: '红雾幻想',
+  name: '东方红魔乡：异典',
   subtitle: 'koumakyou · 三维弹幕计划',
   repository: 'https://github.com/Ortunate/SoftwareEngineering_2026',
   branch: 'feat/wiki-site',

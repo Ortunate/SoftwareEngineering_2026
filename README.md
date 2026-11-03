@@ -2,7 +2,7 @@
 
 Windows 启动入口统一位于 `tools/windows/`；下文启动路径均相对项目根目录。
 
-# koumakyou
+# 东方红魔乡：异典
 
 项目官网与 Wiki 源码位于 [website](website/README.md)，提供玩家指南、开发文档、Git 进度和课程材料占位。GitHub Pages 部署配置已准备，预期入口为 [项目网站](https://Ortunate.github.io/SoftwareEngineering_2026/)；首次公开部署完成前该地址可能不可访问。
 

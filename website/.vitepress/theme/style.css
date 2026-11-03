@@ -6,4 +6,17 @@
 /* 原始立绘画布右半侧透明，向右平移以让可见角色位于文案之外。 */
 .hero-reimu{right:-38%;top:12px}.hero-moon{right:12%;opacity:.45}
 @media(max-width:800px){.hero-reimu{right:-690px;opacity:.35}.hero-moon{right:-200px}}
+/* 入场只短暂改变透明度和位移，内容始终可访问；减少动态效果时禁用所有装饰动画。 */
+@keyframes mist-enter{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes portrait-enter{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:translateX(0)}}
+@media(prefers-reduced-motion:no-preference){
+  .hero-copy>*{animation:mist-enter .65s cubic-bezier(.2,.7,.3,1) both}
+  .hero-copy h1{animation-delay:.08s}.hero-description{animation-delay:.16s}.hero-actions{animation-delay:.24s}.hero-caption{animation-delay:.3s}
+  .hero-reimu{animation:portrait-enter .9s cubic-bezier(.2,.7,.3,1)}
+  .home-cards article{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+  .primary-action,.secondary-action{transition:transform .2s ease,box-shadow .2s ease}
+  .primary-action:hover,.primary-action:focus-visible{transform:translateY(-2px);box-shadow:0 6px 18px #9e304a33}
+  .secondary-action:hover{transform:translateX(3px)}
+  .home-cards article:hover,.home-cards article:focus-within{transform:translateY(-5px);border-color:var(--vp-c-brand-1);box-shadow:0 10px 25px #70394a12}
+}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}

@@ -1,4 +1,4 @@
-// 本文件定义符卡练习的三列目录和人物区；绘制、箭头、滚动翻页与点击共用屏幕矩形。
+// 本文件定义符卡练习的Boss 列表、符卡/难度两栏和人物区；绘制、箭头、滚动翻页与点击共用屏幕矩形。
 #pragma once
 #include "render/menu_layout.hpp"
 namespace koumakyou::menu {
@@ -10,7 +10,7 @@ struct SpellPracticeLayout {
     [[nodiscard]] Rectangle Title() const{return canvas.Rect(42,30,compact?676:830,58);}
     [[nodiscard]] Rectangle Heading() const{return canvas.Rect(42,compact?540:105,compact?676:830,42);}
     [[nodiscard]] Rectangle Columns() const{return canvas.Rect(42,compact?602:157,compact?676:830,30);}
-    [[nodiscard]] Rectangle StageRow(int index) const{return canvas.Rect(42,(compact?648:202)+index*(compact?78:62),compact?676:830,compact?72:58);}
+    [[nodiscard]] Rectangle BossRow(int index) const{return canvas.Rect(42,(compact?648:202)+index*(compact?78:62),compact?676:830,compact?72:58);}
     [[nodiscard]] Rectangle GroupRow(int visibleIndex) const{return canvas.Rect(42,(compact?648:202)+visibleIndex*(compact?69:52),compact?238:282,compact?64:48);}
     [[nodiscard]] Rectangle Difficulty(int index,bool extra=false) const{return canvas.Rect(compact?300:348,(compact?648:202)+index*(compact?142:112),compact?418:524,extra?(compact?260:200):(compact?134:106));}
     [[nodiscard]] Rectangle GroupPage(int direction) const{return canvas.Rect(42+(direction>0?(compact?124:148):0),compact?1210:626,compact?114:134,30);}

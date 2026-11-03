@@ -1,4 +1,4 @@
-// 本文件用项目现有底板、衬线字体、行强调和过渡绘制新典式符卡练习三列目录与四组合人物摘要。
+// 本文件用项目现有底板、衬线字体、行强调和过渡绘制按 Boss 归属的符卡练习目录与四组合人物摘要。
 #include "app/game.hpp"
 #include "render/spell_practice_layout.hpp"
 #include "ui/page.hpp"
@@ -26,57 +26,69 @@ void Game::DrawSpellPractice(float opacity) const {
     const auto& c=l.canvas;const float s=c.scale;
     const auto& common=assets_.Common();const Font font=common.hudFont;
     const auto& choice=spellSelection_;
+    const int boss=spell::BossIndex(choice.stage,choice.group);
+    const int selectedGroup=spell::BossGroupIndex(choice.stage,choice.group);
     const float portraitOpacity=opacity;
     if(state_==RunState::StartSetup)opacity*=menuMotion_.Reveal();
     Text(font,"Spell Practice",l.Title(),48*s,kGold,opacity);
-    const char* heading=choice.page==spell::Page::Stage?"关卡选择":"符卡选择";
+    const char* heading=choice.page==spell::Page::Boss?"Boss 选择":spell::Bosses()[boss].name;
     const auto headingBox=l.Heading();
-    Text(font,heading,{headingBox.x,headingBox.y,headingBox.width*0.37F,headingBox.height},30*s,kIvory,opacity);
+    Text(font,heading,{headingBox.x,headingBox.y,headingBox.width*0.55F,headingBox.height},30*s,kIvory,opacity);
     Text(font,TextFormat("《 %s 》",spell::Characters()[choice.character].name),
-         {headingBox.x+headingBox.width*0.38F,headingBox.y,headingBox.width*0.62F,headingBox.height},23*s,kRose,opacity);
+         {headingBox.x+headingBox.width*0.57F,headingBox.y,headingBox.width*0.43F,headingBox.height},23*s,kRose,opacity);
     const auto row=[&](Rectangle bounds,int index,bool available,const ui::MenuMotion& motion,float strength=1) {
         const float weight=motion.Weight(index)*strength;
         return ui::SelectableRow{bounds,index}.Draw({font,s,opacity,motion.Phase()},weight,available);
     };
     const auto columns=l.Columns();
-    if(choice.page==spell::Page::Stage) {
-        Text(font,"STAGE",{columns.x,columns.y,columns.width*0.3F,columns.height},19*s,kGold,opacity);
-        Text(font,"BOSS",{columns.x+columns.width*0.39F,columns.y,columns.width*0.3F,columns.height},19*s,kGold,opacity);
+    if(choice.page==spell::Page::Boss) {
+        Text(font,"BOSS",{columns.x,columns.y,columns.width*0.65F,columns.height},19*s,kGold,opacity);
         Text(font,"取得 / 解锁 / 总数",{columns.x+columns.width*0.72F,columns.y,columns.width*0.28F,columns.height},17*s,kGold,opacity);
-        for(int stage=0;stage<spell::kStageCount;++stage) {
-            const auto& definition=spell::Stages()[stage];int captured=0,available=0,unlocked=0;
-            for(const auto& card:spell::Cards())if(card.stage==stage) {
-                available+=spell::Available(&card,choice.character,spellRecords_);
+        for(int index=0;index<spell::kBossCount;++index) {
+            const auto& definition=spell::Bosses()[index];int captured=0,available=0,unlocked=0,total=0;
+            for(const auto& card:spell::Cards())if(spell::BossIndex(card.stage,card.group)==index) {
+                ++total;available+=spell::Available(&card,choice.character,spellRecords_);
                 unlocked+=spellRecords_.Seen(choice.character,card.number);
                 const auto& record=spellRecords_.Get(choice.character,card.number);
                 captured+=record.captured>0 || record.mainCaptured>0;
             }
-            const auto bounds=l.StageRow(stage);const Color color=row(bounds,stage,available>0,menuMotion_);
-            Text(font,definition.label,{bounds.x+10*s,bounds.y,bounds.width*0.3F,bounds.height*0.52F},24*s,color,opacity);
-            Text(font,definition.boss,{bounds.x+bounds.width*0.39F,bounds.y,bounds.width*0.32F,bounds.height*0.52F},21*s,color,opacity);
-            Text(font,TextFormat("%d / %d / %d",captured,unlocked,definition.total),
-                 {bounds.x+bounds.width*0.73F,bounds.y,bounds.width*0.25F,bounds.height*0.52F},20*s,color,opacity);
-            Text(font,definition.title,{bounds.x+22*s,bounds.y+bounds.height*0.52F,bounds.width-32*s,bounds.height*0.48F},17*s,color,opacity);
+            const auto bounds=l.BossRow(index);const Color color=row(bounds,index,available>0,menuMotion_);
+            Text(font,definition.name,{bounds.x+10*s,bounds.y,bounds.width*0.68F,bounds.height*0.58F},26*s,color,opacity);
+            Text(font,TextFormat("%d / %d / %d",captured,unlocked,total),
+                 {bounds.x+bounds.width*0.73F,bounds.y,bounds.width*0.25F,bounds.height*0.58F},20*s,color,opacity);
+            Text(font,TextFormat("%d 组符卡",static_cast<int>(definition.groups.size())),
+                 {bounds.x+22*s,bounds.y+bounds.height*0.58F,bounds.width-32*s,bounds.height*0.42F},17*s,color,opacity);
         }
     } else {
         Text(font,"符卡",{columns.x,columns.y,columns.width*0.33F,columns.height},20*s,
              choice.page==spell::Page::Group?kGold:kIvory,opacity);
         Text(font,"按难度",{columns.x+columns.width*0.37F,columns.y,columns.width*0.63F,columns.height},20*s,
              choice.page==spell::Page::Difficulty?kGold:kIvory,opacity);
-        const int groups=spell::Stages()[choice.stage].groups;
-        const int offset=choice.group/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
+        const auto& entries=spell::Bosses()[boss].groups;
+        const int groups=static_cast<int>(entries.size());
+        const int offset=selectedGroup/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
         for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<groups;++index) {
             const int group=offset+index;bool available=false;
-            for(int difficulty=0;difficulty<5;++difficulty)available|=spell::Available(spell::Find(choice.stage,group,difficulty),choice.character,spellRecords_);
+            const auto entry=entries[group];
+            const spell::Card* preview=spell::Find(entry.stage,entry.group,choice.difficulty);
+            for(int difficulty=0;difficulty<5;++difficulty) {
+                const auto* card=spell::Find(entry.stage,entry.group,difficulty);
+                if(!preview)preview=card;
+                available|=spell::Available(card,choice.character,spellRecords_);
+            }
             const auto bounds=l.GroupRow(index);
             const Color color=row(bounds,group,available,spellGroupMotion_,choice.page==spell::Page::Group?1:0.65F);
-            Text(font,TextFormat("Spell Card %d",group+1),{bounds.x+8*s,bounds.y,bounds.width-16*s,bounds.height*0.53F},23*s,color,opacity);
-            Text(font,TextFormat("使用者 %s",spell::GroupUser(choice.stage,group)),
+            Text(font,preview?preview->name:"------",{bounds.x+8*s,bounds.y,bounds.width-16*s,bounds.height*0.53F},19*s,color,opacity);
+            Text(font,TextFormat("%02d  ·  %s",group+1,spell::Stages()[entry.stage].label),
                  {bounds.x+12*s,bounds.y+bounds.height*0.53F,bounds.width-22*s,bounds.height*0.47F},17*s,color,opacity);
         }
         if(groups>menu::SpellPracticeLayout::kVisibleGroups) {
             Text(font,"上一页",l.GroupPage(-1),19*s,kGray,opacity);
             Text(font,"下一页",l.GroupPage(1),19*s,kGray,opacity);
+            const auto bounds=l.GroupPage(-1);
+            Text(font,TextFormat("%d / %d",offset/menu::SpellPracticeLayout::kVisibleGroups+1,
+                 (groups+menu::SpellPracticeLayout::kVisibleGroups-1)/menu::SpellPracticeLayout::kVisibleGroups),
+                 {bounds.x,bounds.y+30*s,bounds.width*2,24*s},15*s,kGray,opacity);
         }
         for(int index=0;index<(choice.stage==6?1:4);++index) {
             const int difficulty=choice.stage==6?4:index;

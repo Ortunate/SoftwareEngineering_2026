@@ -160,7 +160,7 @@ private:
     void UpdateBattleAnimations();
     /// @brief 处理 Normal 开局的角色/御札/模式选择，以及成绩、音乐和制作信息页。
     void UpdateMenuPage();
-    /// @brief 处理符卡练习关卡页及同页符卡/难度的两级焦点，鼠标可直接跨栏；返回优先于本帧确认。
+    /// @brief 处理符卡练习 Boss 页及同页符卡/难度的两级焦点，鼠标可直接跨栏；返回优先于本帧确认。
     void UpdateSpellPractice();
     /// @brief 清理战场并返回符卡组选择，保留角色、关卡和难度，不重置选择页动画。
     void ReturnToSpellPractice();

@@ -147,3 +147,5 @@ cmake --build --preset macos-release --target koumakyou_settings_ui_tests
 `python3 tools/test_name_entry.py --auto`运行两个实际入口、字符按钮、ASCII过滤、统一8字符限制、取消保留及保存失败重试的自动回归；`--smoke`短暂打开窗口并依次截图两种场景后自动退出。截图及`run.log`默认保存在`output/name-entry-review/`，可用`--output`指定路径；`--build-dir`指定已有CMake构建目录，默认`build-debug`。脚本不依赖当前工作目录，路径含空格或中文也可运行，需已安装Python 3和CMake；首次配置还需C++20编译器及raylib下载环境。
 
 `koumakyou_ui_tests` 只链接 `koumakyou_ui` 和 raylib，不创建窗口，也不加载游戏或素材；验证横条在极小/宽/窄窗口的单行占位、横向排列与边界，以及独立导航、禁用与空列表、返回优先、重叠命中、静止指针、跨栏焦点、箭头、数值选择及画布/时钟。原生窗口测试先在不创建 Game 的条件下用默认字体绘制全部基础组件，核验零透明度不会泄漏底色、文字或光晕，绘制不推进时钟也不移动指针，并输出 `ui-components.png`；可用 `--components-only` 单独执行。完整测试再通过正式页面验证模态和两栏交互、全部键鼠别名、进场动画及五种窗口比例。
+
+Spell Practice 首层选择 Boss，第二层同页显示实际符卡名称与难度。`spell::Bosses()` 以原关卡/组引用合并使用者的跨关卡符卡，绘制、命中和动效使用 Boss 内行号，保存和启动仍使用原始身份；左右操作保持切换四种机体组合。

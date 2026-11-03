@@ -69,7 +69,7 @@ struct GameSettings {
     int bestScore = 0; // 本机一面最高分，0～20 亿；练习和挑战不写入。
     StartSelection lastSelection{};
     StageHighScores stageHighScores{};
-    spell::Selection spellSelection{}; // 独立保存符卡练习的角色、关卡、符卡组和难度；进入时重置为关卡页。
+    spell::Selection spellSelection{}; // 保存原关卡/组及组合、难度，浏览时推导 Boss 归属；进入时重置为 Boss 页。
     spell::Records spellRecords{};
     bool aimAssistEnabled = true; // 开启最多六度的弹道辅助，不修改镜头。
 };

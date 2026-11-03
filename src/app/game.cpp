@@ -552,9 +552,9 @@ void Game::UpdateUiMotion(float deltaTime) {
         selection = setupStep_ == StartSetupStep::Shot ? selectedShot_ : setupStep_ == StartSetupStep::Mode ? static_cast<int>(challengeMode_)
             : setupStep_ == StartSetupStep::Difficulty ? selectedDifficulty_ : setupStep_ == StartSetupStep::Stage ? selectedPracticeStage_ : 0;
         if(spellPractice_) {
-            detail=spellSelection_.page==spell::Page::Stage?8:9;
-            selection=spellSelection_.page==spell::Page::Stage?spellSelection_.stage:
-                spellSelection_.page==spell::Page::Group?spellSelection_.group:spellSelection_.difficulty;
+            detail=spellSelection_.page==spell::Page::Boss?8:9;
+            selection=spellSelection_.page==spell::Page::Boss?spell::BossIndex(spellSelection_.stage,spellSelection_.group):
+                spellSelection_.page==spell::Page::Group?spell::BossGroupIndex(spellSelection_.stage,spellSelection_.group):spellSelection_.difficulty;
         }
     } else if (state_ == RunState::MusicRoom) {
         detail=selectedTrack_/menu::PageLayout::kTracksPerPage;
@@ -588,9 +588,10 @@ void Game::UpdateUiMotion(float deltaTime) {
         setupChoiceMotion_[static_cast<int>(step)].Advance(static_cast<int>(step),selected,deltaTime);
     }
     spellCharacterMotion_.Advance(0,spellSelection_.character,deltaTime);
-    const bool spellColumns=state_==RunState::StartSetup && spellPractice_ && spellSelection_.page!=spell::Page::Stage;
+    const bool spellColumns=state_==RunState::StartSetup && spellPractice_ && spellSelection_.page!=spell::Page::Boss;
     // 两列各自强调当前选项，焦点变化只改变强弱；统一的选卡页编号保证整页不随递进/返回闪烁。
-    spellGroupMotion_.Advance(spellColumns?spellSelection_.stage:-1,spellColumns?spellSelection_.group:-1,deltaTime);
+    spellGroupMotion_.Advance(spellColumns?spell::BossIndex(spellSelection_.stage,spellSelection_.group):-1,
+        spellColumns?spell::BossGroupIndex(spellSelection_.stage,spellSelection_.group):-1,deltaTime);
     spellDifficultyMotion_.Advance(spellColumns?spellSelection_.stage:-1,spellColumns?spellSelection_.difficulty:-1,deltaTime);
     startCharacterMotion_.Advance(0,selectedCharacter_,deltaTime);
     if(state_==RunState::MainMenu)titleMenuMotion_=menuMotion_;

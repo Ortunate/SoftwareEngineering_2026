@@ -173,9 +173,18 @@ void RunSettingsTests() {
     assert(previous.stageHighScores.Best(false,1)==5176180 && previous.stageHighScores.Best(true,1)==0);
     assert(previous.lastSelection.shot==1 && previous.lastSelection.challenge && previous.lastSelection.practiceStage==1);
     assert(LoadOrCreateSettings(path).stageHighScores.scores==previous.stageHighScores.scores);
+    // 跨关卡归属只影响浏览，旧配置的原始身份仍能恢复到正确 Boss 与局部行。
+    for(const auto identity:{spell::Group{5,0},spell::Group{6,0},spell::Group{6,12}}) {
+        auto remembered=previous;
+        remembered.spellSelection={spell::Page::Boss,identity.stage,identity.group,identity.stage==6?4:1,2};
+        assert(SaveSettingsFile(path,remembered));
+        const auto loaded=LoadOrCreateSettings(path).spellSelection;
+        assert(loaded.stage==identity.stage&&loaded.group==identity.group&&loaded.character==2);
+        assert(spell::BossIndex(loaded.stage,loaded.group)==(identity.stage==5?4:identity.group==0?3:6));
+    }
     // 符卡记录按原典编号和四种角色组合独立保存，旧整关记录不能被迁移为符卡取得。
     auto spells=previous;
-    spells.spellSelection={spell::Page::Stage,3,15,3,3};
+    spells.spellSelection={spell::Page::Boss,3,15,3,3};
     spells.spellRecords.Begin(0,3,true);spells.spellRecords.Finish(0,3,true,true,8765432109LL);
     spells.spellRecords.Begin(1,7,false);spells.spellRecords.Finish(1,7,false,true,9999);
     spells.spellRecords.Begin(2,4,false);spells.spellRecords.Begin(3,131,false);

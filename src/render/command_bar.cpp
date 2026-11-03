@@ -35,7 +35,7 @@ void Game::DrawCommandBar() const {
             break;
         case RunState::StartSetup:
             if(spellPractice_) {
-                add("W / S / ↑↓",spellSelection_.page==spell::Page::Stage?"选择关卡":
+                add("W / S / ↑↓",spellSelection_.page==spell::Page::Boss?"选择 Boss":
                     spellSelection_.page==spell::Page::Group?"选择符卡":"选择难度");
                 add("A / D / ←→","切换角色");add("鼠标移动","选择");
                 add("Z / Space / 左键","确认");add("X / Esc / 右键","返回");

@@ -47,10 +47,59 @@ void CheckFrameBatches(ProjectileAssets& assets){
  std::vector<projectiles::CollectionInstance> full(BulletSystem::kCapacity);for(auto& item:full)item.transform.scale=.01F;
  renderer.Prepare(full,camera,1);Require(renderer.Stats().submitted==BulletSystem::kCapacity);UnloadRenderTexture(target);
 }
+/// @brief 相机与弹体一起转动时相对视角不变，十类弹体的颜色不得依赖固定世界光向。
+/// 另检查针形弹的对称正背面，防止旧顶点亮面在转向后重新形成白面/暗面分区。
+void CheckProjectileLighting(ProjectileAssets& assets,const std::filesystem::path& root,const std::filesystem::path& output){
+ constexpr int size=192;
+ auto target=LoadRenderTexture(size,size);
+ Image sheet=GenImageColor(size*10,size*3,{15,21,33,255});
+ auto& renderer=assets.Collection();
+ projectiles::ClassicRenderer classic(projectiles::ProjectileAssetDirectory(root)/"kunai_classic/kunai_classic.gltf",projectiles::ProjectileShaderDirectory(root),1);
+ const auto render=[&](int type,Quaternion rotation,bool rotateCamera,bool useClassic=false){
+  Camera3D camera{{0,0,2},{0,0,0},{0,1,0},42,CAMERA_PERSPECTIVE};
+  if(rotateCamera){camera.position=Vector3RotateByQuaternion(camera.position,rotation);camera.up=Vector3RotateByQuaternion(camera.up,rotation);}
+  projectiles::CollectionInstance item;item.type=type;item.transform.rotation=rotation;item.transform.appearance=projectiles::AppearanceFor(type,2);
+  if(useClassic)classic.Prepare(std::span(&item.transform,1),camera,1,false);
+  else renderer.Prepare(std::span(&item,1),camera,1,false);
+  BeginTextureMode(target);ClearBackground({15,21,33,255});BeginMode3D(camera);
+  if(useClassic)classic.Draw();else renderer.Draw(0);
+  EndMode3D();EndTextureMode();
+  auto image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);return image;
+ };
+ const auto compare=[&](const Image& a,const Image& b){
+  auto first=LoadImageColors(a),second=LoadImageColors(b);double error=0;int covered=0;
+  for(int i=0;i<size*size;++i){
+   if(first[i].r==15&&first[i].g==21&&first[i].b==33&&second[i].r==15&&second[i].g==21&&second[i].b==33)continue;
+   error+=std::abs(int(first[i].r)-int(second[i].r))+std::abs(int(first[i].g)-int(second[i].g))+std::abs(int(first[i].b)-int(second[i].b));++covered;
+  }
+  UnloadImageColors(first);UnloadImageColors(second);
+  // 仅容许栅格化边缘的舍入差，不能掩盖整面亮度变化；空画面也必须失败。
+  Require(covered>100&&error/(3*covered)<.5);
+ };
+ for(int type=0;type<10;++type){
+  auto front=render(type,QuaternionIdentity(),false);
+  ImageDraw(&sheet,front,{0,0,size,size},{float(type*size),0,size,size},WHITE);
+  for(int view=1;view<=2;++view){
+   auto q=QuaternionFromAxisAngle({0,1,0},view*PI/2);
+   auto orbit=render(type,q,true);compare(front,orbit);UnloadImage(orbit);
+   auto turned=render(type,q,false);
+   ImageDraw(&sheet,turned,{0,0,size,size},{float(type*size),float(view*size),size,size},WHITE);
+   if(type==5&&view==2)compare(front,turned);
+   UnloadImage(turned);
+  }
+  UnloadImage(front);
+ }
+ // 兼容苦无查看器使用独立 shader，同样必须跟随本次 Prepare 的相机。
+ auto classicFront=render(4,QuaternionIdentity(),false,true);
+ auto classicOrbit=render(4,QuaternionFromAxisAngle({0,1,0},PI/2),true,true);
+ compare(classicFront,classicOrbit);UnloadImage(classicFront);UnloadImage(classicOrbit);
+ if(!output.empty()){std::filesystem::create_directories(output);Require(ExportImage(sheet,(output/"projectile-lighting-views.png").string().c_str()));}
+ UnloadImage(sheet);UnloadRenderTexture(target);
+}
 int main(int argc,char**argv){try{
  if(argc<2)throw std::runtime_error("Asset root required");SetConfigFlags(FLAG_WINDOW_HIDDEN);InitWindow(1280,800,"Projectile runtime integration");
  for(int cycle=0;cycle<2;cycle++){
-  ProjectileAssets assets(argv[1]);CheckFrameBatches(assets);for(const auto&d:ProjectileModels)Require(assets.Get(d.name).layers[0].meshCount>0);
+  ProjectileAssets assets(argv[1]);CheckFrameBatches(assets);if(cycle==0)CheckProjectileLighting(assets,argv[1],argc>2?std::filesystem::path(argv[2]):std::filesystem::path{});for(const auto&d:ProjectileModels)Require(assets.Get(d.name).layers[0].meshCount>0);
   // DropSystem 模拟年龄决定旋转，相同模拟时间不依赖帧率；零步长冻结，池复用恢复零角。
   DropSystem drops(7);drops.SpawnFixedPower({0,0,0},1);drops.Update(1,{0,-9,-8});
   drops.ForEachActive([](const Pickup&p){Require(std::abs(p.RotationRadians()-PI/2)<1e-5F);Require(p.NativeItemType()==0);});

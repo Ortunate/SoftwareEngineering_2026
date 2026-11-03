@@ -53,7 +53,9 @@
 
 ## raylib 接入接口
 
-使用 raylib 5.5 / OpenGL 3.3，完整效果需配套 `collection_renderer.*` 与 `shaders/collection.*`；普通 DrawModel 不会解释顶点角色编码。COLOR_0.r 为亮面遮罩，g 为角色/2（实体、壳、装饰），b 为火焰相位；只有火球装饰形变，泡尖丝静态。
+使用 raylib 5.5 / OpenGL 3.3，完整效果需配套 `collection_renderer.*` 与 `shaders/collection.*`；普通 DrawModel 不会解释顶点角色编码。COLOR_0.r 保留历史亮面数据，运行时不再用它划分固定白面；g 为角色/2（实体、壳、装饰），b 为火焰相位。实体根据世界法线与视线夹角计算柔和明暗和高光，避免固定光向或模型转向带来的亮暗割裂；球玉、球壳、火焰保留各自的发光分布。只有火球装饰形变，泡尖丝静态。
+
+光影回归使用 `./build-debug/projectile_runtime_tests . /tmp/projectile-lighting`：在隐藏图形窗口内比较十类弹体随相机共同旋转后的像素一致性，并检查针形弹正背面对称和独立苦无渲染器的相机输入。输出 `projectile-lighting-views.png` 的三行分别为弹体转动 0°、90°、180°，用于检查转向后的体积与明暗。
 
 构造 `CollectionRenderer(projectRoot, sharedCapacity)`，为每个 `CollectionInstance` 设置 type、transform、AppearanceFor(type,color)、shellOpacity 与 phase。先 Prepare(instances,camera,aspect)，再在 BeginMode3D/EndMode3D 中 Draw(seconds,glow)。秒数非负有限、透明度 0–1；光效强度 0–2、宽度 0–0.025。资源在窗口上下文存在时创建和销毁。
 

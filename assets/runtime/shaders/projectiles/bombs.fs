@@ -23,7 +23,12 @@ void main(){if(kind==3&&clipEnabled==1&&(local.y<clipFrom||local.y>clipTo))disca
  vec3 tint=palette>=0?colors[palette%4]:mix(colors[index],colors[(index+1)%4],smoothstep(0.0,1.0,fract(sector)));
  float a=opacity;vec3 c=mix(tint,vec3(1),.15+.65*pow(facing,5));
  if(kind==0){if(layer==0)c=mix(tint,vec3(1),.55);else{c=mix(tint,vec3(1),.2);a*=.6*pow(facing,3.5);}}
- if(kind==2){tint=palette%3==0?vec3(.45,.4,1):palette%3==1?vec3(.4,1,.35):vec3(1,.35,.4);float facet=mix(.65,1.0,step(.5,fract((atan(local.y,local.x)-1.5707963)*.7957747)));c=tint*facet*(.8+.2*facing);if(layer>0){c=tint;a*=layer==1?.15:.24;}}
+ if(kind==2){
+  tint=palette%3==0?vec3(.45,.4,1):palette%3==1?vec3(.4,1,.35):vec3(1,.35,.4);
+  // 星形实体以真实法线塑形，避免本地角度分段形成不随观察方向变化的暗瓣。
+  c=mix(tint*(.82+.18*facing),vec3(1),.4*pow(facing,6.0));
+  if(layer>0){c=tint;a*=layer==1?.15:.24;}
+ }
  if(kind==3){
   float endFade=smoothstep(0.0,.025,local.y)*(1.0-smoothstep(.75,1.0,local.y));
   if(layer==0){c=mix(vec3(1,.92,.65),vec3(1),.65);a*=endFade*(.18+.24*pow(facing,2));}

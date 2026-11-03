@@ -8,7 +8,7 @@
 #include <cstddef>
 namespace koumakyou::projectiles {
 /// @brief 颜色采用 sRGB 8 位；强度范围 [0,2]，宽度以标准化模型长度计 [0,0.025]。
-/// 光效不参与碰撞。白亮面由 glTF COLOR_0.r 遮罩确定，不依赖相机方向。
+/// 光效不参与碰撞。实体高光由世界法线与视线夹角确定，不使用 glTF COLOR_0.r 的固定亮面。
 struct ProjectileAppearance {
     Color bodyColor{244,38,65,255},highlightColor{255,250,246,255},glowColor{255,35,55,255};
     float glowStrength=.55F,glowWidth=.015F;

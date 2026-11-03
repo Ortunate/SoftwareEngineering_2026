@@ -1,6 +1,7 @@
 // 本文件负责游戏生命周期、主循环调度和关卡事件转发。
 
 #include "app/game.hpp"
+#include "app/player_start.hpp"
 #include "app/constants.hpp"
 #include "platform/window_input.hpp"
 #include "ui/components.hpp"
@@ -213,8 +214,13 @@ void Game::CompleteStartRun() {
     playerOptionAnimations_ = {};
     if(!continuingStage_) {
         player_.Reset();
-        runInitialLives_=initialLives_;
-        player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
+        const auto entry=spellPractice_?StageEntry::SpellPractice:practiceMode_?StageEntry::Practice:
+            stageId_==StageId::Extra?StageEntry::Extra:StageEntry::Campaign;
+        const auto* card=spellPractice_?spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty):nullptr;
+        const auto resources=player_start::ForEntry(stageId_,entry,initialLives_,initialBombs_,card);
+        runInitialLives_=resources.extraLives;
+        player_.ConfigureRun(resources.extraLives,resources.bombs,challengeMode_,static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
+        player_.AdjustPower(resources.power-player_.Power());
         missCount_=bombCount_=0;score_=0;graze_=pointItems_=0;
         const auto* combat=stageContent_->CombatData();
         referenceRank_=rank::Initial(combat?combat->stage:StageNumber(stageId_),runDifficulty_);
@@ -264,7 +270,6 @@ void Game::CompleteStartRun() {
         for(int skipped=1;skipped<practiceAttack_;++skipped)
             if(!boss_->AdvanceSkill())throw std::logic_error("Spell practice attack is unreachable");
         if(boss_->attack!=practiceAttack_)throw std::logic_error("Spell practice attack does not match catalog");
-        player_.AdjustPower(Player::kMaxPower);
         spellCutInTimer_ = kSpellCutInDuration;
     }
 #ifdef KOUMAKYOU_DEBUG_FEATURES

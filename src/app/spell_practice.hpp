@@ -16,7 +16,8 @@ struct Character { const char* name; const char* title; const char* displayName;
     int portrait; std::array<int,3> stars; };
 /// @brief number 为原典 1～131 编号；stage/group 为从 0 开始的关内编号，difficulty=0～4 对应 E/N/H/L/EX。
 /// phase 为选定遭遇内的 1 起算展开技能编号，对应运行时 attack；0 表示尚未实现，不能据此启动关卡。
-struct Card { int number,stage,group,difficulty; const char* name; const char* user; int phase; };
+/// power 为本符卡原生练习入口火力；前九张有32/64的显式覆盖，其余缺省128。
+struct Card { int number,stage,group,difficulty; const char* name; const char* user; int phase; int power=128; };
 /// @brief 保留原关卡/组身份；同一 Boss 的符卡可来自多个关卡，难度仍由 Find 查询。
 struct Group { int stage,group; };
 /// @brief Boss 名称及其有序符卡组；名称和组表均借用静态存储，不随浏览加载战斗资源。

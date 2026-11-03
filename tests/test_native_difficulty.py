@@ -65,6 +65,18 @@ class FakePe:
 
 
 class InspectTests(unittest.TestCase):
+    def test_practice_entry_resources_and_tamper_rejection(self):
+        result = subject.inspect(FakePe(), require_hash=False)['practice_entry']
+        self.assertEqual(result['stage_power'], [0, 64, 128, 128, 128, 128])
+        self.assertEqual(result['spell_power_overrides'], {str(i): 32 if i < 2 else 64 for i in range(9)})
+        self.assertEqual(result['spell_default_power'], 128)
+        self.assertEqual((result['spell_extra_lives'], result['spell_bombs']), (0, 0))
+        for rva in (0x178b, 0x3c860, 0x3c932):
+            pe = FakePe()
+            pe.data[rva + len(bytes.fromhex(subject.ANCHORS[rva])) - 1] ^= 1
+            with self.assertRaisesRegex(ValueError, '锚点'):
+                subject.inspect(pe, require_hash=False)
+
     def test_encounter_records_accept_three_encore_cards_without_expanding_practice_catalog(self):
         result = subject.inspect(FakePe(), require_hash=False)
         self.assertEqual(result['spell_record_count'], 134)

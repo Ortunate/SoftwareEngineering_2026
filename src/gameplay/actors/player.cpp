@@ -47,7 +47,7 @@ Vector3 ConvergingShotDirection(Vector3 origin, Vector3 position, Vector3 forwar
 void Player::Reset() { *this = Player{}; }
 
 void Player::ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot) {
-    lives_ = std::clamp(extraLives, 1, 5);
+    lives_ = std::clamp(extraLives, 0, 5);
     bombs_ = respawnBombs_ = std::clamp(bombs, 0, 3);
     challenge_ = challenge;
     shot_ = shot;

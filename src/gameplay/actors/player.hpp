@@ -57,7 +57,8 @@ public:
     static constexpr float kOptionWorldHeight = native_sizes::kOptionHeight;
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
     void Reset();
-    /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
+    /// @brief Reset 后配置本局额外残机（0～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
+    /// 额外残机0供单符练习使用，表示仅当前一条命；设置界面仍限制为1～5。
     /// 新局净Miss归零；挑战模式照常计 Miss、扣 Power 和复活，但不扣残机，不会因命中结束一局。
     /// Bomb 配置同时保存为本局死亡重生的恢复数量，不受拾取或消耗改变。
     void ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot);

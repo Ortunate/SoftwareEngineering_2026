@@ -3,6 +3,7 @@
 #include "platform/file_publish.hpp"
 #include "stage/catalog.hpp"
 #include "app/spell_practice.hpp"
+#include "app/player_start.hpp"
 #include "gameplay/combat/rank.hpp"
 #include <bit>
 #include <cmath>
@@ -212,8 +213,8 @@ bool CanPlay(const Data& d,std::string& error) {
     if((!legacy && d.route!=expectedRoute) || (legacy && (h.practice || first.stage!="stage1" || first.difficulty!=Difficulty::Normal || d.segments.size()!=1)) ||
        d.shot!=std::array<const char*,4>{"reimu-a","reimu-b","marisa-a","marisa-b"}.at(h.shot) ||
        d.character!=(h.shot<2?"reimu":"marisa") || d.rules!=(h.challenge?"challenge":"standard") ||
-       d.continues!=0 || h.lives>5 || h.bombs>3 || first.seed!=h.seed || first.lives!=h.lives || first.bombs!=h.bombs ||
-       first.score!=0 || first.power!=(h.spell?128u:8u) || (!campaign && d.segments.size()!=1))return reject();
+       d.continues!=0 || h.lives>5 || h.bombs>3 || first.seed!=h.seed ||
+       first.score!=0 || (!campaign && d.segments.size()!=1))return reject();
     for(std::size_t i=0;i<d.segments.size();++i) {
         const auto& segment=d.segments[i];Entry entry;
         if(segment.seed!=h.seed || !ResolveEntry(segment,entry) || (h.spell!=(entry.spellNumber!=0)))return reject();
@@ -221,6 +222,12 @@ bool CanPlay(const Data& d,std::string& error) {
         const auto difficulty=entry.stage==6?native_combat::Difficulty::Normal:*native_combat::DifficultyFromIndex(entry.difficulty);
         const auto kind=h.spell?StageEntry::SpellPractice:h.practice?StageEntry::Practice:entry.stage==6?StageEntry::Extra:StageEntry::Campaign;
         if(!SupportsStage(stage,difficulty,kind) || (h.spell && (!spell::Playable(spell::Find(entry.stage,entry.group,entry.difficulty),h.shot) || h.phase!=static_cast<unsigned>(entry.phase))))return reject();
+        if(i==0) {
+            const auto resources=player_start::ForEntry(stage,kind,h.lives,h.bombs,
+                h.spell?spell::Find(entry.stage,entry.group,entry.difficulty):nullptr);
+            if(segment.lives!=static_cast<unsigned>(resources.extraLives)||segment.bombs!=static_cast<unsigned>(resources.bombs)||
+               segment.power!=static_cast<unsigned>(resources.power))return reject();
+        }
         if(i==0 && segment.rank!=static_cast<unsigned>(rank::Initial(StageNumber(stage),difficulty)) &&
            !(segment.stage=="stage1" && segment.difficulty==Difficulty::Normal && segment.rank==16))return reject();
         if(campaign && (entry.stage!=static_cast<int>(i) || segment.difficulty!=first.difficulty))return reject();

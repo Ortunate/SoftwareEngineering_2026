@@ -31,7 +31,10 @@ int main() {
         auto practice=data;practice.header.practice=true;practice.route="stage-practice";
         auto& segment=practice.segments.front();segment.stage="stage"+std::to_string(stage);
         segment.difficulty=static_cast<replay::Difficulty>(difficulty);segment.rank=difficulty==0?20:32;
+        segment.power=stage==1?8:stage==2?64:128;
         assert(replay::CanPlay(practice,error)==!(stage==6 && difficulty==0));
+        auto wrongPower=practice;wrongPower.segments[0].power=stage==1?64:8;
+        assert(!replay::CanPlay(wrongPower,error));
     }
     // 每张符卡使用原典编号，不能以相同phase误认成另一关或另一难度的符卡。
     for(const auto& card:spell::Cards())for(unsigned shot=0;shot<4;++shot) {
@@ -42,8 +45,12 @@ int main() {
         auto& segment=practice.segments.front();segment.stage=card.stage==6?"extra":"stage"+std::to_string(card.stage+1);
         segment.difficulty=static_cast<replay::Difficulty>(card.difficulty);
         segment.rank=card.stage==6?18:card.difficulty==0?20:32;
-        segment.power=128;segment.entry="spell";segment.target="spell-"+std::to_string(card.number);
+        segment.lives=segment.bombs=0;segment.power=card.number<=2?32:card.number<=9?64:128;segment.entry="spell";segment.target="spell-"+std::to_string(card.number);
         assert(replay::CanPlay(practice,error));
+        auto wrongPower=practice;wrongPower.segments[0].power=segment.power==128?64:128;
+        assert(!replay::CanPlay(wrongPower,error));
+        auto wrongStock=practice;wrongStock.segments[0].bombs=1;assert(!replay::CanPlay(wrongStock,error));
+        wrongStock=practice;wrongStock.segments[0].lives=1;assert(!replay::CanPlay(wrongStock,error));
         replay::Entry entry;assert(replay::ResolveEntry(segment,entry));
         assert(entry.spellNumber==card.number && entry.stage==card.stage && entry.difficulty==card.difficulty);
         segment.target="spell-999";assert(!replay::CanPlay(practice,error));

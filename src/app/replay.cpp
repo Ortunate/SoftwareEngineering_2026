@@ -44,12 +44,12 @@ void Game::PrepareReplay() {
 #endif
             replayMode_=eligible?replay::Mode::Recording:replay::Mode::Idle;
         }
-        // 入口快照在库存/rank初始化后采样；符卡开局火力在Boss定位后补满，快照仍描述战斗入口。
+        // 玩家入口资源已在创建演员前初始化；直接记录实际值，不能把单符火力固定写成128。
         replay::Segment segment;
         segment.stage=stageId_==StageId::Extra?"extra":"stage"+std::to_string(StageNumber(stageId_));
         segment.difficulty=stageId_==StageId::Extra?replay::Difficulty::Extra:static_cast<replay::Difficulty>(native_combat::DifficultyIndex(runDifficulty_));
         segment.seed=replayData_.header.seed;segment.lives=std::max(0,player_.RemainingLives()-1);segment.bombs=player_.Bombs();
-        segment.power=spellPractice_?128:player_.Power();segment.rank=referenceRank_;segment.score=score_;
+        segment.power=player_.Power();segment.rank=referenceRank_;segment.score=score_;
         segment.entry=spellPractice_?"spell":"stage";
         if(spellPractice_)segment.target="spell-"+std::to_string(spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty)->number);
         // 未录制的预览跨关不需要保留片段生命周期。
@@ -60,7 +60,7 @@ void Game::PrepareReplay() {
         const auto& segment=replayData_.segments[replaySegment_];
         if(segment.stage!=(stageId_==StageId::Extra?"extra":"stage"+std::to_string(StageNumber(stageId_))) ||
            segment.lives!=static_cast<unsigned>(std::max(0,player_.RemainingLives()-1)) || segment.bombs!=static_cast<unsigned>(player_.Bombs()) ||
-           segment.power!=static_cast<unsigned>(spellPractice_?128:player_.Power()) || segment.score!=static_cast<std::uint64_t>(score_) ||
+           segment.power!=static_cast<unsigned>(player_.Power()) || segment.score!=static_cast<std::uint64_t>(score_) ||
            (segment.rank!=static_cast<unsigned>(referenceRank_) && !(replaySegment_==0 && segment.rank==16))) {
             replayStatus_="回放异常 · 关卡入口资源不一致";replayFinished_=replayPaused_=true;
         }

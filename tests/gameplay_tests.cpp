@@ -70,6 +70,10 @@ void TestRespawnBombStock() {
         assert(player.TakeHit()&&player.Bombs()==(stock+1)%4);
         player.Reset();assert(player.Bombs()==3&&player.TakeHit()&&player.Bombs()==3);
     }
+    // 单符入口只有当前一条命且没有Bomb，首次Miss直接结束，不被设置界面的最低残机数抬高。
+    Player spell;spell.ConfigureRun(0,0,false,ShotType::HomingAmulet);
+    assert(spell.RemainingLives()==1&&spell.Bombs()==0);
+    assert(!spell.TakeHit()&&spell.RemainingLives()==0&&spell.Bombs()==0);
 }
 
 /// @brief 非符与符卡共享固定血量区间；击破、超时、下一组和退场均不能把符卡段错误铺满。

@@ -4359,6 +4359,15 @@ struct GameLifecycleProbe {
             if(card)game.spellSelection_={.stage=card->stage,.group=card->group,.difficulty=card->difficulty,.character=0};
             game.StartRun(false,true);game.captureCursor_=true;game.PrepareReplay();
             assert(game.replayMode_==replay::Mode::Recording);
+            const int expectedPower=card?(card->number<=2?32:card->number<=9?64:128):
+                practice?(stage==StageId::Stage1?8:stage==StageId::Stage2?64:128):8;
+            assert(game.player_.Power()==expectedPower);
+            assert(game.player_.RemainingLives()==(card?1:game.initialLives_+1));
+            assert(game.player_.Bombs()==(card?0:game.initialBombs_));
+            const auto& snapshot=game.replayData_.segments.front();
+            assert(snapshot.power==static_cast<unsigned>(expectedPower));
+            assert(snapshot.lives==static_cast<unsigned>(card?0:game.initialLives_));
+            assert(snapshot.bombs==static_cast<unsigned>(card?0:game.initialBombs_));
             for(int frame=0;frame<48;++frame)game.Update(steps[frame%4]);
             const auto position=game.player_.Position();const auto power=game.player_.Power();
             auto recorded=game.replayData_;replay::FinishSession(recorded,game.ReplayResult());
@@ -4390,7 +4399,9 @@ struct GameLifecycleProbe {
             checkEntry(StageId::Stage1,difficulty,false);
             checkEntry(StageId::Stage2,difficulty,true);
         }
-        checkEntry(StageId::Stage6,3,true);checkEntry(StageId::Extra,1,false);
+        for(auto stage:{StageId::Stage3,StageId::Stage4,StageId::Stage5,StageId::Stage6})checkEntry(stage,3,true);
+        checkEntry(StageId::Extra,1,false);
+        checkEntry(StageId::Stage1,2,true,spell::Find(0,0,2));
         checkEntry(StageId::Stage1,2,true,spell::Find(0,1,2));
         checkEntry(StageId::Stage5,1,true,spell::Find(4,1,1));
         checkEntry(StageId::Extra,1,true,spell::Find(6,12,4));

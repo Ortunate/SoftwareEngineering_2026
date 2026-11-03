@@ -44,6 +44,7 @@ void TestSpellPracticeCatalog() {
     std::array<int,7> counts{};int playable=0;
     for(std::size_t index=0;index<spell::Cards().size();++index) {
         const auto& card=spell::Cards()[index];assert(card.number==int(index)+1);
+        assert(card.power==(index<2?32:index<9?64:128));
         assert(card.group>=0 && card.group<groups[card.stage] && card.difficulty>=0 && card.difficulty<5 && (card.stage==6?card.difficulty==4:card.difficulty<4));
         assert(spell::Find(card.stage,card.group,card.difficulty)==&card);++counts[card.stage];
         playable+=spell::Playable(&card,0);

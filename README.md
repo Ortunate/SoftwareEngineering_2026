@@ -4,6 +4,8 @@ Windows 启动入口统一位于 `tools/windows/`；下文启动路径均相对�
 
 # koumakyou
 
+项目官网与 Wiki 源码位于 [website](website/README.md)，提供玩家指南、开发文档、Git 进度和课程材料占位。GitHub Pages 部署配置已准备，预期入口为 [项目网站](https://Ortunate.github.io/SoftwareEngineering_2026/)；首次公开部署完成前该地址可能不可访问。
+
 一个使用 C++20 和 raylib 实现的三维弹幕射击课设原型。目前可玩范围为《东方红魔乡：新典》Easy／Normal／Hard／Lunatic 一至六面流程（Easy 在五面结束）及独立 Extra，支持连续闯关、逐关练习与已接入符卡练习。出生时序、行为和弹幕参数依据本机新典数据提炼并通过独立参考测试核对；三维操作、碰撞、随机序列和部分结算仍有项目适配。数据来源、转写流程及验证边界见 [Stage 移植方法](docs/STAGE_PORTING_METHOD.md)。
 
 敌方激光两套模型使用 `tools/windows/Review-Lasers.cmd` 独立审阅，`tools/windows/Stress-Lasers.cmd` 压测；长宽、时序、碰撞与资源说明见[敌方激光](docs/PROJECTILE_LASERS.md)。两套均已人工验收通过。

@@ -40,3 +40,15 @@ koumakyou_scores.dat.tmp
 
 # 渲染压测的逐帧数据、截图和本机环境记录
 /output/render-performance/
+
+# Wiki 的依赖、派生内容和静态构建产物。
+/website/node_modules/
+/website/.npm-cache/
+/website/.vitepress/cache/
+/website/.vitepress/dist/
+/website/.vitepress/qa/
+/website/test-results/
+/website/playwright-report/
+/website/reference/
+/website/_generated/
+/website/public/media/

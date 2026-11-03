@@ -44,6 +44,7 @@ public:
     /// @param color 渲染颜色。
     /// @param visual 当前关卡素材表中的外观 ID。
     /// @param acceleration 加速度，默认零向量。
+    /// 普通敌弹默认不按年龄回收，自机弹默认寿命为 3 秒；调用方可显式设置返回对象的 maxAge（秒）。
     /// @return 系统持有的新弹幕指针；容量耗尽或速度非有限时返回 nullptr，指针仅在槽位复用或 Reset 前有效。
     Bullet* Spawn(BulletOwner owner, Vector3 position, Vector3 velocity,
                   float radius, Color color, VisualId visual,

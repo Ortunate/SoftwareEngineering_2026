@@ -284,7 +284,8 @@ Bullet* BulletSystem::Spawn(BulletOwner owner, Vector3 position,
     bullet->acceleration = acceleration;
     bullet->radius = radius;
     bullet->color = color;
-    bullet->maxAge = owner == BulletOwner::Player ? 3.0F : 14.0F;
+    // 原生普通敌弹没有统一寿命；场内慢弹须保留到离场、命中或清弹，显式限时攻击另设 maxAge。
+    bullet->maxAge = owner == BulletOwner::Player ? 3.0F : std::numeric_limits<float>::infinity();
     return bullet;
 }
 

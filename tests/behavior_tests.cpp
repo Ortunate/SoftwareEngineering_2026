@@ -126,10 +126,14 @@ void EqualBullets(const BulletSystem& original,const BulletSystem& replacement) 
         EqualPosition(x.position,y.position,"bullet.position");Equal(x.Velocity(),y.Velocity(),"bullet.velocity");
         Equal(x.baseVelocity,y.baseVelocity,"bullet.baseVelocity");Equal(x.launchDirection,y.launchDirection,"bullet.launchDirection");Equal(x.acceleration,y.acceleration,"bullet.acceleration");
         Equal(x.rotationAxis,y.rotationAxis,"bullet.axis");Equal(x.Direction(),y.Direction(),"beam.direction");
-        const float xs[]={x.age,x.maxAge,x.angularVelocity,x.homingTurnRate,x.damage,x.beamLength,x.warningSeconds,
+        // 只有 maxAge 允许以正无穷表示无年龄上限，其他数值仍必须有限，不能用 inf-inf 做误差比较。
+        constexpr auto unlimited=std::numeric_limits<float>::infinity();
+        if(x.maxAge==unlimited||y.maxAge==unlimited)assert(x.maxAge==y.maxAge);
+        else Equal(x.maxAge,y.maxAge,"bullet.maxAge");
+        const float xs[]={x.age,x.angularVelocity,x.homingTurnRate,x.damage,x.beamLength,x.warningSeconds,
             x.turnDelaySeconds,x.turnAngle,x.turnSpeed,x.launchBoost,x.launchBoostSeconds,x.spawnVisualSeconds,x.spawnMoveScale,
             x.beamGrowSeconds,x.beamFadeSeconds,x.dangerEndSeconds};
-        const float ys[]={y.age,y.maxAge,y.angularVelocity,y.homingTurnRate,y.damage,y.beamLength,y.warningSeconds,
+        const float ys[]={y.age,y.angularVelocity,y.homingTurnRate,y.damage,y.beamLength,y.warningSeconds,
             y.turnDelaySeconds,y.turnAngle,y.turnSpeed,y.launchBoost,y.launchBoostSeconds,y.spawnVisualSeconds,y.spawnMoveScale,
             y.beamGrowSeconds,y.beamFadeSeconds,y.dangerEndSeconds};
         for(std::size_t n=0;n<std::size(xs);++n)Equal(xs[n],ys[n],"bullet.scalar");

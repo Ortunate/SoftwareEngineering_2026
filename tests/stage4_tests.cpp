@@ -16,6 +16,7 @@
 #include <numbers>
 #include <vector>
 #include <iostream>
+#include <limits>
 namespace {
 using namespace koumakyou;
 constexpr float pi=std::numbers::pi_v<float>;
@@ -909,7 +910,11 @@ void TestSpatialDisplayFrameRates() {
                     Near(a.velocity.x,b.velocity.x);Near(a.velocity.y,b.velocity.y);Near(a.velocity.z,b.velocity.z);
                     Near(a.beamDirection.x,b.beamDirection.x,1e-5F);Near(a.beamDirection.y,b.beamDirection.y,1e-5F);Near(a.beamDirection.z,b.beamDirection.z,1e-5F);
                     Near(a.angularVelocity,b.angularVelocity,1e-5F);Near(a.angularSeconds,b.angularSeconds,1e-5F);
-                    Near(a.beamLength,b.beamLength);Near(a.maxAge,b.maxAge,1e-5F);
+                    Near(a.beamLength,b.beamLength);
+                    // 无年龄上限只允许正无穷，有限寿命仍保留原差分容差。
+                    constexpr auto unlimited=std::numeric_limits<float>::infinity();
+                    if(a.maxAge==unlimited||b.maxAge==unlimited)assert(a.maxAge==b.maxAge);
+                    else Near(a.maxAge,b.maxAge,1e-5F);
                     Near(a.acceleration.x,b.acceleration.x,1e-4F);Near(a.acceleration.y,b.acceleration.y,1e-4F);Near(a.acceleration.z,b.acceleration.z,1e-4F);
                     Near(a.turnDirection.x,b.turnDirection.x,1e-5F);Near(a.turnDirection.y,b.turnDirection.y,1e-5F);Near(a.turnDirection.z,b.turnDirection.z,1e-5F);
                     Near(a.accelerationSeconds,b.accelerationSeconds,1e-5F);Near(a.turnDelay,b.turnDelay,1e-5F);

@@ -148,6 +148,31 @@ void TestBeamContacts() {
     }
 }
 
+/// @brief 场内静止/慢速敌弹跨过旧14秒上限仍存活；显式时限、自机寿命、离场和清弹继续回收。
+void TestOrdinaryBulletLifetime() {
+    using namespace koumakyou;
+    auto pool=std::make_unique<BulletSystem>();
+    for(int hz:{30,60,120,144,240}) {
+        pool->Reset();
+        auto* limited=pool->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,0);
+        auto* stationary=pool->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,0);
+        auto* slow=pool->Spawn(BulletOwner::Enemy,{}, {.02F,0,0},.1F,WHITE,0);
+        auto* player=pool->Spawn(BulletOwner::Player,{}, {},.1F,WHITE,0);
+        auto* beam=pool->SpawnBeam({}, {0,0,1},2,.1F,.5F,1,WHITE);
+        assert(stationary&&slow&&player&&limited&&beam);
+        limited->maxAge=2;
+        for(int tick=0;tick<30*hz;++tick)pool->Update(1.0F/hz);
+        assert(stationary->active&&slow->active&&!player->active&&!limited->active&&!beam->active);
+        assert(std::abs(slow->position.x-.6F)<5e-4F&&pool->Pool().ActiveCount()==2);
+        slow->position.x=kArenaHalfExtents.x+4;pool->Update(1.0F/hz);
+        assert(!slow->active&&stationary->active);
+        pool->ClearEnemyBullets();assert(pool->Pool().ActiveCount()==0);
+        // 复用刚才的有限寿命槽位，不能把上一颗限时弹的截止值带入新敌弹。
+        auto* reused=pool->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,0);assert(reused);
+        pool->Update(20);assert(reused->active);
+    }
+}
+
 /// @brief 原生淡出末帧保持可访问，下一逻辑步回收；独立验证长寿命累计、强制淡出、外部改龄和暂停。
 void TestBeamLifetimeBoundary() {
     using namespace koumakyou;
@@ -259,6 +284,7 @@ void RunGameplayTests() {
     TestBeamContacts();
     TestBeamRepeatGraze();
     TestBeamLifetimeBoundary();
+    TestOrdinaryBulletLifetime();
     TestEnemyBodyContacts();
     using koumakyou::BulletOwner;
     using koumakyou::BulletSystem;

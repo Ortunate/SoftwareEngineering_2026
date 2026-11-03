@@ -32,6 +32,6 @@ npm run dev
 
 ## 后续部署
 
-GitHub Actions 在 `dev/koumakyou` 与 `feat/wiki-site` 推送时仅构建验证，PR 也只验证。发布必须手动触发，且仅允许 `dev/koumakyou` 分支。队友审阅通过、合入开发分支后，再决定是否部署。仓库公开后，在 Settings → Pages 中选择 GitHub Actions；部署环境如限制分支，需要允许 `dev/koumakyou`。网站不自动更改仓库可见性。
+GitHub Actions 在 `feat/wiki-site` 推送时构建验证并发布；`dev/koumakyou` 推送与 PR 仅验证。部署直接使用网站分支，无需合入其他分支。在 Settings → Pages 中选择 GitHub Actions；部署环境如限制分支，需要允许 `feat/wiki-site`。网站不自动更改仓库可见性。
 
 部署后用匿名窗口检查首页、深层链接、搜索和图片，将真实上线日期补入课程材料页，按课程要求保留至少一个月。下载包经验证后填入配置，条目包含 `platform`、`version`、`name`、`url`。

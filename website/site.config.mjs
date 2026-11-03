@@ -3,7 +3,7 @@ export const site = {
   name: '红雾幻想',
   subtitle: 'koumakyou · 三维弹幕计划',
   repository: 'https://github.com/Ortunate/SoftwareEngineering_2026',
-  branch: 'dev/koumakyou',
+  branch: 'feat/wiki-site',
   base: '/SoftwareEngineering_2026/',
   timezone: 'Asia/Hong_Kong',
   downloads: []

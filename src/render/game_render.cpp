@@ -148,12 +148,14 @@ void Game::DrawWorld() const {
             pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),255,pickup.RotationRadians()});
         });
         if (player_.OptionsVisible()) {
+            // 两名角色共用局内显示倍率，模型、光晕与透明排序范围同步缩放。
+            constexpr float optionVisualScale = 0.6F;
             const auto positions = player_.OptionPositions();
             for (int side = 0; side < 2; ++side) {
                 const auto visual = stageContent_->PlayerOptionVisual(side,player_.Shot());
                 if (visual == kInvalidVisualId || !assets_.GetVisual(visual).archive) continue;
                 // 与道具共用透明公告板批次，保证圈与副弹按真实深度排序；这些绘制数据不参与拾取或碰撞。
-                pickupSprites_.push_back({positions[side], visual, player_.OptionScale(),
+                pickupSprites_.push_back({positions[side], visual, player_.OptionScale()*optionVisualScale,
                                           &playerOptionAnimations_[side].player.Sample(), Player::kShotAlpha});
             }
         }

@@ -4,7 +4,8 @@
 
 ## 从整体开始
 
-- [NABCD 需求分析](/reference/NABCD)：项目面向谁、解决什么问题。
+- [课程 NABCD](/reference/course/NABCD)：2026 年 11 月 4 日更新的需求分析及功能边界。
+- [原型系统设计](/reference/course/PROTOTYPE_SYSTEM_DESIGN)、[概要设计](/reference/course/OUTLINE_DESIGN)、[详细设计](/reference/course/DETAILED_DESIGN)：开发分支新增的课程设计材料。
 - [当前实现架构记录](/reference/DESIGN)：模块职责、对象关系与运行流程，注意页首时效说明。
 - [目标系统设计](/reference/SOFTWARE_DESIGN)：需求到设计的映射、接口和总体规划。
 - [构建与运行](/reference/README)：平台工具链、启动入口和测试方式。

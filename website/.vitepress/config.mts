@@ -27,7 +27,7 @@ export default defineConfig({
     sidebar: {
       '/guide/': [{ text: '玩家指南', items: [{ text: '获取与开始', link: '/guide/start' }, { text: '玩法与模式', link: '/guide/play' }, { text: '录像、音乐与设置', link: '/guide/features' }] }],
       '/reference/': meta.groups,
-      '/course/': [{ text: '课程材料', items: [{ text: '材料索引', link: '/course/' }, ...coursePages.map(([slug, title]) => ({ text: title, link: `/course/${slug}` }))] }],
+      '/course/': [meta.groups[0], { text: '课程材料', items: [{ text: '材料索引', link: '/course/' }, ...coursePages.map(([slug, title]) => ({ text: title, link: `/course/${slug}` }))] }],
       '/development': meta.groups,
       '/testing': meta.groups,
       '/sources': meta.groups

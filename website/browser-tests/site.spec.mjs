@@ -48,3 +48,17 @@ test('中文搜索和 Mermaid 图表', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(page.locator('#localsearch-input')).not.toBeVisible()
 })
+
+test('课程材料导航、来源与设计图表', async ({ page }) => {
+  await page.goto('course/index.html')
+  await page.getByRole('link', { name: '课程 NABCD', exact: true }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('NABCD')
+  for (const name of ['NABCD', 'PROTOTYPE_SYSTEM_DESIGN', 'OUTLINE_DESIGN', 'DETAILED_DESIGN']) {
+    await page.goto(`reference/course/${name}.html`)
+    await expect(page.locator('.vp-doc a').filter({ hasText: '查看源文件' })).toHaveAttribute('href', new RegExp(`48216a7ad77a0531ce0f66518c486ef754d90b62/docs/course/${name}.md`))
+    for (const diagram of await page.locator('.diagram-host').all()) {
+      await diagram.scrollIntoViewIfNeeded()
+      await expect(diagram.locator('svg')).toBeVisible()
+    }
+  }
+})

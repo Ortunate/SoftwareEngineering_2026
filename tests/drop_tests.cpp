@@ -1,4 +1,5 @@
 // 本文件负责验证敌人/自机受击掉落、道具运动、满火力清弹星点与拾取结算。
+// DropSystem 内嵌 1024 个道具槽；测试池由独占堆对象持有，避免多场景叠加耗尽 Windows 默认栈。
 
 #include "gameplay/arena.hpp"
 #include "gameplay/items/drop_system.hpp"
@@ -25,7 +26,8 @@ koumakyou::Pickup SinglePickup(const koumakyou::DropSystem& drops) {
 void TestPickupMotion() {
     using koumakyou::DropSystem;
     constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
-    DropSystem drops(1234);
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
     drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
     assert(SinglePickup(drops).velocityZ == 4.0F);
     drops.Update(0.0F, distantPlayer);
@@ -94,7 +96,8 @@ void TestPickupBoundary() {
         {0.90F, 0.0F, 0.0F}, {0.0F, -0.90F, 0.0F},
         {0.0F, 0.0F, -0.90F}, {0.52F, 0.52F, -0.52F},
     }};
-    DropSystem nearby(1234);
+    auto nearbyStorage = std::make_unique<DropSystem>(1234);
+    auto& nearby = *nearbyStorage;
     for (int item : {0, 1}) {
         for (Vector3 position : outside) {
             nearby.SpawnReferenceDrop(position, item, false);
@@ -114,7 +117,8 @@ void TestPickupBoundary() {
     constexpr float rearZ = -koumakyou::kArenaHalfExtents.z;
     constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
     constexpr std::array<koumakyou::DropOutcome, 1> outcome{{{1, 1, 1}}};
-    DropSystem drops(1234);
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
     // 1.25 秒位移为 -0.484375；P 点和分数点都恰好落在边界时仍保留。
     drops.SpawnEnemyDrops({5.0F, 0.0F, rearZ + 0.484375F}, outcome);
     drops.Update(1.25F, distantPlayer);
@@ -155,7 +159,8 @@ void TestBulletStars() {
     using koumakyou::PickupKind;
     // 弹幕池较大，置于堆上，避免 Windows 默认栈容量不足。
     auto bullets = std::make_unique<BulletSystem>();
-    DropSystem drops(1234);
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
     constexpr Vector3 origin{5.0F, 0.0F, 0.0F};
     constexpr Vector3 player{-5.0F, 0.0F, 0.0F};
     auto* enemy = bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0);
@@ -226,7 +231,8 @@ void TestPlayerMissDrops() {
     using namespace koumakyou;
     const Vector3 origin{2,3,-5},player{-9,-9,-9};
     for(bool spare:{false,true}) {
-        DropSystem drops(17);drops.SpawnPlayerMiss(origin,spare);
+        auto dropsStorage=std::make_unique<DropSystem>(17);auto& drops=*dropsStorage;
+        drops.SpawnPlayerMiss(origin,spare);
         int small=0,large=0,full=0;
         drops.ForEachActive([&](const Pickup& p) {
             assert(p.position.x==origin.x&&p.position.y==origin.y&&p.position.z==origin.z);
@@ -244,7 +250,8 @@ void TestPlayerMissDrops() {
     }
     std::array<Pickup,6> baseline{};
     for(int fps:{30,60,120,144,240}) {
-        DropSystem drops(17);drops.SpawnPlayerMiss(origin,true);
+        auto dropsStorage=std::make_unique<DropSystem>(17);auto& drops=*dropsStorage;
+        drops.SpawnPlayerMiss(origin,true);
         for(int frame=0;frame<fps;++frame)assert(drops.Update(1.F/fps,player).power==0);
         int index=0;
         drops.ForEachActive([&](const Pickup& p) {
@@ -260,7 +267,9 @@ void TestPlayerMissDrops() {
         drops.Clear();drops.SpawnFixedPower(origin,1);
         const auto reused=SinglePickup(drops);assert(!reused.missScattering&&reused.scatterSeconds==0);
     }
-    DropSystem combined(17),split(17);combined.SpawnPlayerMiss(origin,true);split.SpawnPlayerMiss(origin,true);
+    auto combinedStorage=std::make_unique<DropSystem>(17),splitStorage=std::make_unique<DropSystem>(17);
+    auto& combined=*combinedStorage;auto& split=*splitStorage;
+    combined.SpawnPlayerMiss(origin,true);split.SpawnPlayerMiss(origin,true);
     combined.Update(1.25F,player);split.Update(1,player);split.Update(.25F,player);
     int index=0;combined.ForEachActive([&](const Pickup& p){baseline[index++]=p;});index=0;
     split.ForEachActive([&](const Pickup& p){assert(std::abs(p.position.z-baseline[index++].position.z)<5e-4F);});
@@ -279,7 +288,8 @@ void RunDropTests() {
     using koumakyou::PickupKind;
     constexpr float autoCollectZ = koumakyou::kArenaHalfExtents.z * 0.2F;
 
-    DropSystem drops(1234);
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
     constexpr std::array<DropOutcome, 2> outcomes{{
         {9, 9, 0}, {1, 2, 1},
     }};
@@ -367,7 +377,8 @@ void RunDropTests() {
     drops.Clear();
     assert(drops.Update(0.0F, {}).power == 0);
 
-    DropSystem latchedDrops(4321);
+    auto latchedDropsStorage = std::make_unique<DropSystem>(4321);
+    auto& latchedDrops = *latchedDropsStorage;
     latchedDrops.SpawnFixedPower({}, 1);
     latchedDrops.Update(0.02F, {0.0F, 0.0F, autoCollectZ});
     const auto afterLeaving = latchedDrops.Update(0.05F, {3.0F, 0.0F, 0.0F});
@@ -426,7 +437,9 @@ void RunDropTests() {
         const auto pickup=SinglePickup(drops);assert(pickup.kind==fixedKinds[item-3]&&pickup.value==fixedValues[item-3]);
         assert(pickup.position.x==burstOrigin.x&&pickup.position.y==burstOrigin.y&&pickup.position.z==burstOrigin.z);
     }
-    DropSystem ordinary(1234),withFixed(1234);ordinary.Clear();withFixed.Clear();
+    auto ordinaryStorage=std::make_unique<DropSystem>(1234),withFixedStorage=std::make_unique<DropSystem>(1234);
+    auto& ordinary=*ordinaryStorage;auto& withFixed=*withFixedStorage;
+    ordinary.Clear();withFixed.Clear();
     withFixed.SpawnReferenceDrop({},5,false);
     for(int kill=0;kill<96;++kill) {
         const Vector3 origin{static_cast<float>(kill),0,0};

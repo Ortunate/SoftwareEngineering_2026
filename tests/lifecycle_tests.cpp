@@ -1022,6 +1022,39 @@ struct GameLifecycleProbe {
         std::cout<<"Native Master Spark WAV pause, resume and exit cancellation passed (muted)\n";
     }
 
+    /// @brief 静音加载新增短音效，经过真实拾取/战斗更新检查触发、暂停及非符/退场门禁。
+    static void TestCombatAudio(Game& game) {
+        struct AudioBoss final:Boss {
+            bool spell=true,finish=false;float limit=20;
+            AudioBoss(){active=true;attack=phase=skill=1;health=maxHealth=100;visual=stage1::kRumia;}
+            bool Update(float seconds,Vector3,BulletSystem&) override {skillTimer+=seconds;return finish;}
+            bool AdvanceSkill() override {active=false;return false;}
+            const char* SpellName() const override {return spell?"Audio clock":nullptr;}
+            int SpellCardNumber() const override {return spell?1:0;}
+            const char* DisplayName() const override {return "Audio probe";}
+            float TimeLimit() const override {return limit;}
+        };
+        assert(IsAudioDeviceReady());game.StartPreview();game.stage_=StageDirector{};game.actors_.Clear();game.drops_.Clear();
+        game.player_.ConfigureRun(3,3,false,ShotType::HomingAmulet);
+        const auto playing=[&](std::string_view name){const auto* sound=game.assets_.FindSoundEffect(name);assert(sound&&IsSoundValid(*sound));return IsSoundPlaying(*sound);};
+        const auto stop=[&]{for(auto name:{"life_up","pickup","countdown","countdown_urgent"})game.assets_.StopSoundEffect(name);};
+        stop();const int lives=game.player_.RemainingLives();
+        game.drops_.SpawnNativeItem(game.player_.Position(),5,false);game.UpdatePickups(0);
+        assert(game.player_.RemainingLives()==lives+1&&playing("life_up")&&!playing("pickup"));
+        stop();game.drops_.SpawnFixedPower(game.player_.Position(),1);game.UpdatePickups(0);
+        assert(playing("pickup")&&!playing("life_up"));
+        game.boss_=std::make_unique<AudioBoss>();auto* clock=static_cast<AudioBoss*>(game.boss_.get());
+        stop();clock->skillTimer=9.9F;game.UpdateBoss(.1F);assert(playing("countdown")&&!playing("countdown_urgent"));
+        stop();game.UpdateBoss(0);assert(!playing("countdown"));
+        clock->skillTimer=14.9F;game.UpdateBoss(.1F);assert(playing("countdown_urgent"));
+        stop();clock->skillTimer=9.9F;const float frozen=clock->skillTimer;
+        game.TogglePause();game.Update(2);assert(clock->skillTimer==frozen&&!playing("countdown")&&!playing("countdown_urgent"));game.TogglePause();
+        clock->spell=false;clock->skillTimer=14.9F;game.UpdateBoss(.1F);assert(!playing("countdown_urgent"));
+        clock->spell=true;clock->skillTimer=19.9F;game.UpdateBoss(.1F);assert(!playing("countdown_urgent"));
+        clock->skillTimer=14.9F;clock->finish=true;game.UpdateBoss(.1F);assert(!playing("countdown_urgent")&&!clock->active);
+        stop();game.EnterMainMenu();std::cout<<"1UP pickup, countdown/urgent WAV, pause and skill-end audio gates passed (muted)\n";
+    }
+
     /// @brief 实际加载十个差分，渲染逐句切换及菜单/符卡，验证离开关卡不释放通用立绘。
     static void TestPortraits(Game& game, const std::string& prefix) {
         game.StartPreview();
@@ -4613,6 +4646,8 @@ struct GameLifecycleProbe {
             UnloadImage(secondaryImage);UnloadImage(background);
             std::cout<<"Marisa "<<(shot==ShotType::MagicMissile?"missile":"laser")<<" focus "<<focus<<": "<<ink<<" secondary pixels\n";
             assert(ink>100);
+            // 满火力两种副机布局都应留下清晰视野，不能让包住镜头的整屏光壳通过可见性检查。
+            if(shot==ShotType::IllusionLaser)assert(ink<target.texture.width*target.texture.height/2);
             if(shot==ShotType::MagicMissile) {
                 bool impact=false;
                 game.bullets_.Pool().ForEachActive([&](Bullet& bullet){
@@ -4871,7 +4906,7 @@ struct GameLifecycleProbe {
 }  // namespace koumakyou
 
 /// @brief 隐藏窗口集成测试；argv[1]为截图前缀，argv[2]选择主线或Extra专项，完整选项见下方显式分派；缺省运行通用回归。
-/// --bomb-audio-only/--extra-assets-only初始化音频且强制静音，设置与成绩只写临时目录。
+/// --bomb-audio-only/--combat-audio-only/--extra-assets-only初始化音频且强制静音，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
     const std::string prefix = argc >= 2 && argv[1][0] != '\0' ? std::filesystem::absolute(argv[1]).string() : "";
@@ -4889,7 +4924,8 @@ int main(int argc, char** argv) {
     const bool extraDialogue=argc>=3&&std::string(argv[2])=="--extra-dialogue-only";
     const bool extraTimeline=argc>=3&&std::string(argv[2])=="--extra-timeline-only";
     const bool extraPostfight=argc>=3&&std::string(argv[2])=="--extra-postfight-only";
-    const bool audioTest=extraAssets||dialogueMusic||extraDialogue||extraTimeline||extraPostfight||(argc>=3 && std::string(argv[2])=="--bomb-audio-only");
+    const bool combatAudio=argc>=3&&std::string(argv[2])=="--combat-audio-only";
+    const bool audioTest=combatAudio||extraAssets||dialogueMusic||extraDialogue||extraTimeline||extraPostfight||(argc>=3 && std::string(argv[2])=="--bomb-audio-only");
     if(audioTest) {InitAudioDevice();SetMasterVolume(0);}
     {
         auto game = std::make_unique<koumakyou::Game>();
@@ -4910,6 +4946,8 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestExtraPostfightFlow(*game,prefix);
         } else if(argc>=3&&std::string(argv[2])=="--challenge-progress-only") {
             koumakyou::GameLifecycleProbe::TestChallengeProgress(*game);
+        } else if(combatAudio) {
+            koumakyou::GameLifecycleProbe::TestCombatAudio(*game);
         } else if(audioTest) {
             koumakyou::GameLifecycleProbe::TestPlayerBombAudio(*game);
         } else if(argc>=3 && std::string(argv[2])=="--world-clock-only") {

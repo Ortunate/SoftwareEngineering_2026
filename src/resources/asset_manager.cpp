@@ -32,7 +32,7 @@ bool NeedsProjectileModels(const StageAssetManifest&manifest){
 }
 
 /// @brief 音效清单项，资源路径相对 assets 根目录。
-constexpr std::array<SoundDefinition, 19> kCommonSounds{{
+constexpr std::array<SoundDefinition, 22> kCommonSounds{{
     {"menu_move", "common/se/menu_move.wav"},
     {"menu_confirm", "common/se/menu_confirm.wav"},
     {"menu_cancel", "common/se/menu_cancel.wav"},
@@ -46,6 +46,9 @@ constexpr std::array<SoundDefinition, 19> kCommonSounds{{
     {"spell", "common/se/spell.wav"},
     {"clear", "common/se/clear.wav"},
     {"full_power", "common/se/full_power.wav"},
+    {"life_up", "common/se/life_up.wav"},
+    {"countdown", "common/se/countdown.wav"},
+    {"countdown_urgent", "common/se/countdown_urgent.wav"},
     {"reference_6", "common/se/reference_6.wav"},
     {"reference_7", "common/se/reference_7.wav"},
     {"reference_8", "common/se/reference_8.wav"},

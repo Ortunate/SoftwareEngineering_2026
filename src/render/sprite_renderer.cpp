@@ -4,6 +4,7 @@
 #include "render/combat_renderer.hpp"
 #include "render/animated_sprite.hpp"
 #include "render/bomb_geometry.hpp"
+#include "render/projectiles/marisa_beam_geometry.hpp"
 #include "gameplay/data/native_sizes.hpp"
 
 #include "rlgl.h"
@@ -253,6 +254,20 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         constexpr float margin=1e-5F;
         return Rectangle{left-margin,bottom-margin,right-left+2*margin,top-bottom+2*margin};
     };
+    const auto capsuleBounds=[&](Vector3 first,Vector3 last,float radius) {
+        const auto a=Subtract(first,camera.position),b=Subtract(last,camera.position);
+        const float near=std::min(depth(first),depth(last))-radius,far=std::max(depth(first),depth(last))+radius;
+        if(near<=1e-4F)return Rectangle{0,0,-1,-1};
+        // 用相机坐标系中的胶囊包围盒覆盖整个端帽与辉光；不能拿原 ANM 的光带宽度排除立体外壳。
+        const auto axis=[&](Vector3 direction) {
+            const auto dot=[&](Vector3 p){return p.x*direction.x+p.y*direction.y+p.z*direction.z;};
+            const float low=std::min(dot(a),dot(b))-radius,high=std::max(dot(a),dot(b))+radius;
+            if(camera.projection!=CAMERA_PERSPECTIVE)return Vector2{low,high};
+            return Vector2{std::min({low/near,low/far,high/near,high/far}),std::max({low/near,low/far,high/near,high/far})};
+        };
+        const auto x=axis(screenRight),y=axis(screenUp);constexpr float margin=1e-5F;
+        return Rectangle{x.x-margin,y.x-margin,x.y-x.x+2*margin,y.y-y.x+2*margin};
+    };
     const auto spritePlane=[&](const VisualResource& visual,float height,Vector3 position,
                                const anm::Frame* animation,Vector3 motion=Vector3{}) {
         const auto spec=Spec(visual,height,animation,motion);
@@ -398,6 +413,16 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     };
     for(const Bullet* beam:beams_) {
         const auto& visual=FindVisual(visuals,beam->visual);
+        if(models&&models->Available()) {
+            const auto binding=ProjectileFrameBuilder::Resolve(*beam,visual);
+            if(binding.id==ProjectileAssetId::MarisaLaser) {
+                // 显示起点前移后，切点也必须按同一段光束归一化，否则演员交叉处会错位。
+                const auto geometry=projectiles::SampleMarisaBeamGeometry(*beam,binding.tier);
+                if(geometry.length>0)queueBeam(geometry.origin,geometry.end,Kind::Beam,0,beam,
+                                               capsuleBounds(geometry.origin,geometry.end,geometry.haloRadius));
+                continue;
+            }
+        }
         Rectangle bounds{0,0,-1,-1};
         std::array<Vector3,4> points{};
         if(visual.archive) {

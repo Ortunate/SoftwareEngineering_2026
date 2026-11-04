@@ -29,7 +29,7 @@
 	],
 	"meshes":[
 		{
-			"name":"FacetedCrystal",
+			"name":"RegularHexagonalCrystal",
 			"primitives":[
 				{
 					"attributes":{
@@ -47,67 +47,67 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":80,
+			"count":60,
 			"max":[
-				0.125,
+				0.20000000298023224,
 				0.5,
-				0.07500000298023224
+				0.05196152254939079
 			],
 			"min":[
-				-0.125,
+				-0.20000000298023224,
 				-0.5,
-				-0.07500000298023224
+				-0.05196152254939079
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":80,
+			"count":60,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":80,
+			"count":60,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":3,
 			"componentType":5123,
-			"count":96,
+			"count":72,
 			"type":"SCALAR"
 		}
 	],
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":960,
+			"byteLength":720,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":960,
-			"byteOffset":960,
+			"byteLength":720,
+			"byteOffset":720,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":960,
-			"byteOffset":1920,
+			"byteLength":720,
+			"byteOffset":1440,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":192,
-			"byteOffset":2880,
+			"byteLength":144,
+			"byteOffset":2160,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":3072,
+			"byteLength":2304,
 			"uri":"needle_classic.bin"
 		}
 	]

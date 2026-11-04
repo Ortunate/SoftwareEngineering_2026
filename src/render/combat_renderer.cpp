@@ -2,6 +2,8 @@
 #include "combat_renderer.hpp"
 #include "render/projectiles/effects_asset.hpp"
 #include "render/projectiles/marisa_asset.hpp"
+#include "render/projectiles/marisa_beam_geometry.hpp"
+#include "external/glad.h"
 #include "rlgl.h"
 #include "render/projectiles/model_draw.hpp"
 #include "render/projectiles/option_renderer.hpp"
@@ -64,7 +66,9 @@ bool CombatRenderer::DrawBullet(const Bullet&b,const VisualResource&v){
   BeginBlendMode(BLEND_ALPHA);rlDrawRenderBatchActive();rlDisableDepthMask();Int(assets_,shader,"effect",0);DrawLayer(r.layers[0],shader,pose);EndBlendMode();
   BeginBlendMode(BLEND_ADDITIVE);Int(assets_,shader,"effect",1);DrawLayer(r.layers[1],shader,pose);EndBlendMode();rlDrawRenderBatchActive();rlDisableDepthMask();return true;
  }
- BeginBlendMode(BLEND_ALPHA);rlDrawRenderBatchActive();rlDisableDepthMask();DrawLayer(r.layers[0],{},pose,Fade(Color{b.color.r,b.color.g,b.color.b,255},alpha));EndBlendMode();
+ // 灵梦实体复用抛光材质，底色由 DrawMesh 的 colDiffuse 提供；尾迹继续使用原光效通道。
+ auto surface=assets_->Marisa();Int(assets_,surface,"kind",4);Int(assets_,surface,"effect",0);Int(assets_,surface,"clay",0);Real(assets_,surface,"opacity",alpha);Vec(assets_,surface,"eye",camera_.position);Vec(assets_,surface,"tintMultiplier",{b.color.r/255.F,b.color.g/255.F,b.color.b/255.F});
+ BeginBlendMode(BLEND_ALPHA);rlDrawRenderBatchActive();rlDisableDepthMask();DrawLayer(r.layers[0],surface,pose);EndBlendMode();
  BeginBlendMode(BLEND_ADDITIVE);if(binding.asset=="reimu_needle")DrawLayer(r.layers[1],assets_->Needle(),pose,Fade(VIOLET,alpha*.75F));else{pose.scale*=1.055F;DrawLayer(r.layers[0],{},pose,Fade(binding.asset=="reimu_gold"?GOLD:SKYBLUE,alpha*.2F));}EndBlendMode();return true;
 }
 bool CombatRenderer::DrawBeam(const Bullet&b,const VisualResource&v,float from,float to){
@@ -74,7 +78,15 @@ bool CombatRenderer::DrawBeam(const Bullet&b,const VisualResource&v,float from,f
   if(found!=laserIndices_.end()&&found->first==&b)assets_->Lasers().DrawPrepared(found->second,from,to);
   return true;
  }
- auto&r=assets_->Get(binding.id);auto pose=ProjectileFrameBuilder::Pose(b,binding,*assets_);pose.scale=1;pose.position=b.position;Shader s=assets_->Marisa();projectiles::MarisaInstance native;native.kind=2;native.tier=binding.tier;native.age=b.age;native.fadeAt=b.laserFadeAt>0?b.laserFadeAt:std::max(0.F,b.maxAge-.5F);auto state=projectiles::SampleMarisa(native);Int(assets_,s,"kind",2);Int(assets_,s,"clipEnabled",1);Real(assets_,s,"clipFrom",from);Real(assets_,s,"clipTo",to);Int(assets_,s,"clay",0);Real(assets_,s,"beamLength",b.beamLength);Real(assets_,s,"radius",b.radius*b.BeamVisualScale());Real(assets_,s,"phase",b.age);Real(assets_,s,"growth",1);Real(assets_,s,"trailLengthScale",1);Real(assets_,s,"trailWidthScale",1);Real(assets_,s,"opacity",b.color.a/255.F*state.nativeOpacity);Real(assets_,s,"strength",.8F);Vec(assets_,s,"eye",camera_.position);Vec(assets_,s,"tintMultiplier",{b.color.r/255.F,b.color.g/255.F,b.color.b/255.F});BeginBlendMode(BLEND_ADDITIVE);rlDrawRenderBatchActive();rlDisableDepthMask();Int(assets_,s,"effect",0);DrawLayer(r.layers[0],s,pose);Int(assets_,s,"effect",1);Real(assets_,s,"radius",b.radius*b.BeamVisualScale()*state.haloScale);DrawLayer(r.layers[1],s,pose);EndBlendMode();return true;
+ const auto geometry=projectiles::SampleMarisaBeamGeometry(b,binding.tier);if(geometry.length<=0)return true;
+ auto&r=assets_->Get(binding.id);auto pose=ProjectileFrameBuilder::Pose(b,binding,*assets_);pose.scale=1;pose.position=geometry.origin;
+ Shader s=assets_->Marisa();projectiles::MarisaInstance native;native.kind=2;native.tier=binding.tier;native.age=b.age;native.fadeAt=b.laserFadeAt>0?b.laserFadeAt:std::max(0.F,b.maxAge-.5F);auto state=projectiles::SampleMarisa(native);
+ Int(assets_,s,"kind",2);Int(assets_,s,"clipEnabled",1);Int(assets_,s,"clipGeometry",1);Real(assets_,s,"clipFrom",from);Real(assets_,s,"clipTo",to);Int(assets_,s,"clay",0);
+ Real(assets_,s,"beamLength",geometry.length);Real(assets_,s,"radius",geometry.radius);Real(assets_,s,"phase",b.age);Real(assets_,s,"growth",1);Real(assets_,s,"trailLengthScale",1);Real(assets_,s,"trailWidthScale",1);Real(assets_,s,"opacity",b.color.a/255.F*state.nativeOpacity);Real(assets_,s,"strength",.8F);Vec(assets_,s,"eye",camera_.position);Vec(assets_,s,"tintMultiplier",{b.color.r/255.F,b.color.g/255.F,b.color.b/255.F});BeginBlendMode(BLEND_ADDITIVE);rlDrawRenderBatchActive();rlDisableDepthMask();
+ // 裁剪距离仅在两层激光的立即绘制期间启用；其他 raylib shader 没有对应输出，必须在返回前关闭。
+ glEnable(GL_CLIP_DISTANCE0);glEnable(GL_CLIP_DISTANCE1);
+ Int(assets_,s,"effect",0);DrawLayer(r.layers[0],s,pose);Int(assets_,s,"effect",1);Real(assets_,s,"radius",geometry.haloRadius/1.5F);DrawLayer(r.layers[1],s,pose);
+ glDisable(GL_CLIP_DISTANCE0);glDisable(GL_CLIP_DISTANCE1);EndBlendMode();return true;
 }
 bool CombatRenderer::DrawItem(const PickupSprite&p,const VisualResource&v){
  if(!assets_||v.animation.atlas!=battle::Atlas::Bullets||v.animation.script<21||v.animation.script>27)return false;

@@ -6,46 +6,57 @@
   "renderMeshes": 1,
   "textureMaps": 0,
   "renderMaterial": "collection shader / vertex surface roles",
-  "description": "短直刀、短护手、中央贯通孔的圆柱柄，纯色刃脊",
-  "collisionSemantics": "刀刃、护手、穿孔圆柱柄实体并集；柄孔为空",
-  "humanAcceptance": "approved",
+  "description": "竖直平面刀刃、短护手与压薄穿孔刀柄",
+  "collisionSemantics": "刀刃、护手、压薄穿孔刀柄实体并集；柄孔为空",
+  "humanAcceptance": "pending",
   "tipAxis": "+Y",
   "frontAxis": "+Z",
   "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
   "triangleHardLimit": 256,
-  "revision": 2,
+  "revision": 3,
   "vertexChannels": {
-    "r": "fixed highlight mask",
+    "r": "legacy highlight mask; runtime lighting uses normals",
     "g": "role / 2 (body, shell, decorative flame or static filament)",
     "b": "flame phase"
   },
   "parts": [
     {
-      "name": "DoubleBevelBlade",
+      "name": "VerticalBeveledBlade",
       "role": 0,
       "collision": true,
-      "triangles": 14
+      "display": true,
+      "triangles": 38
     },
     {
       "name": "ShortGuard",
       "role": 0,
       "collision": true,
+      "display": true,
       "triangles": 12
     },
     {
-      "name": "PiercedCylinderHandle",
+      "name": "PiercedFlatHandle",
       "role": 0,
       "collision": true,
+      "display": true,
       "triangles": 96
     }
   ],
-  "triangles": 122,
-  "collisionTriangles": 122,
-  "humanAcceptanceBy": [
-    "user"
-  ],
-  "humanAcceptanceDate": "2026-10-28",
-  "humanAcceptanceNote": "User: other projectile types pass; bubble remains under revision.",
+  "knifeStructure": {
+    "faceAxis": [
+      0,
+      0,
+      1
+    ],
+    "handleHalfDepth": 0.04,
+    "guardHalfDepth": 0.042,
+    "bladeHalfDepth": 0.028,
+    "bladeFacePlane": "XY",
+    "handleFaceAxisScale": 0.47058823529411764,
+    "normalPolicy": "authored flat blade and smooth handle"
+  },
+  "triangles": 146,
+  "collisionTriangles": 146,
   "localForward": [
     0,
     1,

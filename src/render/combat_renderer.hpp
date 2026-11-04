@@ -26,6 +26,9 @@ public:
  void UploadGroups();
  void DrawPreparedGroup(std::size_t batch);
  bool DrawBullet(const Bullet&,const VisualResource&);
+ /// @brief 按显示光束归一化区间 [from,to] 绘制透明切片，0<=from<to<=1；不改变判定及生命周期。
+ /// 魔理沙显示跨度由 SampleMarisaBeamGeometry 决定，排序端须共用其起点与长度。
+ /// 魔理沙两层模型临时启用 GL_CLIP_DISTANCE0/1，并在返回前关闭；调用方不得借用这两个裁剪槽。
  bool DrawBeam(const Bullet&,const VisualResource&,float from,float to);
  /// @brief 已绑定原始 Item(0…6) 时绘制共享薄板；未知外观返回 false。
  bool DrawItem(const PickupSprite&,const VisualResource&);

@@ -6,8 +6,10 @@ namespace koumakyou {
 using namespace projectile_detail;
 bool BombRenderer::Draw(const ProjectileAssets* assets_,const Camera3D& camera_,const BombVolumeSprite&item,const VisualResource&v,float from,float to){
  if(!assets_||!item.sprite)return false;const auto&p=*item.sprite;if(p.shape==PlayerBombSprite::Shape::Slab)return false;if(p.trail)return true;
- int kind=p.shape==PlayerBombSprite::Shape::Beam?3:p.shape==PlayerBombSprite::Shape::Star?2:0;if(kind!=2&&p.layer!=0)return true;auto name=kind==3?"bomb_spark":kind==2?"bomb_star":"bomb_seal";const auto&r=assets_->Get(name);ProjectilePose pose;pose.position=p.volume.origin;pose.scale=kind==2?p.height/(2*r.referenceRadius):p.volume.radius/r.referenceRadius;Shader s=assets_->Bomb();
- Int(assets_,s,"kind",kind);Int(assets_,s,"palette",kind==2?p.layer%3:-1);Int(assets_,s,"clipEnabled",kind==3);Real(assets_,s,"clipFrom",from);Real(assets_,s,"clipTo",to);Int(assets_,s,"clay",0);Real(assets_,s,"seconds",p.ageSeconds);float opacity=p.frame.color.a/255.F*(kind==2?.5F:1.F);
+ int kind=p.shape==PlayerBombSprite::Shape::Beam?3:p.shape==PlayerBombSprite::Shape::Star?2:0;if(kind==3&&p.layer!=0)return true;auto name=kind==3?"bomb_spark":kind==2?"bomb_star":"bomb_seal";const auto&r=assets_->Get(name);ProjectilePose pose;pose.position=p.volume.origin;pose.scale=kind==2?p.height/(2*r.referenceRadius):p.volume.radius/r.referenceRadius;Shader s=assets_->Bomb();
+ Int(assets_,s,"kind",kind);Int(assets_,s,"palette",kind==0?p.layer%4:kind==2?p.layer%3:-1);Int(assets_,s,"clipEnabled",kind==3);Real(assets_,s,"clipFrom",from);Real(assets_,s,"clipTo",to);Int(assets_,s,"clay",0);Real(assets_,s,"seconds",p.ageSeconds);float opacity=p.frame.color.a/255.F*(kind==2?.5F:1.F);
+ // 封印四个 ANM 层独立显示蓝/青/绿/红，并保留各层淡入淡出；平分原单份模型曝光，避免四份实体叠白。
+ if(kind==0)opacity*=.25F;
  // 攻击几何保持不变，近眼曝光沿用原演出规则，避免球体/星群覆盖整个第一人称画面。
  if(kind!=3){float distance=Vector3Distance(camera_.position,p.volume.origin);float near=std::clamp((distance/std::max(.01F,p.volume.radius)-.35F)/1.3F,0.F,1.F);opacity*=std::max(kind==2?.005F:.075F,near*near*near*near);}
  // 原四层光炮合并为一份几何，补偿总亮度，避免重复描画四组螺旋。

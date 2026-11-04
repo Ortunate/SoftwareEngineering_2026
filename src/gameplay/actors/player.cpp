@@ -248,6 +248,8 @@ void Player::UpdateLasers(bool allowFire, BulletSystem& bullets,
         if(bullet.owner!=BulletOwner::Player || bullet.playerShotKind!=PlayerShotKind::Laser)return;
         if(!allowFire || !IsMarisa() || bullet.weaponEpoch!=weaponEpoch_ || bullet.playerSlot<0 || bullet.playerSlot>1) {bullet.active=false;return;}
         bullet.position=centers[bullet.playerSlot];
+        // 持续光束也跟随当前副机缩放，不能沿用出生时远距离的尺寸挤进近距离镜头。
+        bullet.visualScale=OptionScale();
         const float depth=BulletSystem::Length(game_math::Subtract(aim_.point,position_));
         bullet.SetBeamDirection(ConvergingShotDirection(bullet.position,position_,aim_.forward,Right(),depth,0));
     });

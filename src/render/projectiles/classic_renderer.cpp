@@ -1,5 +1,6 @@
 // 本文件实现共享网格、持久实例缓冲、视锥剔除和双色苦无光效；不访问 Game。
 #include "classic_renderer.hpp"
+#include "smooth_normals.hpp"
 #include "gl_state.hpp"
 #include "raymath.h"
 #include "rlgl.h"
@@ -51,10 +52,11 @@ ClassicRenderer::ClassicRenderer(const std::filesystem::path& asset,const std::f
     if(model.meshCount!=1){UnloadModel(model);throw std::runtime_error("Classic asset requires exactly one render mesh");}
     const Mesh& mesh=model.meshes[0];
     if(mesh.triangleCount>192||!mesh.colors||!mesh.normals){UnloadModel(model);throw std::runtime_error("Classic mesh budget or color-mask violation");}
+    const auto normals=SmoothProjectileNormals(mesh);
     std::vector<Vertex> vertices(mesh.vertexCount);
     for(int i=0;i<mesh.vertexCount;++i){
         vertices[i]={{mesh.vertices[i*3],mesh.vertices[i*3+1],mesh.vertices[i*3+2]},
-                     {mesh.normals[i*3],mesh.normals[i*3+1],mesh.normals[i*3+2]},mesh.colors[i*4]/255.F};
+                     normals[i],mesh.colors[i*4]/255.F};
         p.bound=std::max(p.bound,Vector3Length(vertices[i].position));
     }
     std::vector<unsigned short> indices(mesh.triangleCount*3);

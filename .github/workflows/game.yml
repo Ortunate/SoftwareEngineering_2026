@@ -21,29 +21,46 @@ jobs:
     name: CTest (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows
             runner: windows-2022
+            shell: msys2 {0}
           - platform: macos
             runner: macos-15
+            shell: bash
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v7
+        if: runner.os == 'macOS'
         with:
           python-version: '3.13'
+      - name: Set up MinGW-w64
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
       - name: Configure Windows tests
         if: runner.os == 'Windows'
         run: >-
-          cmake -S . -B build/ci -G "Visual Studio 17 2022" -A x64
+          cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_RC_COMPILER=windres
           -DBUILD_TESTING=ON -DBUILD_SHARED_LIBS=OFF
-          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
-          -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
-          -DUSE_MSVC_RUNTIME_LIBRARY_DLL=OFF
+          '-DCMAKE_EXE_LINKER_FLAGS=-static -static-libgcc -static-libstdc++'
       - name: Configure macOS tests
         if: runner.os == 'macOS'
         run: >-
@@ -68,30 +85,47 @@ jobs:
     needs: test
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-x64
             runner: windows-2022
+            shell: msys2 {0}
           - platform: macos-universal
             runner: macos-15
+            shell: bash
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-python@v7
+        if: runner.os == 'macOS'
         with:
           python-version: '3.13'
-      # 显式对游戏、raylib 和 GLFW 使用静态 CRT，防止包体依赖额外的 VC 运行库。
+      - name: Set up MinGW-w64
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+      # 测试与发布使用相同 MinGW-w64 环境，静态链接 GCC、C++ 和线程运行库。
       - name: Configure Windows release
         if: runner.os == 'Windows'
         run: >-
-          cmake -S . -B build/ci -G "Visual Studio 17 2022" -A x64
+          cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_RC_COMPILER=windres
           -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=OFF
-          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
-          -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
-          -DUSE_MSVC_RUNTIME_LIBRARY_DLL=OFF
+          '-DCMAKE_EXE_LINKER_FLAGS=-static -static-libgcc -static-libstdc++'
       # 一个 app 同时携带两种架构；只静态链接第三方库，系统框架仍由 macOS 提供。
       - name: Configure macOS release
         if: runner.os == 'macOS'
@@ -102,14 +136,29 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
       - name: Build release
         run: cmake --build build/ci --config Release --target koumakyou --parallel 3
+      - name: Verify Windows runtime dependencies
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          imports=$(objdump -p build/ci/koumakyou.exe | awk '/DLL Name:/{print tolower($3)}')
+          printf '%s\n' "$imports"
+          # 系统 DLL 由 Windows 提供；拒绝把编译环境中的额外运行库依赖带进发布包。
+          while IFS= read -r library; do
+            case "$library" in
+              libgcc_s_*.dll|libstdc++-*.dll|libwinpthread-*.dll|libmcfgthread-*.dll|raylib.dll|glfw3.dll|msys-2.0.dll)
+                printf 'Unexpected runtime dependency: %s\n' "$library" >&2
+                exit 1
+                ;;
+            esac
+          done <<< "$imports"
       - name: Package Windows ZIP
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $package = 'dist/koumakyou-windows-x64'
           New-Item -ItemType Directory -Path $package -Force | Out-Null
-          Copy-Item build/ci/Release/koumakyou.exe $package
-          Copy-Item build/ci/Release/assets "$package/assets" -Recurse
+          Copy-Item build/ci/koumakyou.exe $package
+          Copy-Item build/ci/assets "$package/assets" -Recurse
           Copy-Item build/ci/_deps/raylib-src/LICENSE "$package/RAYLIB_LICENSE.txt"
           Compress-Archive -Path $package -DestinationPath dist/koumakyou-windows-x64.zip
       - name: Package macOS ZIP

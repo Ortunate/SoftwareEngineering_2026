@@ -115,9 +115,20 @@ Routine CounterRotatingKnives(Actor& a,bool reverse) {
     }
     co_await a.At(120);
 }
+// 以玩家出生点所在的 -Z 方向为轴，按固定实例序号均匀铺开半球；连续种子的首个随机角过于接近，不能作为散开方向。
+// 末尾回调在通用极坐标速度更新后写入 XYZ，下一固定步再积分；保留速率和30内容帧后的绕Z轴缓慢弯曲。
+void UpdateSpatialBatFlight(Actor& a) {
+    const float cosine=spatial::RadicalInverse(a.spatialIndex,2);
+    const float lateral=std::sqrt(1-cosine*cosine),speed=a.motion.speed;
+    a.motion.velocity={std::cos(a.motion.angle)*lateral*speed,std::sin(a.motion.angle)*lateral*speed,-cosine*speed};
+}
 Routine BatFamiliar(Actor& a) {
     a.Animate(165);a.interactable=false;const float angle=a.Random(pi),angular=(a.Random(pi/4)-pi/8)/20;
-    a.motion.Polar(angle,a.Random(10.7142859F)+13.3928576F);co_await a.At(30);a.motion.Apply({.angularVelocity=angular*60});co_await a.At(10000);a.finished=true;
+    const float speed=a.Random(10.7142859F)+13.3928576F;
+    // 中性路径继续逐帧对照源行为；空间方向不额外消费随机数，保持三次读取及速度、曲率分布。
+    a.motion.Polar(a.skills.spatial ? 2*pi*spatial::RadicalInverse(a.spatialIndex,3) : angle,speed);
+    if(a.skills.spatial)a.SetStepEffect(UpdateSpatialBatFlight);
+    co_await a.At(30);a.motion.Apply({.angularVelocity=angular*60});co_await a.At(10000);a.finished=true;
 }
 inline constexpr behavior::Pattern kBatFamiliar{.initialAnimation=165,.deathEffect=0,.routine=BatFamiliar};
 void SpawnBat(Actor& a) {

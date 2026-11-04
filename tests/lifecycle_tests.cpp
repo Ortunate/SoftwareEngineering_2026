@@ -3599,13 +3599,14 @@ struct GameLifecycleProbe {
     }
 
     /// @brief 六面四段非符或五组符卡在N/H/L分别走击破/超时，核对实际弹池、召唤身份、暂停和卸载。
-    /// spellGroups为0时测试非符，为1或5时测试相应组数的符卡；正式整关与符卡练习入口另验。
-    static void TestStage6DifficultyNonspells(Game& game,const std::string& prefix,int spellGroups=0) {
+    /// spellGroups为0时测试非符，为1或5时测试相应组数的符卡；batsOnly仅筛选化蝠非符，仍覆盖N/H/L及击破/超时。
+    static void TestStage6DifficultyNonspells(Game& game,const std::string& prefix,int spellGroups=0,bool batsOnly=false) {
         using S=bosses::RemiliaBoss;using B=S::Behavior;
         constexpr std::array skills{B::FirstNonspell,B::SecondNonspell,B::ThirdNonspell,B::BatNonspell};constexpr std::array thresholds{1200,1600,1600,1300};
         constexpr std::array normal{B::StarOfVanities,B::ScarletNetherworld,B::VladTepesCurse,B::ScarletShoot,B::RedMagic};
         constexpr std::array high{B::YoungDemonLord,B::ThousandNeedles,B::VampireIllusion,B::ScarletMeister,B::ScarletGensokyo};
         for(int d=1;d<4;++d)for(int phase=0;phase<(spellGroups?spellGroups:4);++phase)for(bool damage:{false,true}) {
+            if(batsOnly&&(spellGroups||phase!=3))continue;
             const int shot=(d+phase)%4;const auto difficulty=*native_combat::DifficultyFromIndex(d);
             game.stageId_=StageId::Stage6;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();
             game.stage_=StageDirector{};game.actors_.Clear();game.bullets_.Reset();game.bossEventId_.reset();game.runDifficulty_=difficulty;
@@ -3616,13 +3617,23 @@ struct GameLifecycleProbe {
             config.phases={{{id},{{{0,1,WHITE}}}}};auto boss=std::make_unique<S>();boss->StartBoss(config);game.boss_=std::move(boss);
             for(int tick=0;tick<260;++tick)game.Update(1.0F/120);game.boss_->ResumeCombat();
             const auto label=std::string(spellGroups?"stage6-spell-d":"stage6-nonspell-d")+std::to_string(d)+"-phase"+std::to_string(phase)+(damage?"-damage":"-timeout");
-            std::size_t peak=0;int ticks=0;bool paused=false,sampled=false;
+            std::size_t peak=0;int ticks=0;bool paused=false,sampled=false,batSpread=false;
             for(;ticks<170*120&&game.boss_->active;++ticks) {
                 game.Update(1.0F/120);assert(game.state_==RunState::Playing&&game.referenceRank_==32);
                 assert(!game.bullets_.Pool().DroppedSpawns()&&!game.actors_.DroppedSpawns());
                 peak=std::max(peak,game.bullets_.Pool().ActiveCount());
                 if(spellGroups&&game.boss_->SpellName())assert(game.boss_->SpellCardNumber()==103+phase*3+d);
                 game.actors_.ForEachActive([&](const behavior::Actor& a){assert(a.difficulty==difficulty);});
+                if(!spellGroups&&phase==3) {
+                    bool left=false,right=false,up=false,down=false;
+                    game.actors_.ForEachActive([&](const behavior::Actor& a){
+                        assert(a.motion.velocity.z<0&&!a.interactable&&a.animationScript==165);
+                        left|=a.motion.velocity.x<0;right|=a.motion.velocity.x>0;up|=a.motion.velocity.y>0;down|=a.motion.velocity.y<0;
+                    });
+                    if(!batSpread&&left&&right&&up&&down&&EnemyCount(game)>=20){
+                        batSpread=true;if(!damage)Capture(game,prefix,(label+"-bat-spread").c_str());
+                    }
+                }
                 if(!paused&&game.boss_->skillTimer>4) {
                     paused=true;const auto time=game.boss_->skillTimer;game.TogglePause();game.Update(0.5F);assert(game.boss_->skillTimer==time);game.TogglePause();
                 }
@@ -3630,6 +3641,7 @@ struct GameLifecycleProbe {
                 if(damage&&game.boss_->CanTakeDamage()&&game.boss_->skillTimer>12) {game.boss_->health=spellGroups?0:thresholds[phase]-1;game.ResolveCollisions();}
             }
             assert(ticks<170*120&&paused&&sampled&&!game.boss_->active&&game.boss_->Defeated()==damage);
+            if(!spellGroups&&phase==3)assert(batSpread);
             game.EnterMainMenu();assert(!game.boss_&&game.assets_.Stage().visuals.empty()&&!EnemyCount(game));
             assert(!game.bullets_.Pool().ActiveCount()&&!game.actorEffects_.Pool().ActiveCount());
             std::cout<<label<<" complete; peak "<<peak<<" projectiles\n";
@@ -4997,6 +5009,8 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestStage6DifficultyNonspells(*game,prefix,true);
         } else if(argc>=3 && std::string(argv[2])=="--stage6-difficulty-nonspells") {
             koumakyou::GameLifecycleProbe::TestStage6DifficultyNonspells(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--stage6-bats-only") {
+            koumakyou::GameLifecycleProbe::TestStage6DifficultyNonspells(*game,prefix,0,true);
         } else if(argc>=3 && std::string(argv[2])=="--stage6-difficulty-midboss") {
             koumakyou::GameLifecycleProbe::TestStage6DifficultyMidboss(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--stage6-pending-difficulties") {

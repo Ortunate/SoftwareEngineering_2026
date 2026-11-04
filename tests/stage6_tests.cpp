@@ -823,8 +823,52 @@ void TestSpatialDisplayFrameRates() {
     }
 }
 
+/// @brief 通过真实召唤验证六十只蝙蝠覆盖 -Z 半球，保持速度、随机流、双频率和显示帧率一致。
+void TestSpatialBatSpread() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int d=1;d<4;++d)for(unsigned seed:{7U,0x9e3779b9U}) {
+        behavior::Actor boss;boss.Reset({0,0,5},13000,seed);boss.difficulty=*native_combat::DifficultyFromIndex(d);
+        stage6::ConfigureBehavior(boss,true);boss.Start(bosses::RemiliaBoss::Behaviors::BatNonspell(boss));
+        std::vector<behavior::Spawn> spawns;
+        for(int tick=0;tick<480&&spawns.size()<60;++tick) {
+            boss.Update(1.F/120,{3,2,8},*bullets);spawns.insert(spawns.end(),boss.spawnEvents.begin(),boss.spawnEvents.end());
+        }
+        assert(spawns.size()==60);
+        std::array<int,4> quadrants{},depthBands{};
+        for(auto rate:{behavior::UpdateRate::Hz60,behavior::UpdateRate::Hz120})for(const auto& request:spawns) {
+            auto spawn=request;spawn.retireOutside=false;
+            Vector3 expected{};float expectedRandom=0;double expectedClock=0;
+            for(int fps:{120,30,60,144,240}) {
+                behavior::Actor bat(rate);bat.Activate(spawn);const float step=1.F/static_cast<int>(rate);
+                bat.Update(step,{3,2,8},*bullets);const auto v=bat.motion.velocity;
+                const float speed=std::sqrt(v.x*v.x+v.y*v.y+v.z*v.z);
+                assert(v.z<0&&speed>=13.3928576F&&speed<=24.1071435F&&!bat.interactable);
+                Near(bat.position.x,spawn.position.x);Near(bat.position.y,spawn.position.y);Near(bat.position.z,spawn.position.z);
+                unsigned random=spawn.seed;Next(random);Next(random);
+                const float sourceSpeed=static_cast<float>(Next(random)>>8)/16777216.F*10.7142859F+13.3928576F;
+                Near(speed,sourceSpeed,1e-4F);assert(bat.motion.angularVelocity==0);
+                if(rate==behavior::UpdateRate::Hz120&&fps==120) {
+                    ++quadrants[(v.x>0?1:0)+(v.y>0?2:0)];++depthBands[std::min(3,static_cast<int>(-v.z/speed*4))];
+                }
+                for(int frame=0;frame<fps*2;++frame) {
+                    bat.Update(1.F/fps,{3,2,8},*bullets);
+                    assert(bat.motion.velocity.z<0&&bat.position.z<=spawn.position.z);
+                }
+                assert(bat.active&&bat.motion.angularVelocity!=0);Near(bat.motion.speed,sourceSpeed,1e-4F);
+                const float nextRandom=bat.Random(1);
+                assert(nextRandom==static_cast<float>(Next(random)>>8)/16777216.F);
+                if(fps==120){expected=bat.position;expectedRandom=nextRandom;expectedClock=bat.phaseFrames;}
+                else{Near(bat.position.x,expected.x);Near(bat.position.y,expected.y);Near(bat.position.z,expected.z);assert(nextRandom==expectedRandom&&bat.phaseFrames==expectedClock);}
+            }
+        }
+        for(int count:quadrants)assert(count>=8);
+        for(int count:depthBands)assert(count>=8);
+    }
+}
+
 /// @brief 长时间高速巡航后，空间本体不能漂离出生回收盒使化蝠永久占槽；按正式顺序处理全部子演员。
 void TestBatFamiliarRetirement() {
+    TestSpatialBatSpread();
     for(int d=1;d<4;++d) {
     auto bullets=std::make_unique<BulletSystem>();auto pool=std::make_unique<behavior::ActorPool<128>>();
     behavior::Actor boss;boss.Reset({0,0,5},13000,7);boss.difficulty=*native_combat::DifficultyFromIndex(d);
@@ -889,7 +933,7 @@ void RunStage6DifficultyTests() {TestDifficultyOrdinaryReference();TestOrdinaryD
 void RunStage6MidbossTests() {TestMidbossDifficultyReference();TestMidbossDifficultyLifecycle();}
 
 /// @brief 六面蕾米莉亚已接入非符的N/H/L源差分。
-void RunStage6NonspellTests() {TestRemiliaAmbientLifecycle();TestRemiliaDefeatedEffects();TestRemiliaEffectDisplayRates();TestRemiliaNonspellDifficultyReference();TestRemiliaNonspellDifficultyLifecycle();}
+void RunStage6NonspellTests() {TestBatFamiliarRetirement();TestRemiliaAmbientLifecycle();TestRemiliaDefeatedEffects();TestRemiliaEffectDisplayRates();TestRemiliaNonspellDifficultyReference();TestRemiliaNonspellDifficultyLifecycle();}
 /// @brief 第一组符卡的独立源差分与默认120 Hz生命周期入口，便于定位首次不一致。
 void RunStage6FirstSpellTests() {TestRemiliaSpellDifficultyReference(1);TestRemiliaSpellDifficultyLifecycle(1);}
 /// @brief 全部已接入符卡的源差分和120 Hz角色生命周期；未接入入口不因数据存在而执行。

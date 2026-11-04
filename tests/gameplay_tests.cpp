@@ -1,4 +1,4 @@
-// 本文件负责验证弹幕方向、敌人行动和 Boss 阶段行为。
+// 本文件负责验证弹幕方向、持续消弹、玩家资源、敌人行动和 Boss 阶段行为。
 
 #include "actor_fixture.hpp"
 #include "gameplay/bullets/system.hpp"
@@ -38,19 +38,42 @@ void TestChallengeLifeCredits() {
         player.CollectResources(1,1);
         assert(player.NetMisses()==(challenge?-1:0)&&player.RemainingLives()==(challenge?3:4)&&player.Bombs()==2);
         assert(player.TakeHit());assert(player.NetMisses()==(challenge?0:1));
-        assert(player.RemainingLives()==3);
+        assert(player.RemainingLives()==3&&player.Bombs()==1);
         player.CollectResources(2,0);assert(player.NetMisses()==(challenge?-2:1));
         const auto count=player.NetMisses();const auto lives=player.RemainingLives();
         player.ResetPose();assert(player.NetMisses()==count&&player.RemainingLives()==lives);
         for(const auto reward:{std::array{-1,1},std::array{1,-1}}) {
             bool rejected=false;try {player.CollectResources(reward[0],reward[1]);}catch(const std::invalid_argument&) {rejected=true;}
-            assert(rejected&&player.NetMisses()==count&&player.RemainingLives()==lives&&player.Bombs()==2);
+            assert(rejected&&player.NetMisses()==count&&player.RemainingLives()==lives&&player.Bombs()==1);
         }
         player.CollectResources(20,20);
         assert(player.NetMisses()==(challenge?-22:1)&&player.RemainingLives()==(challenge?3:9)&&player.Bombs()==8);
         player.ConfigureRun(2,1,challenge,ShotType::Needle);assert(player.NetMisses()==0);
         player.CollectResources(1,0);player.Reset();assert(player.NetMisses()==0);
     }
+}
+
+/// @brief 四机体、双模式及0～3配置均按本局设置恢复Bomb；验证高库存截回、消耗后补回和姿态重置保留。
+void TestRespawnBombStock() {
+    using namespace koumakyou;
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int shot=0;shot<4;++shot)for(bool challenge:{false,true})for(int stock=0;stock<=3;++stock) {
+        Player player;player.ConfigureRun(3,stock,challenge,static_cast<ShotType>(shot));
+        assert(player.Bombs()==stock);
+        player.CollectResources(0,8);assert(player.Bombs()==8);
+        assert(player.TakeHit()&&player.Bombs()==stock);
+        const bool used=player.Update(0,{.bomb=true},*bullets,0,1,true);
+        assert(used==(stock>0)&&player.Bombs()==std::max(0,stock-1));
+        const auto remaining=player.Bombs();player.ResetPose();assert(player.Bombs()==remaining);
+        assert(player.TakeHit()&&player.Bombs()==stock);
+        player.ConfigureRun(3,(stock+1)%4,challenge,static_cast<ShotType>(shot));
+        assert(player.TakeHit()&&player.Bombs()==(stock+1)%4);
+        player.Reset();assert(player.Bombs()==3&&player.TakeHit()&&player.Bombs()==3);
+    }
+    // 单符入口只有当前一条命且没有Bomb，首次Miss直接结束，不被设置界面的最低残机数抬高。
+    Player spell;spell.ConfigureRun(0,0,false,ShotType::HomingAmulet);
+    assert(spell.RemainingLives()==1&&spell.Bombs()==0);
+    assert(!spell.TakeHit()&&spell.RemainingLives()==0&&spell.Bombs()==0);
 }
 
 /// @brief 非符与符卡共享固定血量区间；击破、超时、下一组和退场均不能把符卡段错误铺满。
@@ -145,6 +168,187 @@ void TestBeamContacts() {
             ++count;
         });
         assert(count == 21);
+    }
+}
+
+/// @brief 以独立固定步计数验证持续消弹截止，并覆盖时停、即时清弹、窗口延长和重置。
+void TestSustainedEnemyBulletClear() {
+    using namespace koumakyou;
+    auto pool = std::make_unique<BulletSystem>();
+    // 同时生成普通敌弹和仍在预警的光束，避免只检查 Dangerous 而漏清尚未生效的光束。
+    const auto spawnEnemies = [&] {
+        auto* bullet = pool->Spawn(BulletOwner::Enemy, {}, {}, 0.1F, RED, 0);
+        auto* beam = pool->SpawnBeam({}, {0, 0, 1}, 4, 0.1F, 2, 4, WHITE);
+        assert(bullet && beam && !beam->Dangerous());
+        return std::array<Bullet*, 2>{bullet, beam};
+    };
+    const auto spawnPlayer = [&] {
+        auto* bullet = pool->Spawn(BulletOwner::Player, {}, {}, 0.1F, WHITE, 0);
+        assert(bullet);
+        bullet->maxAge = 20;
+        return bullet;
+    };
+
+    for (int hz : {60, 120}) {
+        for (int fps : {30, 60, 144, 240}) {
+            pool->Reset();
+            auto* player = spawnPlayer();
+            const auto initial = spawnEnemies();
+            pool->ClearEnemyBullets(2);
+            assert(!initial[0]->active && !initial[1]->active && player->active);
+            const float step = 1.0F / static_cast<float>(hz);
+            const int clearTicks = hz * 2; // 原生120内容帧按60 Hz解释为2秒，120 Hz模拟则覆盖240步。
+            int ticks = 0;
+            double pendingTicks = 0;
+            // 模拟显示帧补步；预期由整数逻辑步给出，不读取生产窗口或复刻其浮点减法。
+            // 两秒内最后一步仍清弹，下一步的新弹必须存活，不能提前漏清或延长一整步。
+            for (int frame = 0; ticks < clearTicks + 1; ++frame) {
+                assert(frame < fps * 3);
+                const int previousTicks = ticks;
+                const float previousAge = player->age;
+                pendingTicks += static_cast<double>(hz) / fps;
+                while (pendingTicks + 1e-9 >= 1 && ticks < clearTicks + 1) {
+                    pendingTicks -= 1;
+                    const auto enemies = spawnEnemies();
+                    pool->Update(step);
+                    ++ticks;
+                    const bool expired = ticks > clearTicks;
+                    assert(enemies[0]->active == expired && enemies[1]->active == expired);
+                    if (!expired) assert(enemies[0]->age == 0 && enemies[1]->age == 0);
+                    assert(player->active && pool->Pool().ActiveCount() == (expired ? 3U : 1U));
+                }
+                if (ticks == previousTicks) assert(player->age == previousAge);
+            }
+            assert(std::abs(player->age - (clearTicks + 1) * step) < 1e-5F);
+        }
+    }
+
+    // 默认即时清弹不创建窗口；即使随后推进正时间，新弹也应保留。
+    pool->Reset();
+    auto* player = spawnPlayer();
+    auto enemies = spawnEnemies();
+    pool->ClearEnemyBullets();
+    assert(!enemies[0]->active && !enemies[1]->active && player->active);
+    enemies = spawnEnemies();
+    pool->Update(0);
+    pool->Update(0.125F);
+    assert(enemies[0]->active && enemies[1]->active && player->active);
+
+    // dt=0 仍清当前敌弹，但不能消费窗口；下一次正时间更新覆盖整个最后一步。
+    pool->ClearEnemyBullets(0.125F);
+    for (int repeat = 0; repeat < 3; ++repeat) {
+        enemies = spawnEnemies();
+        pool->Update(0);
+        assert(!enemies[0]->active && !enemies[1]->active && player->active);
+    }
+    enemies = spawnEnemies();
+    pool->Update(0.125F);
+    assert(!enemies[0]->active && !enemies[1]->active);
+    enemies = spawnEnemies();
+    pool->Update(0);
+    assert(enemies[0]->active && enemies[1]->active);
+
+    // 剩余窗口不足一步时也先清后扣时；跨过截止的该步不能漏清，下一步立即放行。
+    pool->ClearEnemyBullets(0.03125F);
+    enemies = spawnEnemies();
+    pool->Update(0.0625F);
+    assert(!enemies[0]->active && !enemies[1]->active && player->active);
+    enemies = spawnEnemies();
+    pool->Update(0.0625F);
+    assert(enemies[0]->active && enemies[1]->active && player->active);
+
+    // 时停既不执行持续清弹，也不消费剩余秒数；恢复后仍须覆盖尚余的最后一步。
+    pool->Reset();
+    player = spawnPlayer();
+    pool->ClearEnemyBullets(0.25F);
+    pool->Update(0.125F);
+    enemies = spawnEnemies();
+    const float playerAge = player->age;
+    pool->Update(10, {}, {}, true);
+    pool->Update(0, {}, {}, true);
+    assert(enemies[0]->active && enemies[1]->active && player->active);
+    assert(enemies[0]->age == 0 && enemies[1]->age == 0 && player->age == playerAge);
+    pool->Update(0.125F);
+    assert(!enemies[0]->active && !enemies[1]->active && player->active);
+    enemies = spawnEnemies();
+    pool->Update(0);
+    assert(enemies[0]->active && enemies[1]->active);
+
+    // 剩余0.125秒时，默认/显式零和较短时长均不能缩短或重启窗口；较长时长取max而非相加。
+    // 使用可精确表示的二进制秒数，逐步检查截止，隔离重复调用语义与累计舍入。
+    for (float duration : {0.0F, 0.0625F, 0.125F, 0.5F}) {
+        pool->Reset();
+        player = spawnPlayer();
+        pool->ClearEnemyBullets(0.25F);
+        pool->Update(0.125F);
+        enemies = spawnEnemies();
+        pool->ClearEnemyBullets(duration);
+        assert(!enemies[0]->active && !enemies[1]->active && player->active);
+        enemies = spawnEnemies();
+        pool->ClearEnemyBullets();
+        assert(!enemies[0]->active && !enemies[1]->active && player->active);
+        const int remainingSteps = duration == 0.5F ? 8 : 2;
+        for (int tick = 0; tick <= remainingSteps; ++tick) {
+            enemies = spawnEnemies();
+            pool->Update(0.0625F);
+            assert(enemies[0]->active == (tick == remainingSteps));
+            assert(enemies[1]->active == (tick == remainingSteps) && player->active);
+        }
+    }
+
+    // 非法调用必须在清弹前失败，且不得取消或延长既有窗口。
+    for (float duration : {-1.0F, std::numeric_limits<float>::infinity(),
+                           -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
+        pool->Reset();
+        player = spawnPlayer();
+        pool->ClearEnemyBullets(0.125F);
+        enemies = spawnEnemies();
+        bool rejected = false;
+        try { pool->ClearEnemyBullets(duration); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        assert(rejected && enemies[0]->active && enemies[1]->active && player->active);
+        pool->Update(0.125F);
+        assert(!enemies[0]->active && !enemies[1]->active);
+        enemies = spawnEnemies();
+        pool->Update(0);
+        assert(enemies[0]->active && enemies[1]->active);
+    }
+
+    pool->Reset();
+    pool->ClearEnemyBullets(1);
+    spawnEnemies();
+    spawnPlayer();
+    pool->Reset();
+    assert(pool->Pool().ActiveCount() == 0);
+    enemies = spawnEnemies();
+    player = spawnPlayer();
+    pool->Update(0);
+    pool->Update(0.125F);
+    assert(enemies[0]->active && enemies[1]->active && player->active);
+}
+
+/// @brief 场内静止/慢速敌弹跨过旧14秒上限仍存活；显式时限、自机寿命、离场和清弹继续回收。
+void TestOrdinaryBulletLifetime() {
+    using namespace koumakyou;
+    auto pool=std::make_unique<BulletSystem>();
+    for(int hz:{30,60,120,144,240}) {
+        pool->Reset();
+        auto* limited=pool->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,0);
+        auto* stationary=pool->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,0);
+        auto* slow=pool->Spawn(BulletOwner::Enemy,{}, {.02F,0,0},.1F,WHITE,0);
+        auto* player=pool->Spawn(BulletOwner::Player,{}, {},.1F,WHITE,0);
+        auto* beam=pool->SpawnBeam({}, {0,0,1},2,.1F,.5F,1,WHITE);
+        assert(stationary&&slow&&player&&limited&&beam);
+        limited->maxAge=2;
+        for(int tick=0;tick<30*hz;++tick)pool->Update(1.0F/hz);
+        assert(stationary->active&&slow->active&&!player->active&&!limited->active&&!beam->active);
+        assert(std::abs(slow->position.x-.6F)<5e-4F&&pool->Pool().ActiveCount()==2);
+        slow->position.x=kArenaHalfExtents.x+4;pool->Update(1.0F/hz);
+        assert(!slow->active&&stationary->active);
+        pool->ClearEnemyBullets();assert(pool->Pool().ActiveCount()==0);
+        // 复用刚才的有限寿命槽位，不能把上一颗限时弹的截止值带入新敌弹。
+        auto* reused=pool->Spawn(BulletOwner::Enemy,{}, {},.1F,WHITE,0);assert(reused);
+        pool->Update(20);assert(reused->active);
     }
 }
 
@@ -255,10 +459,13 @@ void TestEnemyBodyContacts() {
 /// @brief 验证弹幕方向、生成及敌人和 Boss 行为；断言失败时终止进程。
 void RunGameplayTests() {
     TestChallengeLifeCredits();
+    TestRespawnBombStock();
     TestBossHealthGroups();
     TestBeamContacts();
+    TestSustainedEnemyBulletClear();
     TestBeamRepeatGraze();
     TestBeamLifetimeBoundary();
+    TestOrdinaryBulletLifetime();
     TestEnemyBodyContacts();
     using koumakyou::BulletOwner;
     using koumakyou::BulletSystem;

@@ -13,8 +13,8 @@ bpy.context.preferences.filepaths.temporary_directory = str(ROOT/'.cache/tmp')
 bpy.context.preferences.filepaths.save_version = 0
 # 编号、目录、有效色数、预算、特征及危险体积分别登记，颜色不复制几何。
 SPECS = [
-    (5,'needle_classic',16,96,'双端尖棱晶、直柱中段、白色主面和彩色侧棱','全部棱晶实体'),
-    (8,'knife_classic',8,256,'短直刀、短护手、中央贯通孔的圆柱柄，纯色刃脊','刀刃、护手、穿孔圆柱柄实体并集；柄孔为空'),
+    (5,'needle_classic',16,96,'六棱柱中段、上下对称双锥的薄晶体（面轴厚度 30%）','全部六棱晶体实体'),
+    (8,'knife_classic',8,256,'竖直平面刀刃、短护手与压薄穿孔刀柄','刀刃、护手、压薄穿孔刀柄实体并集；柄孔为空'),
     (2,'rice_classic',16,160,'圆收两端的细长米粒，不使用尖晶端部','闭合纺锤实体'),
     (0,'pellet_classic',16,160,'小型圆珠、明亮中心、较清楚的外边界','闭合圆珠实体'),
     (3,'orb_classic',16,320,'白亮内核、半透明球壳、柔和边缘','外壳外表面围成的整个实体，内部有碰撞'),
@@ -24,8 +24,8 @@ SPECS = [
     (7,'fireball_classic',1,384,'稳定白黄热核与红橙色立体火焰瓣、循环形变','稳定热核有碰撞，外焰和尾部是装饰'),
 ]
 CHECKS={
-    5:['双端尖晶、直柱中段与细彩棱符合 S94–109，不应像缝衣针','转到侧背面仍有实体厚度','探针检查上下尖端与柱体外侧；三维旋转和缩放后仍贴合'],
-    8:['S122–129 的短直刀、护手和圆柱柄均可辨认，不是苦无三角刃','沿 Z 方向贯穿圆柱柄中部的纵孔；孔内 CLEAR，孔壁 CONTACT，侧面是完整圆柱','检查刀背、刃口、护手端部及部件交界，不允许整个外包盒冒充碰撞'],
+    5:['六棱截面、直柱和上下对称尖锥；正面宽高约 2:5，参考 S94–109 的可见轮廓','沿局部 Z 面轴压缩至原厚度 30%，保留六棱拓扑和清晰晶面','探针检查上下尖端与柱体外侧；三维旋转和缩放后仍贴合'],
+    8:['S122–129 的短直刀、护手和刀柄均可辨认；刀刃主面竖直平行局部 XY 面','刀柄沿 Z 面轴压薄，厚度不超过护手；纵孔仍沿 Z 贯通，孔内 CLEAR、孔壁 CONTACT','检查刀背、刃口、护手端部及部件交界，不允许整个外包盒冒充碰撞'],
     2:['S46–61 的细长米粒比例、圆收端与柔亮面均清楚','与针形晶体区分，侧面不能变成薄片','端点、弧面和外侧逐点检查，转向后危险体积随模型变化'],
     0:['S14–29 的小圆珠轮廓与较实边界清楚','在小尺寸画布下与柔边小玉有区别，色号可读','球面探针接触，体积中心为 CONTACT，光效外部为 CLEAR'],
     3:['S62–77 的明亮中心与柔边轮廓可辨，最外层确为三维透明球壳','关闭球壳时可独立查看内核；转到背面、浅色底和重叠场景检查层次','透明壳包围的内部有碰撞，不能只让小内核伤害'],
@@ -102,24 +102,31 @@ def ring(name,cx,cy,major,minor,segments=12,cross=4):
     return mesh(name,v,f,smooth=True)
 
 def needle():
-    cross=[(-.125,-.045),(-.075,-.075),(.075,-.075),(.125,-.045),(.125,.045),(.075,.075),(-.075,.075),(-.125,.045)]
-    v=[(0,.5,0)]+[(x,y,z) for y in (.32,-.32) for x,z in cross]+[(0,-.5,0)]
+    # +Y 为长轴。原图有透明留白，按 S94–109 可见轮廓近似取宽/长 0.4，
+    # 中柱占总长 56%，两端尖锥各占 22%；基准正六边形半径 0.2。
+    # 按面轴（局部 Z）将几何厚度压至 30%，不改 X/Y 轮廓；导出前计算新法线和同源碰撞。
+    cross=[(.2*math.cos(math.tau*i/6),.2*.3*math.sin(math.tau*i/6)) for i in range(6)]
+    v=[(0,.5,0)]+[(x,y,z) for y in (.28,-.28) for x,z in cross]+[(0,-.5,0)]
     f=[]
-    for i in range(8):j=(i+1)%8;f.extend([(0,1+i,1+j),(1+i,9+i,9+j,1+j),(17,9+j,9+i)])
-    mesh('FacetedCrystal',v,f)
+    for i in range(6):j=(i+1)%6;f.extend([(0,1+i,1+j),(1+i,7+i,7+j,1+j),(13,7+j,7+i)])
+    mesh('RegularHexagonalCrystal',v,f)
 
 def knife():
-    # 封闭双斜面刀刃；圆柱柄通过精确布尔开孔，不能用环面替代实心圆柱轮廓。
+    # +Y 为刀尖、+Z 为面轴。主刀面在 Z=±0.028 保持竖直平面，只有边缘斜切，
+    # 避免旧中心顶点向刀尖/刀根形成整面倾斜。外轮廓及护手尺寸不变。
     outline=[(-.105,-.13),(.105,-.13),(.105,.25),(.075,.39),(0,.5),(-.075,.39),(-.105,.25)]
-    n=len(outline);v=[(x,y,0) for x,y in outline]+[(0,.05,.034),(0,.05,-.034)]
-    f=[]
-    for i in range(n):j=(i+1)%n;f.extend([(i,j,n),(j,i,n+1)])
-    mesh('DoubleBevelBlade',v,f)
+    inner=[(-.075,-.105),(.075,-.105),(.075,.245),(.05,.375),(0,.455),(-.05,.375),(-.075,.245)]
+    n=len(outline);v=[(x,y,0) for x,y in outline]+[(x,y,z) for z in (.028,-.028) for x,y in inner]
+    f=[tuple(range(n,2*n)),tuple(range(3*n-1,2*n-1,-1))]
+    for i in range(n):
+        j=(i+1)%n;f.extend([(i,j,n+j,n+i),(j,i,2*n+i,2*n+j)])
+    mesh('VerticalBeveledBlade',v,f)
     prism('ShortGuard',[(-.19,-.165),(.19,-.165),(.19,-.12),(-.19,-.12)],.042)
-    n=12;v=[(.085*math.cos(math.tau*i/n),y,.085*math.sin(math.tau*i/n)) for y in (-.46,-.155) for i in range(n)]
+    # 保留原柄正面外形与穿孔，仅将面轴半厚从 0.085 压至 0.040，严格小于护手的 0.042。
+    n=12;v=[(.085*math.cos(math.tau*i/n),y,.040*math.sin(math.tau*i/n)) for y in (-.46,-.155) for i in range(n)]
     f=[tuple(range(n-1,-1,-1)),tuple(range(n,2*n))]
     for i in range(n):j=(i+1)%n;f.append((i,j,j+n,i+n))
-    handle=mesh('PiercedCylinderHandle',v,f,smooth=True)
+    handle=mesh('PiercedFlatHandle',v,f,smooth=True)
     cutter=prism('TemporarySlot',[(.035*math.cos(math.tau*i/12),-.305+.095*math.sin(math.tau*i/12)) for i in range(12)],.15)
     bpy.context.view_layer.objects.active=handle
     mod=handle.modifiers.new('RealThroughHole','BOOLEAN');mod.operation='DIFFERENCE';mod.solver='EXACT';mod.object=cutter
@@ -171,6 +178,8 @@ def flame():
 for kind,name,colors,limit,description,danger in SPECS:
     # 单件返修只重建指定类别，避免覆盖其他类别的人工验收记录。
     if '--only-bubble' in sys.argv and kind!=9:continue
+    if '--only-needle' in sys.argv and kind!=5:continue
+    if '--only-knife' in sys.argv and kind!=8:continue
     material,parts=begin();out=BASE/name;out.mkdir(parents=True,exist_ok=True)
     if kind==5:needle()
     elif kind==8:knife()
@@ -188,7 +197,9 @@ for kind,name,colors,limit,description,danger in SPECS:
           'renderMeshes':1,'textureMaps':0,'renderMaterial':'collection shader / vertex surface roles',
           'description':description,'collisionSemantics':danger,'humanAcceptance':'pending','tipAxis':'+Y','frontAxis':'+Z',
           'units':'normalized asset coordinates; sphere diameter 1; directional body length approximately 1',
-          'triangleHardLimit':limit,'revision':2,'vertexChannels':{'r':'fixed highlight mask','g':'role / 2 (body, shell, decorative flame or static filament)','b':'flame phase'},'parts':[]}
+          'triangleHardLimit':limit,'revision':4 if kind==5 else 3 if kind==8 else 2,'vertexChannels':{'r':'legacy highlight mask; runtime lighting uses normals','g':'role / 2 (body, shell, decorative flame or static filament)','b':'flame phase'},'parts':[]}
+    if kind==5:info['crystalStructure']={'crossSectionSides':6,'baseCircumradius':.2,'faceAxis':[0,0,1],'faceAxisScale':.3,'length':1,'prismLength':.56,'tipLength':.22,'frontWidthToLength':.4,'reference':'etama3 S94–109 visible silhouette, excluding transparent padding','normalPolicy':'flat crystal facets'}
+    if kind==8:info['knifeStructure']={'faceAxis':[0,0,1],'handleHalfDepth':.040,'guardHalfDepth':.042,'bladeHalfDepth':.028,'bladeFacePlane':'XY','handleFaceAxisScale':.040/.085,'normalPolicy':'authored flat blade and smooth handle'}
     with (out/'collision.bin').open('wb') as stream:
         solids=[o for o in parts if o['collision']];stream.write(b'KCOL0001');stream.write(struct.pack('<I',len(solids)))
         for o in parts:
@@ -220,7 +231,7 @@ for kind,name,colors,limit,description,danger in SPECS:
         export_normals=True,export_materials='EXPORT',export_texcoords=False,export_tangents=False,
         export_vertex_color='ACTIVE',export_all_vertex_colors=False,export_active_vertex_color_when_no_material=True)
     info.update(localForward=[0,1,0],localUp=[0,0,1],surfaceFront=[0,0,1])
-    (out/'asset.json').write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding='utf-8')
+    (out/'asset.json').write_text(json.dumps(info,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     checks='\n'.join('- [ ] '+c for c in CHECKS[kind])
     composition='\n'.join(f"| {p['name']} | {p['triangles']} | {'实体碰撞' if p['collision'] else '显示装饰'} |" for p in info['parts'])
     (out/'REVIEW.md').write_text(f'''# {description}\n\n状态：待人工验收。Type {kind}，{colors} 个有效颜色，共享一个网格，代表色 C{info['representativeColor']:02}。\n\n几何总数 {info['triangles']} 三角形，实体碰撞 {info['collisionTriangles']} 三角形。预算硬上限 {limit}。\n\n| 部件 | 三角形 | 碰撞角色 |\n| --- | ---: | --- |\n{composition}\n\n碰撞约定：{danger}。颜色、透明度和外部光效不改变碰撞。\n\n无拉伸原精灵贴图；纯色、顶点亮面遮罩与独立程序化表面着色。源文件保留分部件及材质预览，glTF 合并网格，角色由 COLOR_0.g 编码，需配套运行时着色器解释。\n\n## 本件人工检查\n\n{checks}\n- [ ] 本类所有有效颜色、深浅背景、常用镜头尺寸及放大视图均检查\n- [ ] 独立碰撞单显与叠加已检查，明确同意本件通过\n\n使用 tools/windows/Review-Projectiles.cmd 选择本件。参数、接口及统一测试记录见 [全组交付说明](../../../docs/PROJECTILE_COLLECTION_REVIEW.md)。本轮人工验收尚未通过，自动检查不能代签。\n''',encoding='utf-8')

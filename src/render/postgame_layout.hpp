@@ -1,4 +1,4 @@
-// 本文件统一结局后成绩页面的绘制与命中布局，横屏分栏、窄屏纵向排列。
+// 本文件统一结局后成绩选存的绘制与命中布局，横屏分栏、窄屏纵向排列。
 #pragma once
 #include "render/menu_layout.hpp"
 
@@ -11,15 +11,6 @@ struct PostgameLayout {
     [[nodiscard]] Rectangle Choice(int index) const {
         return canvas.Rect(compact?48:690,(compact?720:350)+index*(compact?100:80),compact?664:340,60);
     }
-    [[nodiscard]] Rectangle ModeArrow(int direction) const {
-        return canvas.Rect(direction<0?48:250,compact?124:116,32,32);
-    }
-    [[nodiscard]] Rectangle ShotArrow(int direction) const {
-        return canvas.Rect(direction<0?350:680,compact?124:116,32,32);
-    }
-    /// @brief 排行榜底部难度切换命中区；与当前表的难度标题同行。
-    [[nodiscard]] Rectangle DifficultyArrow(int direction) const {
-        return canvas.Rect(direction<0?48:canvas.width-80,canvas.height-104,32,32);
-    }
+
 };
 } // namespace koumakyou::menu

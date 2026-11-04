@@ -67,7 +67,7 @@ void CheckPlayback() {
     assert(rejected);
 }
 void CheckRecords() {
-    score::Profile profile;
+    score::Profile profile;assert(profile.lastName.empty());
     for(int i=0;i<10;++i)assert(profile.Insert(false,0,1,{1000-i*10,"PLAYER",1,2,3,100}));
     assert(!profile.Position(false,0,1,1));
     assert(profile.Position(false,0,1,950)==5);
@@ -82,10 +82,23 @@ void CheckRecords() {
     const auto path=std::filesystem::temp_directory_path()/
         ("koumakyou-ending-unit-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     assert(std::filesystem::create_directory(path));
+    // 首次命名前也能持久化结局标记，不能为了合法存盘恢复出PLAYER默认名。
+    const auto firstFile=path/"first.dat";score::Profile first;first.endingsSeen[0]=true;
+    assert(score::Save(firstFile,first));const auto initial=score::Load(firstFile);
+    assert(initial.lastName.empty() && initial.endingsSeen[0]);
+    {std::ofstream legacy(path/"legacy.dat");legacy<<"KOUMAKYOU_SCORES 1\nname \"PLAYER\"\nending 1\n";}
+    const auto legacy=score::Load(path/"legacy.dat");assert(legacy.lastName.empty() && legacy.endingsSeen[1]);
+    {std::ofstream actual(path/"actual-player.dat");actual<<"KOUMAKYOU_SCORES 1\nname \"PLAYER\"\nscore 0 0 1 0 100 0 0 0 0 \"PLAYER\"\n";}
+    assert(score::Load(path/"actual-player.dat").lastName=="PLAYER");
+    assert(score::Load(path/"missing.dat").lastName.empty());
+    first.lastName="Demo";assert(score::Save(firstFile,first));
+    assert(score::Load(firstFile).lastName=="Demo" && !score::Load(firstFile).Get(false,0)[0]);
+    auto& progress=*profile.groups[1][3][1][0];progress.stage=6;progress.cleared=true;
     const auto file=path/"scores.dat";profile.endingsSeen[3]=true;
     assert(score::Save(file,profile));
     const auto loaded=score::Load(file);
     assert(loaded.Get(false,0)[5]->name=="TIE" && loaded.Get(true,3)[0]->value==9223372036854770000LL);
+    assert(loaded.Get(true,3)[0]->stage==6 && loaded.Get(true,3)[0]->cleared);
     assert(loaded.endingsSeen[3] && loaded.lastName=="MAX");
     std::ifstream input(file);const std::string original((std::istreambuf_iterator<char>(input)),{});input.close();
     auto bad=profile;bad.groups[0][0][1][0]->name="\n";
@@ -98,6 +111,12 @@ void CheckRecords() {
            <<"score 0 0 1 1 400 0 0 0 0 \"VALID\"\r\nscore 4 0 1 0 900 0 0 0 0 \"BAD\"\r\n";
     corrupt.close();const auto filtered=score::Load(path/"corrupt.dat");assert(filtered.Get(false,0)[0]->name=="VALID");
     assert(!filtered.Get(false,0)[1]);
+    {std::ofstream invalid(path/"invalid-v2.dat");invalid<<"KOUMAKYOU_SCORES 2\n"
+        <<"score 0 0 1 0 900 0 0 0 0 \"BAD\" 8 0\n"
+        <<"score 0 0 1 1 800 0 0 0 0 \"BAD\" 0 1\n"
+        <<"score 0 0 1 2 700 0 0 0 0 \"OK\" 3 0\n";}
+    const auto v2=score::Load(path/"invalid-v2.dat");assert(v2.Get(false,0)[0]->name=="OK" && v2.Get(false,0)[0]->stage==3 && !v2.Get(false,0)[1]);
+    assert(score::Load(path/"actual-player.dat").Get(false,0)[0]->stage==0);
     std::filesystem::remove_all(path);
 }
 } // namespace

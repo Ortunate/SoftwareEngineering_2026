@@ -13,7 +13,7 @@ SpawnActors Spawn(Vector3 position,const behavior::Pattern& pattern,float health
         .laserBase=kNativeLaserBase,.defeatBase=kNativeDefeat,.fallback=kBlueBullet,.retireOutside=retireOutside,.retirementHeights=Vector2{-10.5F,10.5F},.initialAnimation=animation},1,0};
 }
 // 道中等待完整遭遇后继续；关底对白两次放行时间轴，Boss 入场与两次恢复分别依赖放行/结束信号。
-const std::array<StageEvent,135> kEvents{{
+const std::array<StageEvent,136> kEvents{{
     {.atFrame=340,.action=Spawn({-10.0F,-1.5F,4.28571415F},kBlueHook,80,1000,1,false,false,2047761257U,-1,true)},
     {.atFrame=348,.action=Spawn({-10.0F,-1.5F,1.42857146F},kRedHook,80,1000,0,false,false,3098905750U,-1,true)},
     {.atFrame=356,.action=Spawn({10.0F,-1.5F,4.28571415F},kBlueHook,80,1000,0,true,false,22554503U,9,true)},
@@ -141,6 +141,8 @@ const std::array<StageEvent,135> kEvents{{
     {.atFrame=2493,.action=StartBoss{&kSakuyaMidboss},.id=1},
     {.delay=0,.action=StartDialogue{false,DialogueScene::Midboss,DialogueClearPolicy::PreserveWorld},.id=2},
     {.delay=1.0F/60,.action=ResumeBoss{},.afterEndOf=2},
+    // 道中完整退场后开始十秒背景演出；对白仍依赖原遭遇结束，不受显示帧率影响。
+    {.delay=0,.action=StartSceneryTransition{},.afterEndOf=1},
     {.delay=600.0F/60,.action=StartDialogue{false,DialogueScene::FinalBoss,DialogueClearPolicy::PreserveWorld},.id=3,.afterEndOf=1},
     {.delay=0,.action=WaitDialogueSignal{1},.id=6},
     {.delay=1.0F/60,.action=StartBoss{&kRemiliaFinal},.id=4,.afterEndOf=6},

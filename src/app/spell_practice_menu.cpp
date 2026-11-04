@@ -1,4 +1,4 @@
-// 本文件处理新典式符卡练习浏览、启动门禁、返回选卡与本机取得记录的生命周期。
+// 本文件处理按 Boss 归属的符卡练习浏览、启动门禁、返回选卡与本机取得记录的生命周期。
 #include "app/game.hpp"
 #include "ui/components.hpp"
 #include "render/spell_practice_layout.hpp"
@@ -9,11 +9,22 @@ void Game::UpdateSpellPractice() {
     auto& choice=spellSelection_;
     if(input.back) {
         assets_.PlaySoundEffect("menu_cancel");
-        if(choice.page==spell::Page::Stage)EnterMainMenu();
-        else choice.page=choice.page==spell::Page::Group?spell::Page::Stage:spell::Page::Group;
+        if(choice.page==spell::Page::Boss)EnterMainMenu();
+        else choice.page=choice.page==spell::Page::Group?spell::Page::Boss:spell::Page::Group;
         return;
     }
     const auto before=choice;
+    int boss=spell::BossIndex(choice.stage,choice.group);
+    int group=spell::BossGroupIndex(choice.stage,choice.group);
+    // 浏览行号仅在 UI 内使用；所有退出路径仍保存原关卡/组身份，不能写进战斗或录像。
+    const auto selectGroup=[&](int index) {
+        const auto entry=spell::Bosses()[boss].groups[index];
+        choice.stage=entry.stage;choice.group=entry.group;group=index;
+        if(spell::Find(choice.stage,choice.group,choice.difficulty))return;
+        for(int difficulty=0;difficulty<5;++difficulty)
+            if(spell::Find(choice.stage,choice.group,difficulty)) {choice.difficulty=difficulty;return;}
+    };
+    if(boss<0) {boss=0;selectGroup(0);}
     int horizontal=input.horizontal;
     // 箭头只切换组合，绝不能将同一鼠标点击继续当作列表确认。
     if(ui::ArrowButton{layout.Arrow(-1),-1}.Update(input).activated)horizontal=-1;
@@ -23,9 +34,9 @@ void Game::UpdateSpellPractice() {
     int vertical=input.vertical;
     const float wheel=GetMouseWheelMove();
     if(wheel!=0) {
-        if(choice.page==spell::Page::Stage) {
-            for(int index=0;index<spell::kStageCount;++index)
-                if(CheckCollisionPointRec(input.mouse,layout.StageRow(index)))vertical=wheel>0?-1:1;
+        if(choice.page==spell::Page::Boss) {
+            for(int index=0;index<spell::kBossCount;++index)
+                if(CheckCollisionPointRec(input.mouse,layout.BossRow(index)))vertical=wheel>0?-1:1;
         } else {
             for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups;++index)
                 if(CheckCollisionPointRec(input.mouse,layout.GroupRow(index))) {
@@ -37,42 +48,37 @@ void Game::UpdateSpellPractice() {
                 }
         }
     }
-    // Group/Difficulty 仅表示同一页的操作焦点；任何符卡变化都先校正难度，再处理右栏命中。
-    // 不能保留新符卡不存在的空难度，否则键盘确认和鼠标直接跨栏会指向不同的符卡。
-    const auto normalizeDifficulty=[&] {
-        if(spell::Find(choice.stage,choice.group,choice.difficulty))return;
-        for(int difficulty=0;difficulty<5;++difficulty)
-            if(spell::Find(choice.stage,choice.group,difficulty)) {choice.difficulty=difficulty;return;}
-    };
-    if(choice.page!=spell::Page::Stage)normalizeDifficulty();
-    const int count=choice.page==spell::Page::Stage?spell::kStageCount:
-        choice.page==spell::Page::Group?spell::Stages()[choice.stage].groups:choice.stage==6?1:4;
-    int& selected=choice.page==spell::Page::Stage?choice.stage:choice.page==spell::Page::Group?choice.group:choice.difficulty;
-    if(vertical) {
-        if(choice.page==spell::Page::Difficulty) {
-            // 原典不存在的难度是空槽；灰色但存在的变体仍可浏览完整名称与记录。
-            int candidate=choice.stage==6?0:choice.difficulty;
-            do { candidate=(candidate+count+vertical)%count; }
-            while(!spell::Find(choice.stage,choice.group,choice.stage==6?4:candidate));
-            choice.difficulty=choice.stage==6?4:candidate;
-        } else selected=(selected+count+vertical)%count;
-    }
-    if(choice.page==spell::Page::Stage) {
-        for(int index=0;index<spell::kStageCount;++index)
-            confirm=ui::SelectableRow{layout.StageRow(index),index}.Select(input,choice.stage)||confirm;
-        if(choice.stage!=before.stage) {choice.group=0;choice.difficulty=choice.stage==6?4:1;}
+    if(choice.page==spell::Page::Boss) {
+        const int previous=boss;
+        if(vertical)boss=(boss+spell::kBossCount+vertical)%spell::kBossCount;
+        for(int index=0;index<spell::kBossCount;++index)
+            confirm=ui::SelectableRow{layout.BossRow(index),index}.Select(input,boss)||confirm;
+        if(boss!=previous) {
+            choice.difficulty=1;selectGroup(0);
+        }
     } else {
-        const int groups=spell::Stages()[choice.stage].groups;
-        const int offset=choice.group/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
-        // 鼠标可直接进入任一栏目；只有实际移动或点击才接管焦点，静止指针不覆盖键盘的递进/返回。
+        selectGroup(group);
+        const int groups=static_cast<int>(spell::Bosses()[boss].groups.size());
+        if(vertical) {
+            if(choice.page==spell::Page::Group)selectGroup((group+groups+vertical)%groups);
+            else {
+                // 同一 Boss 可含主线与 Extra；难度槽取决于符卡实际关卡，不能按 Boss 行号推断。
+                const int count=choice.stage==6?1:4;
+                int candidate=choice.stage==6?0:choice.difficulty;
+                do {candidate=(candidate+count+vertical)%count;}
+                while(!spell::Find(choice.stage,choice.group,choice.stage==6?4:candidate));
+                choice.difficulty=choice.stage==6?4:candidate;
+            }
+        }
+        const int offset=group/menu::SpellPracticeLayout::kVisibleGroups*menu::SpellPracticeLayout::kVisibleGroups;
+        // 静止指针不覆盖键盘焦点；实际移动或点击才允许直接跨栏。
         for(int index=0;index<menu::SpellPracticeLayout::kVisibleGroups && offset+index<groups;++index) {
-            const auto interaction=ui::SelectableRow{layout.GroupRow(index),offset+index}.Update(input,choice.group);
+            const auto interaction=ui::SelectableRow{layout.GroupRow(index),offset+index}.Update(input,group);
             if(interaction.focused) {
-                choice.page=spell::Page::Group;
+                selectGroup(group);choice.page=spell::Page::Group;
                 confirm=interaction.activated || input.confirm;
             }
         }
-        normalizeDifficulty();
         for(int index=0;index<(choice.stage==6?1:4);++index) {
             const int difficulty=choice.stage==6?4:index;
             const auto interaction=ui::SelectableRow{layout.Difficulty(index,choice.stage==6),difficulty,
@@ -82,23 +88,20 @@ void Game::UpdateSpellPractice() {
                 confirm=interaction.activated || input.confirm;
             }
         }
-    }
-    if(choice.page!=spell::Page::Stage && spell::Stages()[choice.stage].groups>menu::SpellPracticeLayout::kVisibleGroups) {
-        for(const int direction:{-1,1})if(input.Clicked(layout.GroupPage(direction))) {
-            choice.group=std::clamp(choice.group+direction*menu::SpellPracticeLayout::kVisibleGroups,0,spell::Stages()[choice.stage].groups-1);
-            choice.page=spell::Page::Group;normalizeDifficulty();confirm=false;
+        if(groups>menu::SpellPracticeLayout::kVisibleGroups) {
+            for(const int direction:{-1,1})if(input.Clicked(layout.GroupPage(direction))) {
+                selectGroup(std::clamp(group+direction*menu::SpellPracticeLayout::kVisibleGroups,0,groups-1));
+                choice.page=spell::Page::Group;confirm=false;
+            }
         }
     }
     if(before.stage!=choice.stage || before.group!=choice.group || before.character!=choice.character || before.difficulty!=choice.difficulty) {
         assets_.PlaySoundEffect("menu_move");SaveSettings();
     }
-    if(horizontal)return;
-    if(!confirm)return;
-    if(choice.page==spell::Page::Stage)choice.page=spell::Page::Group;
-    else if(choice.page==spell::Page::Group) {
-        choice.page=spell::Page::Difficulty;
-        normalizeDifficulty();
-    } else {
+    if(horizontal || !confirm)return;
+    if(choice.page==spell::Page::Boss) {selectGroup(group);choice.page=spell::Page::Group;}
+    else if(choice.page==spell::Page::Group)choice.page=spell::Page::Difficulty;
+    else {
         const auto* card=spell::Find(choice.stage,choice.group,choice.difficulty);
         if(!spell::Available(card,choice.character,spellRecords_)) {assets_.PlaySoundEffect("menu_cancel");return;}
         selectedCharacter_=choice.character/2;selectedShot_=choice.character%2;

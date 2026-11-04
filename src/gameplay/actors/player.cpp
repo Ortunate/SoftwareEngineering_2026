@@ -47,8 +47,8 @@ Vector3 ConvergingShotDirection(Vector3 origin, Vector3 position, Vector3 forwar
 void Player::Reset() { *this = Player{}; }
 
 void Player::ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot) {
-    lives_ = std::clamp(extraLives, 1, 5);
-    bombs_ = std::clamp(bombs, 0, 3);
+    lives_ = std::clamp(extraLives, 0, 5);
+    bombs_ = respawnBombs_ = std::clamp(bombs, 0, 3);
     challenge_ = challenge;
     shot_ = shot;
     netMisses_ = 0;
@@ -191,7 +191,7 @@ bool Player::TakeHit() {
     ++netMisses_;
     if (!challenge_) --lives_;
     AdjustPower(-16);
-    bombs_ = std::max(bombs_, 2);
+    bombs_ = respawnBombs_;
     ResetPose();
     invulnerableTimer_ = 2.8F;
     return lives_ >= 0;
@@ -248,6 +248,8 @@ void Player::UpdateLasers(bool allowFire, BulletSystem& bullets,
         if(bullet.owner!=BulletOwner::Player || bullet.playerShotKind!=PlayerShotKind::Laser)return;
         if(!allowFire || !IsMarisa() || bullet.weaponEpoch!=weaponEpoch_ || bullet.playerSlot<0 || bullet.playerSlot>1) {bullet.active=false;return;}
         bullet.position=centers[bullet.playerSlot];
+        // 持续光束也跟随当前副机缩放，不能沿用出生时远距离的尺寸挤进近距离镜头。
+        bullet.visualScale=OptionScale();
         const float depth=BulletSystem::Length(game_math::Subtract(aim_.point,position_));
         bullet.SetBeamDirection(ConvergingShotDirection(bullet.position,position_,aim_.forward,Right(),depth,0));
     });

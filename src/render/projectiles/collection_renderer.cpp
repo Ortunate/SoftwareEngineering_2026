@@ -1,5 +1,6 @@
 // 本文件实现按实体/透明壳/火焰角色分组的持久实例绘制，透明能量层使用顺序无关加色。
 #include "resources/projectile_paths.hpp"
+#include "smooth_normals.hpp"
 #include "collection_renderer.hpp"
 #include "gl_state.hpp"
 #include "raymath.h"
@@ -61,8 +62,12 @@ CollectionRenderer::CollectionRenderer(const std::filesystem::path& root,size_t 
         Model model=LoadModel((dir/(name+".gltf")).string().c_str());
         if(model.meshCount!=1){UnloadModel(model);throw std::runtime_error("One joined mesh required: "+name);}
         auto& m=model.meshes[0];if(!m.colors||!m.normals||m.triangleCount>ProjectileKinds()[kind].hardLimit){UnloadModel(model);throw std::runtime_error("Mesh attributes/budget invalid: "+name);}
+        // 针晶与刀刃保留制作平面法线；刀柄仍使用源文件的平滑法线，不能跨刀面边缘混合。
+        std::vector<Vector3> normals;
+        if(kind==5||kind==8){normals.resize(m.vertexCount);for(int i=0;i<m.vertexCount;++i)normals[i]={m.normals[3*i],m.normals[3*i+1],m.normals[3*i+2]};}
+        else normals=SmoothProjectileNormals(m);
         std::vector<Vertex> vertices(m.vertexCount);std::array<std::vector<unsigned short>,3> groups;
-        for(int i=0;i<m.vertexCount;++i){auto& v=vertices[i];v={{m.vertices[i*3],m.vertices[i*3+1],m.vertices[i*3+2]},{m.normals[i*3],m.normals[i*3+1],m.normals[i*3+2]},m.colors[i*4]/255.F,m.colors[i*4+2]/255.F};g.radius=std::max(g.radius,Vector3Length(v.p));}
+        for(int i=0;i<m.vertexCount;++i){auto& v=vertices[i];v={{m.vertices[i*3],m.vertices[i*3+1],m.vertices[i*3+2]},normals[i],m.colors[i*4]/255.F,m.colors[i*4+2]/255.F};g.radius=std::max(g.radius,Vector3Length(v.p));}
         for(int t=0;t<m.triangleCount;++t){int first=m.indices?m.indices[t*3]:t*3;int role=kind==4?0:std::clamp((int)std::round(m.colors[first*4+1]*2.F/255),0,2);
             for(int j=0;j<3;++j)groups[role].push_back(m.indices?m.indices[t*3+j]:t*3+j);}
         UnloadModel(model);std::vector<unsigned short> indices;

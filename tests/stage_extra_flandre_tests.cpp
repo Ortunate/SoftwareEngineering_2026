@@ -7,6 +7,7 @@
 #include <cassert>
 #include <iostream>
 #include <memory>
+#include <limits>
 namespace {
 using namespace koumakyou;using F=bosses::FlandreBoss;
 // 预期独立抄自源入口元数据，不读取生产配方；编号只用于测试侧选择原指令。
@@ -331,7 +332,12 @@ void TestLaevateinClocksAndDisplayRates() {
                     Near(a.position.x,e.position.x);Near(a.position.y,e.position.y);Near(a.position.z,e.position.z);
                     Near(a.Velocity().x,e.Velocity().x,1e-4F);Near(a.Velocity().y,e.Velocity().y,1e-4F);Near(a.Velocity().z,e.Velocity().z,1e-4F);
                     Near(a.Direction().x,e.Direction().x,1e-5F);Near(a.Direction().y,e.Direction().y,1e-5F);Near(a.Direction().z,e.Direction().z,1e-5F);
-                    Near(a.beamLength,e.beamLength);Near(a.maxAge,e.maxAge,1e-5F);Near(a.dangerEndSeconds,e.dangerEndSeconds,1e-5F);
+                    Near(a.beamLength,e.beamLength);
+                    // 普通敌弹无年龄上限，光束的有限截止值仍按原精度核对。
+                    constexpr auto unlimited=std::numeric_limits<float>::infinity();
+                    if(a.maxAge==unlimited||e.maxAge==unlimited)assert(a.maxAge==e.maxAge);
+                    else Near(a.maxAge,e.maxAge,1e-5F);
+                    Near(a.dangerEndSeconds,e.dangerEndSeconds,1e-5F);
                 }
             }
         }

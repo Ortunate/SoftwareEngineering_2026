@@ -20,6 +20,7 @@
 #include "stages/stage5/boss_config.hpp"
 #include "stages/stage6/boss_config.hpp"
 #include "stages/stage6/behaviors.hpp"
+#include "stages/stage6/scenery.hpp"
 #include "stages/stage_extra/boss_config.hpp"
 #include "stages/stage_extra/manifest.hpp"
 #include "stages/stage_extra/ids.hpp"
@@ -115,6 +116,48 @@ private:
 
 /// @brief 仅此测试定义的友元探针；调用正式游戏路径验证效果不重复奖励或保留战斗对象。
 struct GameLifecycleProbe {
+    /// @brief 真实道中退场后触发转场，检查暂停、重复绘制、十秒归位及重开清理。
+    static void TestStage6Scenery(Game& game,const std::string& prefix) {
+        game.stageId_=StageId::Stage6;game.StartPreview();
+        const std::array events{
+            StageEvent{.action=StartBoss{&stage6::kSakuyaMidboss},.id=1},
+            StageEvent{.action=ResumeBoss{}},
+            StageEvent{.action=StartSceneryTransition{},.afterEndOf=1},
+        };
+        game.stage_=StageDirector(events);game.Update(1.0F/120);
+        assert(!game.sceneryTransitionStart_);
+        for(int phase=1;phase<=2;++phase) {
+            int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
+            assert(ticks<700);game.boss_->health=0;game.ResolveCollisions();
+        }
+        for(int tick=0;tick<400&&!game.sceneryTransitionStart_;++tick)game.Update(1.0F/120);
+        assert(game.sceneryTransitionStart_&&!game.boss_->active);
+        const auto hash=[&] {
+            const auto target=LoadRenderTexture(400,300);assert(IsRenderTextureValid(target));
+            BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(game.camera_);
+            game.stageContent_->DrawSceneryTransition(game.scenerySeconds_,
+                game.scenerySeconds_-*game.sceneryTransitionStart_,game.assets_);
+            EndMode3D();EndTextureMode();EndDrawing();
+            const auto image=LoadImageFromTexture(target.texture);const auto colors=LoadImageColors(image);assert(colors);
+            std::uint64_t result=14695981039346656037ULL;
+            for(int pixel=0;pixel<400*300;++pixel)for(const auto c:std::array{colors[pixel].r,colors[pixel].g,colors[pixel].b}) {result^=c;result*=1099511628211ULL;}
+            UnloadImageColors(colors);UnloadImage(image);UnloadRenderTexture(target);return result;
+        };
+        std::uint64_t previous=0;
+        for(const int second:{0,3,6,10}) {
+            while(game.scenerySeconds_-*game.sceneryTransitionStart_<second)game.Update(1.0F/120);
+            const auto before=game.scenerySeconds_;const auto pixels=hash();assert(pixels==hash()&&pixels!=previous);
+            game.TogglePause();for(int tick=0;tick<120;++tick)game.Update(1.0F/60);
+            assert(game.scenerySeconds_==before&&pixels==hash());game.TogglePause();
+            const auto label="stage6-scenery-"+std::to_string(second);Capture(game,prefix,label.c_str());previous=pixels;
+        }
+        const auto final=stage6::SampleScenery(game.scenerySeconds_-*game.sceneryTransitionStart_);
+        assert(final.moonPosition.x==0&&final.moonPosition.z==52&&final.buildingOffsetY==-90);
+        game.StartPreview();assert(!game.sceneryTransitionStart_&&game.scenerySeconds_==0);
+        game.EnterMainMenu();assert(!game.assets_.HasStage());
+        std::cout<<"Stage6 scenery actual midboss exit, pixels, pause, final pose and restart passed\n";
+    }
+
     /// @brief 正式Extra纹理在三维通道中的暂停、重复绘制和卸载检查；截图覆盖四个观察位置及竖屏。
     static void TestExtraScenery(Game& game,const std::string& prefix) {
         game.EnterMainMenu();game.previewMode_=true;game.practiceMode_=game.spellPractice_=false;
@@ -456,10 +499,10 @@ struct GameLifecycleProbe {
             bool CanTakeDamage() const override {return false;}
         };
         game.StartPreview();game.stage_=StageDirector{};
-        const auto reset=[&] {
+        const auto reset=[&](int bombs=3,bool challenge=false) {
             game.ClearPlayerBomb();game.actors_.Clear();game.boss_.reset();game.bullets_.Reset();
             game.actorEffects_.Clear();game.drops_.Clear();game.dialogueActive_=false;game.state_=RunState::Playing;
-            game.player_.Reset();game.player_.ConfigureRun(3,3,false,ShotType::HomingAmulet);
+            game.player_.Reset();game.player_.ConfigureRun(3,bombs,challenge,ShotType::HomingAmulet);
             game.player_.SetInvulnerability(0);game.player_.AdjustPower(72);game.player_.SyncCamera(game.camera_);
             game.missCount_=game.graze_=0;game.score_=0;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -473,7 +516,7 @@ struct GameLifecycleProbe {
         auto* bullet=game.bullets_.Spawn(BulletOwner::Enemy,position,{},0.1F,RED,stage1::kBlueBullet);assert(bullet);
         game.ResolveCollisions();
         assert(game.missCount_==1 && game.player_.RemainingLives()==3 && game.player_.Power()==64);
-        assert(game.score_==0 && game.graze_==0 && PickupCount(game)==0 && game.actorEffects_.Pool().ActiveCount()==0);
+        assert(game.score_==0 && game.graze_==0 && PickupCount(game)==6 && game.actorEffects_.Pool().ActiveCount()==0);
         game.actors_.ForEachActive([](const behavior::Actor& enemy){assert(enemy.health==100);});
         assert(EnemyCount(game)==2 && game.boss_->health==100 && !bullet->active);
         game.ResolveCollisions();assert(game.missCount_==1); // 重叠不绕过复活无敌。
@@ -501,7 +544,63 @@ struct GameLifecycleProbe {
             assert(shot->active==(mode!=0));
             if(mode==1) {game.ClearActorsWithEffects();assert(game.actorEffects_.Pool().ActiveCount()==0);}
         }
-        game.Reset();std::cout<<"Player/enemy/Boss body contacts and protection gates passed\n";
+        // 经过真实碰撞/Miss结算恢复本局Bomb设置，包括零库存及高于设置值的拾取库存。
+        for(bool challenge:{false,true})for(int stock=0;stock<=3;++stock) {
+            reset(stock,challenge);game.player_.CollectResources(0,8);
+            auto* hit=game.bullets_.Spawn(BulletOwner::Enemy,game.player_.Position(),{},.1F,RED,stage1::kBlueBullet);assert(hit);
+            game.ResolveCollisions();
+            assert(game.missCount_==1&&game.player_.Bombs()==stock);
+            assert(game.player_.RemainingLives()==(challenge?4:3));
+        }
+        game.Reset();std::cout<<"Player/enemy/Boss body contacts, configured respawn Bombs and protection gates passed\n";
+    }
+
+    /// @brief 经过正式碰撞与固定步验证受击点掉落、持续消弹、暂停冻结及重开清理。
+    static void TestPlayerMiss(Game& game) {
+        game.StartPreview();game.stage_=StageDirector{};
+        for(int fps:{30,60,120,144,240}) {
+            game.bullets_.Reset();game.drops_.Clear();game.player_.Reset();game.battleTicks_=0;
+            game.missCount_=game.graze_=0;game.score_=0;
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+            game.debugInvincible_=false;
+#endif
+            // 移离出生点，使 ResetPose 后错误地取位置也会被检出。
+            PlayerInput move;move.ascend=true;
+            for(int tick=0;tick<60;++tick)game.UpdateBattleStep(1.F/120,move,false,false);
+            game.player_.SetInvulnerability(0);game.player_.AdjustPower(128);
+            const Vector3 hitPosition=game.player_.Position();
+            assert(hitPosition.y>0);
+            assert(game.bullets_.Spawn(BulletOwner::Enemy,hitPosition,{},.1F,RED,stage1::kBlueBullet));
+            game.ResolveCollisions();assert(game.missCount_==1&&game.player_.Power()==112&&PickupCount(game)==6);
+            int large=0,small=0;
+            game.drops_.ForEachActive([&](const Pickup& p) {
+                assert(p.kind==PickupKind::Power&&p.position.y==hitPosition.y&&p.position.z==hitPosition.z);
+                if(p.value==8)++large;else {assert(p.value==1);++small;}
+            });
+            assert(large==1&&small==5);
+            const auto spawn=[&] {return game.bullets_.Spawn(BulletOwner::Enemy,{8,0,8},{},.1F,RED,stage1::kBlueBullet);};
+            auto* frozen=spawn();assert(frozen);
+            game.TogglePause();game.Update(3);assert(frozen->active&&PickupCount(game)==6);
+            game.drops_.ForEachActive([](const Pickup& p){assert(p.age==0&&p.scatterSeconds==0);});
+            game.TogglePause();
+            double pendingSteps=0;
+            for(int frame=0;frame<fps*2;++frame) {
+                assert(spawn());game.Update(1.F/fps);
+                pendingSteps+=120.0/fps;
+                // 高显示帧率允许本帧没有逻辑步；手工注入的敌弹须等到下一固定步才会清除。
+                if(pendingSteps+1e-9>=1) {
+                    pendingSteps-=std::floor(pendingSteps+1e-9);
+                    game.bullets_.Pool().ForEachActive([](const Bullet& b){assert(b.owner==BulletOwner::Player);});
+                }
+            }
+            assert(game.missCount_==1&&game.graze_==0&&game.score_==0);
+            assert(PickupCount(game)==6); // 清弹不能生成星点或收走受击掉落。
+            auto* released=spawn();assert(released);game.Update(1.F/120);assert(released->active);
+        }
+        game.bullets_.ClearEnemyBullets(2);game.StartPreview();game.stage_=StageDirector{};
+        auto* restarted=game.bullets_.Spawn(BulletOwner::Enemy,{8,0,8},{},.1F,RED,stage1::kBlueBullet);
+        assert(restarted);game.Update(1.F/120);assert(restarted->active&&PickupCount(game)==0);
+        game.Reset();std::cout<<"Miss drops, sustained cancellation, pause and restart passed\n";
     }
 
     /// @brief 独立绘制世界，检查四边没有留黑，左右边缘随镜头变化，防止旧侧栏或裁切恢复。
@@ -936,8 +1035,8 @@ struct GameLifecycleProbe {
             for(const auto& sprite:game.playerBomb_.Sprites())volumes.push_back({&sprite,visuals[sprite.layer]});
             BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(game.camera_);
             assert(game.assets_.Projectiles());
-            game.combatRenderer_.Prepare(game.assets_.Projectiles(),game.bullets_,game.assets_.Stage().visuals,game.camera_,1100.F/760);
-            game.spriteRenderer_.Draw(game.camera_,game.bullets_,{},nullptr,{},game.assets_.Stage().visuals,
+            game.combatRenderer_.Prepare(game.assets_.Projectiles(),game.bullets_,game.assets_.Stage().visuals,game.camera_,game.player_.Position(),1100.F/760);
+            game.spriteRenderer_.Draw(game.camera_,game.player_.Position(),game.bullets_,{},nullptr,{},game.assets_.Stage().visuals,
                                       game.assets_.Stage().shaders,game.actorEffects_,volumes,&game.externalEffects_,&game.combatRenderer_);
             EndMode3D();EndTextureMode();EndDrawing();
             Image image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);
@@ -1012,6 +1111,39 @@ struct GameLifecycleProbe {
         assert(!game.playerBomb_.Active() && !game.assets_.PauseSoundEffect("bomb_master"));
         for(bool paused:game.playerBombSoundPaused_)assert(!paused);
         std::cout<<"Native Master Spark WAV pause, resume and exit cancellation passed (muted)\n";
+    }
+
+    /// @brief 静音加载新增短音效，经过真实拾取/战斗更新检查触发、暂停及非符/退场门禁。
+    static void TestCombatAudio(Game& game) {
+        struct AudioBoss final:Boss {
+            bool spell=true,finish=false;float limit=20;
+            AudioBoss(){active=true;attack=phase=skill=1;health=maxHealth=100;visual=stage1::kRumia;}
+            bool Update(float seconds,Vector3,BulletSystem&) override {skillTimer+=seconds;return finish;}
+            bool AdvanceSkill() override {active=false;return false;}
+            const char* SpellName() const override {return spell?"Audio clock":nullptr;}
+            int SpellCardNumber() const override {return spell?1:0;}
+            const char* DisplayName() const override {return "Audio probe";}
+            float TimeLimit() const override {return limit;}
+        };
+        assert(IsAudioDeviceReady());game.StartPreview();game.stage_=StageDirector{};game.actors_.Clear();game.drops_.Clear();
+        game.player_.ConfigureRun(3,3,false,ShotType::HomingAmulet);
+        const auto playing=[&](std::string_view name){const auto* sound=game.assets_.FindSoundEffect(name);assert(sound&&IsSoundValid(*sound));return IsSoundPlaying(*sound);};
+        const auto stop=[&]{for(auto name:{"life_up","pickup","countdown","countdown_urgent"})game.assets_.StopSoundEffect(name);};
+        stop();const int lives=game.player_.RemainingLives();
+        game.drops_.SpawnNativeItem(game.player_.Position(),5,false);game.UpdatePickups(0);
+        assert(game.player_.RemainingLives()==lives+1&&playing("life_up")&&!playing("pickup"));
+        stop();game.drops_.SpawnFixedPower(game.player_.Position(),1);game.UpdatePickups(0);
+        assert(playing("pickup")&&!playing("life_up"));
+        game.boss_=std::make_unique<AudioBoss>();auto* clock=static_cast<AudioBoss*>(game.boss_.get());
+        stop();clock->skillTimer=9.9F;game.UpdateBoss(.1F);assert(playing("countdown")&&!playing("countdown_urgent"));
+        stop();game.UpdateBoss(0);assert(!playing("countdown"));
+        clock->skillTimer=14.9F;game.UpdateBoss(.1F);assert(playing("countdown_urgent"));
+        stop();clock->skillTimer=9.9F;const float frozen=clock->skillTimer;
+        game.TogglePause();game.Update(2);assert(clock->skillTimer==frozen&&!playing("countdown")&&!playing("countdown_urgent"));game.TogglePause();
+        clock->spell=false;clock->skillTimer=14.9F;game.UpdateBoss(.1F);assert(!playing("countdown_urgent"));
+        clock->spell=true;clock->skillTimer=19.9F;game.UpdateBoss(.1F);assert(!playing("countdown_urgent"));
+        clock->skillTimer=14.9F;clock->finish=true;game.UpdateBoss(.1F);assert(!playing("countdown_urgent")&&!clock->active);
+        stop();game.EnterMainMenu();std::cout<<"1UP pickup, countdown/urgent WAV, pause and skill-end audio gates passed (muted)\n";
     }
 
     /// @brief 实际加载十个差分，渲染逐句切换及菜单/符卡，验证离开关卡不释放通用立绘。
@@ -2970,17 +3102,17 @@ struct GameLifecycleProbe {
         for(bool after:{false,true}) {
             game.BeginStageDialogue(1,after,DialogueScene::FinalBoss,DialogueClearPolicy::PreserveWorld);
             assert(assets.activeMusic_==AssetManager::MusicSlot::Event&&game.dialogueMusicCursor_==1&&!game.dialogueBossMusic_);
-            AdvanceAudio();const float initial=GetMusicTimePlayed(assets.eventMusic_);assert(initial>.02F);
+            AdvanceAudio();const float initial=(assets.eventMusic_).PositionSeconds();assert(initial>.02F);
             StepTo(119.5);assert(game.dialogueMusicCursor_==1);
             game.TogglePause();const auto timer=game.dialogueTimer_;game.Update(1);
-            assert(game.dialogueTimer_==timer&&game.dialogueMusicCursor_==1&&!IsMusicStreamPlaying(assets.eventMusic_));
-            game.TogglePause();StepTo(120);assert(game.dialogueMusicCursor_==2&&IsMusicStreamPlaying(assets.eventMusic_));
-            assert(GetMusicTimePlayed(assets.eventMusic_)>=initial-.02F); // 同槽选择不重启。
+            assert(game.dialogueTimer_==timer&&game.dialogueMusicCursor_==1&&!(assets.eventMusic_).Playing());
+            game.TogglePause();StepTo(120);assert(game.dialogueMusicCursor_==2&&(assets.eventMusic_).Playing());
+            assert((assets.eventMusic_).PositionSeconds()>=initial-.02F); // 同槽选择不重启。
             StepTo(179.5);assert(game.dialogueMusicCursor_==2);
-            StepTo(180);assert(game.dialogueMusicCursor_==4&&IsMusicStreamPlaying(assets.eventMusic_));
-            assert(GetMusicTimePlayed(assets.eventMusic_)<.025F); // 停止与重播不能合并为最终槽号。
-            AdvanceAudio();const auto restarted=GetMusicTimePlayed(assets.eventMusic_);game.Update(1.0F/120);
-            assert(GetMusicTimePlayed(assets.eventMusic_)>=restarted-.02F&&game.dialogueMusicCursor_==4);
+            StepTo(180);assert(game.dialogueMusicCursor_==4&&(assets.eventMusic_).Playing());
+            assert((assets.eventMusic_).PositionSeconds()<.025F); // 停止与重播不能合并为最终槽号。
+            AdvanceAudio();const auto restarted=(assets.eventMusic_).PositionSeconds();game.Update(1.0F/120);
+            assert((assets.eventMusic_).PositionSeconds()>=restarted-.02F&&game.dialogueMusicCursor_==4);
             StepTo(240);assert(assets.activeMusic_==AssetManager::MusicSlot::Stage&&!game.dialogueBossMusic_);
             StepTo(300);assert(assets.activeMusic_==AssetManager::MusicSlot::Boss&&game.dialogueBossMusic_);
             // 模拟确认跳句跨过停止/两次选择；按表序消费全部音乐，不能受历史BossMusic布尔值屏蔽。
@@ -2988,7 +3120,7 @@ struct GameLifecycleProbe {
             assert(game.dialogueMusicCursor_==9&&assets.activeMusic_==AssetManager::MusicSlot::Event&&!game.dialogueBossMusic_);
             StepTo(600);assert(game.dialogueMusicCursor_==10&&assets.activeMusic_==AssetManager::MusicSlot::None);
         }
-        game.EnterMainMenu();assert(!IsMusicValid(assets.eventMusic_));
+        game.EnterMainMenu();assert(!(assets.eventMusic_).Valid());
         std::cout<<"Dialogue three-slot BGM, ordered restart, pause, skip and legacy cues passed\n";
     }
 
@@ -3018,24 +3150,24 @@ struct GameLifecycleProbe {
             }
             assert(assets.GetVisual(stage_extra::kFlandrePortraits[0]).texture.id==assets.GetVisual(stage_extra::kFlandrePortraits[1]).texture.id);
             assert(stage_extra::PatchouliMidbossConfig().visual==stage_extra::kPatchouli);
-            for(const auto item:std::array<std::pair<Music*,float>,3>{{{&assets.stageMusic_,166.8575F},{&assets.bossMusic_,174.7375F},{&assets.eventMusic_,117.0575F}}}) {
-                assert(IsMusicValid(*item.first)&&std::abs(GetMusicTimeLength(*item.first)-item.second)<.15F);
+            for(const auto item:std::array<std::pair<audio::BgmPlayer*,float>,3>{{{&assets.stageMusic_,166.8575F},{&assets.bossMusic_,174.7375F},{&assets.eventMusic_,117.0575F}}}) {
+                assert((*item.first).Valid()&&std::abs((*item.first).LengthSeconds()-item.second)<.15F);
             }
-            assert(assets.stageMusic_.ctxData!=assets.bossMusic_.ctxData&&assets.bossMusic_.ctxData!=assets.eventMusic_.ctxData);
+            assert(assets.stageMusic_.PcmBytes()>0&&assets.bossMusic_.PcmBytes()>0&&assets.eventMusic_.PcmBytes()>0);
             for(int track=0;track<3;++track) {
                 assets.PlayStageTrack(track);assert(assets.activeMusic_==(track==0?AssetManager::MusicSlot::Stage:track==1?AssetManager::MusicSlot::Boss:AssetManager::MusicSlot::Event));
-                auto* current=assets.MusicFor(assets.activeMusic_);assert(current&&IsMusicStreamPlaying(*current));
-                for(const auto* other:{&assets.stageMusic_,&assets.bossMusic_,&assets.eventMusic_})if(other!=current)assert(!IsMusicStreamPlaying(*other));
+                auto* current=assets.MusicFor(assets.activeMusic_);assert(current&&(*current).Playing());
+                for(const auto* other:{&assets.stageMusic_,&assets.bossMusic_,&assets.eventMusic_})if(other!=current)assert(!(*other).Playing());
                 for(int n=0;n<20;++n) {assets.UpdateAudio();WaitTime(.01);}
-                const float before=GetMusicTimePlayed(*current);assert(before>.02F);
-                assets.PlayStageTrack(track);assert(GetMusicTimePlayed(*current)>=before-.02F);
-                assets.PauseMusic();assert(!IsMusicStreamPlaying(*current));const auto paused=GetMusicTimePlayed(*current);
-                WaitTime(.03);assets.UpdateAudio();assert(std::abs(GetMusicTimePlayed(*current)-paused)<.02F);
-                assets.ResumeMusic();assert(IsMusicStreamPlaying(*current));
+                const float before=(*current).PositionSeconds();assert(before>.02F);
+                assets.PlayStageTrack(track);assert((*current).PositionSeconds()>=before-.02F);
+                assets.PauseMusic();assert(!(*current).Playing());const auto paused=(*current).PositionSeconds();
+                WaitTime(.03);assets.UpdateAudio();assert(std::abs((*current).PositionSeconds()-paused)<.02F);
+                assets.ResumeMusic();assert((*current).Playing());
             }
             for(int invalid:{-2,3}) {bool rejected=false;try {assets.PlayStageTrack(invalid);}catch(const std::invalid_argument&) {rejected=true;}assert(rejected&&assets.activeMusic_==AssetManager::MusicSlot::Event);}
             assets.SetMusicGain(.5F);assets.SetMusicVolumePercent(25);assets.UpdateAudio();
-            assets.PlayStageTrack(-1);assert(assets.activeMusic_==AssetManager::MusicSlot::None&&!IsMusicStreamPlaying(assets.eventMusic_));
+            assets.PlayStageTrack(-1);assert(assets.activeMusic_==AssetManager::MusicSlot::None&&!(assets.eventMusic_).Playing());
             // 独立画真实立绘，检查近透明留白不会把窗口侧边和底边的锚点推离可见人物。
             if(!async)for(Vector2 size:{Vector2{1100,760},Vector2{1280,720},Vector2{390,844}}) {
                 GameplayLayout layout(size.x,size.y);auto target=LoadRenderTexture(size.x,size.y);assert(IsRenderTextureValid(target));
@@ -3053,13 +3185,13 @@ struct GameLifecycleProbe {
                 UnloadRenderTexture(target);
             }
             std::weak_ptr<const anm::Archive> borrowed=flandre.archive;assets.PlayStageTrack(2);assets.UnloadStage();
-            assert(!assets.HasStage()&&assets.Stage().visuals.empty()&&borrowed.expired()&&IsMusicValid(assets.menuMusic_));
-            assert(!IsMusicValid(assets.stageMusic_)&&!IsMusicValid(assets.bossMusic_)&&!IsMusicValid(assets.eventMusic_)&&assets.activeMusic_==AssetManager::MusicSlot::None);
+            assert(!assets.HasStage()&&assets.Stage().visuals.empty()&&borrowed.expired()&&(assets.menuMusic_).Valid());
+            assert(!(assets.stageMusic_).Valid()&&!(assets.bossMusic_).Valid()&&!(assets.eventMusic_).Valid()&&assets.activeMusic_==AssetManager::MusicSlot::None);
             assets.BeginStageLoad(manifest);assert(!assets.AdvanceStageLoad());assets.UnloadStage();assert(!assets.HasStage());
         }
         // 无第三槽的旧关卡不能沿用Extra音乐；缺失槽停止旧曲，公共菜单音乐仍属于全局生命周期。
         game.assets_.LoadStage(stage4::Stage4Content{}.Assets());game.assets_.PlayStageTrack(0);game.assets_.PlayStageTrack(2);
-        assert(!IsMusicValid(game.assets_.eventMusic_)&&game.assets_.activeMusic_==AssetManager::MusicSlot::None);
+        assert(!(game.assets_.eventMusic_).Valid()&&game.assets_.activeMusic_==AssetManager::MusicSlot::None);
         game.EnterMainMenu();assert(!game.assets_.HasStage());game.assets_.SetMusicGain(1);
         std::cout<<"Extra formal assets sync/async, three BGM streams, portraits, native background and ownership verified\n";
     }
@@ -3558,13 +3690,14 @@ struct GameLifecycleProbe {
     }
 
     /// @brief 六面四段非符或五组符卡在N/H/L分别走击破/超时，核对实际弹池、召唤身份、暂停和卸载。
-    /// spellGroups为0时测试非符，为1或5时测试相应组数的符卡；正式整关与符卡练习入口另验。
-    static void TestStage6DifficultyNonspells(Game& game,const std::string& prefix,int spellGroups=0) {
+    /// spellGroups为0时测试非符，为1或5时测试相应组数的符卡；batsOnly仅筛选化蝠非符，仍覆盖N/H/L及击破/超时。
+    static void TestStage6DifficultyNonspells(Game& game,const std::string& prefix,int spellGroups=0,bool batsOnly=false) {
         using S=bosses::RemiliaBoss;using B=S::Behavior;
         constexpr std::array skills{B::FirstNonspell,B::SecondNonspell,B::ThirdNonspell,B::BatNonspell};constexpr std::array thresholds{1200,1600,1600,1300};
         constexpr std::array normal{B::StarOfVanities,B::ScarletNetherworld,B::VladTepesCurse,B::ScarletShoot,B::RedMagic};
         constexpr std::array high{B::YoungDemonLord,B::ThousandNeedles,B::VampireIllusion,B::ScarletMeister,B::ScarletGensokyo};
         for(int d=1;d<4;++d)for(int phase=0;phase<(spellGroups?spellGroups:4);++phase)for(bool damage:{false,true}) {
+            if(batsOnly&&(spellGroups||phase!=3))continue;
             const int shot=(d+phase)%4;const auto difficulty=*native_combat::DifficultyFromIndex(d);
             game.stageId_=StageId::Stage6;game.selectedCharacter_=shot/2;game.selectedShot_=shot%2;game.StartPreview();
             game.stage_=StageDirector{};game.actors_.Clear();game.bullets_.Reset();game.bossEventId_.reset();game.runDifficulty_=difficulty;
@@ -3575,13 +3708,23 @@ struct GameLifecycleProbe {
             config.phases={{{id},{{{0,1,WHITE}}}}};auto boss=std::make_unique<S>();boss->StartBoss(config);game.boss_=std::move(boss);
             for(int tick=0;tick<260;++tick)game.Update(1.0F/120);game.boss_->ResumeCombat();
             const auto label=std::string(spellGroups?"stage6-spell-d":"stage6-nonspell-d")+std::to_string(d)+"-phase"+std::to_string(phase)+(damage?"-damage":"-timeout");
-            std::size_t peak=0;int ticks=0;bool paused=false,sampled=false;
+            std::size_t peak=0;int ticks=0;bool paused=false,sampled=false,batSpread=false;
             for(;ticks<170*120&&game.boss_->active;++ticks) {
                 game.Update(1.0F/120);assert(game.state_==RunState::Playing&&game.referenceRank_==32);
                 assert(!game.bullets_.Pool().DroppedSpawns()&&!game.actors_.DroppedSpawns());
                 peak=std::max(peak,game.bullets_.Pool().ActiveCount());
                 if(spellGroups&&game.boss_->SpellName())assert(game.boss_->SpellCardNumber()==103+phase*3+d);
                 game.actors_.ForEachActive([&](const behavior::Actor& a){assert(a.difficulty==difficulty);});
+                if(!spellGroups&&phase==3) {
+                    bool left=false,right=false,up=false,down=false;
+                    game.actors_.ForEachActive([&](const behavior::Actor& a){
+                        assert(a.motion.velocity.z<0&&!a.interactable&&a.animationScript==165);
+                        left|=a.motion.velocity.x<0;right|=a.motion.velocity.x>0;up|=a.motion.velocity.y>0;down|=a.motion.velocity.y<0;
+                    });
+                    if(!batSpread&&left&&right&&up&&down&&EnemyCount(game)>=20){
+                        batSpread=true;if(!damage)Capture(game,prefix,(label+"-bat-spread").c_str());
+                    }
+                }
                 if(!paused&&game.boss_->skillTimer>4) {
                     paused=true;const auto time=game.boss_->skillTimer;game.TogglePause();game.Update(0.5F);assert(game.boss_->skillTimer==time);game.TogglePause();
                 }
@@ -3589,6 +3732,7 @@ struct GameLifecycleProbe {
                 if(damage&&game.boss_->CanTakeDamage()&&game.boss_->skillTimer>12) {game.boss_->health=spellGroups?0:thresholds[phase]-1;game.ResolveCollisions();}
             }
             assert(ticks<170*120&&paused&&sampled&&!game.boss_->active&&game.boss_->Defeated()==damage);
+            if(!spellGroups&&phase==3)assert(batSpread);
             game.EnterMainMenu();assert(!game.boss_&&game.assets_.Stage().visuals.empty()&&!EnemyCount(game));
             assert(!game.bullets_.Pool().ActiveCount()&&!game.actorEffects_.Pool().ActiveCount());
             std::cout<<label<<" complete; peak "<<peak<<" projectiles\n";
@@ -3696,7 +3840,7 @@ struct GameLifecycleProbe {
     }
 
 
-    /// @brief 通过正式六面对话路径验证两自机的立绘创建、跳句重建与暂停；横竖屏实际像素必须包含两张蕾米莉亚差分。
+    /// @brief 通过正式六面对话路径验证两自机的立绘创建、跳句重建与暂停；横竖屏核对立绘及末页双方台词。
     /// 临时隐藏当前纹理仅用于同帧像素对照，读取后立即恢复资源，退出时检查关卡资源释放。
     static void TestStage6Portraits(Game& game,const std::string& prefix) {
         const int width=GetScreenWidth(),height=GetScreenHeight();
@@ -3736,6 +3880,35 @@ struct GameLifecycleProbe {
                     const auto label="stage6-portrait-"+std::to_string(character)+"-frame-"+std::to_string(frame)+"-"+std::to_string(GetScreenWidth());
                     Capture(game,prefix,label.c_str());
                 }
+                // 独立源帧：双方在末页共同强调，第二行属于自机；同时检查实际文字像素与字形，防止只修数据未绘制。
+                at((character ? 10675 : 10273)+32);
+                const auto lines=game.CurrentDialogue();
+                assert(game.DialogueIndex()==static_cast<int>(lines.size())-1);
+                const auto rows=DialogueTextRowsAt(lines.back(),32.0F/60);
+                assert(std::string_view(rows[0].speaker)=="蕾米莉亚");
+                assert(std::string_view(rows[1].speaker)==(character ? "魔理沙" : "灵梦"));
+                assert(game.dialogueMotion_.Sample(false).opacity==1&&game.dialogueMotion_.Sample(true).opacity==1);
+                for(const auto& row:rows)for(const char* cursor=row.text;*cursor;) {
+                    int bytes=0;const int codepoint=GetCodepointNext(cursor,&bytes);assert(bytes>0);cursor+=bytes;
+                    const auto font=game.assets_.Common().hudFont;
+                    assert(font.glyphs[GetGlyphIndex(font,codepoint)].value==codepoint);
+                }
+                Image together=draw();
+                const GameplayLayout layout(GetScreenWidth(),GetScreenHeight());
+                const auto panel=layout.DialoguePanel();
+                for(int row=0;row<2;++row) {
+                    int ink=0;
+                    for(int y=panel.y+(40+64*row)*layout.scale;y<panel.y+(66+64*row)*layout.scale;++y)
+                        for(int x=panel.x+22*layout.scale;x<panel.x+panel.width-22*layout.scale;++x) {
+                            const auto color=GetImageColor(together,x,y);
+                            ink+=color.r>=220&&color.g>=210&&color.b>=195;
+                        }
+                    assert(ink>100);
+                }
+                UnloadImage(together);
+                Capture(game,prefix,("stage6-together-"+std::to_string(character)+"-"+std::to_string(GetScreenWidth())).c_str());
+                game.TogglePause();const auto togetherTime=game.dialogueTimer_;game.Update(.5F);
+                assert(game.dialogueTimer_==togetherTime);game.TogglePause();
                 UnloadRenderTexture(target);
             }
             at(920);assert(game.dialogueMotion_.Sample(true).opacity==0);
@@ -4334,11 +4507,14 @@ struct GameLifecycleProbe {
         game.UpdatePlayer(0,{.aimAssistEnabled=true});assert(!game.player_.Aim().assisted);
         targetActor->visible=true;targetActor->health=0;
         game.UpdatePlayer(0,{.aimAssistEnabled=true});assert(!game.player_.Aim().assisted);
-        // 失败收尾不能因完整关卡分支新增的结局/成绩分流而漏掉已封存录像的保存询问。
+        // 失败保留结果菜单；返回菜单先登记成绩，拒绝分数后仍须提供已封存录像的保存询问。
         game.replayData_=data;game.replayMode_=replay::Mode::Idle;
         game.replaySaveState_=Game::ReplaySaveState::Ready;
         game.EndStage(RunState::GameOver);game.actorEffects_.Clear();game.externalEffects_.Clear();
-        game.UpdateState(0);assert(game.state_==RunState::GameOver&&game.ReplaySaveModalOpen());
+        game.UpdateState(0);assert(game.state_==RunState::GameOver&&!game.ReplaySaveModalOpen());
+        game.BeginScoreSave();game.selectedScoreSave_=1;
+        PlayAutomationEvent({0,2,{KEY_ENTER,0,0,0}});game.UpdateScoreSave();
+        PlayAutomationEvent({0,1,{KEY_ENTER,0,0,0}});assert(game.ReplaySaveModalOpen());
         game.EnterMainMenu();
         // 实际资源入口覆盖主线四难度、后续关卡、Extra，以及共享phase的不同符卡。
         const auto checkEntry=[&](StageId stage,int difficulty,bool practice,const spell::Card* card=nullptr) {
@@ -4348,14 +4524,23 @@ struct GameLifecycleProbe {
             if(card)game.spellSelection_={.stage=card->stage,.group=card->group,.difficulty=card->difficulty,.character=0};
             game.StartRun(false,true);game.captureCursor_=true;game.PrepareReplay();
             assert(game.replayMode_==replay::Mode::Recording);
+            const int expectedPower=card?(card->number<=2?32:card->number<=9?64:128):
+                practice?(stage==StageId::Stage1?8:stage==StageId::Stage2?64:128):8;
+            assert(game.player_.Power()==expectedPower);
+            assert(game.player_.RemainingLives()==(card?1:game.initialLives_+1));
+            assert(game.player_.Bombs()==(card?0:game.initialBombs_));
+            const auto& snapshot=game.replayData_.segments.front();
+            assert(snapshot.power==static_cast<unsigned>(expectedPower));
+            assert(snapshot.lives==static_cast<unsigned>(card?0:game.initialLives_));
+            assert(snapshot.bombs==static_cast<unsigned>(card?0:game.initialBombs_));
             for(int frame=0;frame<48;++frame)game.Update(steps[frame%4]);
             const auto position=game.player_.Position();const auto power=game.player_.Power();
             auto recorded=game.replayData_;replay::FinishSession(recorded,game.ReplayResult());
             std::string error;assert(replay::CanPlay(recorded,error));
             if(stage==StageId::Extra && !card) {
-                // 胜利直达成绩页的路线也必须先选存录像，不能被后续菜单清空。
+                // Extra胜利先登记成绩，退场期间封存的录像不能被后续成绩入口清空。
                 game.BeginStageClear();game.stageClearSeconds_=10;game.Update(1.0F/120);
-                assert(game.ReplaySaveModalOpen() && game.CanSaveReplay() && game.replayData_.result.won);
+                assert(!game.ReplaySaveModalOpen() && game.CanSaveReplay() && game.replayData_.result.won);
                 game.EnterMainMenu();
             }
             if(stage==StageId::Stage2 && difficulty==0 && !card) {
@@ -4379,7 +4564,9 @@ struct GameLifecycleProbe {
             checkEntry(StageId::Stage1,difficulty,false);
             checkEntry(StageId::Stage2,difficulty,true);
         }
-        checkEntry(StageId::Stage6,3,true);checkEntry(StageId::Extra,1,false);
+        for(auto stage:{StageId::Stage3,StageId::Stage4,StageId::Stage5,StageId::Stage6})checkEntry(stage,3,true);
+        checkEntry(StageId::Extra,1,false);
+        checkEntry(StageId::Stage1,2,true,spell::Find(0,0,2));
         checkEntry(StageId::Stage1,2,true,spell::Find(0,1,2));
         checkEntry(StageId::Stage5,1,true,spell::Find(4,1,1));
         checkEntry(StageId::Extra,1,true,spell::Find(6,12,4));
@@ -4591,6 +4778,8 @@ struct GameLifecycleProbe {
             UnloadImage(secondaryImage);UnloadImage(background);
             std::cout<<"Marisa "<<(shot==ShotType::MagicMissile?"missile":"laser")<<" focus "<<focus<<": "<<ink<<" secondary pixels\n";
             assert(ink>100);
+            // 满火力两种副机布局都应留下清晰视野，不能让包住镜头的整屏光壳通过可见性检查。
+            if(shot==ShotType::IllusionLaser)assert(ink<target.texture.width*target.texture.height/2);
             if(shot==ShotType::MagicMissile) {
                 bool impact=false;
                 game.bullets_.Pool().ForEachActive([&](Bullet& bullet){
@@ -4849,7 +5038,7 @@ struct GameLifecycleProbe {
 }  // namespace koumakyou
 
 /// @brief 隐藏窗口集成测试；argv[1]为截图前缀，argv[2]选择主线或Extra专项，完整选项见下方显式分派；缺省运行通用回归。
-/// --bomb-audio-only/--extra-assets-only初始化音频且强制静音，设置与成绩只写临时目录。
+/// --bomb-audio-only/--combat-audio-only/--extra-assets-only初始化音频且强制静音，设置与成绩只写临时目录。
 int main(int argc, char** argv) {
     const auto originalDirectory = std::filesystem::current_path();
     const std::string prefix = argc >= 2 && argv[1][0] != '\0' ? std::filesystem::absolute(argv[1]).string() : "";
@@ -4867,7 +5056,8 @@ int main(int argc, char** argv) {
     const bool extraDialogue=argc>=3&&std::string(argv[2])=="--extra-dialogue-only";
     const bool extraTimeline=argc>=3&&std::string(argv[2])=="--extra-timeline-only";
     const bool extraPostfight=argc>=3&&std::string(argv[2])=="--extra-postfight-only";
-    const bool audioTest=extraAssets||dialogueMusic||extraDialogue||extraTimeline||extraPostfight||(argc>=3 && std::string(argv[2])=="--bomb-audio-only");
+    const bool combatAudio=argc>=3&&std::string(argv[2])=="--combat-audio-only";
+    const bool audioTest=combatAudio||extraAssets||dialogueMusic||extraDialogue||extraTimeline||extraPostfight||(argc>=3 && std::string(argv[2])=="--bomb-audio-only");
     if(audioTest) {InitAudioDevice();SetMasterVolume(0);}
     {
         auto game = std::make_unique<koumakyou::Game>();
@@ -4876,6 +5066,8 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestReplayAdaptation(*game);
         } else if(extraAssets) {
             koumakyou::GameLifecycleProbe::TestExtraAssets(*game,prefix);
+        } else if(argc>=3&&std::string(argv[2])=="--stage6-scenery-only") {
+            koumakyou::GameLifecycleProbe::TestStage6Scenery(*game,prefix);
         } else if(argc>=3&&std::string(argv[2])=="--extra-scenery-only") {
             koumakyou::GameLifecycleProbe::TestExtraScenery(*game,prefix);
         } else if(dialogueMusic) {
@@ -4888,6 +5080,8 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestExtraPostfightFlow(*game,prefix);
         } else if(argc>=3&&std::string(argv[2])=="--challenge-progress-only") {
             koumakyou::GameLifecycleProbe::TestChallengeProgress(*game);
+        } else if(combatAudio) {
+            koumakyou::GameLifecycleProbe::TestCombatAudio(*game);
         } else if(audioTest) {
             koumakyou::GameLifecycleProbe::TestPlayerBombAudio(*game);
         } else if(argc>=3 && std::string(argv[2])=="--world-clock-only") {
@@ -4937,6 +5131,8 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestStage6DifficultyNonspells(*game,prefix,true);
         } else if(argc>=3 && std::string(argv[2])=="--stage6-difficulty-nonspells") {
             koumakyou::GameLifecycleProbe::TestStage6DifficultyNonspells(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--stage6-bats-only") {
+            koumakyou::GameLifecycleProbe::TestStage6DifficultyNonspells(*game,prefix,0,true);
         } else if(argc>=3 && std::string(argv[2])=="--stage6-difficulty-midboss") {
             koumakyou::GameLifecycleProbe::TestStage6DifficultyMidboss(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--stage6-pending-difficulties") {
@@ -5072,6 +5268,9 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestActorLifecycle(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--spatial-only") {
             koumakyou::GameLifecycleProbe::TestSpatialFrameRates(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--player-miss-only") {
+            koumakyou::GameLifecycleProbe::TestPlayerMiss(*game);
+            koumakyou::GameLifecycleProbe::TestActorContacts(*game);
         } else if(argc>=3 && std::string(argv[2])=="--actor-contacts-only") {
             koumakyou::GameLifecycleProbe::TestActorContacts(*game);
         } else if(argc>=3 && std::string(argv[2])=="--viewport-only") {

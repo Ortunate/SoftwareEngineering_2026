@@ -21,7 +21,7 @@
 	"materials":[
 		{
 			"doubleSided":true,
-			"name":"Projectile_VertexRoles.001",
+			"name":"Projectile_VertexRoles",
 			"pbrMetallicRoughness":{
 				"metallicFactor":0
 			}
@@ -29,7 +29,7 @@
 	],
 	"meshes":[
 		{
-			"name":"DoubleBevelBlade",
+			"name":"VerticalBeveledBlade",
 			"primitives":[
 				{
 					"attributes":{
@@ -47,67 +47,67 @@
 		{
 			"bufferView":0,
 			"componentType":5126,
-			"count":182,
+			"count":210,
 			"max":[
 				0.1899999976158142,
 				0.5,
-				0.08500000089406967
+				0.041999999433755875
 			],
 			"min":[
 				-0.1899999976158142,
 				-0.46000000834465027,
-				-0.08500000089406967
+				-0.041999999433755875
 			],
 			"type":"VEC3"
 		},
 		{
 			"bufferView":1,
 			"componentType":5126,
-			"count":182,
+			"count":210,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":2,
 			"componentType":5126,
-			"count":182,
+			"count":210,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":3,
 			"componentType":5123,
-			"count":366,
+			"count":438,
 			"type":"SCALAR"
 		}
 	],
 	"bufferViews":[
 		{
 			"buffer":0,
-			"byteLength":2184,
+			"byteLength":2520,
 			"byteOffset":0,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":2184,
-			"byteOffset":2184,
+			"byteLength":2520,
+			"byteOffset":2520,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":2184,
-			"byteOffset":4368,
+			"byteLength":2520,
+			"byteOffset":5040,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":732,
-			"byteOffset":6552,
+			"byteLength":876,
+			"byteOffset":7560,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":7284,
+			"byteLength":8436,
 			"uri":"knife_classic.bin"
 		}
 	]

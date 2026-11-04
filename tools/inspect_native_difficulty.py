@@ -11,6 +11,11 @@ from export_native_combat_data import PeImage
 EXPECTED_SHA256 = '48630a42a2eb6762d0db2a7e0d151203efbe67220fef7d2f9d0d51857928ac82'
 # 锚点只证明相关指令与本次分析一致，不能单独推导未追踪的入口、边界和模式条件。
 ANCHORS = {
+    # 单符入口Power覆盖表：零起算0/1为32，2～8为64；未命中时由入口使用128。
+    0x178b: 'c640a800c740ac20000000c640b001c740b420000000c640b802c740bc40000000c640c003c740c440000000c640c804c740cc40000000c640d005c740d440000000c640d806c740dc40000000c640e007c740e440000000c640e808c740ec40000000',
+    0x3c860: '80bf540900000041bf80000000741783ea01741283fa0174076644897f28eb0666c74728400080bf55090000000f84bd000000',
+    # 从覆盖表节点+14取Power；缺省128；最后同时清零相邻的额外残机/Bomb字节。
+    0x3c932: '0fb741146689059b015000eb086644893d9101500066c705f0d350000000',
     # 光束创建时清局部计数；展开结束同一步转持续0帧，先按counter%12传擦弹开关，再递增时钟。
     0x10f21: 'c7430c00000000c7430819fcffff8b47188943108b471c8943148b47408983880200008b47108943048b470889836c020000488bc38b573085d28993700200008b4f34898b680200008b4f38894b188b0f898b8c0200008b4f04890b0f94c1888b90020000',
     0x1104d: '4533ed',
@@ -580,6 +585,9 @@ def inspect(pe, require_hash=True):
             'extra_circle_variable_fields': {variable: hex(field) for variable, (_, field) in EXTRA_CIRCLE_VARIABLES.items()},
             'mine_constants': {hex(rva): value for rva, value in MINE_CONSTANTS.items()},
             'settlement_labels': [label.rstrip(b'\n\0').decode('ascii') for label in LABELS],
+            'practice_entry': {'stage_power': [0,64,128,128,128,128],
+                               'spell_power_overrides': {str(i): 32 if i<2 else 64 for i in range(9)},
+                               'spell_default_power': 128,'spell_extra_lives': 0,'spell_bombs': 0},
             'unresolved': ['rank 动态写入与上下界、状态3其他入口用途']}
 
 

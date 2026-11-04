@@ -1,4 +1,4 @@
-// 本文件保存从新典 spellpractice.msgpack 与 zh-CN 原文提取的完整只读目录。
+// 本文件保存原典符卡身份与本地化目录，并按实际 Boss 使用者组织跨关卡浏览层级。
 #include "app/spell_practice.hpp"
 #include "stage/catalog.hpp"
 namespace koumakyou::spell {
@@ -12,6 +12,21 @@ constexpr std::array<Stage,7> kStages{{
     {"STAGE 6","至福乐土降下血雨","蕾米莉亚·斯卡蕾特",6,18},
     {"STAGE EX","东方红魔狂　～ Sister of Scarlet","芙兰朵露·斯卡蕾特",13,13},
 }};
+// 浏览组仅引用原始身份：六面道中属于咲夜，Extra 前三符属于帕秋莉。
+constexpr Group kRumiaGroups[]{{0,0},{0,1},{0,2}};
+constexpr Group kCirnoGroups[]{{1,0},{1,1},{1,2}};
+constexpr Group kMeilingGroups[]{{2,0},{2,1},{2,2},{2,3},{2,4}};
+constexpr Group kPatchouliGroups[]{
+    {3,0},{3,1},{3,2},{3,3},{3,4},{3,5},{3,6},{3,7},
+    {3,8},{3,9},{3,10},{3,11},{3,12},{3,13},{3,14},{3,15},{6,0},{6,1},{6,2}};
+constexpr Group kSakuyaGroups[]{{4,0},{4,1},{4,2},{4,3},{5,0}};
+constexpr Group kRemiliaGroups[]{{5,1},{5,2},{5,3},{5,4},{5,5}};
+constexpr Group kFlandreGroups[]{{6,3},{6,4},{6,5},{6,6},{6,7},{6,8},{6,9},{6,10},{6,11},{6,12}};
+constexpr std::array<Boss,kBossCount> kBosses{{
+    {"露米娅",kRumiaGroups},{"琪露诺",kCirnoGroups},{"红美铃",kMeilingGroups},
+    {"帕秋莉·诺蕾姬",kPatchouliGroups},{"十六夜咲夜",kSakuyaGroups},
+    {"蕾米莉亚·斯卡蕾特",kRemiliaGroups},{"芙兰朵露·斯卡蕾特",kFlandreGroups},
+}};
 constexpr std::array<Character,4> kCharacters{{
     {"博丽灵梦（灵）","博丽神社的巫女小姐","博丽 灵梦","灵之御札「Homing Amulet」","「梦想封印」",0,{3,4,3}},
     {"博丽灵梦（梦）","博丽神社的巫女小姐","博丽 灵梦","梦之御札「Persuasion Needle」","「封魔阵」",0,{3,4,3}},
@@ -19,15 +34,15 @@ constexpr std::array<Character,4> kCharacters{{
     {"雾雨魔理沙（恋）","东洋的西洋魔术师","雾雨 魔理沙","恋之御札「Illusion Laser」","「Master Spark」",1,{4,1,4}},
 }};
 constexpr std::array<Card,kSpellCount> kCards{{
-    {1,0,0,2,"月符「Moonlight Ray」","露米娅",2},
-    {2,0,0,3,"月符「Moonlight Ray」","露米娅",2},
-    {3,0,1,1,"夜符「Night Bird」","露米娅",2},
-    {4,0,1,2,"夜符「Night Bird」","露米娅",2},
-    {5,0,1,3,"夜符「Night Bird」","露米娅",2},
-    {6,0,2,0,"暗符「Demarcation」","露米娅",3},
-    {7,0,2,1,"暗符「Demarcation」","露米娅",4},
-    {8,0,2,2,"暗符「Demarcation」","露米娅",4},
-    {9,0,2,3,"暗符「Demarcation」","露米娅",4},
+    {1,0,0,2,"月符「Moonlight Ray」","露米娅",2,32},
+    {2,0,0,3,"月符「Moonlight Ray」","露米娅",2,32},
+    {3,0,1,1,"夜符「Night Bird」","露米娅",2,64},
+    {4,0,1,2,"夜符「Night Bird」","露米娅",2,64},
+    {5,0,1,3,"夜符「Night Bird」","露米娅",2,64},
+    {6,0,2,0,"暗符「Demarcation」","露米娅",3,64},
+    {7,0,2,1,"暗符「Demarcation」","露米娅",4,64},
+    {8,0,2,2,"暗符「Demarcation」","露米娅",4,64},
+    {9,0,2,3,"暗符「Demarcation」","露米娅",4,64},
     {10,1,0,0,"冰符「Icicle Fall」","琪露诺",2},
     {11,1,0,1,"冰符「Icicle Fall」","琪露诺",2},
     {12,1,0,2,"雹符「Hailstorm」","琪露诺",2},
@@ -153,6 +168,21 @@ constexpr std::array<Card,kSpellCount> kCards{{
 }};
 }
 std::span<const Stage> Stages(){return kStages;}
+std::span<const Boss> Bosses(){return kBosses;}
+int BossIndex(int stage,int group) {
+    for(int boss=0;boss<kBossCount;++boss)
+        for(const auto& entry:kBosses[boss].groups)
+            if(entry.stage==stage&&entry.group==group)return boss;
+    return -1;
+}
+int BossGroupIndex(int stage,int group) {
+    const int boss=BossIndex(stage,group);
+    if(boss<0)return -1;
+    const auto groups=kBosses[boss].groups;
+    for(int index=0;index<static_cast<int>(groups.size());++index)
+        if(groups[index].stage==stage&&groups[index].group==group)return index;
+    return -1;
+}
 std::span<const Character> Characters(){return kCharacters;}
 std::span<const Card> Cards(){return kCards;}
 const Card* Find(int stage,int group,int difficulty) {

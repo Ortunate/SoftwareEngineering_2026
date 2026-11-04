@@ -7,3 +7,6 @@
 #include "ui/motion.hpp"
 #include "ui/page.hpp"
 #include "ui/typography.hpp"
+#include "ui/name_entry.hpp"
+#include "ui/difficulty_card.hpp"
+#include "ui/page_motion.hpp"

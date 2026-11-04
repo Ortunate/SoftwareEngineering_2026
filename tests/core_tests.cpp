@@ -44,6 +44,7 @@ void TestSpellPracticeCatalog() {
     std::array<int,7> counts{};int playable=0;
     for(std::size_t index=0;index<spell::Cards().size();++index) {
         const auto& card=spell::Cards()[index];assert(card.number==int(index)+1);
+        assert(card.power==(index<2?32:index<9?64:128));
         assert(card.group>=0 && card.group<groups[card.stage] && card.difficulty>=0 && card.difficulty<5 && (card.stage==6?card.difficulty==4:card.difficulty<4));
         assert(spell::Find(card.stage,card.group,card.difficulty)==&card);++counts[card.stage];
         playable+=spell::Playable(&card,0);
@@ -52,6 +53,29 @@ void TestSpellPracticeCatalog() {
         assert(spell::Playable(&card,0)==spell::Playable(&card,3));
     }
     assert(counts==totals && playable==131);
+    // UI 归属独立于启动关卡；逐项覆盖防止跨关卡归并后漏卡或重复显示。
+    constexpr std::array<int,7> bossGroups{3,3,5,19,5,5,10},bossTotals{9,11,17,50,19,15,10};
+    std::array<int,131> coverage{};
+    assert(spell::Bosses().size()==7);
+    for(int boss=0;boss<7;++boss) {
+        const auto& definition=spell::Bosses()[boss];int total=0;
+        assert(static_cast<int>(definition.groups.size())==bossGroups[boss]);
+        for(int index=0;index<bossGroups[boss];++index) {
+            const auto entry=definition.groups[index];
+            assert(spell::BossIndex(entry.stage,entry.group)==boss);
+            assert(spell::BossGroupIndex(entry.stage,entry.group)==index);
+            for(int difficulty=0;difficulty<5;++difficulty)if(const auto* card=spell::Find(entry.stage,entry.group,difficulty)) {
+                assert(std::string_view(card->user)==definition.name);
+                ++coverage[card->number-1];++total;
+            }
+        }
+        assert(total==bossTotals[boss]);
+    }
+    for(int count:coverage)assert(count==1);
+    assert(spell::BossIndex(5,0)==4 && spell::BossGroupIndex(5,0)==4);
+    assert(spell::BossIndex(6,0)==3 && spell::BossGroupIndex(6,0)==16);
+    assert(spell::BossIndex(6,3)==6 && spell::BossGroupIndex(6,3)==0);
+    assert(spell::BossIndex(-1,0)==-1 && spell::BossGroupIndex(6,13)==-1);
     assert(!SpellPracticeStage(-1)&&!SpellPracticeStage(7)&&SpellPracticeStage(6)==StageId::Extra);
     for(int stage=0;stage<6;++stage)assert(SpellPracticeStage(stage)==kPracticeStages[stage]);
     auto invalidExtra=*spell::Find(6,0,4);
@@ -172,7 +196,7 @@ void TestResponsiveLayouts() {
         fits(spellLayout.Title());fits(spellLayout.Heading());fits(spellLayout.Columns());fits(spellLayout.Footer());
         fits(spellLayout.Portrait());fits(spellLayout.CharacterInfo());
         for(int direction:{-1,1}) {fits(spellLayout.Arrow(direction));fits(spellLayout.GroupPage(direction));}
-        for(int index=0;index<7;++index)fits(spellLayout.StageRow(index));
+        for(int index=0;index<7;++index)fits(spellLayout.BossRow(index));
         for(int index=0;index<8;++index)fits(spellLayout.GroupRow(index));
         for(int index=0;index<4;++index)fits(spellLayout.Difficulty(index));
         fits(spellLayout.Difficulty(0,true));

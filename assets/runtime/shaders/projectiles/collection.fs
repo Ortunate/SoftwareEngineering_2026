@@ -1,8 +1,7 @@
-// 程序化纯色球玉、三维球壳与火焰；没有把二维弹图拉伸到模型表面。
+// 本文件绘制随视角变化的柔和实体高光、三维球壳与火焰，不使用模型预烘焙明暗。
 #version 330
 in vec3 n,world,local,center;
 in float instanceScale;
-in float mask;
 in vec4 bodyTint,highlightTint,glowTint,fx;
 uniform vec3 eye;
 uniform int kind,role,pass,mode;
@@ -10,9 +9,13 @@ uniform float seconds;
 out vec4 finalColor;
 vec4 sampledColor;
 void Shade(){
-    vec3 N=normalize(n),V=normalize(eye-world);float facing=abs(dot(N,V));
-    float diffuse=.74+.26*max(dot(N,normalize(vec3(-.5,.6,1))),0);
-    if(mode==1){sampledColor=vec4(vec3(.54,.60,.68)*(.45+.55*max(dot(N,normalize(vec3(-.5,.6,1))),0)),1);return;}
+    vec3 N=normalize(n),V=normalize(eye-world);float facing=clamp(abs(dot(N,V)),0.0,1.0);
+    // 弹体视为自发光材质：保留彩色轮廓，以视线夹角塑形，避免固定世界光向造成半面发黑。
+    // 高光由变换后的法线逐片段求值；COLOR_0.r 的旧亮面不能再作为固定白色分区。
+    float diffuse=.88+.12*facing;
+    // 窄镜面高光叠加柔和底层反射，保留弹色，避免整面铺白产生粉质感。
+    float highlight=.18*pow(facing,4.0)+.72*pow(facing,24.0);
+    if(mode==1){sampledColor=vec4(vec3(.54,.60,.68)*(.45+.55*facing),1);return;}
     if(pass==2){sampledColor=vec4(glowTint.rgb,clamp(fx.x*.35,0,.7)*pow(1-facing,1.3)*glowTint.a);return;}
     // 泡的暗透内球只吸收少量背景光；碰撞几何独立于透明度。
     if(kind==9&&role==0){sampledColor=vec4(0,0,0,.32*fx.z*(.5+.5*facing));return;}
@@ -40,13 +43,13 @@ void Shade(){
         color=mix(color,vec3(1,.19,.015),smoothstep(.5,1,h));
         sampledColor=vec4(color,(.55+.3*wave)*(.7+.3*facing)*(1-.45*h)*fx.z);return;
     }
-    if(kind==4||kind==5||kind==8){sampledColor=vec4(mix(bodyTint.rgb*diffuse,highlightTint.rgb,mask),1);return;}
+    if(kind==4||kind==5||kind==8){sampledColor=vec4(mix(bodyTint.rgb*diffuse,highlightTint.rgb,highlight),1);return;}
     if(kind==1){sampledColor=vec4(highlightTint.rgb,1);return;}
     if(kind==3||kind==6){float rho=sqrt(max(0,1-facing*facing));
-        float white=1-smoothstep(kind==3?.72:.48,1.0,rho);
+        float white=.12*(1-smoothstep(kind==3?.72:.48,1.0,rho))+.78*pow(facing,18.0);
         sampledColor=vec4(mix(bodyTint.rgb,highlightTint.rgb,white),1);return;}
-    float center=smoothstep(.05,.82,facing);
-    if(kind==2)center=pow(max(dot(N,normalize(vec3(-.6,.2,1))),0),.4);
+    float center=highlight;
+    if(kind==2)center=highlight;
     float bright=kind==0?.94:kind==7?1:.98;
     sampledColor=vec4(mix(bodyTint.rgb*diffuse,highlightTint.rgb,center*bright),1);
 }

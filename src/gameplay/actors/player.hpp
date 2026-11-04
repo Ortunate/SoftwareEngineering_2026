@@ -57,8 +57,10 @@ public:
     static constexpr float kOptionWorldHeight = native_sizes::kOptionHeight;
     /// @brief 恢复开局状态，包括初始位置、残机、Bomb、Power 8 和全部计时器。
     void Reset();
-    /// @brief Reset 后配置本局额外残机（1～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
+    /// @brief Reset 后配置本局额外残机（0～5）、Bomb（0～3）、挑战模式与机体；数值越界会钳制。
+    /// 额外残机0供单符练习使用，表示仅当前一条命；设置界面仍限制为1～5。
     /// 新局净Miss归零；挑战模式照常计 Miss、扣 Power 和复活，但不扣残机，不会因命中结束一局。
+    /// Bomb 配置同时保存为本局死亡重生的恢复数量，不受拾取或消耗改变。
     void ConfigureRun(int extraLives, int bombs, bool challenge, ShotType shot);
     /// @brief 重置位置、视角、副弹周期及副机收拢/动画时间，用于返回菜单或复活，旧激光下次更新回收。
     void ResetPose();
@@ -101,7 +103,7 @@ public:
     /// 复活或 Bomb 无敌时、半径无效时返回 false；不修改敌人，不产生擦弹，受击结算由 Game 统一合并。
     [[nodiscard]] bool ContactEnemyBody(Vector3 position,float radius) const;
     /// @brief 结算一次确认Miss并增加净Miss；普通模式扣残机，挑战模式保留库存。
-    /// 两模式均扣16 Power（最低8）、补足Bomb、复位并给予无敌；调用方须先合并同帧接触并检查保护期。
+    /// 两模式均扣16 Power（最低8）、将Bomb重设为本局配置值、复位并给予无敌；调用方须先合并同帧接触并检查保护期。
     /// @return 仍有可用残机时返回 true；用尽时返回 false。
     bool TakeHit();
     /// @brief 根据玩家位置和视角更新相机；相机位置始终等于玩家判定中心。
@@ -176,6 +178,7 @@ private:
     // lives_ 是额外残机数；未配置的默认值 3 供独立测试使用，Game 按设置覆盖；-1 时结束。
     int lives_ = 3;
     int bombs_ = 3;
+    int respawnBombs_ = 3; // 本局开局配置的快照；ResetPose、拾取与消耗不修改，死亡时精确恢复。
     int power_ = kMinPower;
     std::int64_t netMisses_=0; // Challenge残机可使该计数为负；用宽整数避免项目长局累计溢出。
     bool challenge_ = false;

@@ -129,13 +129,34 @@ void Game::DrawMainMenu(const ui::MenuMotion* motion) const {
     }
 }
 
-void Game::DrawOptions() const {
-    if (optionsPage_ == OptionsPage::KeyBindings) { DrawKeyBindings(); return; }
+void Game::DrawTitlePages() const {
+    // 首页作为混合底层保持完整绘制；子页背景和内容使用相同权重覆盖，不创建截图纹理。
+    DrawMainMenu(state_==RunState::MainMenu?nullptr:&titleMenuMotion_);
+    float accumulated=titlePageMotion_.Title();
+    for(int index=0;index<kTitlePages;++index) {
+        const float weight=titlePageMotion_.Layer(index);
+        if(weight<=0)continue;
+        accumulated+=weight;
+        // 将混合权重转换为逐层覆盖透明度；子页互换时总覆盖保持完整，不让首页从背景中闪现。
+        const float opacity=weight/accumulated;
+        const auto page=static_cast<TitlePage>(index);const auto* motion=&titlePageLayers_[index];
+        if(page==TitlePage::Replay)DrawReplayTable(false,opacity,motion);
+        else if(page>=TitlePage::ScoreDifficulty && page<=TitlePage::ScoreFourth)
+            DrawScorePage(opacity,motion,index-static_cast<int>(TitlePage::ScoreDifficulty));
+        else if(page==TitlePage::Music || page==TitlePage::Credit)
+            DrawMenuPage(page==TitlePage::Music?RunState::MusicRoom:RunState::Credit,opacity,motion);
+        else if(page==TitlePage::Options)DrawOptions(opacity,motion);
+        else if(page==TitlePage::Bindings)DrawKeyBindings(opacity,motion);
+    }
+}
+
+void Game::DrawOptions(float opacity,const ui::MenuMotion* motion) const {
+    const auto& animation=motion?*motion:menuMotion_;
     const auto canvas=menu::PageCanvas(GetScreenWidth(),GetScreenHeight());
     const bool compact=canvas.width<1000;
     const Font font=assets_.Common().uiFont;
-    ui::DrawPageSurface(canvas,menuMotion_);
-    ui::DrawPageHeader(canvas,font,"游戏设置","设置自动保存 · Player 为额外残机","OPTION");
+    ui::DrawPageSurface(canvas,animation,opacity);
+    ui::DrawPageHeader(canvas,font,"游戏设置","设置自动保存 · Player 为额外残机","OPTION",opacity);
     const std::array<std::string,7> values{
         kSupportedFpsLimits[fpsLimitIndex_]==0 ? "Unlimited" : std::to_string(kSupportedFpsLimits[fpsLimitIndex_]),
         std::to_string(musicVolume_)+"%",std::string(TextFormat("%.1fx",mouseSensitivity_/100.0F)),
@@ -144,38 +165,38 @@ void Game::DrawOptions() const {
     constexpr std::array<int,7> minimum{0,0,kMinMouseSensitivity,0,0,1,0};
     constexpr std::array<int,7> maximum{5,100,kMaxMouseSensitivity,1,100,5,3};
     for(int index=0;index<menu::kOptionsCount;++index) {
-        const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.012F);
+        const float weight=animation.Weight(index),reveal=opacity*animation.Reveal(index*0.012F);
         const float y=(compact?230:168)+index*(compact?64:46);
         DrawPageChoiceText(canvas,font,menu::kOptionLabels[index],compact?64:322,y,compact?24:22,
-                   Color{177,150,143,255},kGold,weight,reveal,menuMotion_.Pulse());
+                   Color{177,150,143,255},kGold,weight,reveal,animation.Pulse());
         const auto row=menu::OptionRow(canvas,index);
-        ui::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
+        ui::DrawPageRowRule(canvas,row,animation,weight,reveal);
         if(index>=menu::kNumericOptions)continue;
         DrawPageChoiceText(canvas,font,values[index].c_str(),compact?552:795,y,23,kIvory,kGold,
-                   weight,reveal,menuMotion_.Pulse()+menuMotion_.Flash(),true);
+                   weight,reveal,animation.Pulse()+animation.Flash(),true);
         const ui::ValueSelector selector{row,menu::OptionArrow(canvas,index,-1),menu::OptionArrow(canvas,index,1)};
-        selector.DrawArrows({font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()},
-                            levels[index],minimum[index],maximum[index],{weight,reveal});
+        selector.DrawArrows({font,canvas.scale,opacity,animation.Phase(),animation.Pulse()},
+                            levels[index],minimum[index],maximum[index],{weight,animation.Reveal(index*0.012F)});
     }
 }
 
-void Game::DrawMenuPage() const {
-    if (state_ == RunState::StartSetup) { DrawStartSetup(); return; }
+void Game::DrawMenuPage(RunState page,float opacity,const ui::MenuMotion* motion) const {
+    const auto& animation=motion?*motion:menuMotion_;
     const menu::PageLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto& canvas=layout.canvas;
     const bool compact=layout.compact;
     const auto& common = assets_.Common();
     const Font font = common.uiFont;
-    ui::DrawPageSurface(canvas,menuMotion_);
-    if (state_ == RunState::MusicRoom) {
-        Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, kGold, true);
+    ui::DrawPageSurface(canvas,animation,opacity);
+    if (page == RunState::MusicRoom) {
+        Text(canvas, font, "MUSIC ROOM", canvas.width/2, 100, 46, ui::WithOpacity(kGold,opacity), true);
         constexpr int count=static_cast<int>(music::kTracks.size()),pageSize=menu::PageLayout::kTracksPerPage;
         const int first=selectedTrack_/pageSize*pageSize;
-        const ui::DrawContext context{font,canvas.scale,1,menuMotion_.Phase(),menuMotion_.Pulse()};
+        const ui::DrawContext context{font,canvas.scale,opacity,animation.Phase(),animation.Pulse()};
         for(int index=first;index<std::min(first+pageSize,count);++index) {
             const int rowIndex=index-first;const auto row=layout.Track(rowIndex);
-            const float weight=menuMotion_.Weight(rowIndex),reveal=menuMotion_.Reveal(rowIndex*0.025F);
-            auto rowContext=context;rowContext.opacity=reveal;
+            const float weight=animation.Weight(rowIndex),reveal=animation.Reveal(rowIndex*0.025F);
+            auto rowContext=context;rowContext.opacity=opacity*reveal;
             const auto color=ui::SelectableRow{row,index}.Draw(rowContext,weight);
             const auto& track=music::kTracks[index];
             const auto title=std::to_string(index+1)+". "+track.title;
@@ -187,11 +208,11 @@ void Game::DrawMenuPage() const {
         const auto page=std::to_string(first/pageSize+1)+" / "+std::to_string((count+pageSize-1)/pageSize);
         ui::Label{canvas.Rect(canvas.width/2-80,compact?1010:675,160,42),22,ui::TextAlign::Center}.Draw(context,page.c_str(),kGold);
     } else {
-        Text(canvas, font, "CREDIT", canvas.width/2, 110, 50, kGold, true);
-        Text(canvas, font, "原作 · 东方红魔乡：新典", canvas.width/2, compact?330:260, 30, kIvory, true);
-        Text(canvas, font, "Team Shanghai Alice", canvas.width/2, compact?420:320, 28, kGold, true);
-        Text(canvas, font, "三维扩展与现代化重绘", canvas.width/2, compact?620:430, 27, kIvory, true);
-        Text(canvas, font, "koumakyou · Fan recreation", canvas.width/2, compact?710:480, 23, kGold, true);
+        Text(canvas, font, "CREDIT", canvas.width/2, 110, 50, ui::WithOpacity(kGold,opacity), true);
+        Text(canvas, font, "原作 · 东方红魔乡：新典", canvas.width/2, compact?330:260, 30, ui::WithOpacity(kIvory,opacity), true);
+        Text(canvas, font, "Team Shanghai Alice", canvas.width/2, compact?420:320, 28, ui::WithOpacity(kGold,opacity), true);
+        Text(canvas, font, "三维扩展与现代化重绘", canvas.width/2, compact?620:430, 27, ui::WithOpacity(kIvory,opacity), true);
+        Text(canvas, font, "koumakyou · Fan recreation", canvas.width/2, compact?710:480, 23, ui::WithOpacity(kGold,opacity), true);
     }
 }
 }  // namespace koumakyou

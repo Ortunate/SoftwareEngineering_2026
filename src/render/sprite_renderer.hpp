@@ -41,6 +41,7 @@ public:
     /// @brief 绘制战斗或收尾帧；不透明模型先写深度，其他对象按相机深度排序，末尾恢复深度和剔除状态。
     /// 本次调用须汇总本帧所有透明战斗对象；分次调用不能保证跨批次遮挡正确。
     /// @param camera 当前 3D 相机。
+    /// @param playerPosition 实际自机世界坐标；用于敌弹近镜头淡化，不跟随回放观察相机。
     /// @param bullets 全部活动弹幕。
     /// @param enemies 当前可见敌人指针序列；调用期间所有指针须有效。
     /// @param boss 当前 Boss 状态。
@@ -51,7 +52,7 @@ public:
     /// @param bombVolumes 借用战斗模拟的世界实体；光束按轴向和精灵深度切分，其余实体按中心排序。
     /// @param models 可选的本帧三维模型渲染器；资源借用期仅本次 Draw。
     /// @param external 可选的独立粒子池；与演员/弹幕进入同一透明队列，借用期仅本次Draw。
-    void Draw(const Camera3D& camera, const BulletSystem& bullets,
+    void Draw(const Camera3D& camera, Vector3 playerPosition, const BulletSystem& bullets,
               std::span<const behavior::Actor*> enemies, const Boss* boss,
               std::span<const PickupSprite> pickups,
               std::span<const VisualResource> visuals,

@@ -1,6 +1,7 @@
 // 本文件负责游戏生命周期、主循环调度和关卡事件转发。
 
 #include "app/game.hpp"
+#include "app/player_start.hpp"
 #include "app/constants.hpp"
 #include "platform/window_input.hpp"
 #include "ui/components.hpp"
@@ -138,7 +139,7 @@ void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
         stageId_==StageId::Extra ? StageEntry::Extra : StageEntry::Campaign;
     if(!requestedDifficulty||!SupportsStage(stageId_,*requestedDifficulty,entry))
         throw std::invalid_argument("Unsupported run identity");
-    if(!continuingStage && replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear(); replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
+    if(!continuingStage && replayMode_!=replay::Mode::Playback) { replaySaveState_=ReplaySaveState::None;replayName_.clear();replayNamePrepared_=false; replayMode_=replay::Mode::Idle; replayData_={}; replayStatus_.clear(); }
     replayEnded_=false;
     playerBodyAnimation_={};playerBodyAction_=0;playerBodySince_=0;
     FinishSpellRecord(false);
@@ -163,6 +164,7 @@ void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
     stageContent_ = CreateStageContent(stageId_,runDifficulty_,entry);
     stage_ = StageDirector(stageContent_->Events());
     scenerySeconds_=0;
+    sceneryTransitionStart_.reset();
     loadingSeconds_ = 0;
     loadingStarted_ = loadingFailed_ = false;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -213,8 +215,13 @@ void Game::CompleteStartRun() {
     playerOptionAnimations_ = {};
     if(!continuingStage_) {
         player_.Reset();
-        runInitialLives_=initialLives_;
-        player_.ConfigureRun(initialLives_, initialBombs_, challengeMode_,static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
+        const auto entry=spellPractice_?StageEntry::SpellPractice:practiceMode_?StageEntry::Practice:
+            stageId_==StageId::Extra?StageEntry::Extra:StageEntry::Campaign;
+        const auto* card=spellPractice_?spell::Find(spellSelection_.stage,spellSelection_.group,spellSelection_.difficulty):nullptr;
+        const auto resources=player_start::ForEntry(stageId_,entry,initialLives_,initialBombs_,card);
+        runInitialLives_=resources.extraLives;
+        player_.ConfigureRun(resources.extraLives,resources.bombs,challengeMode_,static_cast<ShotType>(selectedCharacter_*2+selectedShot_));
+        player_.AdjustPower(resources.power-player_.Power());
         missCount_=bombCount_=0;score_=0;graze_=pointItems_=0;
         const auto* combat=stageContent_->CombatData();
         referenceRank_=rank::Initial(combat?combat->stage:StageNumber(stageId_),runDifficulty_);
@@ -264,7 +271,6 @@ void Game::CompleteStartRun() {
         for(int skipped=1;skipped<practiceAttack_;++skipped)
             if(!boss_->AdvanceSkill())throw std::logic_error("Spell practice attack is unreachable");
         if(boss_->attack!=practiceAttack_)throw std::logic_error("Spell practice attack does not match catalog");
-        player_.AdjustPower(Player::kMaxPower);
         spellCutInTimer_ = kSpellCutInDuration;
     }
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -287,7 +293,7 @@ void Game::EnterMainMenu() {
     continuingStage_=false;
     pendingEnding_.reset();endingPlayer_=ending::Player{};clearedMainlineStages_=0;runContinues_=0;
     scorePageFromRun_=false;scoreHighlight_=-1;
-    replaySaveState_=ReplaySaveState::None;replayName_.clear();replayAfterSave_=ReplayAction::Stay;
+    replaySaveState_=ReplaySaveState::None;replayName_.clear();replayNamePrepared_=false;replayAfterSave_=ReplayAction::Stay;
     (void)DisableWindowInputMethods(GetWindowHandle());
     RefreshReplayAvailability(0,true);
     FinishSpellRecord(false);
@@ -552,9 +558,9 @@ void Game::UpdateUiMotion(float deltaTime) {
         selection = setupStep_ == StartSetupStep::Shot ? selectedShot_ : setupStep_ == StartSetupStep::Mode ? static_cast<int>(challengeMode_)
             : setupStep_ == StartSetupStep::Difficulty ? selectedDifficulty_ : setupStep_ == StartSetupStep::Stage ? selectedPracticeStage_ : 0;
         if(spellPractice_) {
-            detail=spellSelection_.page==spell::Page::Stage?8:9;
-            selection=spellSelection_.page==spell::Page::Stage?spellSelection_.stage:
-                spellSelection_.page==spell::Page::Group?spellSelection_.group:spellSelection_.difficulty;
+            detail=spellSelection_.page==spell::Page::Boss?8:9;
+            selection=spellSelection_.page==spell::Page::Boss?spell::BossIndex(spellSelection_.stage,spellSelection_.group):
+                spellSelection_.page==spell::Page::Group?spell::BossGroupIndex(spellSelection_.stage,spellSelection_.group):spellSelection_.difficulty;
         }
     } else if (state_ == RunState::MusicRoom) {
         detail=selectedTrack_/menu::PageLayout::kTracksPerPage;
@@ -562,9 +568,24 @@ void Game::UpdateUiMotion(float deltaTime) {
     }
     else if (state_ == RunState::Paused) selection = selectedPauseItem_;
     else if (state_ == RunState::Won || state_ == RunState::GameOver) selection = selectedResultItem_;
-    if (state_ == RunState::Score || state_ == RunState::Credit) selection = 0;
+    if(state_==RunState::Score) {
+        detail=scoreViewStep_==ScoreViewStep::Difficulty?0:1+scoreShot_;
+        selection=scoreViewStep_==ScoreViewStep::Difficulty?scoreDifficulty_:-1;
+    }
+    if(state_==RunState::Credit)selection=0;
     // 同一 RunState 内的难度/机体/模式和设置子页独立进场，选择编号只在当前页有效。
     menuMotion_.Advance(static_cast<int>(state_) * 16 + detail, selection, deltaTime);
+    int titlePage=-2;
+    if(state_==RunState::MainMenu)titlePage=-1;
+    else if(state_==RunState::ReplayList)titlePage=static_cast<int>(TitlePage::Replay);
+    else if(state_==RunState::Score && !scorePageFromRun_)titlePage=static_cast<int>(TitlePage::ScoreDifficulty)+
+        (scoreViewStep_==ScoreViewStep::Difficulty?0:1+scoreShot_);
+    else if(state_==RunState::MusicRoom)titlePage=static_cast<int>(TitlePage::Music);
+    else if(state_==RunState::Credit)titlePage=static_cast<int>(TitlePage::Credit);
+    else if(state_==RunState::Options)titlePage=static_cast<int>(optionsPage_==OptionsPage::General?TitlePage::Options:TitlePage::Bindings);
+    // 退场页面保留自身选择与进场快照；新的业务状态立即接管输入，展示权重独立追随。
+    if(titlePage>=0)titlePageLayers_[titlePage]=menuMotion_;
+    titlePageMotion_.Advance(titlePage,deltaTime);
     startSetupMotion_.Advance(state_==RunState::MainMenu?-1:state_==RunState::StartSetup?static_cast<int>(setupStep_):-2,deltaTime);
     for(const auto step:{StartSetupStep::Shot,StartSetupStep::Mode,StartSetupStep::Stage}) {
         if(startSetupMotion_.Layer(step)<=0 && !(state_==RunState::StartSetup && setupStep_==step))continue;
@@ -573,9 +594,10 @@ void Game::UpdateUiMotion(float deltaTime) {
         setupChoiceMotion_[static_cast<int>(step)].Advance(static_cast<int>(step),selected,deltaTime);
     }
     spellCharacterMotion_.Advance(0,spellSelection_.character,deltaTime);
-    const bool spellColumns=state_==RunState::StartSetup && spellPractice_ && spellSelection_.page!=spell::Page::Stage;
+    const bool spellColumns=state_==RunState::StartSetup && spellPractice_ && spellSelection_.page!=spell::Page::Boss;
     // 两列各自强调当前选项，焦点变化只改变强弱；统一的选卡页编号保证整页不随递进/返回闪烁。
-    spellGroupMotion_.Advance(spellColumns?spellSelection_.stage:-1,spellColumns?spellSelection_.group:-1,deltaTime);
+    spellGroupMotion_.Advance(spellColumns?spell::BossIndex(spellSelection_.stage,spellSelection_.group):-1,
+        spellColumns?spell::BossGroupIndex(spellSelection_.stage,spellSelection_.group):-1,deltaTime);
     spellDifficultyMotion_.Advance(spellColumns?spellSelection_.stage:-1,spellColumns?spellSelection_.difficulty:-1,deltaTime);
     startCharacterMotion_.Advance(0,selectedCharacter_,deltaTime);
     if(state_==RunState::MainMenu)titleMenuMotion_=menuMotion_;
@@ -637,11 +659,11 @@ void Game::UpdateState(float deltaTime) {
             return;
         }
         if (input.back) {
-            if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
+            if(!practiceMode_ && !previewMode_)BeginScoreSave();
             else RequestReplayAction(practiceMode_?ReplayAction::StageSelection:ReplayAction::Menu);
             return;
         }
-        if(IsKeyPressed(KEY_M)) {if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();else RequestReplayAction(ReplayAction::Menu);return;}
+        if(IsKeyPressed(KEY_M)) {if(!practiceMode_ && !previewMode_)BeginScoreSave();else RequestReplayAction(ReplayAction::Menu);return;}
         const menu::OverlayLayout layout(GetScreenWidth(),GetScreenHeight());
         std::array<ui::Item,menu::kResultCount> items{};
         for (int index = 0; index < menu::kResultCount; ++index)
@@ -654,7 +676,7 @@ void Game::UpdateState(float deltaTime) {
             assets_.PlaySoundEffect("menu_confirm");
             if(selectedResultItem_==2)RequestReplayAction(ReplayAction::Stay);
             else if (selectedResultItem_ == 0) RequestReplayAction(ReplayAction::Retry);
-            else if(stageId_==StageId::Extra && !previewMode_)BeginScoreSave();
+            else if(!practiceMode_ && !previewMode_)BeginScoreSave();
             else RequestReplayAction(practiceMode_?ReplayAction::StageSelection:ReplayAction::Menu);
         }
         return;
@@ -710,10 +732,7 @@ void Game::UpdateState(float deltaTime) {
             if(finishResult_==RunState::Won && practiceMode_ && !spellPractice_)ReturnToPracticeStage();
             else if(finishResult_==RunState::Won && pendingEnding_)BeginEnding();
             else if(finishResult_==RunState::Won && stageId_==StageId::Extra && !previewMode_ && !spellPractice_)BeginScoreSave();
-            else {
-                state_ = finishResult_; EnableCursor();
-                if(!practiceMode_ && CanSaveReplay())RequestReplayAction(ReplayAction::Stay);
-            }
+            else {state_=finishResult_;EnableCursor();}
         }
         return;
     }
@@ -871,6 +890,10 @@ void Game::BeginStageDialogue(StageEventId id, bool afterBattle,DialogueScene sc
     if(dialogueFlow_.awardFrame==0)AwardStageClear();
     if(!cues.empty())dialogueMotion_.Seek(cues,0);
     messageTimer_ = 0.0F;
+}
+
+void Game::BeginStageSceneryTransition() {
+    sceneryTransitionStart_=scenerySeconds_;
 }
 
 void Game::ResumeStageBoss() {

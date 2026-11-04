@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <limits>
+#include <fstream>
 
 int main() {
     using namespace koumakyou;
@@ -30,7 +31,10 @@ int main() {
         auto practice=data;practice.header.practice=true;practice.route="stage-practice";
         auto& segment=practice.segments.front();segment.stage="stage"+std::to_string(stage);
         segment.difficulty=static_cast<replay::Difficulty>(difficulty);segment.rank=difficulty==0?20:32;
+        segment.power=stage==1?8:stage==2?64:128;
         assert(replay::CanPlay(practice,error)==!(stage==6 && difficulty==0));
+        auto wrongPower=practice;wrongPower.segments[0].power=stage==1?64:8;
+        assert(!replay::CanPlay(wrongPower,error));
     }
     // 每张符卡使用原典编号，不能以相同phase误认成另一关或另一难度的符卡。
     for(const auto& card:spell::Cards())for(unsigned shot=0;shot<4;++shot) {
@@ -41,8 +45,12 @@ int main() {
         auto& segment=practice.segments.front();segment.stage=card.stage==6?"extra":"stage"+std::to_string(card.stage+1);
         segment.difficulty=static_cast<replay::Difficulty>(card.difficulty);
         segment.rank=card.stage==6?18:card.difficulty==0?20:32;
-        segment.power=128;segment.entry="spell";segment.target="spell-"+std::to_string(card.number);
+        segment.lives=segment.bombs=0;segment.power=card.number<=2?32:card.number<=9?64:128;segment.entry="spell";segment.target="spell-"+std::to_string(card.number);
         assert(replay::CanPlay(practice,error));
+        auto wrongPower=practice;wrongPower.segments[0].power=segment.power==128?64:128;
+        assert(!replay::CanPlay(wrongPower,error));
+        auto wrongStock=practice;wrongStock.segments[0].bombs=1;assert(!replay::CanPlay(wrongStock,error));
+        wrongStock=practice;wrongStock.segments[0].lives=1;assert(!replay::CanPlay(wrongStock,error));
         replay::Entry entry;assert(replay::ResolveEntry(segment,entry));
         assert(entry.spellNumber==card.number && entry.stage==card.stage && entry.difficulty==card.difficulty);
         segment.target="spell-999";assert(!replay::CanPlay(practice,error));
@@ -85,5 +93,30 @@ int main() {
     assert(loaded.result==result&&loaded.frames.size()==2);
     assert(!loaded.frames[0].player.aimAssistEnabled&&loaded.frames[1].player.aimAssistEnabled);
     assert(loaded.frames[1].player.mouseDelta.y==-2&&loaded.frames[1].confirm);
+    // 槽位发布必须先完整写入，未确认、无效槽或目标为目录都不能破坏既有录像。
+    data.name="  Name ";assert(replay::SaveSlot(directory,data,1,false,file,error));
+    assert(file.filename()=="th6_01.krep");replay::Summary summary;
+    assert(replay::ReadSummary(file,summary,error) && summary.name==data.name && summary.recordedAt==data.recordedAt);
+    assert(summary.result==data.result && summary.stage=="stage1" && summary.shot=="reimu-a");
+    auto replacement=data;replacement.name="NEW";
+    assert(!replay::SaveSlot(directory,replacement,1,false,file,error));
+    assert(replay::Load(replay::SlotPath(directory,1),loaded,error) && loaded.name==data.name);
+    assert(!replay::SaveSlot(directory,replacement,0,true,file,error));
+    assert(!replay::SaveSlot(directory,replacement,61,true,file,error));
+    assert(replay::SaveSlot(directory,replacement,1,true,file,error));
+    assert(replay::Load(file,loaded,error) && loaded.name=="NEW");
+    auto damaged=replacement;damaged.frames[0].dt=std::numeric_limits<float>::quiet_NaN();
+    assert(!replay::SaveSlot(directory,damaged,1,true,file,error));
+    assert(replay::Load(replay::SlotPath(directory,1),loaded,error) && loaded.name=="NEW");
+    assert(std::filesystem::create_directory(replay::SlotPath(directory,60)));
+    assert(!replay::SaveSlot(directory,replacement,60,true,file,error));
+    assert(replay::Load(replay::SlotPath(directory,1),loaded,error) && loaded.name=="NEW");
+    // 摘要读取只验证头及声明长度，真正播放前的完整Load仍拦截负载损坏。
+    const auto corrupt=replay::SlotPath(directory,1);
+    {std::fstream stream(corrupt,std::ios::binary|std::ios::in|std::ios::out);
+        stream.seekg(-5,std::ios::end);char byte=0;stream.get(byte);stream.seekp(-5,std::ios::end);stream.put(byte^1);}
+    assert(replay::ReadSummary(corrupt,summary,error));assert(!replay::Load(corrupt,loaded,error));
+    {std::ofstream stream(directory/"bad.krep");stream<<"bad";}
+    summary.name="keep";assert(!replay::ReadSummary(directory/"bad.krep",summary,error) && summary.name=="keep");
     std::filesystem::remove_all(directory);
 }

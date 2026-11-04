@@ -14,7 +14,7 @@
 
 stage7.std的656/784/912字节处分别绑定`th06_14.opus`、`th06_15.opus`、`th06_16.opus`。官方中文标签依次为“魔法少女们的百年祭”“U.N.Owen就是她吗？”“绯红恶魔姗姗而至”。MSG分支0/10等切至槽1，3/13在223帧切至槽2，5/15在0帧切至槽2；不能假定本关只有两首音乐。
 
-以现有`rewrap_native_opus.py`重封装Ogg，ffmpeg/libmp3lame q2离线转换为stage_theme/boss_theme/event_theme.mp3。ffprobe可解码并分别给出166.8575、174.7375、117.0575秒；运行时只读取转换后的MP3，不读取原始音乐容器。第三槽已通过AssetManager::PlayStageTrack(2)播放，event_theme仅表明独立事件音乐资源，不预设它属于何种结算模式；正式MSG调用时刻仍须按原生控制流接入。
+使用统一 `tools/import_bgm.py` 将原始 Opus 解码为 `stage_theme/boss_theme/event_theme.flac`，并从同包 `.pos` 导入各自循环区间；ffmpeg 解码后的 PCM 与 FLAC 回解 PCM 逐曲哈希一致。完整时长仍分别为166.8575、174.7375、117.0575秒，实际循环按旁路 `.loop` 的原作区间执行，前奏只播放一次。来源、单位和 EOF 策略见 [BGM 原作循环](BGM_LOOP_REFERENCE.md)。第三槽通过 `AssetManager::PlayStageTrack(2)` 播放，event_theme 仅表明独立事件音乐资源，不预设它属于何种结算模式。
 
 ## 运行素材校验
 
@@ -24,12 +24,12 @@ stage7.std的656/784/912字节处分别绑定`th06_14.opus`、`th06_15.opus`、`
 |---|---:|---|
 | `stages/stage_extra/background.anm` | 352 | `23ba803629eb7e673574280707745cb15e156d8ab766063f315eca722779abb7` |
 | `stages/stage_extra/background.dds` | 1048724 | `a3663c629e9605bf535edc2bd0bb27895b233e0517712e5463d98dee9ec01025` |
-| `stages/stage_extra/boss_theme.mp3` | 4343037 | `5871f62611bfe22c2c1af58943e85ff18ca3c4b7ceeacc273dd3f37f7cb51642` |
-| `stages/stage_extra/event_theme.mp3` | 3117285 | `fcc9d158d0da4acdc1a0fb2b1e2171bc004e7984c02a1353403b4c4d312f752b` |
+| `stages/stage_extra/boss_theme.flac` | 22686215 | `740cc06045db4d2b12172a31372a74fe6aa88892af7299b461af40bea7413a1e` |
+| `stages/stage_extra/event_theme.flac` | 15491504 | `571ae41e0240f4f27430069de5ee580aa481aa10fa93d4d55ac8fe8e4530a12f` |
 | `stages/stage_extra/portraits/flandre/face12a_0.png` | 2031809 | `10ae92fd9e5d846919a62e6b0f150ca0d4e883ff7de6ea930c14a12970ae8325` |
 | `stages/stage_extra/portraits/flandre/face12b_0.png` | 2067919 | `c111e0140e6635932e547ea20b367357e1449b770873177068738a503dca94cb` |
 | `stages/stage_extra/portraits/flandre/face12c_0.png` | 2088680 | `b11a6da1430ee7c383f3dcaf1dca053bef873d421e3fbeedc705bf470e741bc0` |
-| `stages/stage_extra/stage_theme.mp3` | 4286253 | `3358044ee801ddad92c0bea24f4f80be6819ac84b3485983d7ae556dd6bacbc4` |
+| `stages/stage_extra/stage_theme.flac` | 21602260 | `5426089eacade5755a84f5eb2959abf65f93b8737edcd6d9a7905c2f97602bc4` |
 
 ## 提取及转码输入身份
 
@@ -51,11 +51,11 @@ stage7.std的656/784/912字节处分别绑定`th06_14.opus`、`th06_15.opus`、`
 
 `stage_extra/manifest.*`提供静态StageExtraManifest，CommonBattleVisuals只共用定义与路径，不跨关卡借用已加载纹理。普通演员0/3、发射体/辅助光圈13与道中帕秋莉65均绑定ExtraEnemies；芙兰朵露160绑定Flandre。kFlandre沿用kBoss，kPatchouli及其四立绘/背景追加在公共槽之后，清单稠密无重复；道中工厂已切到kPatchouli，不能再用kBoss同时代表两名角色。Flandre表情按原生稀疏编号绑定0=c、2=a、3=b，未使用的1号公共预留槽复用c，按路径共享同一GPU纹理所有权；帕秋莉沿用已核对face08文件路径，但由本关资源管理器独立加载/释放。
 
-StageAssetManifest新增可选eventBgm，旧清单默认空值。AssetManager独占Event流并与Stage/Boss流一起加载、音量调整、更新、暂停和卸载；PlayStageTrack接受0/1/2，-1停止，其他索引拒绝且保留正在播放的曲目。同槽重复选择不重启；空槽请求停止旧曲，不沿用上一关流。旧PlayStageMusic/PlayBossMusic接口保留。
+StageAssetManifest新增可选eventBgm，旧清单默认空值。AssetManager独占Event播放器并与Stage/Boss流一起加载、音量调整、更新、暂停和卸载；PlayStageTrack接受0/1/2，-1停止，其他索引拒绝且保留正在播放的曲目。同槽重复选择不重启；空槽请求停止旧曲，不沿用上一关流。旧PlayStageMusic/PlayBossMusic接口保留。
 
-`--extra-assets-only`已在真实图形/音频上下文（强制静音）通过同步及异步加载、异步取消、三个独立音乐解码器/真实播放/重复选择/暂停恢复/停止、卸载清空、旧关卡空第三槽隔离。原生背景1024×1024纹理、两个独立Boss档案、全部Flandre姿态有效；原始三张1400×2020立绘在1100×760、1280×720、390×844下均无超过2像素的侧边/底边锚点空隙，0/1槽正确共享c纹理。弱引用随卸载释放，不重复销毁共享纹理。
+`--extra-assets-only`已在真实图形/音频上下文（强制静音）通过同步及异步加载、异步取消、三个独立 PCM 播放器/真实播放/重复选择/暂停恢复/停止、卸载清空、旧关卡空第三槽隔离。原生背景1024×1024纹理、两个独立Boss档案、全部Flandre姿态有效；原始三张1400×2020立绘在1100×760、1280×720、390×844下均无超过2像素的侧边/底边锚点空隙，0/1槽正确共享c纹理。弱引用随卸载释放，不重复销毁共享纹理。
 
-这些验证确认资源和流式接口可用，未把背景纹理当作已实现的三维关卡，也未把合成立绘边缘测试视作真实MSG对话验收。正式清单下四机体×击破/超时的8条完整道中，以及首机体主战20技能/10符与后继5技能/3符的两条连续遭遇均通过；峰值与旧隔离清单一致。GPU透明遮挡、旧Bomb音频与公共资源生命周期回归也已通过。
+这些验证确认资源和音乐播放接口可用，未把背景纹理当作已实现的三维关卡，也未把合成立绘边缘测试视作真实MSG对话验收。正式清单下四机体×击破/超时的8条完整道中，以及首机体主战20技能/10符与后继5技能/3符的两条连续遭遇均通过；峰值与旧隔离清单一致。GPU透明遮挡、旧Bomb音频与公共资源生命周期回归也已通过。
 
 声效仍沿用项目既有合成公共音效，不因本次音乐接入而宣称已还原原生SE。清单当前没有reference_5和reference_22，角色行为虽报告这些源音效号，播放端会忽略未配置项；正式Extra音效映射须先核对EXE索引/原包，不能随意将其指向相似声音。
 

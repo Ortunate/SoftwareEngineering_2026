@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.20)
 # 根工程显式启用 C，供原生桥接与 raylib 共用完整的语言配置。
 project(koumakyou VERSION 0.1.0 LANGUAGES C CXX)
 
-# MinGW 通过资源脚本嵌入进程清单，不能只把 .manifest 列为源码。
-if(WIN32 AND NOT MSVC)
+# Windows 通过资源脚本嵌入图标；MinGW 还通过该语言嵌入进程清单。
+if(WIN32)
     enable_language(RC)
 endif()
 
@@ -30,6 +30,8 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(raylib)
+# BGM 从原始 Opus 离线解码为 FLAC，运行时无二次有损编码或 MP3 填充。
+target_compile_definitions(raylib PRIVATE SUPPORT_FILEFORMAT_FLAC=1)
 
 # 第三方公开头文件按系统头传递，避免 raymath.h 的 C 风格初始化在每个 C++ 使用方重复报警。
 # 仅改变 raylib 头文件的诊断边界；项目源码仍使用原有警告选项，兼容 CMake 3.20。
@@ -37,7 +39,7 @@ get_target_property(koumakyou_raylib_include_dirs raylib INTERFACE_INCLUDE_DIREC
 target_include_directories(raylib SYSTEM INTERFACE ${koumakyou_raylib_include_dirs})
 
 # 通用 UI 可独立链接和测试，不依赖 Game、关卡、配置或素材管理器。
-add_library(koumakyou_ui STATIC src/ui/components.cpp src/ui/command_bar.cpp)
+add_library(koumakyou_ui STATIC src/ui/components.cpp src/ui/command_bar.cpp src/ui/name_entry.cpp src/ui/difficulty_card.cpp)
 target_include_directories(koumakyou_ui PUBLIC src)
 target_link_libraries(koumakyou_ui PUBLIC raylib)
 
@@ -103,6 +105,8 @@ add_library(koumakyou_engine STATIC
     src/gameplay/effects/player_bomb.cpp
     src/gameplay/effects/bomb_volume.cpp
     src/gameplay/items/drop_system.cpp
+    src/platform/file_publish.cpp
+    src/platform/window_icon.cpp
     src/platform/window_input.cpp
     src/render/menu_render.cpp
     src/render/start_setup_render.cpp
@@ -114,6 +118,7 @@ add_library(koumakyou_engine STATIC
     src/render/bomb_geometry.cpp
     src/render/sprite_renderer.cpp
     src/render/animated_sprite.cpp
+    src/audio/bgm_player.cpp
     src/resources/asset_manager.cpp
     src/resources/animation.cpp
     src/resources/battle_catalog.cpp
@@ -180,7 +185,7 @@ target_include_directories(koumakyou_engine PUBLIC src)
 find_package(Threads REQUIRED)
 target_link_libraries(koumakyou_engine PUBLIC koumakyou_ui raylib Threads::Threads)
 if(APPLE)
-    target_sources(koumakyou_engine PRIVATE src/platform/window_input_macos.m)
+    target_sources(koumakyou_engine PRIVATE src/platform/window_input_macos.m src/platform/window_icon_macos.m)
     target_link_libraries(koumakyou_engine PRIVATE "-framework AppKit")
 elseif(WIN32)
     target_link_libraries(koumakyou_engine PRIVATE imm32)
@@ -204,6 +209,13 @@ target_sources(koumakyou_engine PRIVATE
 
 add_executable(koumakyou src/main.cpp)
 target_link_libraries(koumakyou PRIVATE koumakyou_engine)
+if(WIN32)
+    target_sources(koumakyou PRIVATE src/windows_icon.rc)
+    target_include_directories(koumakyou PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/assets/source/app_icon")
+    # 显式追踪 RC 引用的二进制资源，替换图标后也会重新嵌入。
+    set_property(SOURCE src/windows_icon.rc APPEND PROPERTY OBJECT_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/source/app_icon/koumakyou.ico")
+endif()
 
 # Rebuild the six-face strip only when its source artwork needs changing.
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
@@ -211,6 +223,15 @@ target_link_libraries(generate_skybox PRIVATE raylib)
 
 add_executable(sprite_benchmark EXCLUDE_FROM_ALL tools/sprite_benchmark.cpp)
 target_link_libraries(sprite_benchmark PRIVATE koumakyou_engine)
+
+# 统一原作素材/正式模型对照工具，按需构建；不进入游戏运行或普通 CTest。
+add_executable(projectile_comparison EXCLUDE_FROM_ALL tools/projectile_review/comparison_viewer.cpp)
+target_link_libraries(projectile_comparison PRIVATE koumakyou_engine)
+if(MSVC)
+    target_compile_options(projectile_comparison PRIVATE /W4 /permissive- /utf-8)
+else()
+    target_compile_options(projectile_comparison PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 # 正式模型与透明队列的窗口压测仅按需运行，不进入普通 CTest。
 if(UNIX)
@@ -260,6 +281,15 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    # 采样级循环验证无需音频设备，覆盖一次前奏、跨缓冲接缝和观战定位。
+    add_executable(koumakyou_bgm_player_tests tests/bgm_player_tests.cpp)
+    target_link_libraries(koumakyou_bgm_player_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_compile_options(koumakyou_bgm_player_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_bgm_player_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME koumakyou_bgm_player_tests COMMAND koumakyou_bgm_player_tests)
     add_executable(koumakyou_postgame_tests tests/ending_tests.cpp)
     target_link_libraries(koumakyou_postgame_tests PRIVATE koumakyou_engine)
     if(MSVC)
@@ -348,6 +378,8 @@ if(BUILD_TESTING)
     # 参考导入与结构审阅使用独立合成数据；仅测试期使用 Python，不成为游戏运行依赖。
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME projectile_comparison_launcher_tests
+            COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_projectile_comparison_launcher.py)
         add_test(NAME koumakyou_reference_tool_tests
             COMMAND ${Python3_EXECUTABLE} -B -m unittest
                 tests/test_native_combat_data.py
@@ -357,7 +389,8 @@ if(BUILD_TESTING)
                 tests/test_extra_flow.py
                 tests/test_extra_dialogue.py
                 tests/test_stage_script_inspection.py
-                tests/test_stage1_reference_import.py)
+                tests/test_stage1_reference_import.py
+                tests/test_import_bgm.py)
         set_tests_properties(koumakyou_reference_tool_tests PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
@@ -392,6 +425,14 @@ if(BUILD_TESTING)
     target_include_directories(projectile_direction_tests PRIVATE src)
     target_link_libraries(projectile_direction_tests PRIVATE koumakyou_engine)
     add_test(NAME projectile_direction_tests COMMAND projectile_direction_tests)
+    add_executable(combat_feedback_tests tests/combat_feedback_tests.cpp)
+    target_link_libraries(combat_feedback_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_compile_options(combat_feedback_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(combat_feedback_tests PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME combat_feedback_tests COMMAND combat_feedback_tests)
     # 录像的纯 CPU 格式与可播放范围单独验证，不依赖图形窗口或本机录像目录。
     add_executable(koumakyou_replay_tests tests/replay_tests.cpp)
     target_link_libraries(koumakyou_replay_tests PRIVATE koumakyou_engine)
@@ -409,7 +450,7 @@ if(BUILD_TESTING)
     target_link_libraries(projectile_runtime_tests PRIVATE koumakyou_engine)
 endif()
 
-# 真实音频设备回归按需运行；静音验证中文文件名和 MP3 流，不依赖图形窗口。
+# 真实音频设备回归按需运行；静音验证中文文件名和原作循环 PCM 流，不依赖图形窗口。
 if(BUILD_TESTING)
     add_executable(koumakyou_music_tests EXCLUDE_FROM_ALL tests/music_tests.cpp)
     target_link_libraries(koumakyou_music_tests PRIVATE koumakyou_engine)

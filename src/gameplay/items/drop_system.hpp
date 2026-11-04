@@ -1,4 +1,4 @@
-// 本文件负责定义普通掉落物、清弹星点及统一生成与拾取接口。
+// 本文件负责定义敌人/自机受击掉落、清弹星点及统一生成与拾取接口。
 
 #pragma once
 
@@ -23,7 +23,7 @@ class BulletSystem;
 enum class PickupKind : std::uint8_t { Power, Score, Star, Bomb, Life, FullPower };
 
 /// @brief 系统持有的道具；position 为世界坐标。
-/// velocityZ 为非追踪运动的世界 Z 轴速度（单位/秒），正值上抛、负值下落；追踪时忽略。
+/// velocityZ 为普通抛落的世界 Z 轴速度（单位/秒），正值上抛、负值下落；追踪及 Miss 散落时忽略。
 /// value 对 P 点是 Power 增量，对分数点和星点是得分增量；homing 一经触发便持续到拾取或消失。
 /// active 失活后普通道具槽位可复用，星点由容器移除；复用时会重置全部运动状态。
 struct Pickup {
@@ -34,6 +34,11 @@ struct Pickup {
     int value = 1;
     float velocityZ = 0.0F;
     float age = 0.0F; // 视觉秒数，与运动/追踪时钟独立；暂停时不推进。
+    // Miss 道具先向前方散落一秒，期间不拾取/追踪；结束后从零下落速度接入普通运动。
+    // 起终点均为世界坐标，保持受击高度；每个池槽独占，复用时重置。
+    bool missScattering = false;
+    Vector3 scatterOrigin{},scatterTarget{};
+    double scatterSeconds = 0;
     /// @brief 出生后按 90 度/秒绕竖直长轴旋转；只由模拟 age 决定，暂停冻结，返回弧度。
     float RotationRadians() const { return std::fmod(age,4.F)*1.57079632679F; }
     /// @brief 当前道具对应的原始 Item 编号；大 P 按 Power 增量至少 8 区分。
@@ -49,7 +54,7 @@ struct PickupReward {
     int bombs=0,lives=0; // 本次拾取的 Bomb 与额外残机数量，由玩家库存接口钳制上限。
 };
 
-/// @brief 生成敌人掉落物和清弹星点，持有道具并处理运动、自动吸取与拾取。
+/// @brief 生成敌人/自机受击掉落和清弹星点，持有道具并处理运动、自动吸取与拾取。
 class DropSystem {
 public:
     /// @brief 普通掉落物的固定池容量；清弹星点另行存储，不占这些槽位。
@@ -80,6 +85,10 @@ public:
     /// @param position 退场位置，使用世界坐标。
     /// @param power 增加的 Power 点数；非正值不生成。
     void SpawnFixedPower(Vector3 position, int power);
+    /// @brief 在受击世界位置生成死亡掉落：有额外残机为 1 大 P（8）和 5 小 P（1），末命为 5 满 P。
+    /// hasSpareLife 使用扣命前库存判断；与当前 Power 无关，不转换为分数，池满丢弃请求。
+    /// 三维散落保持高度、向前方 X/Z 区域作一秒连续插值，然后下落；暂停时不推进。
+    void SpawnPlayerMiss(Vector3 position, bool hasSpareLife);
     /// @brief 原作敌人掉落；-1每三次击破按32项表轮换，0…6与SpawnNativeItem编号相同；其他值不生成。
     /// 仅小/大P在满Power时转分数；固定道具不推进整关轮换计数，Clear随机初始化两个表偏移。
     void SpawnReferenceDrop(Vector3 position, int item, bool fullPower);
@@ -93,7 +102,7 @@ public:
     /// @param bullets 借用的弹幕系统；转换的敌弹失活，不再参与碰撞。
     /// @note 不受普通道具池容量限制，已有星点也会继续追踪。
     void ConvertEnemyBulletsToStars(BulletSystem& bullets);
-    /// @brief 推进道具并拾取；普通掉落物先向 +Z 上抛，再沿 -Z 加速至下落速度上限。
+    /// @brief 推进道具并拾取；普通掉落物先上抛再下落，Miss 道具先散落一秒再从零速度下落。
     /// @note 玩家进入 +Z 端 2/5 区域时，所有活动道具立即持续追踪玩家，优先于上抛和下落。
     /// 已触发的道具在玩家离开该区域后仍追踪；之后生成的道具重新从上抛开始。
     /// 非追踪道具沿 -Z 下落至 z < -kArenaHalfExtents.z 时消失；刚好位于边界时仍保留。

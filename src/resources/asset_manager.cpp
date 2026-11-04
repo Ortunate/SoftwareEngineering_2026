@@ -32,7 +32,7 @@ bool NeedsProjectileModels(const StageAssetManifest&manifest){
 }
 
 /// @brief 音效清单项，资源路径相对 assets 根目录。
-constexpr std::array<SoundDefinition, 19> kCommonSounds{{
+constexpr std::array<SoundDefinition, 22> kCommonSounds{{
     {"menu_move", "common/se/menu_move.wav"},
     {"menu_confirm", "common/se/menu_confirm.wav"},
     {"menu_cancel", "common/se/menu_cancel.wav"},
@@ -46,6 +46,9 @@ constexpr std::array<SoundDefinition, 19> kCommonSounds{{
     {"spell", "common/se/spell.wav"},
     {"clear", "common/se/clear.wav"},
     {"full_power", "common/se/full_power.wav"},
+    {"life_up", "common/se/life_up.wav"},
+    {"countdown", "common/se/countdown.wav"},
+    {"countdown_urgent", "common/se/countdown_urgent.wav"},
     {"reference_6", "common/se/reference_6.wav"},
     {"reference_7", "common/se/reference_7.wav"},
     {"reference_8", "common/se/reference_8.wav"},
@@ -74,16 +77,11 @@ Shader LoadShaderAsset(const std::filesystem::path& vertex,
                       fragment.string().c_str());
 }
 
-/// @brief 仅在音频设备已初始化时打开流式 BGM。
-/// @param path 音乐文件路径。
-/// @return 可持续更新的音乐流，音频不可用时为空。
-Music LoadMusicAsset(const std::filesystem::path& path) {
-    if (!IsAudioDeviceReady() || !FileExists(path.string().c_str())) return {};
-    Music music = LoadMusicStream(path.string().c_str());
-    if (IsMusicValid(music)) {
-        music.looping = true;
-        SetMusicVolume(music, 0.5F);
-    }
+/// @brief 加载带原作循环区间的无损 BGM；音频不可用或素材/循环数据无效时返回空播放器。
+audio::BgmPlayer LoadMusicAsset(const std::filesystem::path& path) {
+    audio::BgmPlayer music;
+    if (IsAudioDeviceReady() && !music.Load(path))
+        TraceLog(LOG_WARNING, "BGM: Cannot load PCM or loop metadata: %s", path.string().c_str());
     return music;
 }
 
@@ -131,15 +129,8 @@ void UnloadTextureAsset(Texture2D& texture) {
     texture = {};
 }
 
-/// @brief 停止并关闭一条有效的音乐流。
-/// @param music 要关闭的音乐流。
-void UnloadMusicAsset(Music& music) {
-    if (IsMusicValid(music)) {
-        StopMusicStream(music);
-        UnloadMusicStream(music);
-    }
-    music = {};
-}
+/// @brief 停止音频回调后释放播放器独占的 PCM 和流，可重复调用。
+void UnloadMusicAsset(audio::BgmPlayer& music) { music.Reset(); }
 
 /// @brief 将自有 UI 字体的 ASCII 数字设为等宽；居中保留原字形，分数更新时不会改变整串宽度。
 /// 只调整当前字体的运行时度量，不改 OTF，也不能传入由 raylib 借用的默认字体。
@@ -282,7 +273,7 @@ void AssetManager::LoadCommon() {
     }
 
     menuMusic_ = LoadMusicAsset(root_ / "common" /
-                                "比赤色更鲜红的梦.mp3");
+                                "比赤色更鲜红的梦.flac");
     SetMusicVolumePercent(musicVolumePercent_);
     LoadSounds(commonSounds_, root_, kCommonSounds);
     SetSoundVolumePercent(soundVolumePercent_);
@@ -494,7 +485,7 @@ void AssetManager::UnloadCommon() {
     commonLoaded_ = false;
 }
 
-Music* AssetManager::MusicFor(MusicSlot slot) {
+audio::BgmPlayer* AssetManager::MusicFor(MusicSlot slot) {
     switch (slot) {
         case MusicSlot::Menu: return &menuMusic_;
         case MusicSlot::Stage: return &stageMusic_;
@@ -508,13 +499,13 @@ Music* AssetManager::MusicFor(MusicSlot slot) {
 
 void AssetManager::SwitchMusic(MusicSlot slot) {
     if (slot == activeMusic_) return;
-    if (Music* current = MusicFor(activeMusic_);
-        current != nullptr && IsMusicValid(*current)) {
-        StopMusicStream(*current);
+    if (audio::BgmPlayer* current = MusicFor(activeMusic_);
+        current != nullptr && current->Valid()) {
+        current->Stop();
     }
     activeMusic_ = MusicSlot::None;
-    if (Music* next = MusicFor(slot); next != nullptr && IsMusicValid(*next)) {
-        PlayMusicStream(*next);
+    if (audio::BgmPlayer* next = MusicFor(slot); next != nullptr && next->Valid()) {
+        next->Play();
         activeMusic_ = slot;
     }
 }
@@ -523,10 +514,10 @@ bool AssetManager::PlayMusicRoomTrack(std::size_t index) {
     const auto& track=music::kTracks.at(index);
     if(MusicRoomTrack()==static_cast<int>(index))return true;
     // 先验证新流，失败时不打断旧曲；随后停旧曲再释放，避免音频回调访问失效句柄。
-    Music next=LoadMusicAsset(root_/track.path);
-    if(!IsMusicValid(next))return false;
+    auto next=LoadMusicAsset(root_/track.path);
+    if(!next.Valid())return false;
     SwitchMusic(MusicSlot::None);UnloadMusicAsset(roomMusic_);
-    roomMusic_=next;musicRoomTrack_=static_cast<int>(index);
+    roomMusic_=std::move(next);musicRoomTrack_=static_cast<int>(index);
     SetMusicVolumePercent(musicVolumePercent_);SwitchMusic(MusicSlot::Room);return true;
 }
 
@@ -544,28 +535,26 @@ void AssetManager::PlayStageTrack(int index) {
 }
 
 void AssetManager::SeekMusic(float seconds) {
-    if(Music* music=MusicFor(activeMusic_);music && IsMusicValid(*music)) {
-        const float length=GetMusicTimeLength(*music);if(length>0)SeekMusicStream(*music,std::fmod(std::max(0.0F,seconds),length));
-    }
+    if (auto* music = MusicFor(activeMusic_); music && music->Valid()) music->Seek(std::max(0.0F, seconds));
 }
 void AssetManager::PauseMusic() {
-    if (Music* music = MusicFor(activeMusic_);
-        music != nullptr && IsMusicValid(*music)) {
-        PauseMusicStream(*music);
+    if (audio::BgmPlayer* music = MusicFor(activeMusic_);
+        music != nullptr && music->Valid()) {
+        music->Pause();
     }
 }
 
 void AssetManager::ResumeMusic() {
-    if (Music* music = MusicFor(activeMusic_);
-        music != nullptr && IsMusicValid(*music)) {
-        ResumeMusicStream(*music);
+    if (audio::BgmPlayer* music = MusicFor(activeMusic_);
+        music != nullptr && music->Valid()) {
+        music->Resume();
     }
 }
 
 void AssetManager::SetMusicVolumePercent(int percent) {
     musicVolumePercent_ = std::clamp(percent, 0, 100);
-    for (Music* music : {&menuMusic_, &stageMusic_, &bossMusic_, &eventMusic_, &roomMusic_}) {
-        if (IsMusicValid(*music)) SetMusicVolume(*music, musicVolumePercent_ / 100.0F*musicGain_);
+    for (audio::BgmPlayer* music : {&menuMusic_, &stageMusic_, &bossMusic_, &eventMusic_, &roomMusic_}) {
+        if (music->Valid()) music->SetVolume(musicVolumePercent_ / 100.0F*musicGain_);
     }
 }
 
@@ -575,10 +564,7 @@ void AssetManager::SetMusicGain(float gain) {
 }
 
 void AssetManager::UpdateAudio() {
-    if (Music* music = MusicFor(activeMusic_);
-        music != nullptr && IsMusicValid(*music)) {
-        UpdateMusicStream(*music);
-    }
+    // PCM 已在加载阶段备齐，音频回调直接拼接循环段；显示线程卡顿不会停止补充 BGM。
 }
 
 void AssetManager::SetSoundVolumePercent(int percent) {

@@ -1,6 +1,7 @@
 // 本文件负责初始化窗口与游戏循环，并处理静默截图等启动参数。
 
 #include "app/game.hpp"
+#include "platform/window_icon.hpp"
 #include "platform/window_input.hpp"
 
 #include "raylib.h"
@@ -83,6 +84,8 @@ int main(int argc, char** argv) {
     }
     SetConfigFlags(windowFlags);
     InitWindow(screenWidth, screenHeight, "koumakyou - Stage 1 Normal Demo");
+    if (!koumakyou::SetApplicationIcon())
+        TraceLog(LOG_WARNING, "WINDOW: Could not load application icon");
     if (!koumakyou::DisableWindowInputMethods(GetWindowHandle()))
         TraceLog(LOG_WARNING, "INPUT: Could not disable window input methods");
     if (!captureFrame) InitAudioDevice();

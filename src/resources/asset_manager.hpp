@@ -3,6 +3,7 @@
 #pragma once
 
 #include "resources/loaded_assets.hpp"
+#include "audio/bgm_player.hpp"
 
 #include "raylib.h"
 
@@ -96,14 +97,15 @@ public:
     bool PlayMusicRoomTrack(std::size_t index);
     /// @brief 当前试听的曲目下标；未试听时返回-1，不转移流所有权。
     int MusicRoomTrack() const { return activeMusic_==MusicSlot::Room?musicRoomTrack_:-1; }
-    /// @brief 游戏暂停时暂停当前 BGM。
-    /// @brief 观战定位使用当前音乐身份与秒偏移；不加载或切换素材，未知/无音频时无副作用。
+    /// @brief 返回当前音乐槽身份，供观战记录切曲时刻；无音乐时返回 None 对应值。
     int MusicIdentity() const { return static_cast<int>(activeMusic_); }
+    /// @brief 按曲目开始后的秒数定位，超过首次终点后按原作循环段折返；未知/无音频时无副作用。
     void SeekMusic(float seconds);
+    /// @brief 游戏暂停时暂停当前 BGM，恢复时保留采样位置。
     void PauseMusic();
     /// @brief 游戏继续时恢复当前 BGM。
     void ResumeMusic();
-    /// @brief 每帧更新流式 BGM，维持持续播放。
+    /// @brief 保留统一音频更新入口；BGM 由音频线程连续取样，不依赖显示帧率。
     void UpdateAudio();
     /// @brief 设置全部已加载/未来加载的 BGM 音量；percent 限定到 0～100，不影响音效。
     void SetMusicVolumePercent(int percent);
@@ -133,7 +135,7 @@ private:
     /// @brief 切换 BGM，并在播放新曲之前停止旧曲。
     void SwitchMusic(MusicSlot slot);
     /// @brief 查询音乐槽位对应的流对象。
-    [[nodiscard]] Music* MusicFor(MusicSlot slot);
+    [[nodiscard]] audio::BgmPlayer* MusicFor(MusicSlot slot);
     /// @brief 程序退出时释放通用素材。
     void UnloadCommon();
 
@@ -142,12 +144,12 @@ private:
     CommonAssets common_{};
     StageAssets stage_{};
     std::unique_ptr<StageLoad> stageLoad_;
-    Music menuMusic_{};
-    Music stageMusic_{};
-    Music bossMusic_{};
-    Music roomMusic_{}; // 试听仅保留当前曲；退出页面或切入关卡时随UnloadStage释放。
+    audio::BgmPlayer menuMusic_{};
+    audio::BgmPlayer stageMusic_{};
+    audio::BgmPlayer bossMusic_{};
+    audio::BgmPlayer roomMusic_{}; // 试听仅保留当前曲；退出页面或切入关卡时随UnloadStage释放。
     int musicRoomTrack_=-1;
-    Music eventMusic_{}; // 管理器独占的可选第三流，随本关卸载；不能继续借用上一个关卡的流。
+    audio::BgmPlayer eventMusic_{}; // 管理器独占的可选第三流，随本关卸载；不能继续借用上一个关卡的流。
     std::unordered_map<std::string, Sound> commonSounds_;
     std::unordered_map<std::string, Sound> stageSounds_;
     std::unordered_map<std::string, Texture2D> stageTextures_;

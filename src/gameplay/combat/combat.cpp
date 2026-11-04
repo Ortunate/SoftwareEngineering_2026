@@ -3,6 +3,7 @@
 #include "app/game.hpp"
 #include "app/constants.hpp"
 #include "app/math.hpp"
+#include "gameplay/effects/combat_audio.hpp"
 
 #include <algorithm>
 #include <array>
@@ -74,10 +75,20 @@ void Game::UpdateBoss(float deltaTime) {
     if(boss_ && boss_->active) {
         boss_->SetPlayerBombActive(playerBomb_.Active());
         const int previousSpell=boss_->SpellCardNumber();
+        const int previousAttack=boss_->attack;
+        const float previousTimer=boss_->skillTimer;
+        const int previousSecond=combat_audio::CountdownSecond(boss_->TimeLimit(),previousTimer);
         const bool ended=boss_->Update(deltaTime,player_.Position(),bullets_);
         for(const auto& request:boss_->EffectEvents())externalEffects_.Spawn(request);
         // 部分遭遇在同一阶段内先等待再宣告符卡；按真实宣告时刻记录及切入，不能提前到阶段交接。
         if(!ended&&previousSpell==0&&boss_->SpellCardNumber()>0)OnSpellDeclared();
+        if(!ended&&boss_->SpellName()) {
+            // 只跟随实际战斗更新，暂停/绘制不产生声音；换符或准备时钟回零不能继承上一符的秒数。
+            const bool sameSpell=previousSpell==boss_->SpellCardNumber()&&previousAttack==boss_->attack&&boss_->skillTimer>=previousTimer;
+            const auto cue=combat_audio::CountdownCue(sameSpell?previousSecond:11,
+                combat_audio::CountdownSecond(boss_->TimeLimit(),boss_->skillTimer));
+            if(!cue.empty())assets_.PlaySoundEffect(cue);
+        }
         for(int id:boss_->SoundEvents())assets_.PlaySoundEffect("reference_"+std::to_string(id));
         for(int count:boss_->DropEvents())drops_.SpawnReferenceBurst(boss_->position,count,
                                             player_.Power()==Player::kMaxPower);
@@ -205,7 +216,9 @@ void Game::UpdatePickups(float deltaTime) {
     pointItems_ += reward.pointItems;
     stagePointItems_ += reward.pointItems;
     // 源七种拾取分派及其清弹/计分辅助只更新奖励，不向全局rank追加旧兼容的每点3 subrank。
-    if (reward.power != 0 || reward.score != 0 || reward.bombs || reward.lives) assets_.PlaySoundEffect("pickup");
+    // 同帧奖励聚合后优先提示加命，避免被普通拾取音掩盖；挑战模式收取 Life 也保留该提示。
+    if(reward.lives>0)assets_.PlaySoundEffect("life_up");
+    else if(reward.power!=0||reward.score!=0||reward.bombs)assets_.PlaySoundEffect("pickup");
 }
 
 void Game::AdjustPlayerPower(int delta) {
@@ -306,13 +319,16 @@ void Game::PausePlayerBombSounds(bool paused) {
 
 void Game::HandlePlayerHit() {
     ClearPlayerBomb();
+    // TakeHit 会立即复位位置和扣命；掉落必须使用受击位置及扣命前库存，满 Power 也不转分数。
+    drops_.SpawnPlayerMiss(player_.Position(),player_.RemainingLives()>1);
     // 原生Miss确认更新净Miss、Power与复活状态，不附加旧兼容规则的16级rank惩罚。
     ++missCount_;
     assets_.PlaySoundEffect("hit");
     const bool survived = player_.TakeHit();
     player_.SyncCamera(camera_);
     screenFlashTimer_ = 0.22F;
-    bullets_.ClearEnemyBullets();
+    // 项目沿用即时复活；把原生重生段及其尾窗合计 120 内容帧的全池消弹从本次确认 Miss 开始。
+    bullets_.ClearEnemyBullets(2.0F);
     if (!survived) {
         EndStage(RunState::GameOver);
     } else {

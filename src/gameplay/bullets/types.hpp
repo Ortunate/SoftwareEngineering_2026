@@ -20,7 +20,8 @@ enum class PlayerShotKind : std::uint8_t { Projectile, Missile, Laser, Explosion
 /// @brief 对象池中的单颗弹幕；位置和半径采用世界单位，速度为世界单位/秒，加速度为世界单位/秒²。
 /// 普通弹 position 为模型原点或旧球形判定中心；光束 position 为起点，Direction() 为单位束轴。
 /// IsBeam() 时采用线段胶囊判定，预警期不造成接触；active=false 后槽位可复用。
-/// age 和 maxAge 为秒；rotationAxis 是旋转轴，angularVelocity 为弧度/秒。
+/// age 和 maxAge 为秒；maxAge 为正无穷表示不按年龄回收，普通敌弹默认使用此值。
+/// rotationAxis 是旋转轴，angularVelocity 为弧度/秒。
 /// homingTurnRate 为追踪转向上限（弧度/秒），零表示不追踪；damage 是原始 HP 单位的单次命中基准。
 struct Bullet {
     bool active = false;
@@ -71,7 +72,7 @@ public:
     double beamContactAge = 0; // 本次更新前的光束年龄，秒；停时不推进。
     float beamGrazeStartSeconds = 0; // 展开转持续的年龄，秒；独立于可配置的预警时窗。
     std::int64_t lastBeamGrazeFrame = -1; // 持续阶段0起算的60Hz内容帧，槽复用时重置。
-    float maxAge = 12.0F;
+    float maxAge = std::numeric_limits<float>::infinity();
     float angularVelocity = 0.0F;
     float angularSeconds=1.0e9F; // 旋转速度剩余有效秒数；独立于视觉年龄和显现期。
     float speedAcceleration=0; // 极坐标速度的增量，世界单位/秒²；仅 polarMotion 使用。

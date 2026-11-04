@@ -28,6 +28,17 @@ def packet_samples(packet):
     return samples
 
 
+def _crc_entry(byte):
+    """生成 Ogg 非反射 CRC 的一项；表只缓存固定多项式，不改变整页覆盖范围。"""
+    value = byte << 24
+    for _ in range(8):
+        value = ((value << 1) ^ (0x04c11db7 if value & 0x80000000 else 0)) & 0xffffffff
+    return value
+
+
+_CRC_TABLE = tuple(_crc_entry(byte) for byte in range(256))
+
+
 def page(packet, sequence, granule, flags):
     """封装一包为单个 Ogg 页，保留包字节；CRC 按 Ogg 非反射多项式覆盖完整页计算。"""
     lengths = bytes([255] * (len(packet) // 255) + [len(packet) % 255])
@@ -37,9 +48,7 @@ def page(packet, sequence, granule, flags):
     result += bytes([len(lengths)]) + lengths + packet
     crc = 0
     for byte in result:
-        crc ^= byte << 24
-        for _ in range(8):
-            crc = ((crc << 1) ^ (0x04c11db7 if crc & 0x80000000 else 0)) & 0xffffffff
+        crc = ((crc << 8) & 0xffffffff) ^ _CRC_TABLE[(crc >> 24) ^ byte]
     struct.pack_into('<I', result, 22, crc)
     return result
 

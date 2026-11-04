@@ -28,7 +28,7 @@ const auto kVisuals=[] {
     return visuals;
 }();
 constexpr std::array<SoundDefinition,0> kSounds{};
-const StageAssetManifest kAssets{kVisuals,"stages/stage1/宛如鬼灯的鲜红之魂.mp3","stages/stage1/妖魔夜行.mp3",kSounds};
+const StageAssetManifest kAssets{kVisuals,"stages/stage1/宛如鬼灯的鲜红之魂.flac","stages/stage1/妖魔夜行.flac",kSounds};
 }
 const StageAssetManifest& Stage1Manifest() { return kAssets; }
 }

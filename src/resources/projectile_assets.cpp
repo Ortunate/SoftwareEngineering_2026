@@ -2,6 +2,7 @@
 #include "projectile_assets.hpp"
 #include "gameplay/bullets/system.hpp"
 #include "resources/projectile_paths.hpp"
+#include "render/projectiles/smooth_normals.hpp"
 #include <unordered_set>
 #include <cmath>
 #include "rlgl.h"
@@ -37,8 +38,17 @@ void ProjectileAssets::LoadModelResource(std::size_t i){
 
   auto name=std::string(ProjectileModels[i].name);auto dir=base/name;auto& r=resources_[i];
   const std::string files[]{name+".gltf",std::filesystem::exists(dir/"glow.gltf")?"glow.gltf":"shell.gltf","effect.gltf"};
-  for(int layer=0;layer<3;layer++)if(std::filesystem::exists(dir/files[layer])){ValidateModel(dir/files[layer]);r.layers[layer]=LoadModel((dir/files[layer]).string().c_str());if(!r.layers[layer].meshCount)throw std::runtime_error("Projectile model missing: "+name);ValidateGeometry(r.layers[layer]);}
+  for(int layer=0;layer<3;layer++)if(std::filesystem::exists(dir/files[layer])){ValidateModel(dir/files[layer]);r.layers[layer]=LoadModel((dir/files[layer]).string().c_str());if(!r.layers[layer].meshCount)throw std::runtime_error("Projectile model missing: "+name);ValidateGeometry(r.layers[layer]);
+   // 仅更新显示网格的 NORMAL 缓冲；副机、针晶和刀弹保留源法线，刀弹主面须保持平直。
+   if(name!="reimu_option"&&name!="marisa_option"&&name!="needle_classic"&&name!="knife_classic")for(int meshIndex=0;meshIndex<r.layers[layer].meshCount;++meshIndex){
+    auto& mesh=r.layers[layer].meshes[meshIndex];const auto normals=projectiles::SmoothProjectileNormals(mesh);
+    for(int vertex=0;vertex<mesh.vertexCount;++vertex){mesh.normals[3*vertex]=normals[vertex].x;mesh.normals[3*vertex+1]=normals[vertex].y;mesh.normals[3*vertex+2]=normals[vertex].z;}
+    UpdateMeshBuffer(mesh,2,mesh.normals,mesh.vertexCount*3*sizeof(float),0);
+   }}
   if(!r.layers[0].meshCount)throw std::runtime_error("Projectile body missing: "+name);
+  for(int meshIndex=0;meshIndex<r.layers[0].meshCount;++meshIndex){const auto& mesh=r.layers[0].meshes[meshIndex];
+   for(int vertex=0;vertex<mesh.vertexCount;++vertex)r.visualRadius=std::max(r.visualRadius,
+    Vector3Length(Vector3Transform({mesh.vertices[3*vertex],mesh.vertices[3*vertex+1],mesh.vertices[3*vertex+2]},r.layers[0].transform)));}
   auto box=GetModelBoundingBox(r.layers[0]);auto axis=ProjectileModels[i].direction.forward;r.forwardExtent=std::abs(axis.x)*(box.max.x-box.min.x)+std::abs(axis.y)*(box.max.y-box.min.y)+std::abs(axis.z)*(box.max.z-box.min.z);if(r.forwardExtent<=0)throw std::runtime_error("Empty projectile extent");
   if(std::filesystem::exists(dir/"collision.bin")){r.collision=std::make_unique<projectiles::CollisionAsset>(dir/"collision.bin");r.referenceRadius=r.collision->BoundingRadius();}
 }

@@ -78,13 +78,21 @@ struct Scene {
  PlayerBombSprite bomb{};std::vector<BombVolumeSprite> bombs;
  Camera3D camera{{0,0,-10},{0,0,5},{0,1,0},65,CAMERA_PERSPECTIVE};
  Scene(const std::string& name){
-  std::size_t n=name=="mixed1024"?1024:name=="mixed8192"?8192:name=="capacity16384"?16384:name=="interleaved"?4096:name=="lasers"?1024:0;
+  std::size_t n=name=="mixed1024"?1024:name=="mixed8192"?8192:name=="capacity16384"?16384:name=="interleaved"?4096:name=="lasers"?1024:name=="marisa-lasers"?2048:0;
   for(std::size_t i=0;i<n;++i){const int type=i%10,color=i%16;auto* b=bullets.Spawn(BulletOwner::Enemy,{(int(i%64)-31.5F)*.16F,(int(i/64%64)-31.5F)*.12F,float(i%127)*.09F},{0,0,1},battle::EnemyBulletHitRadius(type),WHITE,stage1::kNativeBulletBase+type*16+color);if(!b)throw std::runtime_error("Bullet pool overflow");b->nativeType=type;b->nativeColor=color;b->age=1;if(name=="interleaved"&&i%7==0){b->age=.12F;b->spawnVisualSeconds=.5F;}}
-  if(name=="interleaved"||name=="lasers")for(std::size_t i=0;i<actors.size();++i){
+  if(name=="interleaved"||name=="lasers"||name=="marisa-lasers")for(std::size_t i=0;i<actors.size();++i){
    behavior::Spawn spawn{.position={(int(i%4)-1.5F)*1.2F,(int(i%3)-1)*1.2F,float(i)*.45F},.pattern={.movement={.speed=0},.endFrame=2147483647},.sourceHealth=1,.visual=stage1::kFairy,.hitRadius=.4F,.retireOutside=false};
    actors[i].Activate(spawn);actors[i].presentation.Update(1);visible.push_back(&actors[i]);
   }
   if(name=="lasers")for(int i=0;i<32;++i){auto* b=bullets.SpawnBeam({(i%8-3.5F)*.4F,(i/8-1.5F)*.5F,-2},{.015F,0,1},24,.12F,0,10,WHITE);b->visual=stage1::kNativeLaserBase+i%16;b->age=1;}
+  // 从生产 Player 发射满 Power 的两束激光和主弹，保留真实近景半径、外辉光及透明切点。
+  // 手工缩小半径或只放远处激光会漏掉局内的大面积重复着色；快照生成不计入性能采样。
+  if(name=="marisa-lasers"){
+   Player player;player.ConfigureRun(3,3,false,ShotType::IllusionLaser);player.AdjustPower(128);
+   stage1::Stage1Content content;const auto visuals=content.PlayerVisuals(ShotType::IllusionLaser);
+   for(int i=0;i<20;++i){player.Update(1.F/60,{.fire=true},bullets,visuals,true);bullets.Update(1.F/60);}
+   player.SyncCamera(camera);
+  }
   if(name=="shots")for(int i=0;i<512;++i){auto* b=bullets.Spawn(BulletOwner::Player,{(i%32-15.5F)*.2F,(i/32-7.5F)*.2F,float(i%16)*.5F},{0,0,1},.08F,WHITE,i%2?stage1::kMarisaPrimary:stage1::kPlayerNeedle);b->age=.3F;}
   if(name=="drops"||name=="interleaved")for(int i=0;i<(name=="drops"?512:48);++i)pickups.push_back({{(i%24-11.5F)*.2F,(i/24-4)*.2F,float(i%37)*.3F},stage1::kPowerPoint,1,nullptr,255,.5F});
   if(name=="bomb"){
@@ -92,7 +100,7 @@ struct Scene {
    bombs.push_back({&bomb,stage1::kMarisaBombSpark});
   }
  }
- void Draw(const AssetManager& assets){const auto& stage=assets.Stage();BeginMode3D(camera);models.Prepare(assets.Projectiles(),bullets,stage.visuals,camera,float(GetRenderWidth())/GetRenderHeight(),1);sprites.Draw(camera,bullets,visible,nullptr,pickups,stage.visuals,stage.shaders,effects,bombs,nullptr,&models);EndMode3D();}
+ void Draw(const AssetManager& assets){const auto& stage=assets.Stage();BeginMode3D(camera);models.Prepare(assets.Projectiles(),bullets,stage.visuals,camera,camera.position,float(GetRenderWidth())/GetRenderHeight(),1);sprites.Draw(camera,camera.position,bullets,visible,nullptr,pickups,stage.visuals,stage.shaders,effects,bombs,nullptr,&models);EndMode3D();}
 };
 
 double CpuSeconds(){rusage usage{};getrusage(RUSAGE_SELF,&usage);return usage.ru_utime.tv_sec+usage.ru_utime.tv_usec/1e6+usage.ru_stime.tv_sec+usage.ru_stime.tv_usec/1e6;}
@@ -107,7 +115,7 @@ void WriteDistribution(std::ostream& out,std::vector<double> values){
 int main(int argc,char** argv){try{
  if(argc!=9)throw std::runtime_error("Usage: render_benchmark ASSETS OUTPUT CASE WARM_SECONDS MEASURE_SECONDS REPEATS MSAA FPS");
  const auto root=std::filesystem::absolute(argv[1]),out=std::filesystem::absolute(argv[2]);const std::string name=argv[3];
- const std::array<std::string,11> names{"empty","mixed1024","mixed8192","interleaved","lasers","shots","drops","bomb","capacity16384","game","menu"};
+ const std::array<std::string,12> names{"empty","mixed1024","mixed8192","interleaved","lasers","marisa-lasers","shots","drops","bomb","capacity16384","game","menu"};
  if(std::find(names.begin(),names.end(),name)==names.end())throw std::runtime_error("Unknown scene");
  const double warm=std::stod(argv[4]),duration=std::stod(argv[5]);const int repeats=std::stoi(argv[6]),msaa=std::stoi(argv[7]),fps=std::stoi(argv[8]);
  if(warm<0||duration<=0||repeats<1||(msaa!=0&&msaa!=4)||fps<0)throw std::runtime_error("Invalid sampling parameters");

@@ -17,7 +17,7 @@ Windows 启动入口统一位于 `tools/windows/`；下文启动路径均相对�
 
 ## Replay
 
-Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Practice 各可玩符卡结束后可询问保存并命名录像；主线按整轮、关卡练习按单关、符卡练习按单符保存，从主菜单 Replay 选择播放；支持暂停、定位、倍速和三种观察视角。文件保存在启动目录的 `replays/`，仅支持相同构建。实现边界与验证方式见 [Replay 说明](docs/REPLAY.md)。
+Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Practice 各可玩符卡结束后可询问保存并命名录像；分数与录像共用8字符ASCII名称及最近成功保存的名字。主线按整轮、关卡练习按单关、符卡练习按单符保存，从主菜单 Replay 选择播放；支持暂停、定位、倍速和三种观察视角。录像有60个固定槽位，先选槽再命名，覆盖前确认；旧文件保留为附加页。文件保存在启动目录的 `replays/`，播放仍须匹配模拟与内容版本。实现边界与验证方式见 [Replay 说明](docs/REPLAY.md)，原作依据与适配见 [命名和列表参考](docs/NAME_REPLAY_REFERENCE.md)。
 
 ## Music Room
 
@@ -29,7 +29,7 @@ Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Pr
 - 第一人称 6DoF 视角，摄像机位置就是球形判定点
 - 浅色红月标题、深红花纹选项、现代化透明立绘，支持 Z / Enter、方向键和鼠标
 - 灵梦／魔理沙四种御札、标准/无限残机挑战模式、整关练习、独立符卡练习，以及音乐室和最高通关成绩页
-- Spell Practice 完整展示新典 7 关、50 组、131 个符卡难度变体及灵／梦／魔／恋四组合，人物箭头可点击；已实现符卡须以当前组合在实际关卡遇见才解锁，目前接通四种御札的 Normal 夜符与暗符；四组合独立保存解锁、取得记录和最高分
+- Spell Practice 按七位 Boss → 符卡组织 50 组、131 个符卡难度变体，跨关卡符卡按实际使用者归并，保留难度选择及灵／梦／魔／恋四组合，人物箭头可点击；已实现符卡须以当前组合在实际关卡遇见才解锁，目前接通四种御札的 Normal 夜符与暗符；四组合独立保存解锁、取得记录和最高分
 - 参照新典的难度 → 主人公 → 御札 → 模式 → 最终确认流程，角色页支持灵梦／魔理沙候选、可点击左右箭头及不同姿势的前后层立绘，两位角色均可实际开局；选择记录在返回菜单和重启后保留；Practice Start 在模式后选择关卡，显示标准/挑战各自的关卡最高分（一至六面均可选择）
 - WASD 前后左右、Space 上升、Left Shift 下降、鼠标观察
 - 所有界面底部统一展示当前功能按键；Option、Score、Music Room 和改键页使用 X / Esc / 鼠标右键返回，移除返回按钮
@@ -54,7 +54,7 @@ Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Pr
 - 战斗 3D 场景覆盖整个窗口；左侧关卡题签、右侧状态卡和 Boss 血条悬浮显示，对话与符卡演出随窗口比例布局
 - 对话立绘按窗口等比贴边，按新典差分与中断标签切换，非发言者 Alpha 为 128；保留原生入退场和暂停冻结
 - 通用素材在启动时加载，各关素材在进入该关时加载；全部战斗图集按需缓存，在结算或离开关卡时卸载
-- 标题、各关道中和关底 Boss 使用独立的流式 BGM
+- 标题、各关道中和关底 Boss 使用独立 BGM，按原作循环点连续播放
 - 红雾背景使用六面天空盒，转动镜头时保持固定的世界方向，避免球面极区拉伸
 - 子弹、敌人和 Boss 的贴图锚点与球形判定中心分别配置；大幅仰俯视时贴图仍面向镜头
 - Windows/macOS 共用 CMake 工程
@@ -102,7 +102,7 @@ Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Pr
 
 raylib 会在首次配置时通过 CMake FetchContent 下载。仅 `assets/runtime` 会在构建时复制到可执行文件旁的 `assets` 目录；立绘原始参考和生成记录不进入运行包。
 
-`AssetManager` 在程序启动时加载菜单与关卡共用的天空盒和标题 BGM；进入各关时加载角色、弹幕、对话立绘、着色器及道中/Boss BGM；切关、结束或返回菜单前先清除全部借用者，再释放本关资源。世界角色使用原包 DDS/ANM，演出立绘独立加载。BGM 以流式方式播放，暂停游戏时暂停，静默截图模式不初始化音频设备。通用音效覆盖菜单、射击、击破、受击、Bomb、擦弹、拾取、符卡、通关与满火力，独立 SE 音量与 BGM 分开控制。新增插画、音效及字体的来源和重建方法见 [素材说明](docs/STAGE1_ASSETS.md)。
+`AssetManager` 在程序启动时加载菜单与关卡共用的天空盒和标题 BGM；进入各关时加载角色、弹幕、对话立绘、着色器及道中/Boss BGM；切关、结束或返回菜单前先清除全部借用者，再释放本关资源。世界角色使用原包 DDS/ANM，演出立绘独立加载。BGM 从 FLAC 预解码为 PCM，由音频回调按原作循环点连续取样；暂停游戏时暂停，静默截图模式不初始化音频设备。循环依据与素材重建见 [BGM 循环说明](docs/BGM_LOOP_REFERENCE.md)。通用音效覆盖菜单、射击、击破、受击、Bomb、擦弹、拾取、符卡、通关与满火力，独立 SE 音量与 BGM 分开控制。新增插画、音效及字体的来源和重建方法见 [素材说明](docs/STAGE1_ASSETS.md)。
 
 天空盒素材是 `assets/runtime/common/crimson_mist_skybox.png`，按 OpenGL 的 +X、-X、+Y、-Y、+Z、-Z 顺序横向排列。六面由同一个方向采样函数生成；如需重绘，在项目根目录运行 `cmake --build build --target generate_skybox`，然后运行 `./build/generate_skybox assets/runtime/common/crimson_mist_skybox.png`（Windows 下使用对应的可执行文件路径）。常规构建只加载现成贴图，不在启动时生成纹理。
 
@@ -142,9 +142,11 @@ cmake --build --preset macos-release --target koumakyou
 python3 tools/package_game_macos.py
 ```
 
-生成 `output/koumakyou.app`，包含原生游戏和运行时素材，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/koumakyou_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
+生成 `output/koumakyou.app`，包含原生游戏、运行时素材与芙兰朵露应用图标，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/koumakyou_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
 
 工具拒绝覆盖已有 app；再次打包时可用 `--output output/koumakyou-new.app` 指定新目标，或用 `--build` 指定其他构建目录。生成的 app 与截图不提交到 Git。
+
+应用图标使用已审查的芙兰朵露头像：Windows 构建嵌入多尺寸 ICO，运行时设置窗口图标；macOS 原生程序设置 Dock 图标，打包工具同时加入 Finder 使用的 ICNS。原图、来源和格式重建方法见 [图标素材说明](assets/source/app_icon/README.md)。
 
 ## Windows Visual Studio
 
@@ -174,7 +176,7 @@ ctest --test-dir build --output-on-failure
 .\build\koumakyou.exe
 ```
 
-有可用音频设备时，可额外静音验证标题和一面共 3 首 BGM 的文件加载、MP3 解码及播放推进；此测试不创建窗口，也不修改玩家设置：
+有可用音频设备时，可额外静音验证全部 17 首 BGM 的 FLAC 解码、原作循环点、回放定位、暂停及资源释放；此测试不创建窗口，也不修改玩家设置：
 
 ```powershell
 cmake --build build --target koumakyou_music_tests
@@ -231,7 +233,7 @@ Power 从 8 开始，范围固定为 8～128，受击或调试降低 Power 时�
 
 战斗数值统一使用新典原始 HP 和伤害，不再使用生命 ÷25、弹伤害 ÷12 的缩放。一面道中出生 HP 显式写入时间轴并与统一目录对照；Boss 阶段生命、符卡阈值和超时读取统一目录，回调使用命名行为；二至六面及 Extra 的全部记录以 `DataOnly` 注册。四机体九档火力均可查询，游玩从 Power 8 开始。Bomb 的区域伤害、同帧 70 上限及符卡整数 ÷3 已核对执行代码；其余普通弹 Boss 减伤及普通弹/Bomb 联合上限仍由结算边界保留，不把回退冒充原生规则。数据来源、接口与复现见 [原始战斗数据接入](docs/NATIVE_COMBAT_DATA.md)。
 
-关卡奖励面板固定展示 Stage×1000、Power×100、Graze×10、Point Item、Normal 倍率和本次奖励。面板使用关卡结束时的快照，奖励只加入一次；10 秒或 Z / Space / Enter / 左键关闭，暂停冻结倒计时。面板在 Boss 战后对话结束后出现；普通开局关闭后进入通关菜单，Practice Start 清理本局后返回 Stage 页，保留御札、模式与关卡；其暂停菜单也可直接选择“返回关卡选择画面”。符卡练习在选关后同页显示符卡与难度，键盘逐级确认、鼠标悬停联动并直接跨栏，确认难度后启动，结束后可返回选卡或重试；未实现的保存 Replay 项置灰。
+关卡奖励面板固定展示 Stage×1000、Power×100、Graze×10、Point Item、Normal 倍率和本次奖励。面板使用关卡结束时的快照，奖励只加入一次；10 秒或 Z / Space / Enter / 左键关闭，暂停冻结倒计时。面板在 Boss 战后对话结束后出现；普通开局关闭后进入通关菜单，Practice Start 清理本局后返回 Stage 页，保留御札、模式与关卡；其暂停菜单也可直接选择“返回关卡选择画面”。符卡练习在选择 Boss 后同页显示符卡与难度，键盘逐级确认、鼠标悬停联动并直接跨栏，确认难度后启动，结束后可返回选卡或重试；未实现的保存 Replay 项置灰。
 
 Debug 构建的主菜单增加 `SHOT TEST`。进入后关卡时间轴停止，场中只有一只不会移动或攻击的靶怪；击空血量后会立即复原。正常 START 与射击测试中都可以使用 F5/F6 每次降低或增加 8 点 Power，升满时同样触发 `Full Power` 提示与敌弹转星点；HUD 显示调节按键，射击测试还显示靶怪血量。暂停时不调整 Power；按 Esc 暂停，再按 M 返回主菜单。Release 构建不显示射击测试入口，也不提供这些 Power 调节键。
 

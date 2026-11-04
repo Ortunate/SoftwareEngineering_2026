@@ -26,7 +26,9 @@ using namespace game_math;
 void Game::Draw() const {
     // 最小化时某些后端可返回零尺寸；暂停绘制，避免 3D 视口换算除零或创建无效裁切区域。
     if(GetScreenWidth()<=0 || GetScreenHeight()<=0)return;
-    if(state_==RunState::ReplayList) { DrawReplayList(); }
+    if(state_==RunState::ReplayList || (state_==RunState::Score && !scorePageFromRun_) ||
+        state_==RunState::Options || state_==RunState::MusicRoom || state_==RunState::Credit ||
+        (state_==RunState::MainMenu && titlePageMotion_.Visible())) { DrawTitlePages(); }
     else if(state_==RunState::Ending) {
         DrawEnding();
     } else if(state_==RunState::ScoreSave || state_==RunState::ScoreName) {
@@ -39,10 +41,6 @@ void Game::Draw() const {
         DrawLoading();
     } else if (state_ == RunState::MainMenu) {
         DrawMainMenu();
-    } else if (state_ == RunState::Options) {
-        DrawOptions();
-    } else if (state_ == RunState::MusicRoom || state_ == RunState::Credit) {
-        DrawMenuPage();
     } else {
         DrawWorld();
         DrawHud();
@@ -132,7 +130,8 @@ void Game::DrawWorld() const {
         rlEnableBackfaceCulling();
     }
     // 离屏尺寸/副机对照允许暂时移出内容接口；此时仍可独立绘制场地与其他已加载图层。
-    if(stageContent_)stageContent_->DrawScenery(static_cast<float>(scenerySeconds_),assets_);
+    if(stageContent_)stageContent_->DrawSceneryTransition(static_cast<float>(scenerySeconds_),
+        sceneryTransitionStart_ ? static_cast<float>(scenerySeconds_-*sceneryTransitionStart_) : -1.0F,assets_);
     DrawArena();
     std::array<const behavior::Actor*, kActorCapacity> visibleEnemies{};
     std::size_t visibleCount = 0;
@@ -147,15 +146,18 @@ void Game::DrawWorld() const {
             const VisualId visual=PickupVisual(pickup);
             const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
-            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),255,pickup.RotationRadians()});
+            // 普通掉落物与清弹星点统一使用 50% 不透明度，并与素材自身 Alpha 相乘。
+            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),128,pickup.RotationRadians()});
         });
         if (player_.OptionsVisible()) {
+            // 两名角色共用局内显示倍率，模型、光晕与透明排序范围同步缩放。
+            constexpr float optionVisualScale = 0.6F;
             const auto positions = player_.OptionPositions();
             for (int side = 0; side < 2; ++side) {
                 const auto visual = stageContent_->PlayerOptionVisual(side,player_.Shot());
                 if (visual == kInvalidVisualId || !assets_.GetVisual(visual).archive) continue;
                 // 与道具共用透明公告板批次，保证圈与副弹按真实深度排序；这些绘制数据不参与拾取或碰撞。
-                pickupSprites_.push_back({positions[side], visual, player_.OptionScale(),
+                pickupSprites_.push_back({positions[side], visual, player_.OptionScale()*optionVisualScale,
                                           &playerOptionAnimations_[side].player.Sample(), Player::kShotAlpha});
             }
         }
@@ -172,8 +174,8 @@ void Game::DrawWorld() const {
        (player_.InvulnerabilitySeconds()<=0 || static_cast<int>(player_.VisualAge()*12)%2==0))
         pickupSprites_.push_back({player_.Position(),static_cast<VisualId>(stage_assets::kPlayerBody+(player_.IsMarisa()?5:0)+playerBodyAction_),1,&playerBodyAnimation_.player.Sample()});
     DrawPlayerBombBackdrop(viewport.width,viewport.height);
-    combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,drawCamera,viewport.width/viewport.height,stage_.Elapsed());
-    spriteRenderer_.Draw(drawCamera, bullets_, visible, boss_.get(),
+    combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,drawCamera,player_.Position(),viewport.width/viewport.height,stage_.Elapsed());
+    spriteRenderer_.Draw(drawCamera, player_.Position(), bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
                          actorEffects_,playerBombVolumes_,&externalEffects_,&combatRenderer_);
@@ -348,22 +350,23 @@ void Game::DrawStageClear() const {
                      center,canvas.Point(0,493).y,18*s,ivory);
 }
 
-void Game::DrawKeyBindings() const {
+void Game::DrawKeyBindings(float opacity,const ui::MenuMotion* motion) const {
+    const auto& animation=motion?*motion:menuMotion_;
     const Font font=assets_.Common().uiFont;
     const menu::BindingsLayout layout(GetScreenWidth(),GetScreenHeight());
     const auto& canvas=layout.canvas;
     const float scale=canvas.scale;
     const Color gold=ui::kPageGold;
-    ui::DrawPageSurface(canvas,menuMotion_);
-    ui::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","KEYBINDINGS");
+    ui::DrawPageSurface(canvas,animation,opacity);
+    ui::DrawPageHeader(canvas,font,"按键设置","选择操作后，按下新的键盘或鼠标按键","KEYBINDINGS",opacity);
     const int resetIndex=static_cast<int>(kBindingNames.size());
     for(int index=0;index<=resetIndex;++index) {
         const auto row=layout.Row(index);
-        const float weight=menuMotion_.Weight(index),reveal=menuMotion_.Reveal(index*0.012F);
+        const float weight=animation.Weight(index),reveal=opacity*animation.Reveal(index*0.012F);
         const auto label=layout.LabelOrigin(index);
-        ui::DrawPageRowRule(canvas,row,menuMotion_,weight,reveal);
+        ui::DrawPageRowRule(canvas,row,animation,weight,reveal);
         ui::DrawPageChoiceText(canvas,font,index==resetIndex?"恢复默认键位":kBindingNames[index],label.x,label.y,layout.compact?24:22,
-                               Color{177,150,143,255},gold,weight,reveal,menuMotion_.Pulse());
+                               Color{177,150,143,255},gold,weight,reveal,animation.Pulse());
         if(index==resetIndex)continue;
         const bool capturing=waitingForBinding_ && index==selectedBinding_;
         const auto key=capturing?std::string("请按下新键"):KeyLabel(BindingAt(index));
@@ -371,7 +374,7 @@ void Game::DrawKeyBindings() const {
         const Color grey{145,145,150,255};
         ui::DrawPageChoiceText(canvas,font,key.c_str(),layout.compact?552:795,label.y,keySize,
                                capturing?grey:ui::kPageIvory,capturing?grey:gold,weight,reveal,
-                               capturing?0:menuMotion_.Pulse()+menuMotion_.Flash(),true);
+                               capturing?0:animation.Pulse()+animation.Flash(),true);
     }
 }
 

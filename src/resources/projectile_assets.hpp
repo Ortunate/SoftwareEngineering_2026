@@ -10,6 +10,8 @@ struct ProjectileModelResource {
  std::array<Model,3> layers{};
  std::unique_ptr<projectiles::CollisionAsset> collision;
  float referenceRadius=.5F,forwardExtent=1;
+ // 显示主模型相对原点的包围球半径，加载时缓存；与碰撞 referenceRadius 独立，单位为模型本地单位。
+ float visualRadius=0;
 };
 // 与关卡同生命周期；模型实例只借用资源，禁止自行 UnloadModel/UnloadShader。
 class ProjectileAssets {

@@ -1,5 +1,6 @@
 // 本文件实现共享网格、持久实例缓冲、视锥剔除和双色苦无光效；不访问 Game。
 #include "classic_renderer.hpp"
+#include "smooth_normals.hpp"
 #include "gl_state.hpp"
 #include "raymath.h"
 #include "rlgl.h"
@@ -40,8 +41,8 @@ ProjectileAppearance ClassicPalette(int color){
 }
 struct ClassicRenderer::Impl {
     GLuint vao=0,vertex=0,index=0,instances=0;Shader shader{};GLsizei indexCount=0;
-    std::vector<Packed> packed;std::size_t capacity;BatchStats stats{};Matrix vp{};bool anyGlow=false;
-    int vpLoc,passLoc,clayLoc;float bound=0;
+    std::vector<Packed> packed;std::size_t capacity;BatchStats stats{};Matrix vp{};Vector3 eye{};bool anyGlow=false;
+    int vpLoc,eyeLoc,passLoc,clayLoc;float bound=0;
     explicit Impl(std::size_t n):packed(n),capacity(n){}
 };
 ClassicRenderer::ClassicRenderer(const std::filesystem::path& asset,const std::filesystem::path& shaders,std::size_t capacity):impl_(std::make_unique<Impl>(capacity)){
@@ -51,10 +52,11 @@ ClassicRenderer::ClassicRenderer(const std::filesystem::path& asset,const std::f
     if(model.meshCount!=1){UnloadModel(model);throw std::runtime_error("Classic asset requires exactly one render mesh");}
     const Mesh& mesh=model.meshes[0];
     if(mesh.triangleCount>192||!mesh.colors||!mesh.normals){UnloadModel(model);throw std::runtime_error("Classic mesh budget or color-mask violation");}
+    const auto normals=SmoothProjectileNormals(mesh);
     std::vector<Vertex> vertices(mesh.vertexCount);
     for(int i=0;i<mesh.vertexCount;++i){
         vertices[i]={{mesh.vertices[i*3],mesh.vertices[i*3+1],mesh.vertices[i*3+2]},
-                     {mesh.normals[i*3],mesh.normals[i*3+1],mesh.normals[i*3+2]},mesh.colors[i*4]/255.F};
+                     normals[i],mesh.colors[i*4]/255.F};
         p.bound=std::max(p.bound,Vector3Length(vertices[i].position));
     }
     std::vector<unsigned short> indices(mesh.triangleCount*3);
@@ -62,7 +64,7 @@ ClassicRenderer::ClassicRenderer(const std::filesystem::path& asset,const std::f
     p.indexCount=static_cast<GLsizei>(indices.size());UnloadModel(model);
     p.shader=LoadShader((shaders/"classic.vs").string().c_str(),(shaders/"classic.fs").string().c_str());
     if(p.shader.id==rlGetShaderIdDefault())throw std::runtime_error("Classic shader compilation failed");
-    p.vpLoc=glGetUniformLocation(p.shader.id,"viewProjection");p.passLoc=glGetUniformLocation(p.shader.id,"glowPass");p.clayLoc=glGetUniformLocation(p.shader.id,"clay");
+    p.vpLoc=glGetUniformLocation(p.shader.id,"viewProjection");p.eyeLoc=glGetUniformLocation(p.shader.id,"eye");p.passLoc=glGetUniformLocation(p.shader.id,"glowPass");p.clayLoc=glGetUniformLocation(p.shader.id,"clay");
     glGenVertexArrays(1,&p.vao);glBindVertexArray(p.vao);
     glGenBuffers(1,&p.vertex);glBindBuffer(GL_ARRAY_BUFFER,p.vertex);glBufferData(GL_ARRAY_BUFFER,vertices.size()*sizeof(Vertex),vertices.data(),GL_STATIC_DRAW);
     for(int a=0;a<3;++a){glEnableVertexAttribArray(a);glVertexAttribPointer(a,a==2?1:3,GL_FLOAT,GL_FALSE,sizeof(Vertex),reinterpret_cast<void*>(a==0?0:a==1?sizeof(Vector3):sizeof(Vector3)*2));}
@@ -75,6 +77,7 @@ void ClassicRenderer::Prepare(std::span<const ProjectileInstance> instances,cons
     auto& p=*impl_;if(instances.size()>p.capacity)throw std::length_error("Instance capacity exceeded");
     if(!(aspect>0)||!std::isfinite(aspect))throw std::invalid_argument("Invalid camera aspect");
     p.vp=MatrixMultiply(GetCameraMatrix(camera),MatrixPerspective(camera.fovy*DEG2RAD,aspect,.01,1000));
+    p.eye=camera.position;
     auto frustum=planes(p.vp);p.stats={instances.size(),0,0,0};p.anyGlow=false;
     for(const auto& i:instances){
         if(!valid(i))throw std::invalid_argument("Invalid projectile instance");
@@ -94,6 +97,7 @@ void ClassicRenderer::Draw(bool glow,bool clay){
     auto& p=*impl_;if(!p.stats.visible)return;rlDrawRenderBatchActive();GLState state;
     glBindVertexArray(p.vao);glUseProgram(p.shader.id);
     auto matrix=MatrixToFloatV(p.vp);glUniformMatrix4fv(p.vpLoc,1,GL_FALSE,matrix.v);glUniform1i(p.clayLoc,clay);
+    glUniform3f(p.eyeLoc,p.eye.x,p.eye.y,p.eye.z);
     glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glEnable(GL_CULL_FACE);glCullFace(GL_BACK);glFrontFace(GL_CCW);glDepthMask(GL_TRUE);glDisable(GL_BLEND);
     glUniform1i(p.passLoc,0);glDrawElementsInstanced(GL_TRIANGLES,p.indexCount,GL_UNSIGNED_SHORT,nullptr,static_cast<int>(p.stats.visible));
     p.stats.drawCalls=1;p.stats.triangles=static_cast<int>(p.stats.visible)*p.indexCount/3;

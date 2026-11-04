@@ -1,5 +1,6 @@
 // 本文件实现两套激光持久实例批绘制，以及与游戏一致的胶囊和时窗语义。
 #include "resources/projectile_paths.hpp"
+#include "smooth_normals.hpp"
 #include "laser_renderer.hpp"
 #include "gl_state.hpp"
 #include "raymath.h"
@@ -53,7 +54,8 @@ LaserRenderer::LaserRenderer(const std::filesystem::path& root,size_t capacity):
     for(int k=0;k<2;++k){auto& g=p.geometry[k];auto path=ProjectileAssetDirectory(root)/names[k]/(std::string(names[k])+".gltf");Model m=LoadModel(path.string().c_str());
         if(m.meshCount!=1){UnloadModel(m);throw std::runtime_error("Laser mesh count");}auto& mesh=m.meshes[0];
         if(!mesh.colors||!mesh.normals||mesh.triangleCount>384){UnloadModel(m);throw std::runtime_error("Laser attributes/budget");}
-        std::vector<Impl::V> v(mesh.vertexCount);for(int i=0;i<mesh.vertexCount;++i)v[i]={{mesh.vertices[i*3],mesh.vertices[i*3+1],mesh.vertices[i*3+2]},{mesh.normals[i*3],mesh.normals[i*3+1],mesh.normals[i*3+2]}};
+        const auto normals=SmoothProjectileNormals(mesh);
+        std::vector<Impl::V> v(mesh.vertexCount);for(int i=0;i<mesh.vertexCount;++i)v[i]={{mesh.vertices[i*3],mesh.vertices[i*3+1],mesh.vertices[i*3+2]},normals[i]};
         std::vector<unsigned short> indices;
         for(int role=0;role<2;++role){g.offset[role]=(int)indices.size();for(int i=0;i<mesh.triangleCount;++i){int first=mesh.indices?mesh.indices[i*3]:i*3;if((mesh.colors[first*4+1]>127)!=bool(role))continue;for(int j=0;j<3;++j)indices.push_back(mesh.indices?mesh.indices[i*3+j]:i*3+j);}g.count[role]=(int)indices.size()-g.offset[role];}
         UnloadModel(m);glGenVertexArrays(1,&g.vao);glBindVertexArray(g.vao);glGenBuffers(1,&g.vbo);glBindBuffer(GL_ARRAY_BUFFER,g.vbo);glBufferData(GL_ARRAY_BUFFER,v.size()*sizeof(v[0]),v.data(),GL_STATIC_DRAW);

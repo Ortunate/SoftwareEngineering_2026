@@ -6,6 +6,7 @@
 #include "stages/stage6/content.hpp"
 #include "app/spell_practice.hpp"
 #include "stages/stage6/behaviors.hpp"
+#include "stages/stage6/scenery.hpp"
 #include "stages/stage6/boss_config.hpp"
 #include "gameplay/bosses/sakuya.hpp"
 #include "gameplay/bosses/remilia.hpp"
@@ -161,7 +162,7 @@ void TestBirthsAndNeutralMovement() {
     std::vector<const native_combat::HealthRecord*> births;
     for(const auto& r:native_combat::Stage(6)->health)
         if(r.scope==native_combat::HealthScope::TimelineSpawn&&r.targetSub!=8&&r.targetSub!=17)births.push_back(&r);
-    assert(births.size()==124&&stage6::Stage6Timeline().size()==135);std::size_t index=0;
+    assert(births.size()==124&&stage6::Stage6Timeline().size()==136);std::size_t index=0;
     auto bullets=std::make_unique<BulletSystem>();constexpr float scale=20.0F/448;
     for(const auto& event:stage6::Stage6Timeline()) {
         const auto* request=std::get_if<SpawnActors>(&event.action);if(!request)continue;
@@ -641,11 +642,31 @@ void TestDialogueMilestones() {
         assert(stage6::Stage6Dialogue(DialogueScene::FinalBoss,true,marisa).empty());
         const auto lines=stage6::Stage6Dialogue(DialogueScene::FinalBoss,false,marisa);
         int duration=0;for(const auto& line:lines)duration+=std::lround(line.duration*60);assert(duration==(marisa ? 11106 : 10704));
+        // MSG6 的末页在 10273/10675 帧写入对手，下一帧向第二行写入自机；两行不共用说话人。
+        const auto& last=lines.back();
+        assert(last.bossSpeaking&&last.secondLineSpeaker&&!last.secondLineSpeaker->bossSpeaking);
+        assert(std::string_view(last.text)==(marisa ? "看来今夜会很炽热呢" : "看来今夜会很快乐呢"));
+        assert(std::string_view(last.secondLine)==(marisa ? "看来今夜会很清凉呢" : "看来今夜会很漫长呢"));
+        assert(last.duration==431.0F/60&&last.advanceAfter==401.0F/60&&last.confirmDelay==9.0F/60);
+        for(float frame:{0.0F,.5F,1.0F,1.5F,400.0F}) {
+            const auto rows=DialogueTextRowsAt(last,frame/60);
+            assert(rows[0].bossSpeaking&&std::string_view(rows[0].speaker)=="蕾米莉亚");
+            assert(std::string_view(rows[0].text)==last.text);
+            if(frame<1)assert(rows[1].text[0]=='\0');
+            else {
+                assert(!rows[1].bossSpeaking&&std::string_view(rows[1].speaker)==(marisa ? "魔理沙" : "灵梦"));
+                assert(std::string_view(rows[1].text)==last.secondLine);
+                assert((DialogueExpressionsAt(lines,lines.size()-1,frame/60)==std::array<int,2>{1,marisa ? 2 : 3}));
+            }
+        }
         for(std::size_t index=1;index<lines.size();++index)assert(lines[index].showBoss);
         std::vector<std::array<int,3>> starts;
         for(const auto& cue:cues)if(cue.kind==DialogueCueKind::PortraitStart)starts.push_back({cue.frame,cue.slot,cue.value});
         assert((starts==std::vector<std::array<int,3>>{{0,0,0},{921,1,0}}));
         ui::DialogueMotion motion;
+        motion.Seek(cues,(marisa ? 10705 : 10303)/60.0F);
+        assert(motion.Sample(false).focus==1&&motion.Sample(true).focus==1);
+        assert(motion.Sample(false).opacity==1&&motion.Sample(true).opacity==1);
         const auto seek=[&](int frame) {motion.Seek(cues,frame/60.0F);return motion.Sample(true);};
         assert(seek(920).opacity==0);
         assert(seek(921).slide==1&&motion.Sample(true).opacity==0);
@@ -661,7 +682,7 @@ void TestDialogueMilestones() {
     }
     // 测试接收端独立交付各次等待，目录不得把两次恢复或对白中的入场合并到最后一次 EndEvent。
     StageDirector director(stage6::Stage6Timeline());std::vector<int> resumed;std::vector<int> bosses;
-    int midDialogue=-1,mainDialogue=-1,waitSignal=-1;bool midEnded=false;
+    int midDialogue=-1,mainDialogue=-1,waitSignal=-1,transition=-1;bool midEnded=false;
     for(int frame=1;frame<22000;++frame) {
         director.Update(1.0F/60,[&](const StageEvent& event) {
             if(const auto* boss=std::get_if<StartBoss>(&event.action)) {bosses.push_back(frame);if(boss->battle==&stage6::kSakuyaMidboss)assert(frame==2493);return false;}
@@ -669,6 +690,7 @@ void TestDialogueMilestones() {
                 if(dialogue->scene==DialogueScene::Midboss)midDialogue=frame;else if(!dialogue->afterBattle)mainDialogue=frame;return false;
             }
             if(const auto* wait=std::get_if<WaitDialogueSignal>(&event.action)) {waitSignal=wait->signal;return false;}
+            if(std::holds_alternative<StartSceneryTransition>(event.action)) {assert(transition==-1);transition=frame;return true;}
             if(std::holds_alternative<ResumeBoss>(event.action)) {resumed.push_back(frame);return true;}
             return true;
         });
@@ -680,8 +702,27 @@ void TestDialogueMilestones() {
             if(frame==mainDialogue+10704) {assert(waitSignal==0);director.EndEvent(3);director.EndEvent(8);}
         }
     }
+    assert(transition==4001);
     assert(midEnded&&mainDialogue==4600&&bosses.size()==2&&bosses[1]==5462);
     assert((resumed==std::vector<int>{2734,13267,15305}));
+}
+/// @brief 独立检查转场端点、单调逼近和建筑整体下沉，防止月球进入可玩 Z 区间。
+void TestSceneryTransition() {
+    const auto initial=stage6::SampleScenery(-1);
+    Near(initial.buildingOffsetY,0);Near(initial.moonPosition.x,-20);Near(initial.moonPosition.z,105);
+    const auto final=stage6::SampleScenery(10);
+    Near(final.buildingOffsetY,-90);Near(final.moonPosition.x,0);Near(final.moonPosition.y,10);Near(final.moonPosition.z,52);Near(final.cloudOpacity,0);
+    for(const int fps:{30,60,120,144,240}) {
+        auto previous=initial;
+        for(int tick=0;tick<=fps*12;++tick) {
+            const auto pose=stage6::SampleScenery(static_cast<float>(tick)/fps);
+            assert(pose.buildingOffsetY<=previous.buildingOffsetY&&pose.moonPosition.z<=previous.moonPosition.z);
+            assert(pose.moonPosition.x>=previous.moonPosition.x&&pose.moonPosition.z-16>10);
+            assert(pose.cloudOpacity>=0&&pose.cloudOpacity<=previous.cloudOpacity);
+            previous=pose;
+        }
+        Near(previous.moonPosition.z,52);Near(previous.buildingOffsetY,-90);
+    }
 }
 void TestBossPhaseLifecycle() {
     auto bullets=std::make_unique<BulletSystem>();
@@ -823,8 +864,52 @@ void TestSpatialDisplayFrameRates() {
     }
 }
 
+/// @brief 通过真实召唤验证六十只蝙蝠覆盖 -Z 半球，保持速度、随机流、双频率和显示帧率一致。
+void TestSpatialBatSpread() {
+    auto bullets=std::make_unique<BulletSystem>();
+    for(int d=1;d<4;++d)for(unsigned seed:{7U,0x9e3779b9U}) {
+        behavior::Actor boss;boss.Reset({0,0,5},13000,seed);boss.difficulty=*native_combat::DifficultyFromIndex(d);
+        stage6::ConfigureBehavior(boss,true);boss.Start(bosses::RemiliaBoss::Behaviors::BatNonspell(boss));
+        std::vector<behavior::Spawn> spawns;
+        for(int tick=0;tick<480&&spawns.size()<60;++tick) {
+            boss.Update(1.F/120,{3,2,8},*bullets);spawns.insert(spawns.end(),boss.spawnEvents.begin(),boss.spawnEvents.end());
+        }
+        assert(spawns.size()==60);
+        std::array<int,4> quadrants{},depthBands{};
+        for(auto rate:{behavior::UpdateRate::Hz60,behavior::UpdateRate::Hz120})for(const auto& request:spawns) {
+            auto spawn=request;spawn.retireOutside=false;
+            Vector3 expected{};float expectedRandom=0;double expectedClock=0;
+            for(int fps:{120,30,60,144,240}) {
+                behavior::Actor bat(rate);bat.Activate(spawn);const float step=1.F/static_cast<int>(rate);
+                bat.Update(step,{3,2,8},*bullets);const auto v=bat.motion.velocity;
+                const float speed=std::sqrt(v.x*v.x+v.y*v.y+v.z*v.z);
+                assert(v.z<0&&speed>=13.3928576F&&speed<=24.1071435F&&!bat.interactable);
+                Near(bat.position.x,spawn.position.x);Near(bat.position.y,spawn.position.y);Near(bat.position.z,spawn.position.z);
+                unsigned random=spawn.seed;Next(random);Next(random);
+                const float sourceSpeed=static_cast<float>(Next(random)>>8)/16777216.F*10.7142859F+13.3928576F;
+                Near(speed,sourceSpeed,1e-4F);assert(bat.motion.angularVelocity==0);
+                if(rate==behavior::UpdateRate::Hz120&&fps==120) {
+                    ++quadrants[(v.x>0?1:0)+(v.y>0?2:0)];++depthBands[std::min(3,static_cast<int>(-v.z/speed*4))];
+                }
+                for(int frame=0;frame<fps*2;++frame) {
+                    bat.Update(1.F/fps,{3,2,8},*bullets);
+                    assert(bat.motion.velocity.z<0&&bat.position.z<=spawn.position.z);
+                }
+                assert(bat.active&&bat.motion.angularVelocity!=0);Near(bat.motion.speed,sourceSpeed,1e-4F);
+                const float nextRandom=bat.Random(1);
+                assert(nextRandom==static_cast<float>(Next(random)>>8)/16777216.F);
+                if(fps==120){expected=bat.position;expectedRandom=nextRandom;expectedClock=bat.phaseFrames;}
+                else{Near(bat.position.x,expected.x);Near(bat.position.y,expected.y);Near(bat.position.z,expected.z);assert(nextRandom==expectedRandom&&bat.phaseFrames==expectedClock);}
+            }
+        }
+        for(int count:quadrants)assert(count>=8);
+        for(int count:depthBands)assert(count>=8);
+    }
+}
+
 /// @brief 长时间高速巡航后，空间本体不能漂离出生回收盒使化蝠永久占槽；按正式顺序处理全部子演员。
 void TestBatFamiliarRetirement() {
+    TestSpatialBatSpread();
     for(int d=1;d<4;++d) {
     auto bullets=std::make_unique<BulletSystem>();auto pool=std::make_unique<behavior::ActorPool<128>>();
     behavior::Actor boss;boss.Reset({0,0,5},13000,7);boss.difficulty=*native_combat::DifficultyFromIndex(d);
@@ -880,7 +965,7 @@ void TestCrossPhaseChargeMemory() {
 
 }
 /// @brief 运行六面独立出生/攻击时钟、九阶段、扩展几何、化蝠保护与 120 Hz 显示帧率一致性。
-void RunStage6Tests() {TestRemiliaAmbientLifecycle();TestRemiliaDefeatedEffects();TestRemiliaEffectDisplayRates();TestBirthsAndNeutralMovement();TestDifficultyOrdinaryReference();TestOrdinaryDisplayRates();TestMidbossDifficultyReference();TestMidbossDifficultyLifecycle();TestRemiliaNonspellDifficultyReference();TestRemiliaNonspellDifficultyLifecycle();TestRemiliaSpellDifficultyReference();TestRemiliaSpellDifficultyLifecycle();TestRemiliaFinalDifficultyLifecycle();TestStage6PracticeSkills();TestDialogueMilestones();TestBossPhaseLifecycle();TestNativeStarGeometry();TestNativeMines();TestBossSourceClocks();TestSpatialDisplayFrameRates();TestBatFamiliarRetirement();TestBombBatProtection();TestCrossPhaseChargeMemory();}
+void RunStage6Tests() {TestSceneryTransition();TestRemiliaAmbientLifecycle();TestRemiliaDefeatedEffects();TestRemiliaEffectDisplayRates();TestBirthsAndNeutralMovement();TestDifficultyOrdinaryReference();TestOrdinaryDisplayRates();TestMidbossDifficultyReference();TestMidbossDifficultyLifecycle();TestRemiliaNonspellDifficultyReference();TestRemiliaNonspellDifficultyLifecycle();TestRemiliaSpellDifficultyReference();TestRemiliaSpellDifficultyLifecycle();TestRemiliaFinalDifficultyLifecycle();TestStage6PracticeSkills();TestDialogueMilestones();TestBossPhaseLifecycle();TestNativeStarGeometry();TestNativeMines();TestBossSourceClocks();TestSpatialDisplayFrameRates();TestBatFamiliarRetirement();TestBombBatProtection();TestCrossPhaseChargeMemory();}
 
 /// @brief 只运行六面普通演员的四难度源差分与默认120 Hz显示帧率一致性。
 void RunStage6DifficultyTests() {TestDifficultyOrdinaryReference();TestOrdinaryDisplayRates();}
@@ -889,7 +974,7 @@ void RunStage6DifficultyTests() {TestDifficultyOrdinaryReference();TestOrdinaryD
 void RunStage6MidbossTests() {TestMidbossDifficultyReference();TestMidbossDifficultyLifecycle();}
 
 /// @brief 六面蕾米莉亚已接入非符的N/H/L源差分。
-void RunStage6NonspellTests() {TestRemiliaAmbientLifecycle();TestRemiliaDefeatedEffects();TestRemiliaEffectDisplayRates();TestRemiliaNonspellDifficultyReference();TestRemiliaNonspellDifficultyLifecycle();}
+void RunStage6NonspellTests() {TestBatFamiliarRetirement();TestRemiliaAmbientLifecycle();TestRemiliaDefeatedEffects();TestRemiliaEffectDisplayRates();TestRemiliaNonspellDifficultyReference();TestRemiliaNonspellDifficultyLifecycle();}
 /// @brief 第一组符卡的独立源差分与默认120 Hz生命周期入口，便于定位首次不一致。
 void RunStage6FirstSpellTests() {TestRemiliaSpellDifficultyReference(1);TestRemiliaSpellDifficultyLifecycle(1);}
 /// @brief 全部已接入符卡的源差分和120 Hz角色生命周期；未接入入口不因数据存在而执行。

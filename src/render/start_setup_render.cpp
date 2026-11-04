@@ -2,6 +2,7 @@
 #include "app/game.hpp"
 #include "render/start_setup_layout.hpp"
 #include "ui/page.hpp"
+#include "ui/difficulty_card.hpp"
 #include "ui/typography.hpp"
 #include "ui/effects.hpp"
 #include <array>
@@ -47,26 +48,6 @@ void Portrait(Texture2D texture,Rectangle slot,bool backdrop,float reveal) {
     DrawTexturePro(texture,source,slot,{},0,Fade(backdrop?Color{173,130,135,255}:WHITE,(backdrop?0.27F:1)*reveal));
 }
 
-/// @brief 难度札index为主线0～3或Extra的4；卡片页与后续徽章共用原作中文副文案。
-void DifficultyCard(Font font,Rectangle card,float scale,int index,bool selected,bool available,float opacity=1) {
-    constexpr std::array<const char*,5> names{"EASY","NORMAL","HARD","LUNATIC","EXTRA"};
-    // 对照th06TL.dat的select01/02/05_4k_zh-CN.dds；主线保留原图独立的面数行。
-    constexpr std::array<const char*,5> descriptions{"面向不擅长STG的人","面向大多数人的难度","一般街机STG的难度",
-        "面向有些奇怪的人的难度","收手吧！会疯的哦？"};
-    if(!available)opacity*=0.45F;
-    constexpr std::array<Color,5> colors{{{81,131,96,255},{66,101,145,255},{141,71,117,255},{150,56,64,255},{115,61,139,255}}};
-    DrawRectangleRec(card,ui::WithOpacity(selected?kIvory:Color{101,85,83,155},opacity));
-    DrawRectangleLinesEx(card,2*scale,ui::WithOpacity(selected?kGold:Color{127,98,84,180},opacity));
-    const Color ink=ui::WithOpacity(selected?colors[index]:Color{169,151,144,255},opacity);
-    Label(font,names[index],card,42*scale,ink,0.08F);
-    Rectangle rule{card.x+card.width*0.12F,card.y+card.height*0.48F,card.width*0.76F,0};
-    Ornament(rule,scale,ink);
-    const Color descriptionInk=selected?ui::WithOpacity(Color{63,43,43,255},opacity):ink;
-    const Rectangle description{card.x+card.width*0.08F,card.y,card.width*0.84F,card.height};
-    Label(font,descriptions[index],description,22*scale,descriptionInk,index==4?0.60F:0.56F);
-    if(index<4)Label(font,index==0?"(共5面)":"(共6面)",description,18*scale,descriptionInk,0.79F);
-}
-
 /// @brief 两行御札摘要与选择项共用样式；combination 为灵/梦/魔/恋的 0～3，weight/reveal 为 0～1。
 void Shot(Font font,Rectangle row,float scale,int combination,float weight,float reveal,float opacity=1) {
     const auto& profile=spell::Characters()[combination];
@@ -83,7 +64,7 @@ struct Painter {
         Label(font,text,bounds,size,ui::WithOpacity(color,opacity),top,center,glow);
     }
     void Rule(Rectangle bounds,Color color) const { Ornament(bounds,scale,ui::WithOpacity(color,opacity)); }
-    void Card(Rectangle bounds,int index,bool selected,bool available) const { DifficultyCard(font,bounds,scale,index,selected,available,opacity); }
+    void Card(Rectangle bounds,int index,bool selected,bool available) const { ui::DifficultyCard{bounds,index,available}.Draw({font,scale,opacity},selected); }
 };
 
 /// @brief 两个屏幕矩形连续插值；t 为 0～1，窗口缩放时由当前布局重算，不能缓存旧窗口像素。

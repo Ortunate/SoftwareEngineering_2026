@@ -150,8 +150,8 @@ def main():
                                           'sha256': hashlib.sha256(data).hexdigest()})
         report['music'] = {'source': 'bgm/th06_17.opus',
                            'source_sha256': hashlib.sha256(args.source_music.read_bytes()).hexdigest(),
-                           'runtime': 'endings/ending.mp3',
-                           'runtime_sha256': hashlib.sha256((args.runtime_root / 'endings/ending.mp3').read_bytes()).hexdigest()}
+                           'runtime': 'endings/ending.flac',
+                           'runtime_sha256': hashlib.sha256((args.runtime_root / 'endings/ending.flac').read_bytes()).hexdigest()}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text('\n'.join(source) + '\n')
     args.report.parent.mkdir(parents=True, exist_ok=True)

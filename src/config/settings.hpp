@@ -64,12 +64,12 @@ struct GameSettings {
     int musicVolume = kDefaultMusicVolume; // 0～100，0 静音，只影响 BGM。
     int mouseSensitivity = 100; // 10～300，相对于原始弧度/像素灵敏度的百分比。
     int soundVolume = 60; // 0～100，独立于 BGM。
-    int initialLives = 2; // 额外残机 1～5，不含当前正在使用的一条命。
-    int initialBombs = 3; // 开局 Bomb 0～3；复活补给保持玩家规则。
+    int initialLives = 3; // 额外残机 1～5，不含当前正在使用的一条命。
+    int initialBombs = 3; // 开局及每次死亡重生后的 Bomb 数量，范围 0～3。
     int bestScore = 0; // 本机一面最高分，0～20 亿；练习和挑战不写入。
     StartSelection lastSelection{};
     StageHighScores stageHighScores{};
-    spell::Selection spellSelection{}; // 独立保存符卡练习的角色、关卡、符卡组和难度；进入时重置为关卡页。
+    spell::Selection spellSelection{}; // 保存原关卡/组及组合、难度，浏览时推导 Boss 归属；进入时重置为 Boss 页。
     spell::Records spellRecords{};
     bool aimAssistEnabled = true; // 开启最多六度的弹道辅助，不修改镜头。
 };

@@ -55,14 +55,14 @@ void Game::UpdateMainMenu() {
             // 符卡练习跳过模式页，仍沿用固定练习规则；不能将它的临时模式写回上次开局记录。
             challengeMode_ = !spellPractice_ && lastSelection_.challenge;
             practiceAttack_ = lastSelection_.practicePhase;
-            if(spellPractice_)spellSelection_.page=spell::Page::Stage;
+            if(spellPractice_)spellSelection_.page=spell::Page::Boss;
             state_ = RunState::StartSetup;
             break;
         case 4: OpenReplayList(); break;
         case 5:
             scoreMode_=lastSelection_.challenge?1:0;scoreShot_=lastSelection_.character*2+lastSelection_.shot;
             scoreDifficulty_=lastSelection_.difficulty;
-            scorePageFromRun_=false;scoreHighlight_=-1;state_=RunState::Score;break;
+            scorePageFromRun_=false;scoreHighlight_=-1;scoreViewStep_=ScoreViewStep::Difficulty;state_=RunState::Score;break;
         case 6: {
             // 试听独立加载音频，避免仅为浏览曲目加载一整关的模型和纹理。
             selectedTrack_ = 0;

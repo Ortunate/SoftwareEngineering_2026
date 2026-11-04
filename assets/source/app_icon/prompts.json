@@ -1,0 +1,38 @@
+{
+  "tool": "内置 image_gen",
+  "generated_source": "exec-6f4b0268-38b7-43c3-8b57-3c09de1896ff.png",
+  "review": "用户审查生成图后，要求将该图标加入项目素材并接入",
+  "transparent_background": false,
+  "input_images": [
+    {
+      "role": "项目保留的原始角色造型参考",
+      "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12a_0.png",
+      "commit": "3c7b254574404d47f24e8ccbfa6e73c352addf96"
+    },
+    {
+      "role": "现代画风参考",
+      "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12a_0.png",
+      "sha256": "10ae92fd9e5d846919a62e6b0f150ca0d4e883ff7de6ea930c14a12970ae8325"
+    }
+  ],
+  "prompt": "Use case: stylized-concept. Asset type: ONE square desktop application/game icon, review draft for the C++ 3D Touhou koumakyou project. Create a new icon of Flandre Scarlet / 芙兰朵露·斯卡蕾特 inspired by her original Touhou Embodiment of Scarlet Devil character design. Input image 1 is the project's preserved ORIGINAL character design reference; image 2 is ONLY a modern anime rendering reference. Recompose from scratch specifically for icon readability, do not reproduce the full-body portrait or its background. Preserve blonde wavy bob with short side ponytail, bright scarlet red eyes, white soft frilled mob cap with large red ribbon, red vest over white puff-sleeve blouse, yellow necktie, dark branchlike wings hung with multicolored pointed crystal ornaments. She has a playful, confident closed-mouth small smile, looks at viewer; youthful canonical stylized anime appearance, fully clothed. Composition: one centered head-and-shoulders bust filling a square, face large and visually dominant, slightly tilted head, hat entirely inside safe margin. Two simplified dark crystal-wing branches frame her at the sides, readable red/orange/yellow/green/cyan/blue/violet angular crystal pendants. Only head, shoulders and upper chest, no hands, staff or full body. Clean polished Japanese anime cel illustration with bold controlled silhouette, elegant economical linework, distinct color masses, restrained highlights; enough simplification to read at 32px and 64px. Background is a simple deep burgundy to near-black plum square with subtle red halo behind head, evokes Scarlet Devil Mansion; strong separation for blonde hair and white cap. Edge-to-edge square artwork, no mockup device, no exterior white margin, no typography, no letters, no watermark, no extra characters, no decorative badge border. No excessive sparkles or tiny filigree. Render a single finished high quality 1024x1024 square image for review, not a contact sheet.",
+  "conversion": "python3 tools/generate_app_icons.py；实际原图为1254×1254，保留原图，只缩放衍生图标并封装PNG图块",
+  "files": {
+    "assets/source/app_icon/flandre.png": {
+      "sha256": "3d4d3cdb2a40a707656c0a623e08e5d633bc7fea9d4ab2b66ad07f6cf06a01a7",
+      "bytes": 1856836
+    },
+    "assets/source/app_icon/koumakyou.ico": {
+      "sha256": "76097f408fe85de98b27d36f5f08d0f5d654e4ab4f021782b521080db13f15d0",
+      "bytes": 179047
+    },
+    "assets/source/app_icon/koumakyou.icns": {
+      "sha256": "f1af0cf53bf4876736e0aa6a86c34d8cb1b0a534337d9c0721a7ff808774699e",
+      "bytes": 2557562
+    },
+    "assets/runtime/common/app_icon.png": {
+      "sha256": "fb74107441d360296bf281aeafaa323f8137c201d24d563940418eba58b0d4e6",
+      "bytes": 121789
+    }
+  }
+}

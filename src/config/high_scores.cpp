@@ -10,7 +10,7 @@ namespace koumakyou::score {
 namespace {
 bool ValidGroup(int shot,int difficulty) {return shot>=0 && shot<kShots && difficulty>=0 && difficulty<kDifficulties;}
 bool ValidEntry(const Entry& e) {
-    return e.value>=0 && ValidName(e.name) && e.misses>=0 && e.bombs>=0 && e.graze>=0 && e.completedAt>=0;
+    return e.value>=0 && ValidName(e.name) && e.misses>=0 && e.bombs>=0 && e.graze>=0 && e.completedAt>=0 && e.stage>=0 && e.stage<=7 && (!e.cleared || e.stage>0);
 }
 } // namespace
 bool ValidName(std::string_view name) {
@@ -40,28 +40,37 @@ Profile Load(const std::filesystem::path& path) {
     std::string line;
     if(!std::getline(input,line))return profile;
     if(!line.empty() && line.back()=='\r')line.pop_back();
-    if(line!="KOUMAKYOU_SCORES 1")return profile;
+    const bool legacy=line=="KOUMAKYOU_SCORES 1";
+    if(!legacy && line!="KOUMAKYOU_SCORES 2")return profile;
     while(std::getline(input,line)) {
         std::istringstream row(line);std::string kind,trailing;row>>kind;
         if(kind=="name") {
-            std::string name;if(row>>std::quoted(name) && !(row>>trailing) && ValidName(name))profile.lastName=name;
+            std::string name;if(row>>std::quoted(name) && !(row>>trailing) && (name.empty() || ValidName(name)))profile.lastName=name;
         } else if(kind=="ending") {
             int id=-1;if(row>>id && !(row>>trailing) && id>=0 && id<6)profile.endingsSeen[id]=true;
         } else if(kind=="score") {
             int mode=-1,shot=-1,difficulty=-1,slot=-1;Entry entry;
-            if(row>>mode>>shot>>difficulty>>slot>>entry.value>>entry.misses>>entry.bombs>>entry.graze>>entry.completedAt>>std::quoted(entry.name) &&
-               !(row>>trailing) && mode>=0 && mode<2 && ValidGroup(shot,difficulty) && slot>=0 && slot<kSlots && ValidEntry(entry)) {
+            int cleared=0;
+            const bool fields=bool(row>>mode>>shot>>difficulty>>slot>>entry.value>>entry.misses>>entry.bombs>>entry.graze>>entry.completedAt>>std::quoted(entry.name));
+            const bool progress=legacy || bool(row>>entry.stage>>cleared);
+            entry.cleared=cleared==1;
+            if(fields && progress && cleared>=0 && cleared<=1 && !(row>>trailing) && mode>=0 && mode<2 && ValidGroup(shot,difficulty) && slot>=0 && slot<kSlots && ValidEntry(entry)) {
                 auto& target=profile.groups[mode][shot][difficulty][slot];
                 if(!target)target=entry;
             }
         }
     }
-    for(auto& mode:profile.groups)for(auto& shot:mode)for(auto& table:shot)
+    bool hasScores=false;
+    for(auto& mode:profile.groups)for(auto& shot:mode)for(auto& table:shot) {
         std::stable_sort(table.begin(),table.end(),[](const auto& a,const auto& b){return a && (!b || a->value>b->value);});
+        hasScores=hasScores || table.front().has_value();
+    }
+    // 旧版可能仅为观看结局写入默认PLAYER；没有有效成绩时不能把它视为一次成功命名。
+    if(legacy && !hasScores)profile.lastName.clear();
     return profile;
 }
 bool Save(const std::filesystem::path& path,const Profile& profile) {
-    if(!ValidName(profile.lastName))return false;
+    if(!profile.lastName.empty() && !ValidName(profile.lastName))return false;
     for(const auto& mode:profile.groups)for(const auto& shot:mode)for(const auto& table:shot) {
         bool emptySeen=false;long long previous=-1;
         for(const auto& e:table) {
@@ -72,14 +81,14 @@ bool Save(const std::filesystem::path& path,const Profile& profile) {
     }
     const auto temporary=std::filesystem::path(path.string()+".tmp");
     std::ofstream output(temporary,std::ios::trunc);if(!output)return false;
-    output<<"KOUMAKYOU_SCORES 1\nname "<<std::quoted(profile.lastName)<<'\n';
+    output<<"KOUMAKYOU_SCORES 2\nname "<<std::quoted(profile.lastName)<<'\n';
     for(int id=0;id<6;++id)if(profile.endingsSeen[id])output<<"ending "<<id<<'\n';
     for(int mode=0;mode<2;++mode)for(int shot=0;shot<kShots;++shot)for(int difficulty=0;difficulty<kDifficulties;++difficulty)
         for(int slot=0;slot<kSlots;++slot) {
             const auto& entry=profile.groups[mode][shot][difficulty][slot];if(!entry)continue;
             const auto& e=*entry;
             output<<"score "<<mode<<' '<<shot<<' '<<difficulty<<' '<<slot<<' '<<e.value<<' '<<e.misses<<' '<<e.bombs<<' '
-                  <<e.graze<<' '<<e.completedAt<<' '<<std::quoted(e.name)<<'\n';
+                  <<e.graze<<' '<<e.completedAt<<' '<<std::quoted(e.name)<<' '<<e.stage<<' '<<int(e.cleared)<<'\n';
         }
     output.flush();bool written=output.good();output.close();written=written&&!output.fail();
     std::error_code error;

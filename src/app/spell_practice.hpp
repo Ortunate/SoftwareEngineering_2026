@@ -6,7 +6,7 @@
 #include <algorithm>
 
 namespace koumakyou::spell {
-inline constexpr int kSpellCount=131, kCharacterCount=4, kStageCount=7;
+inline constexpr int kSpellCount=131, kCharacterCount=4, kStageCount=7, kBossCount=7;
 // 练习目录仍为131张；原生遇见/取得表另接受零起算0…133，追加三符只能从实际遭遇写入。
 inline constexpr int kRecordCount=134;
 /// @brief 原典关卡从 0 编号，6 表示 Extra；groups 是该关符卡组数，total 包含所有难度变体。
@@ -16,7 +16,18 @@ struct Character { const char* name; const char* title; const char* displayName;
     int portrait; std::array<int,3> stars; };
 /// @brief number 为原典 1～131 编号；stage/group 为从 0 开始的关内编号，difficulty=0～4 对应 E/N/H/L/EX。
 /// phase 为选定遭遇内的 1 起算展开技能编号，对应运行时 attack；0 表示尚未实现，不能据此启动关卡。
-struct Card { int number,stage,group,difficulty; const char* name; const char* user; int phase; };
+/// power 为本符卡原生练习入口火力；前九张有32/64的显式覆盖，其余缺省128。
+struct Card { int number,stage,group,difficulty; const char* name; const char* user; int phase; int power=128; };
+/// @brief 保留原关卡/组身份；同一 Boss 的符卡可来自多个关卡，难度仍由 Find 查询。
+struct Group { int stage,group; };
+/// @brief Boss 名称及其有序符卡组；名称和组表均借用静态存储，不随浏览加载战斗资源。
+struct Boss { const char* name; std::span<const Group> groups; };
+/// @brief 返回按初次登场排序的七位符卡使用者；跨关卡符卡归到实际使用者名下。
+[[nodiscard]] std::span<const Boss> Bosses();
+/// @brief 将原关卡/组身份映射到 Boss 行号；无效身份返回 -1，不改变记录或录像编号。
+[[nodiscard]] int BossIndex(int stage,int group);
+/// @brief 返回符卡在所属 Boss 内的行号；无效身份返回 -1。
+[[nodiscard]] int BossGroupIndex(int stage,int group);
 /// @brief 返回七关只读目录；借用静态数据，不加载素材。
 [[nodiscard]] std::span<const Stage> Stages();
 /// @brief 返回灵/梦/魔/恋四组合；借用静态原文与能力评级。
@@ -30,10 +41,11 @@ struct Card { int number,stage,group,difficulty; const char* name; const char* u
 /// @brief 返回关内符卡组的使用者原文；无此组返回空串，字符串具有静态生命周期。
 [[nodiscard]] const char* GroupUser(int stage,int group);
 inline constexpr std::array<const char*,5> kDifficulties{"EASY","NORMAL","HARD","LUNATIC","EXTRA"};
-/// @brief Stage 为关卡页，Group/Difficulty 为同一选卡页的两级操作焦点；切换焦点不能重新播放页面进场。
+/// @brief Boss 为使用者页，Group/Difficulty 为同一选卡页的两级操作焦点；切换焦点不能重新播放页面进场。
 /// 横向输入独立循环四种角色，纵向输入改变当前列；鼠标移动可直接切换列，键盘确认/返回逐级切换。
-enum class Page { Stage, Group, Difficulty };
-struct Selection { Page page=Page::Stage; int stage=0,group=1,difficulty=1,character=0; };
+enum class Page { Boss, Group, Difficulty };
+/// @brief 始终保存原关卡/组身份，Boss 与其局部行号从目录推导；旧配置和录像无需迁移。
+struct Selection { Page page=Page::Boss; int stage=0,group=1,difficulty=1,character=0; };
 /// @brief 单张符卡的本机记录；mainAttempts>0 说明已在实际关卡内遇见，不要求击破。
 /// 计数上限 20 亿，bestScore 为非负 64 位分数，不能导入原游戏的个人成绩。
 struct Record { long long bestScore=0; int attempts=0,captured=0,mainAttempts=0,mainCaptured=0; };

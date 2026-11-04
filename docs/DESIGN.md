@@ -1,6 +1,6 @@
 # 东方红魔乡：异典 3D 第一人称空间弹幕演示版设计
 
-本文记录现有实现。面向《东方红魔乡：新典》全流程 3D 改造的目标系统设计见[软件设计说明书](SOFTWARE_DESIGN.md)，产品需求见[NABCD 需求分析](NABCD.md)。
+本文记录现有实现。面向《东方红魔乡：新典》全流程 3D 改造的目标系统设计见[软件设计说明书](SOFTWARE_DESIGN.md)，产品需求见[NABCD 需求分析](course/NABCD.md)。
 
 ## 1 设计目标
 
@@ -224,3 +224,5 @@ direction = (r cos(phi), y, r sin(phi))
 原始生命与伤害目录位于 `gameplay/data/native_combat.*`，编译时持有七关 3598 条生命记录、四机体 193 条通道。源码记录输入哈希、ECL 偏移、掩码、Normal 指令索引和 PE RVA；运行时不要求安装原作或执行 Python。`Stage(1..7)` 独立于可玩关卡目录：一面为 Playable，其余为 DataOnly，不能据此开放选择。一面时间轴出生 HP 由测试逐条核对目录原值，Boss 阶段生命与 HUD 直接读取原始点数；已移除恒为 1 的 `kReferenceHealthUnit` 接口。未知默认 HP、寄存器生命须由未来关卡提供上下文，`RequireLiteral` 对此拒绝返回假常量。
 
 `ResolveDamage` 是统一伤害入口，`DamageContext` 提供原始接触伤害、机体、来源 RVA、目标身份、保护/符卡状态、Bomb 使用状态及有效秒数。`StageContent::DamageRules()` 可覆盖规则；未处理返回 nullopt，默认结果区分 BaseOnly、Fallback 与 NativeRule。Bomb 必须传入同一逻辑帧的通道合计，按本机新典每帧 70 上限、符卡整数 ÷3（最低 1）和新符卡旧 Bomb 保护处理，不再使用固定 550/875 伤害。普通弹在 Bomb 期间按原始接触伤害 ÷3（最低 1）；普通弹对 Boss 的 0.8/符卡 ÷7 回退和普通弹/Bomb 联合上限尚未作为完整原引擎结算重构。普通弹仍用三维球形判定，原表矩形尺寸、音效和坐标完整保留。详情见 [原始战斗数据接入](NATIVE_COMBAT_DATA.md)。
+
+BGM 使用独立的 `audio::BgmPlayer`，加载 FLAC 与旁路循环元数据后预解码为 16 bit PCM；音频回调在单个缓冲内按原作区间回绕，前奏只播放一次。所有音乐槽及回放定位共用此规则，音频供样不依赖显示更新。来源、单位、EOF 边界和验证入口见 [BGM 原作循环](BGM_LOOP_REFERENCE.md)。

@@ -1,0 +1,29 @@
+{
+  "asset": "reimu_option",
+  "bodyTriangles": 528,
+  "collision": "none",
+  "humanAcceptance": "approved",
+  "front": "+Z",
+  "up": "+Y",
+  "referenceAnm": [
+    128,
+    129
+  ],
+  "acceptanceFingerprint": "edf7d9c35a76230199c4515742d6afde3b3996e30b0ec52e5871986bc2b271c3",
+  "acceptanceNote": "用户确认外观通过；旋转速度为演示值，未接入游戏",
+  "localForward": [
+    0,
+    0,
+    1
+  ],
+  "localUp": [
+    0,
+    1,
+    0
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

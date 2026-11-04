@@ -1,0 +1,170 @@
+{
+  "tool": "内置 image_gen",
+  "use_case": "style-transfer",
+  "character": "雾雨魔理沙",
+  "original_archive": "th06CM.dat",
+  "original_canvas": [
+    2048,
+    2048
+  ],
+  "dds_canvas": [
+    4096,
+    4096
+  ],
+  "sprite_rectangles": [
+    [
+      1,
+      1,
+      620,
+      1024
+    ],
+    [
+      622,
+      1,
+      620,
+      1024
+    ]
+  ],
+  "extraction": "按原 ANM 坐标与 4K DDS 的 2 倍比例逐张裁出，保留原像素和 Alpha",
+  "style_reference": "assets/runtime/common/spell_practice/marisa_modern.png",
+  "portrait_order": [
+    "face01a_0",
+    "face01a_1",
+    "face01b_0",
+    "face01b_1",
+    "face01c_0",
+    "face01c_1"
+  ],
+  "portraits": [
+    {
+      "id": "face01a_0",
+      "prompt": "Use case: style-transfer. Asset type: ONE full-body transparent anime game portrait from a consistent six-variant Kirisame Marisa set. Image 1 is the authoritative ORIGINAL edit target for exact pose, head angle, expression, gesture, clothing and visible crop. Image 2 is the approved modern Marisa STYLE/IDENTITY reference only, not the pose to copy. Match the style reference's golden blonde wavy layered hair, single side braid with small white bow, amber-gold eyes, black floppy witch hat with large white ribbon and white ruffled brim, black short puff-sleeved dress, white apron and ruffled collar, white ruffled underskirt, white socks and pale gray-white shoes. Refined varied anime linework, layered hair highlights, polished cel shading with restrained gradients and naturally constructed fabric folds. Consistent face and costume design with Image 2. Modernize the drawing quality, preserve the original specific gesture and facial expression. Correct hand proportions, natural bent knuckles, five fingers per hand when exposed, middle finger shorter than palm, no elongated fingers, do not reveal hands hidden in the source. Entire hat, bow, skirt, both shoes and all visible gestures included. Genuine transparent alpha, no white or black rectangles, atlas padding, checkerboard, colored fringe, aura, background, ground shadow, text or UI. The BLACK dress and BLACK hat are intentional costume, preserve them; only atlas junk outside the silhouette is removed. No broom or props unless explicitly present in Image 1. Not chibi, not photorealistic, not 3D. Variant face01a_0: full-body standing pose leaning/tilting torso and head toward viewer LEFT as in Image 1; both arms extend down in front of the abdomen with hands held together low and mostly hidden by the apron/skirt folds. DO NOT raise either hand, do not hold up the apron edges. Eyes OPEN amber, calm small CLOSED-mouth confident smile, gentle neutral brows. Black skirt and white apron swept gently toward viewer LEFT, ankles and both pale shoes clearly visible. Preserve this distinct leaning pose instead of the upright apron-holding pose in style Image 2.",
+      "cleanup_prompt": "Use case: precise-object-edit. Keep this exact modern full-body Marisa illustration, pose, face, calm open-eye small closed-mouth smile, costume, hat, braid, colors and all fabric folds unchanged. Technical transparent-edge cleanup ONLY: remove every detached white/gray/colored speckle, matte residue, grain, haze or glow outside the actual drawn silhouette, especially in the empty gap between the legs and below the skirt. Keep clean antialiasing and legitimate white lace, socks and apron. No colored or white outline around the character. Output genuine transparent alpha, complete full-body character including both shoes, no background, checkerboard, ground shadow, text or additional objects. Do not change the hand gestures or overall composition.",
+      "generated_source": "exec-8ebabefa-c658-4f62-944a-7592e2e6254c.png",
+      "expression": "睁眼小幅微笑；侧倾、双手低垂在围裙前",
+      "original": "assets/source/portraits/marisa/originals/face01a_0.png",
+      "destination": "assets/runtime/common/portraits/marisa/face01a_0.png",
+      "original_size": [
+        1240,
+        2048
+      ],
+      "original_sha256": "37a94acc34f5b3f2340db33fa00dc4d9e079a91c388d67d4d50e3485098811be",
+      "destination_size": [
+        976,
+        1611
+      ],
+      "destination_sha256": "302b32713a5c1e47d600f8c5a48caadadaf3afb45ec203b5b3db2b6ae3c08113"
+    },
+    {
+      "id": "face01a_1",
+      "prompt": "Use case: style-transfer. Asset type: ONE full-body transparent anime game portrait from a consistent six-variant Kirisame Marisa set. Image 1 is the authoritative ORIGINAL edit target for exact pose, head angle, expression, gesture, clothing and visible crop. Image 2 is the approved modern Marisa STYLE/IDENTITY reference only, not the pose to copy. Match the style reference's golden blonde wavy layered hair, single side braid with small white bow, amber-gold eyes, black floppy witch hat with large white ribbon and white ruffled brim, black short puff-sleeved dress, white apron and ruffled collar, white ruffled underskirt, white socks and pale gray-white shoes. Refined varied anime linework, layered hair highlights, polished cel shading with restrained gradients and naturally constructed fabric folds. Consistent face and costume design with Image 2. Modernize the drawing quality, preserve the original specific gesture and facial expression. Correct hand proportions, natural bent knuckles, five fingers per hand when exposed, middle finger shorter than palm, no elongated fingers, do not reveal hands hidden in the source. Entire hat, bow, skirt, both shoes and all visible gestures included. Genuine transparent alpha, no white or black rectangles, atlas padding, checkerboard, colored fringe, aura, background, ground shadow, text or UI. The BLACK dress and BLACK hat are intentional costume, preserve them; only atlas junk outside the silhouette is removed. No broom or props unless explicitly present in Image 1. Not chibi, not photorealistic, not 3D. Variant face01a_1: upright full-body pose, shoulders level, face turned slightly toward viewer LEFT, both eyes OPEN amber, calm small closed-mouth slightly self-assured smile, gentle cheek blush. Both forearms bend upward with hands holding the white apron/frilled fabric edges at chest height on either side, four short curved fingertips visible over each cloth edge and thumbs naturally behind. This is the apron-holding pose used for the LARGE BACK LAYER in character selection. It is NOT the seated broom pose; no broom. Keep the black skirt hanging normally underneath the white apron.",
+      "cleanup_prompt": "Use case: precise-object-edit. Keep this exact modern full-body Marisa illustration, pose, face, calm open-eye small closed-mouth smile, costume, hat, braid, colors and all fabric folds unchanged. Technical transparent-edge cleanup ONLY: remove every detached white/gray/colored speckle, matte residue, grain, haze or glow outside the actual drawn silhouette, especially in the empty gap between the legs and below the skirt. Keep clean antialiasing and legitimate white lace, socks and apron. No colored or white outline around the character. Output genuine transparent alpha, complete full-body character including both shoes, no background, checkerboard, ground shadow, text or additional objects. Do not change the hand gestures or overall composition.",
+      "generated_source": "exec-aa8007fd-a988-422a-bfa8-fa48ef7b7d78.png",
+      "expression": "睁眼小幅微笑；直立、双手提围裙",
+      "original": "assets/source/portraits/marisa/originals/face01a_1.png",
+      "destination": "assets/runtime/common/portraits/marisa/face01a_1.png",
+      "original_size": [
+        1240,
+        2048
+      ],
+      "original_sha256": "54e8d39026f7b62c8544dd00cbf0e3f0a300df6ba81d263c196fd4b5d9fb97e7",
+      "destination_size": [
+        976,
+        1612
+      ],
+      "destination_sha256": "4f799d02a27c562a0e120b7d86193ecafffe6317603d769a5733fbb7c14e3e99"
+    },
+    {
+      "id": "face01b_0",
+      "prompt": "Use case: precise-object-edit. Image 1 is the modern Marisa FULL-BODY edit target. Image 2 is ONLY the ORIGINAL expression reference for variant face01b_0. Change ONLY the facial expression in Image 1 to match Image 2: both eyes CLOSED with relaxed, gently downward-curved eyelids (not laughing upward arcs), warm blushed cheeks, small closed-mouth content/self-satisfied smile, relaxed brows. Keep the exact leaning head/body pose, hands together low behind apron, face identity, hat, braid, black-white costume, all folds, both legs and shoes and all other pixels/composition of Image 1. No anger mark, sweat drop or open mouth. Preserve genuine transparent alpha and clean silhouette; remove detached matte speckles outside the figure, do not add background, checkerboard, shadow, aura, text or props. One full-body game portrait only.",
+      "modern_base": "exec-8ebabefa-c658-4f62-944a-7592e2e6254c.png",
+      "original": "assets/source/portraits/marisa/originals/face01b_0.png",
+      "destination": "assets/runtime/common/portraits/marisa/face01b_0.png",
+      "generated_source": "exec-067c9d63-f514-4201-a746-9e2cd12b12f6.png",
+      "expression": "闭眼含笑；侧倾、双手低垂",
+      "original_size": [
+        1240,
+        2048
+      ],
+      "original_sha256": "b7b536495b0edd421dd232974e4b4e8974d6dd8fd379d5f84242387ebec71afb",
+      "destination_size": [
+        976,
+        1611
+      ],
+      "destination_sha256": "f94aac999ebcced8991833b3ba6ba4e1330981889f3383942645ec95f7dc33dc"
+    },
+    {
+      "id": "face01b_1",
+      "prompt": "Use case: precise-object-edit. Image 1 is the modern Marisa FULL-BODY edit target. Image 2 is ONLY the ORIGINAL expression reference for variant face01b_1. Change ONLY the facial expression: eyes CLOSED in cheerful upward happy curves, small OPEN laughing/smiling mouth, warm cheek blush, joyful expression matching Image 2. Keep exact upright apron-holding pose, hands/fingers naturally gripping cloth at chest height, face identity, hat, braid, black-white costume, all fabric folds, both legs/shoes and all other composition of Image 1. No sweat or anger symbol. Genuine transparent alpha, clean antialiased character edge, no detached matte speckles outside figure, no background, checkerboard, shadow, aura, text or props. One full-body game portrait only.",
+      "modern_base": "exec-aa8007fd-a988-422a-bfa8-fa48ef7b7d78.png",
+      "original": "assets/source/portraits/marisa/originals/face01b_1.png",
+      "destination": "assets/runtime/common/portraits/marisa/face01b_1.png",
+      "generated_source": "exec-e9715d19-e9b3-4bb7-a918-4a8b41ebaee4.png",
+      "expression": "闭眼开怀笑；直立、双手提围裙",
+      "original_size": [
+        1240,
+        2048
+      ],
+      "original_sha256": "29d5a574192616dc87e9423edc789996adc9a010d7aa81a67d2e7c1dc0ad0f52",
+      "destination_size": [
+        976,
+        1612
+      ],
+      "destination_sha256": "7a13152260bef4262a13ed915bf4305e34ca377e27434f00da7d169a7834aa31"
+    },
+    {
+      "id": "face01c_0",
+      "prompt": "Use case: precise-object-edit. Image 1 is the modern Marisa FULL-BODY edit target. Image 2 is ONLY the ORIGINAL expression/symbol reference for variant face01c_0. Change ONLY the expression and original emotion symbol in Image 1: eyes CLOSED with relaxed downward-curved eyelids, cheeks flushed, small closed pouting/frowning mouth turned down slightly, and ONE small red four-pronged anime anger/vein mark over the hair on viewer RIGHT of forehead, matching Image 2. Keep the exact leaning head/body pose, hands together low behind apron, face identity, hat, braid, black-white costume, all folds, both legs and shoes and all other composition of Image 1. No sweat drop or open mouth. Genuine transparent alpha and clean silhouette; remove detached matte speckles outside the figure. No background, checkerboard, shadow, aura, text or props. One full-body game portrait only.",
+      "modern_base": "exec-8ebabefa-c658-4f62-944a-7592e2e6254c.png",
+      "correction_prompt": "Use case: precise-object-edit. Make ONE small correction to this angry Marisa full-body portrait: replace only the small smiling mouth with a visibly DOWN-TURNED CLOSED frown/pout like an inverted U (∩), with the mouth corners LOWER than its middle. There must be NO smile or upward mouth corner. Keep both eyes closed with the current relaxed downward eyelids, cheek blush and red four-pronged anger mark unchanged. Keep the entire rest of the image exactly: leaning pose, hidden low hands, face identity, hat, hair, braid, apron, skirt, socks, both shoes, colors, linework and transparent alpha. Do not add new objects, background, text, shadow or halo. Remove any detached matte speckles in the empty transparent area while preserving the actual character contour.",
+      "original": "assets/source/portraits/marisa/originals/face01c_0.png",
+      "destination": "assets/runtime/common/portraits/marisa/face01c_0.png",
+      "generated_source": "exec-e3b15b14-0b2e-4567-894a-6b72ca2bd5fb.png",
+      "expression": "闭眼噘嘴、生气符号；侧倾、双手低垂",
+      "original_size": [
+        1240,
+        2048
+      ],
+      "original_sha256": "cc12cb608d386e5439b20c2a9f98d7867ca9abb48dd8343a575e9f4df2a69621",
+      "destination_size": [
+        976,
+        1611
+      ],
+      "destination_sha256": "41119f15489ea0a282837bc7bf4e1c8a8c15231658a84efd56a27c4f5cc9c721"
+    },
+    {
+      "id": "face01c_1",
+      "prompt": "Use case: precise-object-edit. Image 1 is the modern Marisa FULL-BODY edit target. Image 2 is ONLY the ORIGINAL expression and symbol reference for variant face01c_1. Change ONLY facial expression and original emotion symbol: eyes CLOSED in strained/awkward upward arcs, tiny CLOSED pursed slightly worried/frowning mouth, ONE large pale-cyan anime sweat drop at the viewer RIGHT forehead/temple extending upward in front of hat/hair, just like Image 2. This is an embarrassed/awkward expression, NOT an open-mouth happy laugh. Keep exact upright apron-holding pose, natural hand/finger proportions gripping cloth, face identity, hat, braid, black-white costume, all folds, both legs/shoes and all other composition of Image 1. No anger mark. Genuine transparent alpha, clean antialiased edge; remove detached matte speckles outside character. No background, checkerboard, shadow, aura, text or additional props. One full-body game portrait only.",
+      "modern_base": "exec-aa8007fd-a988-422a-bfa8-fa48ef7b7d78.png",
+      "original": "assets/source/portraits/marisa/originals/face01c_1.png",
+      "destination": "assets/runtime/common/portraits/marisa/face01c_1.png",
+      "generated_source": "exec-8de1cf6f-29c4-4112-9b68-75a8aa4f45ad.png",
+      "expression": "闭眼局促、汗滴；直立、双手提围裙",
+      "original_size": [
+        1240,
+        2048
+      ],
+      "original_sha256": "310da3427af70f1010f21e8a1fa8f55d648782b2a3c96eed93080cd098f92b10",
+      "destination_size": [
+        976,
+        1612
+      ],
+      "destination_sha256": "bcf011b1a77d2480486ed8923a74dcd970d218265673c4a38bbdf1d1c3206ff1"
+    }
+  ],
+  "menu_reuse": {
+    "original": "th06TL.dat/slpl01a_4k.dds",
+    "original_reference": "assets/source/player_portraits/marisa_backdrop_original.png",
+    "modern_backdrop": "assets/runtime/common/portraits/marisa/face01a_1.png",
+    "modern_foreground": "assets/runtime/common/spell_practice/marisa_modern.png",
+    "note": "选人原典后层与 face01a_1 为同一提围裙姿势；复用该现代版的上部，前景仍为独立骑扫帚图"
+  },
+  "source_checksums": {
+    "face01b_4k.dds": "383cb4ea2459aee2f5b7071797b3499089619b263c598f34e295c2238296ab0f",
+    "face01c_4k.dds": "f0846475eb8e9adc761401103aeaa57850938ae5161c35a2fba32d7aae10377b",
+    "face01c.anm": "af70a50ebcf59281571099c55bd327478e261bbd2e2c4007b04dce4c36168a71",
+    "face01b.anm": "b6e736d426aaf01bf29c603269ba10d181fcfe5eb60df6a0a9554b784b7b5e20",
+    "face01a.anm": "fcaf461dfb539af027b266b8a5b9a21b3bd0ad612fb9fa68e66ac3a6600b6429",
+    "face01a_4k.dds": "eac701166719699cee7de922a40f1c179db107fbbd8a6faf9b1440bcdc04da3c"
+  }
+}

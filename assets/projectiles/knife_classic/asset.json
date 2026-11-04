@@ -1,0 +1,75 @@
+{
+  "asset": "knife_classic",
+  "nativeType": 8,
+  "effectiveColors": 8,
+  "representativeColor": 1,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "竖直平面刀刃、短护手与压薄穿孔刀柄",
+  "collisionSemantics": "刀刃、护手、压薄穿孔刀柄实体并集；柄孔为空",
+  "humanAcceptance": "pending",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 256,
+  "revision": 3,
+  "vertexChannels": {
+    "r": "legacy highlight mask; runtime lighting uses normals",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "VerticalBeveledBlade",
+      "role": 0,
+      "collision": true,
+      "display": true,
+      "triangles": 38
+    },
+    {
+      "name": "ShortGuard",
+      "role": 0,
+      "collision": true,
+      "display": true,
+      "triangles": 12
+    },
+    {
+      "name": "PiercedFlatHandle",
+      "role": 0,
+      "collision": true,
+      "display": true,
+      "triangles": 96
+    }
+  ],
+  "knifeStructure": {
+    "faceAxis": [
+      0,
+      0,
+      1
+    ],
+    "handleHalfDepth": 0.04,
+    "guardHalfDepth": 0.042,
+    "bladeHalfDepth": 0.028,
+    "bladeFacePlane": "XY",
+    "handleFaceAxisScale": 0.47058823529411764,
+    "normalPolicy": "authored flat blade and smooth handle"
+  },
+  "triangles": 146,
+  "collisionTriangles": 146,
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

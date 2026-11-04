@@ -1,0 +1,100 @@
+// 本文件负责角色入场表现与脱离战斗对象生命周期的退场效果快照。
+
+#pragma once
+
+#include "core/fixed_pool.hpp"
+#include "resources/visual_assets.hpp"
+#include "raylib.h"
+
+namespace koumakyou {
+
+/// @brief 表现规格与退场原因；清场不等同于击破，不产生奖励或爆散。
+enum class ActorKind { Enemy, Boss };
+enum class ActorExitReason { Retreat, Defeated, StageClear };
+
+/// @brief 纯视觉采样值；尺寸乘以外观高度，透明度为 [0,1]，环半径乘以判定半径。
+/// burst 为击破粒子的扩散进度 [0,1]，burstAlpha 为零时不绘制粒子或闪光。
+struct ActorAppearance {
+    float scale = 1.0F;
+    float alpha = 1.0F;
+    float ringRadius = 0.0F;
+    float ringAlpha = 0.0F;
+    float burst = 0.0F;
+    float burstAlpha = 0.0F;
+};
+
+/// @brief 活动角色的视觉时钟；不改变攻击、判定和移动，暂停时调用方停止推进。
+class ActorPresentation {
+public:
+    /// @brief 新角色从入场首帧开始；Boss 使用 Boss 规格。
+    explicit ActorPresentation(ActorKind kind = ActorKind::Enemy) : kind_(kind) {}
+    /// @brief 设置本次遭遇的规格并重置入场；Boss 换阶段不得调用。
+    void Reset(ActorKind kind = ActorKind::Enemy);
+    /// @brief 推进视觉时钟并清除上一帧的边界预测；deltaTime 为非负秒数。
+    /// 调用方先 Update，再按本帧实际运动提交 PreviewBoundaryExit。
+    void Update(float deltaTime);
+    /// @brief 已确定退场终点/时刻时提前淡出；剩余秒数非负，进度不可逆。
+    /// 不适用于可能因轨道转向失效的边界预测；始终保留战斗对象到原定退场时刻。
+    void PrepareExit(float remainingSeconds);
+    /// @brief 按本帧外向速度预测的剩余非负秒数预淡出；正无穷表示无预计越界。
+    /// 同帧多个轴取最深淡出，下一次 Update 清除预测，允许转向后正常显示。
+    void PreviewBoundaryExit(float remainingSeconds);
+    /// @brief 返回当前入场与预退场的组合表现。
+    [[nodiscard]] ActorAppearance Sample() const;
+    /// @brief 查询规格，供脱离对象的退场快照使用。
+    [[nodiscard]] ActorKind Kind() const { return kind_; }
+    /// @brief 普通退场淡出时长，单位为秒。
+    [[nodiscard]] static float ExitDuration(ActorKind kind);
+
+private:
+    ActorKind kind_ = ActorKind::Enemy;
+    float age_ = 0.0F;
+    // 已确定的退场只会加深；速度外推的边界预测必须逐帧更新，不能永久锁定透明度。
+    float departure_ = 0.0F;
+    float boundaryDeparture_ = 0.0F;
+};
+
+/// @brief 值快照，不持有行为演员/Boss 指针或纹理；VisualId 仅在当前关卡资源存活时有效。
+struct ActorExitEffect {
+    bool active = false;
+    VisualId visual = kInvalidVisualId;
+    Vector3 position{};
+    float hitRadius = 0.55F;
+    ActorKind kind = ActorKind::Enemy;
+    ActorExitReason reason = ActorExitReason::Retreat;
+    ActorAppearance initial{};
+    float age = 0.0F;
+    float duration = 0.25F;
+    anm::Frame animation{}; // 身体的最后一帧或独立击破动画的当前帧，不借用原演员。
+    bool nativeDefeat = false; // 为 true 时仅绘制独立击破动画，不叠加身体淡出。
+    battle::Cursor effectAnimation; // 借用关卡档案，必须在卸载关卡前清空效果池。
+    /// @brief 采样淡出、收缩或击破爆散；不参与碰撞或索敌。
+    [[nodiscard]] ActorAppearance Sample() const;
+};
+
+/// @brief 最多保留 512 个退场快照，覆盖敌人池整池清场及连续短时退场。
+/// 池满只丢弃视觉，不能影响计分和战斗对象回收；切换关卡前必须 Clear。
+class ActorEffectSystem {
+public:
+    /// @brief 复制角色最后一帧外观；position 是世界坐标，hitRadius 是正的世界单位半径。
+    /// 调用方须在一次实际退场时仅调用一次，传入当前关卡的 visual。
+    /// defeatVisual 仅在 Defeated 时替代身体外观；ANM 删除指令负责结束，最长保留 1 秒。
+    /// @return 池满返回 false，不延长战斗对象寿命。
+    bool Spawn(VisualId visual, Vector3 position, float hitRadius,
+               const ActorPresentation& presentation, ActorExitReason reason,
+               const anm::Frame* animation = nullptr, VisualId defeatVisual = kInvalidVisualId);
+    /// @brief 推进效果并回收到期槽位；deltaTime 为非负秒数，暂停时不调用。
+    void Update(float deltaTime);
+    /// @brief 立即丢弃全部效果；在卸载关卡纹理之前调用。
+    void Clear() { effects_.Clear(); }
+    /// @brief 只读借用快照池，借用期间不得修改本系统。
+    [[nodiscard]] const FixedPool<ActorExitEffect, 512>& Pool() const { return effects_; }
+
+    /// @brief 逐帧借用活动效果以同步动画；回调不能产生新效果或卸载素材。
+    template<class Function> void ForEachActive(Function&& function) { effects_.ForEachActive(function); }
+
+private:
+    FixedPool<ActorExitEffect, 512> effects_;
+};
+
+}  // namespace koumakyou

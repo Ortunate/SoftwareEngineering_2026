@@ -1,0 +1,50 @@
+{
+  "asset": "kunai_classic",
+  "nativeType": 4,
+  "representativeColor": 2,
+  "units": "normalized length approximately 1",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "vertexMask": "COLOR_0.r = highlight mix",
+  "humanAcceptance": "approved",
+  "humanAcceptanceBy": [
+    "user",
+    "leader"
+  ],
+  "humanAcceptanceDate": "2026-10-27",
+  "parts": [
+    {
+      "name": "Blade",
+      "triangles": 6,
+      "closed": true
+    },
+    {
+      "name": "ShortConnector",
+      "triangles": 12,
+      "closed": true
+    },
+    {
+      "name": "TailRing",
+      "triangles": 128,
+      "closed": true
+    }
+  ],
+  "triangles": 146,
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

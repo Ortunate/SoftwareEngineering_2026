@@ -1,2 +1,56 @@
 # Microsoft Office temporary lock files
 ~$*
+
+# 项目内建模工具链、依赖及用户状态；可编辑资产不在这些目录内。
+/.tools/
+/.deps/
+/.cache/
+/.local/
+/output/projectile-review/
+*.blend1
+
+# Local build products and editor metadata
+.DS_Store
+.vscode/
+build/
+build-*/
+cmake-build-*/
+__pycache__/
+*.py[cod]
+
+# Runtime-local settings
+koumakyou_settings.cfg
+koumakyou_scores.dat
+koumakyou_scores.dat.tmp
+
+# 本机 CrossOver 包装产物，包含借用的运行时与机器路径
+/output/th06nc-reference.app/
+
+# 本机原生应用与视觉检查截图
+/output/koumakyou.app/
+/output/stage1-review/
+
+# 本机原作血量与弹伤害的只读解析结果
+/output/native-combat-data/
+
+# 本机一面时间轴的原始解包与审阅结果
+/output/stage1-timeline-review/
+# 本地录像与未完成的原子保存文件
+/replays/
+
+# 渲染压测的逐帧数据、截图和本机环境记录
+/output/render-performance/
+
+# Wiki 的依赖、派生内容和静态构建产物。
+/website/node_modules/
+/website/.npm-cache/
+/website/.vitepress/cache/
+/website/.vitepress/dist/
+/website/.vitepress/qa/
+/website/test-results/
+/website/playwright-report/
+/website/reference/
+/website/_generated/
+/website/public/media/
+# 公用命名界面测试截图与日志
+/output/name-entry-review/

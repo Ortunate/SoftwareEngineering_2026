@@ -1,0 +1,2 @@
+# Windows 批处理必须保持 CRLF，避免 cmd.exe 按代码页解析时截断命令。
+*.cmd text eol=crlf

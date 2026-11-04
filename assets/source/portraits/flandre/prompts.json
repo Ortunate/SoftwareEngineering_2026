@@ -1,0 +1,107 @@
+{
+  "tool": "内置 image_gen",
+  "source_commit": "3c7b254574404d47f24e8ccbfa6e73c352addf96",
+  "user_constraints": [
+    "保留动作和神态",
+    "重绘面部和手部"
+  ],
+  "style_reference": "assets/runtime/stages/stage6/portraits/remilia/face10a_0.png",
+  "variants": [
+    {
+      "key": "face12a_0",
+      "generated_source": "exec-f4f7cae2-d38f-4074-8f93-9aa4ce118585.png",
+      "prompt": "Use case: style-transfer. Asset type: one production transparent game dialogue portrait. Image 1 is the authoritative ORIGINAL Flandre Scarlet edit target; image 2 is ONLY the project's modern anime rendering style reference, never copy its costume, character or pose. Redraw Flandre in polished contemporary Japanese anime illustration with delicate clean varied linework, layered blonde curls, refined cel shading and soft skin shading, detailed red eyes. Especially REDRAW the FACE and BOTH HANDS from sound anatomy, not tracing old distorted features; natural compact palms, five fingers with appropriate joints, foreshortening and natural lengths. Preserve original apparent age, body pose, head tilt, exact expression and gaze, arm directions, hand gestures, costume, decorations, original colors and full-body stance with spread legs. Keep white frilled cap with large red side ribbon, blonde side ponytail on viewer-right, red sleeveless vest over white puff sleeves, yellow necktie, red flared skirt with white frilled hem and white boots, branching dark wings with rainbow crystal pendants, and original curved red-black staff at viewer-left. The raised hand at viewer-right faces the viewer with fingers spread, other hand at viewer-left holds the skirt edge. Complete full body including both shoes and all crystal wings with safe transparent margins, no clipping. Remove old image's black/white rectangular padding and rough halos; genuine transparent alpha background, no backdrop, no text or watermark. Preserve gesture and silhouette but reconstruct hands and face beautifully; do not lengthen fingers. Portrait canvas about 2:3. Specific target face12a_0: bright OPEN RED EYES, small CLOSED gently playful smile, original tilted head looking toward viewer. Keep exact emotion, not a toothy grin.",
+      "expression": "睁眼、闭口微笑，抬掌张指，另一手提裙",
+      "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12a_0.png",
+      "original_sha256": "cd7abba71560fb12c81a27b7ac2371acf9e46298fcba5e773a60a0fc6bfeedae",
+      "original_size": [
+        1400,
+        2020
+      ],
+      "size": [
+        1024,
+        1536
+      ],
+      "sha256": "10ae92fd9e5d846919a62e6b0f150ca0d4e883ff7de6ea930c14a12970ae8325",
+      "bytes": 2031809,
+      "input_images": [
+        {
+          "role": "原始动作与神态目标",
+          "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12a_0.png",
+          "commit": "3c7b254574404d47f24e8ccbfa6e73c352addf96"
+        },
+        {
+          "role": "现代画风参考",
+          "file": "assets/runtime/stages/stage6/portraits/remilia/face10a_0.png"
+        }
+      ]
+    },
+    {
+      "key": "face12b_0",
+      "generated_source": "exec-f60b5762-11c8-473b-befe-f69e741bd504.png",
+      "prompt": "Use case: style-transfer. Asset type: one production transparent game dialogue portrait. Image 1 is the authoritative ORIGINAL Flandre Scarlet edit target; image 2 is ONLY the project's modern anime rendering style reference, never copy its costume, character or pose. Redraw Flandre in polished contemporary Japanese anime illustration with delicate clean varied linework, layered blonde curls, refined cel shading and soft skin shading, detailed red eyes. Especially REDRAW the FACE and BOTH HANDS from sound anatomy, not tracing old distorted features; natural compact palms, five fingers with appropriate joints, foreshortening and natural lengths. Preserve original apparent age, body pose, head tilt, exact expression and gaze, arm directions, hand gestures, costume, decorations, original colors and full-body stance with spread legs. Keep white frilled cap with large red side ribbon, blonde side ponytail on viewer-right, red sleeveless vest over white puff sleeves, yellow necktie, red flared skirt with white frilled hem and white boots, branching dark wings with rainbow crystal pendants, and original curved red-black staff at viewer-left. The raised hand at viewer-right faces the viewer with fingers spread, other hand at viewer-left holds the skirt edge. Complete full body including both shoes and all crystal wings with safe transparent margins, no clipping. Remove old image's black/white rectangular padding and rough halos; genuine transparent alpha background, no backdrop, no text or watermark. Preserve gesture and silhouette but reconstruct hands and face beautifully; do not lengthen fingers. Portrait canvas about 2:3. Specific target face12b_0: Image 1 locks ORIGINAL pose and expression: BOTH eyes HALF-LIDDED red eyes, lowered upper eyelids, smug mischievous small OPEN grin with white teeth, NOT wide-open innocent eyes. Image 3 is the modern Flandre base just produced: match EXACT face design, hair, hat, costume, wings, staff, both hands, body proportions, stance and positioning to image 3, change only facial expression to match image 1. IMPORTANT no gradient backdrop or aura; all background must be alpha zero, including between legs and wings.",
+      "expression": "半眯眼、露齿得意笑，抬掌张指，另一手提裙",
+      "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12b_0.png",
+      "original_sha256": "f0be5f8eeec749f1fc4955bd4b169417794ab998fd4ca9bfd5489b51e1993cb8",
+      "original_size": [
+        1400,
+        2020
+      ],
+      "size": [
+        1024,
+        1536
+      ],
+      "sha256": "c111e0140e6635932e547ea20b367357e1449b770873177068738a503dca94cb",
+      "bytes": 2067919,
+      "input_images": [
+        {
+          "role": "原始动作与神态目标",
+          "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12b_0.png",
+          "commit": "3c7b254574404d47f24e8ccbfa6e73c352addf96"
+        },
+        {
+          "role": "现代画风参考",
+          "file": "assets/runtime/stages/stage6/portraits/remilia/face10a_0.png"
+        },
+        {
+          "role": "现代芙兰朵露造型参考",
+          "generated_source": "exec-a5e535c1-67f8-4848-af49-5490683ac243.png"
+        }
+      ]
+    },
+    {
+      "key": "face12c_0",
+      "generated_source": "exec-6fbd26b4-0efb-452f-a300-6b68fdc171ca.png",
+      "prompt": "Use case: style-transfer. Asset type: ONE transparent production game dialogue portrait, Flandre Scarlet face12c_0. Image 1 is the AUTHORITATIVE original pose/expression target. Image 2 is modern Flandre design reference for matching character identity, polished rendering, face, hair, cap, outfit, wings, staff, proportions and hands. Redraw image 1 in refined contemporary anime illustration matching image 2, delicate clean variable linework, layered blonde curls, polished cel shading, soft skin shading. RECONSTRUCT FACE and BOTH HANDS anatomically, with natural small palms, proper fingers and joints. Most important: preserve image 1's tired/dejected expression with BOTH EYES COMPLETELY CLOSED, tense brows and tiny unhappy WAVY CLOSED mouth; preserve the very large pale blue sweatdrop at viewer-right temple, red stress hatch at forehead, reddish wisp above hat, bandage on viewer-right upper arm, rumpled damaged blouse with viewer-right SHOULDER EXPOSED and undone yellow necktie. Pose from image 1: head tilted, legs spread exactly as original, viewer-left arm diagonally down with hand pinching skirt edge; viewer-right arm hangs downward in front of skirt, relaxed wrist with small curled fingers at skirt front. NO raised/spread palm in this variant. Preserve original hand positions and gesture but improve construction. Keep blonde side ponytail, white frilled cap with red ribbon, red vest, red skirt with white ruffled hem, white boots, dark branching rainbow crystal wings and curved red-black staff at viewer-left. Complete full-body with both feet, all ornaments and safe transparent margins. Genuine transparent alpha OUTSIDE SILHOUETTE including spaces between legs/wings/arms. No black/white padding, no opaque backdrop, no gray or multicolored gradient, no aura, no vignette, no text/watermark. One character only, portrait about 2:3.",
+      "expression": "闭眼、波浪嘴与汗滴，一手垂在裙前，另一手提裙；保留战损与绷带",
+      "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12c_0.png",
+      "original_sha256": "2bc463f2fa3d33c412965f69a831600e373bc092e449f87b10e648aeaa8a1e21",
+      "original_size": [
+        1400,
+        2020
+      ],
+      "size": [
+        1024,
+        1536
+      ],
+      "sha256": "b11a6da1430ee7c383f3dcaf1dca053bef873d421e3fbeedc705bf470e741bc0",
+      "bytes": 2088680,
+      "input_images": [
+        {
+          "role": "原始动作与神态目标",
+          "file": "assets/runtime/stages/stage_extra/portraits/flandre/face12c_0.png",
+          "commit": "3c7b254574404d47f24e8ccbfa6e73c352addf96"
+        },
+        {
+          "role": "现代芙兰朵露造型参考",
+          "generated_source": "exec-f4f7cae2-d38f-4074-8f93-9aa4ce118585.png"
+        }
+      ]
+    }
+  ],
+  "intermediate": {
+    "generated_source": "exec-a5e535c1-67f8-4848-af49-5490683ac243.png",
+    "prompt": "Use case: background-extraction. Edit this exact illustration ONLY to remove the entire dark gray multicolored gradient backdrop and all background glows. Deliver the character and staff as a clean cutout PNG with GENUINE TRANSPARENT ALPHA outside the silhouette, including every space between legs, arms, staff and rainbow wings. Do not simulate transparency with colors or checkerboard. Preserve every character pixel visually: face, red eyes, smile, blonde hair, both hands, dress, boots, crystal wings, curved red staff, pose, framing and colors. NO opaque background, NO ambient haze, NO drop shadow. Keep original resolution and exact composition.",
+    "note": "透明通道检查用中间版本，仅作为b差分造型参考，不替换a成品"
+  }
+}

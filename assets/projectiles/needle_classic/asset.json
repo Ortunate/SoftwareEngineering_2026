@@ -1,0 +1,64 @@
+{
+  "asset": "needle_classic",
+  "nativeType": 5,
+  "effectiveColors": 16,
+  "representativeColor": 2,
+  "renderMeshes": 1,
+  "textureMaps": 0,
+  "renderMaterial": "collection shader / vertex surface roles",
+  "description": "六棱柱中段、上下对称双锥的薄晶体（面轴厚度 30%）",
+  "collisionSemantics": "全部六棱晶体实体",
+  "humanAcceptance": "pending",
+  "tipAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "normalized asset coordinates; sphere diameter 1; directional body length approximately 1",
+  "triangleHardLimit": 96,
+  "revision": 4,
+  "vertexChannels": {
+    "r": "legacy highlight mask; runtime lighting uses normals",
+    "g": "role / 2 (body, shell, decorative flame or static filament)",
+    "b": "flame phase"
+  },
+  "parts": [
+    {
+      "name": "RegularHexagonalCrystal",
+      "role": 0,
+      "collision": true,
+      "display": true,
+      "triangles": 24
+    }
+  ],
+  "crystalStructure": {
+    "crossSectionSides": 6,
+    "baseCircumradius": 0.2,
+    "faceAxis": [
+      0,
+      0,
+      1
+    ],
+    "faceAxisScale": 0.3,
+    "length": 1,
+    "prismLength": 0.56,
+    "tipLength": 0.22,
+    "frontWidthToLength": 0.4,
+    "reference": "etama3 S94–109 visible silhouette, excluding transparent padding",
+    "normalPolicy": "flat crystal facets"
+  },
+  "triangles": 24,
+  "collisionTriangles": 24,
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

@@ -1,0 +1,777 @@
+{
+  "asset": "bomb_seal",
+  "kind": 0,
+  "triangles": 672,
+  "triangleHardLimit": 896,
+  "parts": {
+    "body": 336,
+    "shell": 0,
+    "effect": 336
+  },
+  "axis": "+Y",
+  "humanAcceptance": "approved",
+  "collision": {
+    "shape": "closed mesh",
+    "file": "collision.bin"
+  },
+  "decorationsCollide": false,
+  "sourceAtlas": "player00",
+  "scripts": [
+    {
+      "script": 133,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            131
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            3158271
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 25,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 17,
+          "args": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 11,
+          "args": [
+            1028443341,
+            1028443341
+          ]
+        },
+        {
+          "frame": 30,
+          "opcode": 20,
+          "args": [
+            1098907648,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 60,
+          "opcode": 11,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 70,
+          "opcode": 20,
+          "args": [
+            3246391296,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 80,
+          "opcode": 20,
+          "args": [
+            0,
+            3246391296,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 90,
+          "opcode": 20,
+          "args": [
+            1090519040,
+            0,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 100,
+          "opcode": 20,
+          "args": [
+            3246391296,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 110,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1090519040,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 110,
+          "opcode": 5,
+          "args": [
+            116
+          ]
+        },
+        {
+          "frame": 110,
+          "opcode": 22,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 110,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 120,
+          "opcode": 20,
+          "args": [
+            3246391296,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 130,
+          "opcode": 20,
+          "args": [
+            0,
+            3246391296,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 130,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 134,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            131
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            3211263
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 25,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 17,
+          "args": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 8,
+          "opcode": 11,
+          "args": [
+            1028443341,
+            1028443341
+          ]
+        },
+        {
+          "frame": 38,
+          "opcode": 20,
+          "args": [
+            3246391296,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 68,
+          "opcode": 11,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 78,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1090519040,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 88,
+          "opcode": 20,
+          "args": [
+            1098907648,
+            3246391296,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 98,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1090519040,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 108,
+          "opcode": 20,
+          "args": [
+            3246391296,
+            3246391296,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 20,
+          "args": [
+            1090519040,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 5,
+          "args": [
+            116
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 22,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 128,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1090519040,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 138,
+          "opcode": 20,
+          "args": [
+            1098907648,
+            3246391296,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 138,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 135,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            131
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            3211056
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 25,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 17,
+          "args": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 2,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 8,
+          "opcode": 11,
+          "args": [
+            1028443341,
+            1028443341
+          ]
+        },
+        {
+          "frame": 38,
+          "opcode": 20,
+          "args": [
+            0,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 68,
+          "opcode": 11,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 78,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 88,
+          "opcode": 20,
+          "args": [
+            1090519040,
+            0,
+            1092616192,
+            0
+          ]
+        },
+        {
+          "frame": 98,
+          "opcode": 20,
+          "args": [
+            1098907648,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 108,
+          "opcode": 20,
+          "args": [
+            1098907648,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 20,
+          "args": [
+            0,
+            3246391296,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 5,
+          "args": [
+            116
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 22,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 118,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 128,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 138,
+          "opcode": 20,
+          "args": [
+            1090519040,
+            0,
+            1092616192,
+            0
+          ]
+        },
+        {
+          "frame": 138,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    },
+    {
+      "script": 136,
+      "instructions": [
+        {
+          "frame": 0,
+          "opcode": 1,
+          "args": [
+            131
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 31,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 13,
+          "args": []
+        },
+        {
+          "frame": 0,
+          "opcode": 4,
+          "args": [
+            16724016
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 25,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 17,
+          "args": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 0,
+          "opcode": 3,
+          "args": [
+            128
+          ]
+        },
+        {
+          "frame": 24,
+          "opcode": 2,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 24,
+          "opcode": 11,
+          "args": [
+            1028443341,
+            1028443341
+          ]
+        },
+        {
+          "frame": 54,
+          "opcode": 20,
+          "args": [
+            0,
+            0,
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 84,
+          "opcode": 11,
+          "args": [
+            0,
+            0
+          ]
+        },
+        {
+          "frame": 94,
+          "opcode": 20,
+          "args": [
+            1090519040,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 104,
+          "opcode": 20,
+          "args": [
+            3246391296,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 114,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1098907648,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 124,
+          "opcode": 20,
+          "args": [
+            1090519040,
+            3246391296,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 134,
+          "opcode": 20,
+          "args": [
+            3238002688,
+            1090519040,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 134,
+          "opcode": 5,
+          "args": [
+            116
+          ]
+        },
+        {
+          "frame": 134,
+          "opcode": 22,
+          "args": [
+            1
+          ]
+        },
+        {
+          "frame": 134,
+          "opcode": 12,
+          "args": [
+            0,
+            30
+          ]
+        },
+        {
+          "frame": 144,
+          "opcode": 20,
+          "args": [
+            1090519040,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 154,
+          "opcode": 20,
+          "args": [
+            3246391296,
+            3238002688,
+            0,
+            10
+          ]
+        },
+        {
+          "frame": 154,
+          "opcode": 0,
+          "args": []
+        }
+      ]
+    }
+  ],
+  "acceptanceFingerprint": "52ee5f68637972ed985ad1f9a7133b3ef6630a887316fab978efd1dabe4ae003",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

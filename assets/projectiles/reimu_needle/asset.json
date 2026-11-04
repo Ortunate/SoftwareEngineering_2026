@@ -1,0 +1,36 @@
+{
+  "asset": "reimu_needle",
+  "triangles": 48,
+  "displayTrianglesWithGlow": 336,
+  "triangleHardLimit": 384,
+  "humanAcceptance": "approved",
+  "axis": "+Y",
+  "collision": "closed solid; glow excluded",
+  "texture": null,
+  "referenceAnm": 66,
+  "glow": {
+    "asset": "glow.gltf",
+    "shape": "open cone side",
+    "triangles": 288,
+    "tipY": 1.1,
+    "baseY": -1.1,
+    "baseRadius": 0.24,
+    "collides": false
+  },
+  "acceptanceFingerprint": "770432b6512fd1e7162a96ed8809349f79b0a82088b995957872ece847748ee7",
+  "localForward": [
+    0,
+    1,
+    0
+  ],
+  "localUp": [
+    0,
+    0,
+    1
+  ],
+  "surfaceFront": [
+    0,
+    0,
+    1
+  ]
+}

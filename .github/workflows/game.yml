@@ -1,0 +1,227 @@
+# 本文件在 main 的 PR/推送上验证游戏；两端测试通过后打包，只有 main 推送发布 Release。
+name: Game
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# PR 的新提交取消旧验证；main 每次推送使用独立组，避免取消尚未完成的发布。
+concurrency:
+  group: game-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: CTest (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-2022
+            shell: msys2 {0}
+          - platform: macos
+            runner: macos-15
+            shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        if: runner.os == 'macOS'
+        with:
+          python-version: '3.13'
+      - name: Set up MinGW-w64
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+      - name: Configure Windows tests
+        if: runner.os == 'Windows'
+        run: >-
+          cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_RC_COMPILER=windres
+          -DBUILD_TESTING=ON -DBUILD_SHARED_LIBS=OFF
+          '-DCMAKE_EXE_LINKER_FLAGS=-static -static-libgcc -static-libstdc++'
+      - name: Configure macOS tests
+        if: runner.os == 'macOS'
+        run: >-
+          cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON -DBUILD_SHARED_LIBS=OFF
+      - name: Build tests
+        run: cmake --build build/ci --config Release --parallel 3
+      - name: Run complete CTest suite
+        # 全关卡差分在不同 runner 上需数分钟；超时仍判失败并阻止打包发布。
+        run: ctest --test-dir build/ci -C Release --output-on-failure --no-tests=error --timeout 900
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-logs-${{ matrix.platform }}
+          path: build/ci/Testing/Temporary/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  package:
+    name: Package (${{ matrix.platform }})
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-2022
+            shell: msys2 {0}
+          - platform: macos-universal
+            runner: macos-15
+            shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        if: runner.os == 'macOS'
+        with:
+          python-version: '3.13'
+      - name: Set up MinGW-w64
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+      # 测试与发布使用相同 MinGW-w64 环境，静态链接 GCC、C++ 和线程运行库。
+      - name: Configure Windows release
+        if: runner.os == 'Windows'
+        run: >-
+          cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_RC_COMPILER=windres
+          -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=OFF
+          '-DCMAKE_EXE_LINKER_FLAGS=-static -static-libgcc -static-libstdc++'
+      # 一个 app 同时携带两种架构；只静态链接第三方库，系统框架仍由 macOS 提供。
+      - name: Configure macOS release
+        if: runner.os == 'macOS'
+        run: >-
+          cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=OFF -DBUILD_SHARED_LIBS=OFF
+          '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64'
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - name: Build release
+        run: cmake --build build/ci --config Release --target koumakyou --parallel 3
+      - name: Verify Windows runtime dependencies
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          imports=$(objdump -p build/ci/koumakyou.exe | awk '/DLL Name:/{print tolower($3)}')
+          printf '%s\n' "$imports"
+          # 系统 DLL 由 Windows 提供；拒绝把编译环境中的额外运行库依赖带进发布包。
+          while IFS= read -r library; do
+            case "$library" in
+              libgcc_s_*.dll|libstdc++-*.dll|libwinpthread-*.dll|libmcfgthread-*.dll|raylib.dll|glfw3.dll|msys-2.0.dll)
+                printf 'Unexpected runtime dependency: %s\n' "$library" >&2
+                exit 1
+                ;;
+            esac
+          done <<< "$imports"
+      - name: Package Windows ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $package = 'dist/koumakyou-windows-x64'
+          New-Item -ItemType Directory -Path $package -Force | Out-Null
+          Copy-Item build/ci/koumakyou.exe $package
+          Copy-Item build/ci/assets "$package/assets" -Recurse
+          Copy-Item build/ci/_deps/raylib-src/LICENSE "$package/RAYLIB_LICENSE.txt"
+          Compress-Archive -Path $package -DestinationPath dist/koumakyou-windows-x64.zip
+      - name: Package macOS ZIP
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          lipo build/ci/koumakyou -verify_arch arm64
+          lipo build/ci/koumakyou -verify_arch x86_64
+          python tools/package_game_macos.py --build build/ci --output dist/koumakyou.app
+          cp build/ci/_deps/raylib-src/LICENSE dist/koumakyou.app/Contents/Resources/RAYLIB_LICENSE.txt
+          # ditto 保留 app 的执行权限和目录结构，避免产物传递时丢失启动器权限。
+          ditto -c -k --sequesterRsrc --keepParent dist/koumakyou.app dist/koumakyou-macos-universal.zip
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: game-${{ matrix.platform }}
+          path: dist/koumakyou-${{ matrix.platform }}.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    name: Publish Release
+    needs: package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: game-*
+          merge-multiple: true
+          path: dist
+      - name: Publish both packages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: '0.1.0'
+        run: |
+          set -euo pipefail
+          test -s dist/koumakyou-windows-x64.zip
+          test -s dist/koumakyou-macos-universal.zip
+          (cd dist && sha256sum koumakyou-*.zip > SHA256SUMS)
+          # 首次正式发布使用版本标签；已有版本不移动，后续 main 推送与重跑继续使用独立构建标签。
+          version_exists=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${RELEASE_VERSION}" --jq "any(.[]; .ref == \"refs/tags/${RELEASE_VERSION}\")")
+          if [[ "$version_exists" == 'false' ]]; then
+            tag="$RELEASE_VERSION"
+          else
+            tag="main-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:7}"
+          fi
+          cat > release-notes.md <<EOF
+          自动构建自 main：${GITHUB_SHA}
+
+          - Windows x64：解压 ZIP 后运行 koumakyou.exe，保留同目录 assets。
+          - macOS：ZIP 内为 Intel / Apple Silicon 通用 app；未使用 Developer ID 签名或公证。
+          - macOS app 的设置、成绩和录像位于 ~/Library/Application Support/koumakyou/。
+          - SHA256SUMS 提供两个下载包的校验值。
+          EOF
+          # 先上传到草稿，所有附件成功后再公开，避免出现缺失任一平台的公开 Release。
+          gh release create "$tag" --target "$GITHUB_SHA" --title "koumakyou $tag" --notes-file release-notes.md --draft
+          gh release upload "$tag" dist/koumakyou-windows-x64.zip dist/koumakyou-macos-universal.zip dist/SHA256SUMS
+          gh release edit "$tag" --draft=false --latest

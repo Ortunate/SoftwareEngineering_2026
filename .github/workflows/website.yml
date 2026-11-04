@@ -1,0 +1,58 @@
+# main 推送后构建并发布 website；面向 main 的 PR 只验证，历史生成要求完整 Git 检出。
+name: Website
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website-review
+          include-hidden-files: true
+          path: |
+            website/.vitepress/dist
+            website/.vitepress/qa
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/.vitepress/dist
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

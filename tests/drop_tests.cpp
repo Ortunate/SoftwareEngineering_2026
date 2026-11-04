@@ -1,0 +1,455 @@
+// 本文件负责验证敌人/自机受击掉落、道具运动、满火力清弹星点与拾取结算。
+// DropSystem 内嵌 1024 个道具槽；测试池由独占堆对象持有，避免多场景叠加耗尽 Windows 默认栈。
+
+#include "gameplay/arena.hpp"
+#include "gameplay/items/drop_system.hpp"
+#include "gameplay/bullets/system.hpp"
+
+#include <array>
+#include <cassert>
+#include <cmath>
+#include <memory>
+
+namespace {
+// 测试场景须恰有一个活动道具；返回副本，避免在后续推进时借用池内对象。
+koumakyou::Pickup SinglePickup(const koumakyou::DropSystem& drops) {
+    koumakyou::Pickup result{};
+    int count = 0;
+    drops.ForEachActive([&](const koumakyou::Pickup& pickup) {
+        result = pickup;
+        ++count;
+    });
+    assert(count == 1);
+    return result;
+}
+
+void TestPickupMotion() {
+    using koumakyou::DropSystem;
+    constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
+    drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
+    assert(SinglePickup(drops).velocityZ == 4.0F);
+    drops.Update(0.0F, distantPlayer);
+    assert(SinglePickup(drops).position.z == 0.0F);
+    assert(SinglePickup(drops).velocityZ == 4.0F);
+
+    drops.Update(0.25F, distantPlayer);
+    assert(std::abs(SinglePickup(drops).position.z - 0.75F) < 0.0001F);
+    assert(std::abs(SinglePickup(drops).velocityZ - 2.0F) < 0.0001F);
+    drops.Update(0.25F, distantPlayer);
+    assert(std::abs(SinglePickup(drops).position.z - 1.0F) < 0.0001F);
+    assert(std::abs(SinglePickup(drops).velocityZ) < 0.0001F);
+    drops.Update(0.25F, distantPlayer);
+    assert(std::abs(SinglePickup(drops).position.z - 0.75F) < 0.0001F);
+    assert(std::abs(SinglePickup(drops).velocityZ + 2.0F) < 0.0001F);
+    drops.Update(0.0625F, distantPlayer);
+    assert(std::abs(SinglePickup(drops).position.z - 0.609375F) < 0.0001F);
+    assert(std::abs(SinglePickup(drops).velocityZ + 2.5F) < 0.0001F);
+    for (int frame = 0; frame < 2; ++frame) {
+        const float previousZ = SinglePickup(drops).position.z;
+        drops.Update(0.2F, distantPlayer);
+        assert(std::abs(SinglePickup(drops).position.z - previousZ + 0.5F) < 0.0001F);
+        assert(std::abs(SinglePickup(drops).velocityZ + 2.5F) < 0.0001F);
+    }
+
+    // 一个大帧同时跨过上抛顶点和限速点，与常见帧率下推进相同时间的结果应一致。
+    drops.Clear();
+    drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
+    drops.Update(2.0F, distantPlayer);
+    const auto largeStep = SinglePickup(drops);
+    for (int fps : {30, 60, 144}) {
+        drops.Clear();
+        drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
+        for (int frame = 0; frame < fps * 2; ++frame)
+            drops.Update(1.0F / static_cast<float>(fps), distantPlayer);
+        const auto smallSteps = SinglePickup(drops);
+        assert(std::abs(smallSteps.position.z - largeStep.position.z) < 0.0001F);
+        assert(std::abs(smallSteps.velocityZ - largeStep.velocityZ) < 0.0001F);
+    }
+
+    // 从已下落的状态立即转入吸取；拾取后复用槽位须恢复上抛而不继承追踪。
+    assert(drops.Update(1.0F, {5.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.2F}).power == 8);
+    drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 1);
+    const auto reused = SinglePickup(drops);
+    assert(!reused.homing && reused.velocityZ == 4.0F);
+}
+
+// 在场内交替移动玩家，让追踪持续超过旧超时时间而不提前拾取。
+void KeepHomingPickupUncollected(koumakyou::DropSystem& drops) {
+    for (int frame = 0; frame < 1600; ++frame) {
+        const float x = frame % 2 == 0 ? -9.0F : 9.0F;
+        const auto reward = drops.Update(0.01F, {x, 9.0F, 0.0F});
+        assert(reward.power == 0 && reward.score == 0);
+        assert(SinglePickup(drops).homing);
+    }
+}
+
+void TestPickupBoundary() {
+    using koumakyou::DropSystem;
+    // 不推进时间，直接检查三维球形拾取范围；P 点和分数点必须共用新半径。
+    constexpr std::array<Vector3, 4> inside{{
+        {0.89F, 0.0F, 0.0F}, {0.0F, -0.89F, 0.0F},
+        {0.0F, 0.0F, -0.89F}, {0.51F, 0.51F, -0.51F},
+    }};
+    constexpr std::array<Vector3, 4> outside{{
+        {0.90F, 0.0F, 0.0F}, {0.0F, -0.90F, 0.0F},
+        {0.0F, 0.0F, -0.90F}, {0.52F, 0.52F, -0.52F},
+    }};
+    auto nearbyStorage = std::make_unique<DropSystem>(1234);
+    auto& nearby = *nearbyStorage;
+    for (int item : {0, 1}) {
+        for (Vector3 position : outside) {
+            nearby.SpawnReferenceDrop(position, item, false);
+            const auto reward = nearby.Update(0.0F, {});
+            assert(reward.power == 0 && reward.score == 0);
+            assert(!SinglePickup(nearby).homing);
+            nearby.Clear();
+        }
+        for (Vector3 position : inside) {
+            nearby.SpawnReferenceDrop(position, item, false);
+            const auto reward = nearby.Update(0.0F, {});
+            assert(reward.power == (item == 0 ? 1 : 0));
+            assert(reward.score == (item == 1 ? DropSystem::kScorePointValue : 0));
+            nearby.ForEachActive([](const koumakyou::Pickup&) { assert(false); });
+        }
+    }
+    constexpr float rearZ = -koumakyou::kArenaHalfExtents.z;
+    constexpr Vector3 distantPlayer{-5.0F, 0.0F, 0.0F};
+    constexpr std::array<koumakyou::DropOutcome, 1> outcome{{{1, 1, 1}}};
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
+    // 1.25 秒位移为 -0.484375；P 点和分数点都恰好落在边界时仍保留。
+    drops.SpawnEnemyDrops({5.0F, 0.0F, rearZ + 0.484375F}, outcome);
+    drops.Update(1.25F, distantPlayer);
+    int remaining = 0;
+    drops.ForEachActive([&](const koumakyou::Pickup& pickup) {
+        ++remaining;
+        assert(pickup.position.z == rearZ);
+        assert(pickup.velocityZ == -2.5F);
+    });
+    assert(remaining == 2);
+    // 越界后即使仍在玩家拾取半径内，也必须回收而不结算奖励。
+    const auto expired = drops.Update(0.01F, {5.0F, 0.0F, rearZ + 0.35F});
+    assert(expired.power == 0 && expired.score == 0);
+    drops.ForEachActive([](const koumakyou::Pickup&) { assert(false); });
+    drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
+    assert(!SinglePickup(drops).homing && SinglePickup(drops).velocityZ == 4.0F);
+    // 一个大帧跨出后边界也应回收。
+    assert(drops.Update(10.0F, distantPlayer).power == 0);
+    drops.ForEachActive([](const koumakyou::Pickup&) { assert(false); });
+
+    // 上抛超过 +Z 边界不提前消失；消失边界只在 -Z 端。
+    drops.SpawnFixedPower({5.0F, 0.0F, koumakyou::kArenaHalfExtents.z - 0.2F}, 1);
+    drops.Update(0.25F, distantPlayer);
+    assert(SinglePickup(drops).position.z > koumakyou::kArenaHalfExtents.z);
+    drops.Clear();
+
+    drops.SpawnFixedPower({}, 8);
+    drops.Update(0.0F, {0.0F, 0.0F, koumakyou::kArenaHalfExtents.z * 0.2F});
+    KeepHomingPickupUncollected(drops);
+    assert(drops.Update(1.0F, {}).power == 8);
+}
+
+void TestBulletStars() {
+    using koumakyou::BulletOwner;
+    using koumakyou::BulletSystem;
+    using koumakyou::DropSystem;
+    using koumakyou::Pickup;
+    using koumakyou::PickupKind;
+    // 弹幕池较大，置于堆上，避免 Windows 默认栈容量不足。
+    auto bullets = std::make_unique<BulletSystem>();
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
+    constexpr Vector3 origin{5.0F, 0.0F, 0.0F};
+    constexpr Vector3 player{-5.0F, 0.0F, 0.0F};
+    auto* enemy = bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0);
+    assert(enemy);
+    enemy->age = 14.0F;
+    auto* playerBullet = bullets->Spawn(BulletOwner::Player, {}, {}, 0.1F, WHITE, 0);
+    assert(playerBullet);
+    auto* inactive = bullets->Spawn(BulletOwner::Enemy, {}, {}, 0.1F, WHITE, 0);
+    assert(inactive);
+    inactive->active = false;
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    assert(!enemy->active && playerBullet->active);
+    assert(bullets->Pool().ActiveCount() == 1);
+    const auto star = SinglePickup(drops);
+    assert(star.kind == PickupKind::Star && star.homing);
+    assert(star.position.x == origin.x && star.position.z == origin.z);
+    assert(star.value == DropSystem::kStarPointValue);
+    // 转换瞬间不计分；即使玩家在自动吸取线之外，仍以 20 世界单位/秒追踪。
+    const auto moving = drops.Update(0.1F, player);
+    assert(moving.power == 0 && moving.score == 0);
+    assert(std::abs(SinglePickup(drops).position.x - 3.0F) < 0.0001F);
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    assert(SinglePickup(drops).kind == PickupKind::Star);
+    const auto collected = drops.Update(1.0F, {-5.0F, 2.0F, -6.5F});
+    assert(collected.power == 0 && collected.score == DropSystem::kStarPointValue);
+    assert(drops.Update(1.0F, player).score == 0);
+
+    // 普通道具池和弹幕池同时满时，所有敌弹仍须产生星点；普通 P 点保留。
+    drops.Clear();
+    bullets->Reset();
+    for (std::size_t index = 0; index < DropSystem::kCapacity; ++index)
+        drops.SpawnFixedPower(origin, 1);
+    for (std::size_t index = 0; index < BulletSystem::kCapacity; ++index)
+        assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    assert(bullets->Pool().ActiveCount() == 0);
+    int starCount = 0;
+    int powerCount = 0;
+    drops.ForEachActive([&](const Pickup& pickup) {
+        if (pickup.kind == PickupKind::Star) ++starCount;
+        if (pickup.kind == PickupKind::Power) ++powerCount;
+    });
+    assert(starCount == static_cast<int>(BulletSystem::kCapacity));
+    assert(powerCount == static_cast<int>(DropSystem::kCapacity));
+    // 再次清弹不能覆盖还在飞行的星点，新敌弹只有转换后才产生额外得分。
+    assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    const auto crowdedReward = drops.Update(1.0F, player);
+    assert(crowdedReward.power == 0);
+    assert(crowdedReward.score ==
+           static_cast<long long>(BulletSystem::kCapacity + 1) * DropSystem::kStarPointValue);
+
+    drops.Clear();
+    assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    drops.Clear();
+    assert(drops.Update(1.0F, player).score == 0);
+    assert(bullets->Spawn(BulletOwner::Enemy, origin, {}, 0.1F, WHITE, 0));
+    drops.ConvertEnemyBulletsToStars(*bullets);
+    KeepHomingPickupUncollected(drops);
+    assert(drops.Update(1.0F, player).score == DropSystem::kStarPointValue);
+    int remaining = 0;
+    drops.ForEachActive([&](const Pickup&) { ++remaining; });
+    assert(remaining == 0);
+}
+/// @brief 以独立数量核对 Miss 配方；三维散落保护期间不可原地拾回，分帧不能改变终点或下落交接。
+void TestPlayerMissDrops() {
+    using namespace koumakyou;
+    const Vector3 origin{2,3,-5},player{-9,-9,-9};
+    for(bool spare:{false,true}) {
+        auto dropsStorage=std::make_unique<DropSystem>(17);auto& drops=*dropsStorage;
+        drops.SpawnPlayerMiss(origin,spare);
+        int small=0,large=0,full=0;
+        drops.ForEachActive([&](const Pickup& p) {
+            assert(p.position.x==origin.x&&p.position.y==origin.y&&p.position.z==origin.z);
+            assert(p.missScattering&&!p.homing&&p.velocityZ==0);
+            assert(p.scatterTarget.y==origin.y);
+            assert(std::abs(p.scatterTarget.x)<=7.5F&&p.scatterTarget.z>=11.5F*3/7&&p.scatterTarget.z<=11.5F*9/7);
+            if(p.kind==PickupKind::FullPower) {assert(p.value==128);++full;}
+            else {assert(p.kind==PickupKind::Power);if(p.value==8)++large;else {assert(p.value==1);++small;}}
+        });
+        assert(small==(spare?5:0)&&large==(spare?1:0)&&full==(spare?0:5));
+        assert(drops.Update(0,origin).power==0);
+        // Bomb 吸取也不能绕过散落段；终点之后才开始追踪。
+        drops.MagnetAllItems();assert(drops.Update(.5F,origin).power==0);
+        drops.ForEachActive([](const Pickup& p){assert(p.missScattering&&p.scatterSeconds==.5);});
+    }
+    std::array<Pickup,6> baseline{};
+    for(int fps:{30,60,120,144,240}) {
+        auto dropsStorage=std::make_unique<DropSystem>(17);auto& drops=*dropsStorage;
+        drops.SpawnPlayerMiss(origin,true);
+        for(int frame=0;frame<fps;++frame)assert(drops.Update(1.F/fps,player).power==0);
+        int index=0;
+        drops.ForEachActive([&](const Pickup& p) {
+            assert(!p.missScattering&&std::abs(p.velocityZ)<1e-5F);
+            assert(std::abs(p.position.x-p.scatterTarget.x)<5e-4F&&std::abs(p.position.z-p.scatterTarget.z)<5e-4F);
+            if(fps==30)baseline[index]=p;
+            else assert(std::abs(p.position.x-baseline[index].position.x)<5e-4F&&std::abs(p.position.z-baseline[index].position.z)<5e-4F);
+            ++index;
+        });
+        assert(index==6);
+        drops.Update(.25F,player);
+        drops.ForEachActive([](const Pickup& p){assert(std::abs(p.velocityZ+2)<1e-5F&&std::abs(p.position.z-p.scatterTarget.z+.25F)<5e-4F);});
+        drops.Clear();drops.SpawnFixedPower(origin,1);
+        const auto reused=SinglePickup(drops);assert(!reused.missScattering&&reused.scatterSeconds==0);
+    }
+    auto combinedStorage=std::make_unique<DropSystem>(17),splitStorage=std::make_unique<DropSystem>(17);
+    auto& combined=*combinedStorage;auto& split=*splitStorage;
+    combined.SpawnPlayerMiss(origin,true);split.SpawnPlayerMiss(origin,true);
+    combined.Update(1.25F,player);split.Update(1,player);split.Update(.25F,player);
+    int index=0;combined.ForEachActive([&](const Pickup& p){baseline[index++]=p;});index=0;
+    split.ForEachActive([&](const Pickup& p){assert(std::abs(p.position.z-baseline[index++].position.z)<5e-4F);});
+}
+}  // namespace
+
+/// @brief 验证普通道具掉落与运动、吸取状态持续性，以及清弹星点的转换和计分。
+void RunDropTests() {
+    TestPlayerMissDrops();
+    TestPickupMotion();
+    TestPickupBoundary();
+    TestBulletStars();
+    using koumakyou::DropOutcome;
+    using koumakyou::DropSystem;
+    using koumakyou::Pickup;
+    using koumakyou::PickupKind;
+    constexpr float autoCollectZ = koumakyou::kArenaHalfExtents.z * 0.2F;
+
+    auto dropsStorage = std::make_unique<DropSystem>(1234);
+    auto& drops = *dropsStorage;
+    constexpr std::array<DropOutcome, 2> outcomes{{
+        {9, 9, 0}, {1, 2, 1},
+    }};
+    drops.SpawnEnemyDrops({}, outcomes);
+    int powerCount = 0;
+    int scoreCount = 0;
+    std::array<Vector3, 3> originalPositions{};
+    int itemIndex = 0;
+    drops.ForEachActive([&](const Pickup& pickup) {
+        assert(itemIndex < static_cast<int>(originalPositions.size()));
+        originalPositions[itemIndex++] = pickup.position;
+        if (pickup.kind == PickupKind::Power) {
+            ++powerCount;
+            assert(pickup.value == 1);
+        } else {
+            ++scoreCount;
+            assert(pickup.value == DropSystem::kScorePointValue);
+        }
+        assert(pickup.velocityZ > 0.0F);
+    });
+    assert(powerCount == 1 && scoreCount == 2);
+    assert(itemIndex == 3);
+    // 触发线之前仍保持上抛；恰好进入前端 2/5 时才为所有道具锁定追踪。
+    drops.Update(0.0F, {0.0F, 0.0F, autoCollectZ - 0.01F});
+    drops.ForEachActive([](const Pickup& pickup) { assert(!pickup.homing); });
+    const auto falling = drops.Update(1.0F, {0.0F, 0.0F, autoCollectZ - 0.01F});
+    assert(falling.power == 0 && falling.score == 0);
+    itemIndex = 0;
+    drops.ForEachActive([&](const Pickup& pickup) {
+        const Vector3 original = originalPositions[itemIndex++];
+        assert(std::abs(pickup.position.x - original.x) < 0.0001F);
+        assert(std::abs(pickup.position.y - original.y) < 0.0001F);
+        assert(std::abs(pickup.position.z - (original.z + 0.140625F)) < 0.0001F);
+        assert(std::abs(pickup.velocityZ + 2.5F) < 0.0001F);
+    });
+    assert(itemIndex == 3);
+    const auto attracted = drops.Update(0.02F, {0.0F, 0.0F, autoCollectZ});
+    assert(attracted.power == 0 && attracted.score == 0);
+    itemIndex = 0;
+    drops.ForEachActive([&](const Pickup& pickup) {
+        assert(pickup.position.z > originalPositions[itemIndex++].z + 0.140625F);
+        assert(pickup.position.z < autoCollectZ);
+    });
+    assert(itemIndex == 3);
+    const auto reward = drops.Update(1.0F, {0.0F, 0.0F, autoCollectZ});
+    assert(reward.power == 1);
+    assert(reward.score == 2 * DropSystem::kScorePointValue);
+
+    // 超出 X/Y 的掉落会被钳制；Z 新增区间中的掉落保留原深度。
+    constexpr std::array<DropOutcome, 1> cornerOutcome{{{1, 0, 1}}};
+    for (float sign : {-1.0F, 1.0F}) {
+        drops.SpawnEnemyDrops({sign * 20.0F, sign * 20.0F, sign * 11.0F},
+                              cornerOutcome);
+        const Pickup corner = SinglePickup(drops);
+        assert(std::abs(corner.position.x - sign * 9.8F) < 0.0001F);
+        assert(std::abs(corner.position.y - sign * 9.8F) < 0.0001F);
+        assert(std::abs(corner.position.z - sign * 11.0F) < 0.0001F);
+        drops.Clear();
+        drops.SpawnEnemyDrops({0.0F, 0.0F, sign * 20.0F}, cornerOutcome);
+        assert(std::abs(SinglePickup(drops).position.z - sign * 11.3F) < 0.0001F);
+        drops.Clear();
+    }
+
+    constexpr std::array<DropOutcome, 2> alternatives{{
+        {1, 0, 1}, {0, 1, 1},
+    }};
+    bool sawPower = false;
+    bool sawScore = false;
+    for (int trial = 0; trial < 100; ++trial) {
+        drops.SpawnEnemyDrops({}, alternatives);
+        const auto sampled = drops.Update(1.0F, {0.0F, 0.0F, autoCollectZ});
+        assert((sampled.power == 1 && sampled.score == 0) ||
+               (sampled.power == 0 &&
+                sampled.score == DropSystem::kScorePointValue));
+        sawPower |= sampled.power == 1;
+        sawScore |= sampled.score > 0;
+    }
+    assert(sawPower && sawScore);
+
+    drops.SpawnEnemyDrops({}, {});
+    assert(drops.Update(0.0F, {}).power == 0);
+    drops.SpawnFixedPower({}, 8);
+    assert(drops.Update(0.0F, {}).power == 8);
+    drops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 1);
+    drops.Clear();
+    assert(drops.Update(0.0F, {}).power == 0);
+
+    auto latchedDropsStorage = std::make_unique<DropSystem>(4321);
+    auto& latchedDrops = *latchedDropsStorage;
+    latchedDrops.SpawnFixedPower({}, 1);
+    latchedDrops.Update(0.02F, {0.0F, 0.0F, autoCollectZ});
+    const auto afterLeaving = latchedDrops.Update(0.05F, {3.0F, 0.0F, 0.0F});
+    assert(afterLeaving.power == 0);
+    int homingCount = 0;
+    latchedDrops.ForEachActive([&](const Pickup& pickup) {
+        ++homingCount;
+        assert(pickup.homing);
+        assert(pickup.position.x > 0.0F);
+    });
+    assert(homingCount == 1);
+
+    // 离开触发区域后新生成的道具仍从上抛开始，不继承旧道具的追踪状态。
+    latchedDrops.SpawnFixedPower({5.0F, 0.0F, 0.0F}, 8);
+    latchedDrops.Update(0.1F, {3.0F, 0.0F, 0.0F});
+    int freshCount = 0;
+    latchedDrops.ForEachActive([&](const Pickup& pickup) {
+        if (pickup.value != 8) return;
+        ++freshCount;
+        assert(!pickup.homing);
+        assert(pickup.position.x == 5.0F);
+        assert(std::abs(pickup.position.z - 0.36F) < 0.0001F);
+        assert(std::abs(pickup.velocityZ - 3.2F) < 0.0001F);
+    });
+    assert(freshCount == 1);
+
+    // 原作脚本散落 5 个道具：未满 Power 时 8+1+1+1+1，满 Power 时为 5 个点数。
+    drops.Clear();
+    constexpr Vector3 burstOrigin{1,2,3};
+    drops.SpawnReferenceBurst(burstOrigin,5,false);
+    int burstCount=0, burstPower=0;
+    bool spreadAlongZ=false;
+    drops.ForEachActive([&](const Pickup& item) { ++burstCount; burstPower+=item.value;
+        assert(item.kind==PickupKind::Power);
+        // 脚本道具与敌机共用 X/Z 平面，散落后高度不变，后续沿 -Z 落向玩家。
+        assert(item.position.y==burstOrigin.y);
+        assert(std::abs(item.position.x-burstOrigin.x)<=72.0F*20/448);
+        assert(std::abs(item.position.z-burstOrigin.z)<=72.0F*20/448);
+        if(std::abs(item.position.z-burstOrigin.z)>0.01F)spreadAlongZ=true;
+    });
+    assert(burstCount==5 && burstPower==12 && spreadAlongZ);
+    drops.Clear(); drops.SpawnReferenceBurst({},5,true);
+    burstCount=0;
+    drops.ForEachActive([&](const Pickup& item) { ++burstCount; assert(item.kind==PickupKind::Score); });
+    assert(burstCount==5);
+    drops.Clear();
+    for(int kill=0;kill<96;++kill)drops.SpawnReferenceDrop({},-1,false);
+    burstCount=0;
+    drops.ForEachActive([&](const Pickup&) { ++burstCount; });
+    assert(burstCount==32);
+    // 敌人出生指定的特殊道具与脚本道具共用编号；满P不能吞掉残机/Bomb或改成分数。
+    constexpr std::array<PickupKind,4> fixedKinds{PickupKind::Bomb,PickupKind::FullPower,PickupKind::Life,PickupKind::Star};
+    constexpr std::array<int,4> fixedValues{1,128,1,DropSystem::kStarPointValue};
+    for(bool fullPower:{false,true})for(int item=3;item<=6;++item) {
+        drops.Clear();drops.SpawnReferenceDrop(burstOrigin,item,fullPower);
+        const auto pickup=SinglePickup(drops);assert(pickup.kind==fixedKinds[item-3]&&pickup.value==fixedValues[item-3]);
+        assert(pickup.position.x==burstOrigin.x&&pickup.position.y==burstOrigin.y&&pickup.position.z==burstOrigin.z);
+    }
+    auto ordinaryStorage=std::make_unique<DropSystem>(1234),withFixedStorage=std::make_unique<DropSystem>(1234);
+    auto& ordinary=*ordinaryStorage;auto& withFixed=*withFixedStorage;
+    ordinary.Clear();withFixed.Clear();
+    withFixed.SpawnReferenceDrop({},5,false);
+    for(int kill=0;kill<96;++kill) {
+        const Vector3 origin{static_cast<float>(kill),0,0};
+        ordinary.SpawnReferenceDrop(origin,-1,false);withFixed.SpawnReferenceDrop(origin,-1,false);
+    }
+    std::array<Pickup,32> baseline{};int count=0;
+    ordinary.ForEachActive([&](const Pickup& pickup){baseline.at(count++)=pickup;});assert(count==32);count=0;
+    withFixed.ForEachActive([&](const Pickup& pickup) {
+        if(pickup.kind==PickupKind::Life)return;
+        const auto& expected=baseline.at(count++);
+        assert(pickup.kind==expected.kind&&pickup.value==expected.value&&pickup.position.x==expected.position.x);
+    });assert(count==32);
+}

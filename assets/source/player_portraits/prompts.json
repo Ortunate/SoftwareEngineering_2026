@@ -1,0 +1,95 @@
+{
+  "tool": "内置 image_gen",
+  "use_case": "style-transfer",
+  "reference_crop": {
+    "x": 1024,
+    "y": 0,
+    "width": 1504,
+    "height": 1396,
+    "atlas_width": 4096,
+    "atlas_height": 4096
+  },
+  "portraits": [
+    {
+      "character": "reimu",
+      "original": "assets/source/player_portraits/reimu_original.png",
+      "destination": "assets/runtime/common/spell_practice/reimu_modern.png",
+      "original_archive": "th06TL.dat",
+      "original_texture": "slpl00b_4k_zh-CN.dds",
+      "style_reference": "assets/runtime/common/portraits/reimu/face00a_0.png",
+      "prompt": "Use case: style-transfer. Asset type: ONE production game character selection portrait on genuine transparent alpha, matching a two-character modern redraw set. Image 1 is the ORIGINAL Hakurei Reimu edit target: preserve her exact standing/leaning pose, arm positions, head angle, gaze and calm small closed-mouth smile. Image 2 is ONLY the project's approved modern anime rendering reference: match refined fine varied linework, layered glossy black hair, expressive red eyes, polished cel shading with soft restrained gradients, warm skin, detailed natural fabric folds; DO NOT copy Image 2's pose or crop. Draw Reimu full body, large red head bow with delicate white trim, black shoulder-length hair with red-white side ornaments, red and white shrine-maiden outfit of the source: red sleeveless vest, white collar and red neck ribbon, large white sleeves, long flowing red skirt, white socks and original red-white footwear. Her arm on viewer RIGHT extends sideways, hand naturally gripping the upright white gohei wand with folded zigzag white paper streamers. Other arm hangs relaxed down on viewer LEFT with fingertips showing under sleeve. Preserve the original arrangement and slight body lean. Complete the small footwear region hidden by atlas text in the source naturally, showing both feet. Correct human hand proportions: five digits when visible, middle finger shorter than palm, natural grip with thumb opposed, no elongated fingers, no extra hands. Keep figure identity and costume; modernization changes illustration quality. IMPORTANT Image 1 contains atlas padding/color bleed and text region contamination in transparent areas: remove ALL white/black rectangular blocks, stripes, colored halo, baked text, stats and UI. Output only the clean character and her held gohei, no scene, background, checkerboard, floor, ground shadow, aura or text. Full head bow, gohei streamers, sleeves, skirt and both feet fully visible, small transparent safety margins, high-resolution portrait framing, elegant contemporary anime illustration, not chibi, not 3D, not photorealistic.",
+      "cleanup_prompt": "Use case: precise-object-edit. Asset type: production transparent PNG game character cutout. Edit this existing Reimu illustration with ONE strictly technical cleanup: remove every scattered white, gray, pink or red speckle, grain, glow, matte halo and stray pixel outside the actual drawn silhouette, especially around the raised sleeve, gohei, hair ribbons and skirt. The illustration itself must remain the same: identical pose, expression, face, costume, natural hand proportions, gohei, folds, colors and rendering. Preserve the fine linework and legitimate white fabric/paper inside the silhouette. Output genuine transparent alpha outside the character and held gohei with clean antialiased contour, no colored or white outer stroke. Place the whole intact figure and gohei inside the canvas with approximately 4% EMPTY transparent margin on every side so nothing touches the border, including head bow, gohei streamers, skirt and both shoes. Do not add a background, checkerboard, shadow, aura, new props or any text. Keep all source-visible elements and do not redraw into a new pose.",
+      "generated_source": "exec-0e21c377-c4b7-49ab-bf7a-fb78aaa75196.png",
+      "original_size": [
+        1504,
+        1396
+      ],
+      "original_sha256": "9afcebe8ac68f79d4f59fb08b78b48c5544e7023e1d0edbd67207966b25cd285",
+      "modern_size": [
+        1088,
+        1445
+      ],
+      "modern_sha256": "83ae38e1e3460028c9f401a39b0c5820d1b48bb297736e69511c74eb4ac350b4"
+    },
+    {
+      "character": "marisa",
+      "original": "assets/source/player_portraits/marisa_original.png",
+      "destination": "assets/runtime/common/spell_practice/marisa_modern.png",
+      "original_archive": "th06TL.dat",
+      "original_texture": "slpl01b_4k_zh-CN.dds",
+      "style_reference": "灵梦本批初稿（exec-5aa1d97e-24d1-4e29-82ce-67d4f40c912c.png）",
+      "prompt": "Use case: style-transfer. Asset type: ONE production game character selection portrait on genuine transparent alpha, matching a two-character modern redraw set. Image 1 is the ORIGINAL Kirisame Marisa edit target and authoritative pose/expression/costume reference. Image 2 is ONLY the project's approved modern anime rendering reference (a DIFFERENT character, Reimu): borrow fine varied linework, layered luminous hair, polished cel shading with restrained soft gradients, warm skin and naturally constructed detailed fabric folds; DO NOT copy Reimu's identity, costume, pose, hair color or red eyes. Marisa must have golden blonde wavy hair, side braid ending in a small white bow, golden/amber eyes, source's composed small closed-mouth smile, face angled slightly toward viewer LEFT. Preserve the exact original full-body seated/hovering pose on a flying broom: torso upright, knees bent and together beneath layered skirt, white-socked legs and pale white-gray shoes visible below, hands behind/along hips where source places them, do not invent exposed hand gestures. Preserve broom orientation: tied golden straw broom head on viewer LEFT, curved wooden handle extending toward viewer RIGHT and slightly upward behind her hips. Preserve original black witch hat with soft pointed/slouched crown, large white ribbon and white ruffled brim; black short puff-sleeved long witch dress, white collar, white apron/bib and layered white frilled petticoat. No costume swap, no added spellbook, wand or star effects. Maintain natural anatomy and normal hand/finger proportions wherever visible; no extra fingers, hands or legs. IMPORTANT Image 1 contains atlas color bleed: completely remove orange/brown aura, black rectangular background, white padding, baked text, stats and UI. Output only the clean character and broom on truly transparent alpha, no scene, colored halo, checkerboard, floor or ground shadow. Entire hat, broom straw/handle, skirt and shoes visible, small transparent safety margins, high-resolution framing. Contemporary anime illustration, consistent with the Reimu style reference, not chibi, not 3D, not photorealistic.",
+      "cleanup_prompt": "Use case: precise-object-edit. Asset type: transparent PNG game character cutout. Keep this Marisa illustration, face, pose, costume, braid, broom orientation, expression, colors, shading and fine linework unchanged. Perform technical edge cleanup ONLY: remove stray white/yellow/red speckles and any matte halo outside the actual character and broom. Retain legitimate white lace and soft antialiased edges. Zoom OUT slightly so the ENTIRE witch hat, golden straw broom tip on far LEFT, wooden handle end on far RIGHT, skirt and both shoes fit comfortably inside the image, with blank transparent space around all sides. Reconstruct only any tiny missing broom-tip contour at the edge naturally. Output genuine transparent alpha, no white/black rectangle, checkerboard, background, aura, glow, floor shadow or text. No new objects, no new gestures, no costume or face redesign.",
+      "generated_source": "exec-b9291fa7-cc3c-4187-b266-f083c66d8dbd.png",
+      "original_size": [
+        1504,
+        1396
+      ],
+      "original_sha256": "c287d00cd6c905ead11c9360995bc43d15d7b9e8b68f6ec0dcf957cfb0600463",
+      "modern_size": [
+        1302,
+        1208
+      ],
+      "modern_sha256": "25c2b33af5c927328059cc5eee032025a221c8df08c42461fd50efa0b605e857"
+    }
+  ],
+  "backdrops": [
+    {
+      "character": "marisa",
+      "destination": "assets/source/player_portraits/marisa_backdrop_original.png",
+      "source_archive": "th06TL.dat",
+      "source_texture": "slpl01a_4k.dds",
+      "source_anm": "slpl01a.anm",
+      "sprite": 0,
+      "anm_canvas": [
+        2048,
+        2048
+      ],
+      "dds_canvas": [
+        4096,
+        4096
+      ],
+      "sprite_rectangle": [
+        1,
+        1,
+        1266,
+        1400
+      ],
+      "dds_rectangle": [
+        2,
+        2,
+        2532,
+        2800
+      ],
+      "operation": "按 ANM 坐标的两倍裁出原精灵，再按 0.001 Alpha 阈值裁掉空白；不重采样，不改变颜色和 Alpha",
+      "source_sha256": "9a8eac51702e3cc33678a4ff9c1de2a8cb915eb03bf9a6df7c54da4bba392b2f",
+      "output_size": [
+        1500,
+        2044
+      ],
+      "output_sha256": "27744037d449f1363b3115184998375c1514d6a62e3c26cba58fd29fdf65d44b",
+      "note": "原始提围裙后层仅作为参考保留；运行时复用同姿势 face01a_1 的现代重绘上部",
+      "modern_runtime": "assets/runtime/common/portraits/marisa/face01a_1.png"
+    }
+  ]
+}

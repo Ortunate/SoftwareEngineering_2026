@@ -10,6 +10,7 @@ public:
     const native_combat::StageData* CombatData() const override {return native_combat::Stage(6);}
     const StageAssetManifest& Assets() const override;
     void DrawScenery(float seconds,const AssetManager& assets) const override;
+    void DrawSceneryTransition(float seconds,float transitionSeconds,const AssetManager& assets) const override;
     std::span<const StageEvent> Events() const override;
     const bosses::Battle& PracticeBoss() const override;
     /// @brief 单符卡练习按本内容难度解析101…118，错配编号抛invalid_argument。

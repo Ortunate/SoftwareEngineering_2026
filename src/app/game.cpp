@@ -164,6 +164,7 @@ void Game::StartRun(bool captureCursor, bool synchronous,bool continuingStage) {
     stageContent_ = CreateStageContent(stageId_,runDifficulty_,entry);
     stage_ = StageDirector(stageContent_->Events());
     scenerySeconds_=0;
+    sceneryTransitionStart_.reset();
     loadingSeconds_ = 0;
     loadingStarted_ = loadingFailed_ = false;
 #ifdef KOUMAKYOU_DEBUG_FEATURES
@@ -889,6 +890,10 @@ void Game::BeginStageDialogue(StageEventId id, bool afterBattle,DialogueScene sc
     if(dialogueFlow_.awardFrame==0)AwardStageClear();
     if(!cues.empty())dialogueMotion_.Seek(cues,0);
     messageTimer_ = 0.0F;
+}
+
+void Game::BeginStageSceneryTransition() {
+    sceneryTransitionStart_=scenerySeconds_;
 }
 
 void Game::ResumeStageBoss() {

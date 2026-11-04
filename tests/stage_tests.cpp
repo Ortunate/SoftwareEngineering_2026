@@ -214,6 +214,7 @@ void TestInvalidEvents() {
     assert(rejects({.action=SpawnActors{invalid}}));
     assert(rejects({.action = StartBoss{&stage1::kRumiaMidboss}}));
     assert(rejects({.action = StartDialogue{}}));
+    assert(!rejects({.action=StartSceneryTransition{}}));
     assert(rejects({.action=WaitDialogueSignal{}}));
     assert(rejects({.action=WaitDialogueSignal{-1},.id=1}));
     assert(rejects({.action=StartDialogue{false,DialogueScene::FinalBoss,static_cast<DialogueClearPolicy>(99)},.id=20}));
@@ -240,6 +241,7 @@ struct EventProbe final : StageEventSink {
     std::vector<std::unique_ptr<behavior::Actor>> enemies;
     int midbosses = 0;
     int finalBosses = 0;
+    int sceneryTransitions = 0;
     int dialogues = 0;
     int messages = 0;
     StageEventId midbossId = 0;
@@ -258,6 +260,7 @@ struct EventProbe final : StageEventSink {
     void BeginStageDialogue(StageEventId id, bool = false,DialogueScene=DialogueScene::FinalBoss,
         DialogueClearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets) override { ++dialogues; dialogueId = id; }
     void ResumeStageBoss() override {}
+    void BeginStageSceneryTransition() override { ++sceneryTransitions; }
     bool AwaitStageDialogueSignal(StageEventId,int) override {return false;}
     void StageMessage(std::string_view text, float duration) override {
         assert(!text.empty() && duration > 0.0F);
@@ -347,6 +350,8 @@ void TestStage1Content() {
     assert(spatialBirths==222&&upper&&lower);
     StageDirector stage(content->Events());
     EventProbe probe(*content);
+    assert(content->HandleEvent(StageEvent{.action=StartSceneryTransition{}},probe));
+    assert(probe.sceneryTransitions==1);
     const auto execute = [&](const StageEvent& event) {
         return content->HandleEvent(event, probe);
     };
@@ -431,6 +436,15 @@ void TestStage1Content() {
     assert(!DialogueFlagAt(reimuCues,DialogueCueKind::BossMusic,3851.0F/60));
     assert(DialogueFlagAt(reimuCues,DialogueCueKind::BossMusic,3852.0F/60));
     assert((DialogueExpressionsAt({},0)==std::array<int,2>{0,0}));
+    // 逐行采样必须兼容旧的延迟出现及同槽覆盖；没有独立说话人时仍共用原名牌。
+    const auto hiddenRows=DialogueTextRowsAt(before[0],.5F);
+    assert(hiddenRows[0].text[0]=='\0'&&hiddenRows[1].text[0]=='\0');
+    auto delayedReplacement=before[0];delayedReplacement.line2Delay=1.0F/60;
+    const auto firstRows=DialogueTextRowsAt(delayedReplacement,delayedReplacement.textDelay);
+    assert(std::string_view(firstRows[0].text)==before[0].text&&firstRows[1].text[0]=='\0');
+    const auto replacedRows=DialogueTextRowsAt(before[0],before[0].textDelay+before[0].line2Delay);
+    assert(std::string_view(replacedRows[0].text)==before[0].secondLine&&replacedRows[1].text[0]=='\0');
+    assert(std::string_view(replacedRows[0].speaker)==before[0].speaker);
     assert(visuals[stage1::kGreenSphere].mode == VisualMode::Bullet);
     assert(content->PlayerBulletVisual() == stage1::kPlayerGoldCard);
     assert(content->PlayerHomingVisual() == stage1::kPlayerCyanCard);

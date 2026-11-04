@@ -31,7 +31,8 @@ constexpr std::array<DialogueLine,26> kReimuBefore{{
     {"灵梦","......",false,402.0F/60,1.0F/60,true,false,"你还挺厉害的嘛",5,0.0F/60,0,8.0F/60,-1,false,0.0F/60},
     {"蕾米莉亚","月光已是如此鲜红",true,402.0F/60,1.0F/60,true,false,"我会使出全力取你性命哦",2,0.0F/60,0,8.0F/60,-1,false,0.0F/60},
     {"灵梦","月光分明如此鲜红",false,401.0F/60,0.0F/60,true,false,"",4,0.0F/60,0,8.0F/60,-1,false,0.0F/60},
-    {"蕾米莉亚","看来今夜会很快乐呢",true,431.0F/60,0.0F/60,true,false,"",3,0.0F/60,0,8.0F/60,401.0F/60,false,0.0F/60},
+    // MSG 同页两行分别属于双方；自机迟一个内容帧写入，确认等待从该次写入起算。
+    {"蕾米莉亚","看来今夜会很快乐呢",true,431.0F/60,1.0F/60,true,false,"看来今夜会很漫长呢",3,0.0F/60,0,9.0F/60,401.0F/60,false,0.0F/60,DialogueSpeaker{"灵梦",false,1}},
 }};
 // MSG1 独立创建立绘；蕾米莉亚在首次放行后第 921 帧才入场，不能由表情或强调标签代替。
 constexpr std::array<DialogueCue,90> kReimuBeforeCues{{
@@ -175,7 +176,8 @@ constexpr std::array<DialogueLine,27> kMarisaBefore{{
     {"蕾米莉亚","或者说，你并不是人类？",true,402.0F/60,1.0F/60,true,false,"",2,0.0F/60,0,8.0F/60,-1,false,0.0F/60},
     {"魔理沙","我是个有趣的人类哦",false,401.0F/60,0.0F/60,true,false,"",3,0.0F/60,0,8.0F/60,-1,false,0.0F/60},
     {"蕾米莉亚","呵呵，也许是因为月光如此鲜红吧？",true,401.0F/60,0.0F/60,true,false,"",3,0.0F/60,0,8.0F/60,-1,false,0.0F/60},
-    {"蕾米莉亚","看来今夜会很炽热呢",true,431.0F/60,0.0F/60,true,false,"",2,0.0F/60,0,8.0F/60,401.0F/60,false,0.0F/60},
+    // 与灵梦分支相同，保留双方各自的台词、表情和同页等待。
+    {"蕾米莉亚","看来今夜会很炽热呢",true,431.0F/60,1.0F/60,true,false,"看来今夜会很清凉呢",2,0.0F/60,0,9.0F/60,401.0F/60,false,0.0F/60,DialogueSpeaker{"魔理沙",false,1}},
 }};
 constexpr std::array<DialogueCue,93> kMarisaBeforeCues{{
     {0,DialogueCueKind::PortraitStart,0,0},

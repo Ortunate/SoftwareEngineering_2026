@@ -221,6 +221,7 @@ private:
     void BeginStageDialogue(StageEventId id, bool afterBattle = false,DialogueScene scene=DialogueScene::FinalBoss,
         DialogueClearPolicy clearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets) override;
     void ResumeStageBoss() override;
+    void BeginStageSceneryTransition() override;
     bool AwaitStageDialogueSignal(StageEventId id,int signal) override;
     /// @brief 更新单个演员及其音画/道具输出；调用方负责在池遍历结束后消费子演员请求。
     void UpdateActor(behavior::Actor& actor,float deltaTime);
@@ -437,6 +438,7 @@ private:
     PlayerInput pendingPlayerInput_{}; // 持续键采用最新快照，鼠标增量累加，Bomb 边沿保留至下个战斗步。
     bool pendingDialogueConfirm_=false;
     StageDirector stage_{};
+    std::optional<double> sceneryTransitionStart_; // 借用同一背景世界时钟；每次开局清空，暂停/时停不前进。
     double scenerySeconds_=0; // 背景世界秒数；时停时冻结，独立于仍前进的关卡事件时钟。
     std::unique_ptr<StageContent> stageContent_{};
     StageId stageId_ = StageId::Stage1;

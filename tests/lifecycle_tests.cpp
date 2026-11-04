@@ -20,6 +20,7 @@
 #include "stages/stage5/boss_config.hpp"
 #include "stages/stage6/boss_config.hpp"
 #include "stages/stage6/behaviors.hpp"
+#include "stages/stage6/scenery.hpp"
 #include "stages/stage_extra/boss_config.hpp"
 #include "stages/stage_extra/manifest.hpp"
 #include "stages/stage_extra/ids.hpp"
@@ -115,6 +116,48 @@ private:
 
 /// @brief 仅此测试定义的友元探针；调用正式游戏路径验证效果不重复奖励或保留战斗对象。
 struct GameLifecycleProbe {
+    /// @brief 真实道中退场后触发转场，检查暂停、重复绘制、十秒归位及重开清理。
+    static void TestStage6Scenery(Game& game,const std::string& prefix) {
+        game.stageId_=StageId::Stage6;game.StartPreview();
+        const std::array events{
+            StageEvent{.action=StartBoss{&stage6::kSakuyaMidboss},.id=1},
+            StageEvent{.action=ResumeBoss{}},
+            StageEvent{.action=StartSceneryTransition{},.afterEndOf=1},
+        };
+        game.stage_=StageDirector(events);game.Update(1.0F/120);
+        assert(!game.sceneryTransitionStart_);
+        for(int phase=1;phase<=2;++phase) {
+            int ticks=0;while(!game.boss_->CanTakeDamage()&&ticks++<700)game.Update(1.0F/120);
+            assert(ticks<700);game.boss_->health=0;game.ResolveCollisions();
+        }
+        for(int tick=0;tick<400&&!game.sceneryTransitionStart_;++tick)game.Update(1.0F/120);
+        assert(game.sceneryTransitionStart_&&!game.boss_->active);
+        const auto hash=[&] {
+            const auto target=LoadRenderTexture(400,300);assert(IsRenderTextureValid(target));
+            BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(game.camera_);
+            game.stageContent_->DrawSceneryTransition(game.scenerySeconds_,
+                game.scenerySeconds_-*game.sceneryTransitionStart_,game.assets_);
+            EndMode3D();EndTextureMode();EndDrawing();
+            const auto image=LoadImageFromTexture(target.texture);const auto colors=LoadImageColors(image);assert(colors);
+            std::uint64_t result=14695981039346656037ULL;
+            for(int pixel=0;pixel<400*300;++pixel)for(const auto c:std::array{colors[pixel].r,colors[pixel].g,colors[pixel].b}) {result^=c;result*=1099511628211ULL;}
+            UnloadImageColors(colors);UnloadImage(image);UnloadRenderTexture(target);return result;
+        };
+        std::uint64_t previous=0;
+        for(const int second:{0,3,6,10}) {
+            while(game.scenerySeconds_-*game.sceneryTransitionStart_<second)game.Update(1.0F/120);
+            const auto before=game.scenerySeconds_;const auto pixels=hash();assert(pixels==hash()&&pixels!=previous);
+            game.TogglePause();for(int tick=0;tick<120;++tick)game.Update(1.0F/60);
+            assert(game.scenerySeconds_==before&&pixels==hash());game.TogglePause();
+            const auto label="stage6-scenery-"+std::to_string(second);Capture(game,prefix,label.c_str());previous=pixels;
+        }
+        const auto final=stage6::SampleScenery(game.scenerySeconds_-*game.sceneryTransitionStart_);
+        assert(final.moonPosition.x==0&&final.moonPosition.z==52&&final.buildingOffsetY==-90);
+        game.StartPreview();assert(!game.sceneryTransitionStart_&&game.scenerySeconds_==0);
+        game.EnterMainMenu();assert(!game.assets_.HasStage());
+        std::cout<<"Stage6 scenery actual midboss exit, pixels, pause, final pose and restart passed\n";
+    }
+
     /// @brief 正式Extra纹理在三维通道中的暂停、重复绘制和卸载检查；截图覆盖四个观察位置及竖屏。
     static void TestExtraScenery(Game& game,const std::string& prefix) {
         game.EnterMainMenu();game.previewMode_=true;game.practiceMode_=game.spellPractice_=false;
@@ -3797,7 +3840,7 @@ struct GameLifecycleProbe {
     }
 
 
-    /// @brief 通过正式六面对话路径验证两自机的立绘创建、跳句重建与暂停；横竖屏实际像素必须包含两张蕾米莉亚差分。
+    /// @brief 通过正式六面对话路径验证两自机的立绘创建、跳句重建与暂停；横竖屏核对立绘及末页双方台词。
     /// 临时隐藏当前纹理仅用于同帧像素对照，读取后立即恢复资源，退出时检查关卡资源释放。
     static void TestStage6Portraits(Game& game,const std::string& prefix) {
         const int width=GetScreenWidth(),height=GetScreenHeight();
@@ -3837,6 +3880,35 @@ struct GameLifecycleProbe {
                     const auto label="stage6-portrait-"+std::to_string(character)+"-frame-"+std::to_string(frame)+"-"+std::to_string(GetScreenWidth());
                     Capture(game,prefix,label.c_str());
                 }
+                // 独立源帧：双方在末页共同强调，第二行属于自机；同时检查实际文字像素与字形，防止只修数据未绘制。
+                at((character ? 10675 : 10273)+32);
+                const auto lines=game.CurrentDialogue();
+                assert(game.DialogueIndex()==static_cast<int>(lines.size())-1);
+                const auto rows=DialogueTextRowsAt(lines.back(),32.0F/60);
+                assert(std::string_view(rows[0].speaker)=="蕾米莉亚");
+                assert(std::string_view(rows[1].speaker)==(character ? "魔理沙" : "灵梦"));
+                assert(game.dialogueMotion_.Sample(false).opacity==1&&game.dialogueMotion_.Sample(true).opacity==1);
+                for(const auto& row:rows)for(const char* cursor=row.text;*cursor;) {
+                    int bytes=0;const int codepoint=GetCodepointNext(cursor,&bytes);assert(bytes>0);cursor+=bytes;
+                    const auto font=game.assets_.Common().hudFont;
+                    assert(font.glyphs[GetGlyphIndex(font,codepoint)].value==codepoint);
+                }
+                Image together=draw();
+                const GameplayLayout layout(GetScreenWidth(),GetScreenHeight());
+                const auto panel=layout.DialoguePanel();
+                for(int row=0;row<2;++row) {
+                    int ink=0;
+                    for(int y=panel.y+(40+64*row)*layout.scale;y<panel.y+(66+64*row)*layout.scale;++y)
+                        for(int x=panel.x+22*layout.scale;x<panel.x+panel.width-22*layout.scale;++x) {
+                            const auto color=GetImageColor(together,x,y);
+                            ink+=color.r>=220&&color.g>=210&&color.b>=195;
+                        }
+                    assert(ink>100);
+                }
+                UnloadImage(together);
+                Capture(game,prefix,("stage6-together-"+std::to_string(character)+"-"+std::to_string(GetScreenWidth())).c_str());
+                game.TogglePause();const auto togetherTime=game.dialogueTimer_;game.Update(.5F);
+                assert(game.dialogueTimer_==togetherTime);game.TogglePause();
                 UnloadRenderTexture(target);
             }
             at(920);assert(game.dialogueMotion_.Sample(true).opacity==0);
@@ -4994,6 +5066,8 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestReplayAdaptation(*game);
         } else if(extraAssets) {
             koumakyou::GameLifecycleProbe::TestExtraAssets(*game,prefix);
+        } else if(argc>=3&&std::string(argv[2])=="--stage6-scenery-only") {
+            koumakyou::GameLifecycleProbe::TestStage6Scenery(*game,prefix);
         } else if(argc>=3&&std::string(argv[2])=="--extra-scenery-only") {
             koumakyou::GameLifecycleProbe::TestExtraScenery(*game,prefix);
         } else if(dialogueMusic) {

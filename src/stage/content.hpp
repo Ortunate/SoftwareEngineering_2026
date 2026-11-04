@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -33,13 +34,22 @@ public:
         DialogueClearPolicy clearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets) = 0;
     /// @brief 请求现存、已入场且等待对话的 Boss 开战；没有可恢复遭遇时由接收方报告错误。
     virtual void ResumeStageBoss() = 0;
+    /// @brief 记录背景转场起点；重复请求重新计时，不改变关卡或战斗时钟。
+    virtual void BeginStageSceneryTransition() = 0;
     /// @brief 登记当前对白的时间轴等待，signal>=0；已到达返回 true，否则实际到达后通知事件结束。
     virtual bool AwaitStageDialogueSignal(StageEventId id,int signal) = 0;
     /// @brief 请求显示一条持续指定秒数的提示；接收方须复制需要留存的文本。
     virtual void StageMessage(std::string_view message, float duration) = 0;
 };
 
-/// @brief 关卡对话中的一条台词与说话人信息；所有字符串指针须在对话结束前有效。
+/// @brief 同页第二行的独立说话人；姓名借用内容表，bossSpeaking 区分自机/对手，expression 为其局部表情号。
+struct DialogueSpeaker {
+    const char* name;
+    bool bossSpeaking;
+    int expression = 0;
+};
+
+/// @brief 关卡对话中的一页台词；默认两行共用说话人，所有字符串指针须在对话结束前有效。
 struct DialogueLine {
     const char* speaker;
     const char* text;
@@ -56,7 +66,18 @@ struct DialogueLine {
     float advanceAfter = -1; // 确认后跳至本句内此秒数；负值跳到下一句，末句保留原始退场/结算等待。
     bool secondLineReplacesFirst = false; // 原脚本写入同一文字槽时保留覆盖行为，原文仍分别保存。
     float introduceDelay=0;
+    /// @brief 指定第二行独立说话人以同时呈现双方台词；缺省沿用首行。共用本页等待/确认，第二行出现时更新其表情。
+    std::optional<DialogueSpeaker> secondLineSpeaker = std::nullopt;
 };
+
+/// @brief 已可见的一行文本及所属说话人；借用内容表，空文本表示尚未出现或已被同槽覆盖。
+struct DialogueTextRow {
+    const char* speaker = "";
+    const char* text = "";
+    bool bossSpeaking = false;
+};
+/// @brief 按页内秒数采样两行文字，保留延迟、同槽覆盖及独立说话人；不改变对话进度。
+[[nodiscard]] std::array<DialogueTextRow,2> DialogueTextRowsAt(const DialogueLine& line, float elapsed);
 
 /// @brief 返回截至 lineIndex 的玩家/Boss 表情编号，数组下标分别为 0/1。
 /// elapsed 为当前句内秒数，默认取完整句末；尚未发言的一方使用 0，不持有台词。
@@ -190,6 +211,11 @@ public:
     /// @brief 在3D通道绘制本关装饰；seconds为冻结暂停后的秒数，assets只在本次调用中借用。
     /// 不得推进逻辑、加载/释放素材或保留纹理引用；卸载后的空素材也须安全处理。
     virtual void DrawScenery(float seconds,const AssetManager& assets) const { (void)seconds; (void)assets; }
+    /// @brief 按背景世界秒数与转场经过秒数绘制；transitionSeconds<0 表示尚未启动。
+    /// 默认沿用静态背景；与 DrawScenery 相同，只采样，不推进或持有资源。
+    virtual void DrawSceneryTransition(float seconds,float transitionSeconds,const AssetManager& assets) const {
+        (void)transitionSeconds;DrawScenery(seconds,assets);
+    }
     /// @brief 按实际机体及关卡局部表情编号返回玩家立绘；未知表情回退到该角色默认表情 0。
     [[nodiscard]] virtual VisualId HeroPortraitVisual(int expression = 0, ShotType shot=ShotType::HomingAmulet) const = 0;
     /// @brief 按关卡局部表情编号返回 Boss 立绘；未知编号回退到默认表情 0。

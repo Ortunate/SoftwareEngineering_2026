@@ -35,6 +35,8 @@ StageDirector::StageDirector(std::span<const StageEvent> events)
                 if (!event.id || (action.scene!=DialogueScene::FinalBoss&&action.scene!=DialogueScene::Midboss&&action.scene!=DialogueScene::EncoreBoss)||
                     (action.clearPolicy!=DialogueClearPolicy::ClearEnemiesAndBullets&&action.clearPolicy!=DialogueClearPolicy::PreserveWorld))
                     throw std::invalid_argument("StartDialogue requires an id and valid scene");
+            } else if constexpr (std::is_same_v<Action, StartSceneryTransition>) {
+                // 无参数同步演出；轨迹与时长由内容负责，不影响事件完成依赖。
             } else if constexpr (std::is_same_v<Action, ResumeBoss>) {
                 // 此动作是否拥有可恢复的 Boss，由接收方按当前遭遇生命周期校验。
             } else if constexpr (std::is_same_v<Action, WaitDialogueSignal>) {

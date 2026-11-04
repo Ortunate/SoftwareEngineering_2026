@@ -1,4 +1,4 @@
-// 本文件负责关卡事件分派，以及按台词恢复双方的对话表情状态。
+// 本文件负责关卡事件分派，以及按台词采样逐行文本和双方的对话表情状态。
 
 #include "stage/content.hpp"
 
@@ -7,13 +7,29 @@
 
 namespace koumakyou {
 
+std::array<DialogueTextRow,2> DialogueTextRowsAt(const DialogueLine& line, float elapsed) {
+    std::array<DialogueTextRow,2> rows{};
+    if(elapsed+0.00001F<line.textDelay)return rows;
+    rows[0]={line.speaker,line.text,line.bossSpeaking};
+    if(elapsed+0.00001F>=line.textDelay+line.line2Delay) {
+        const auto speaker=line.secondLineSpeaker.value_or(DialogueSpeaker{line.speaker,line.bossSpeaking,line.expression});
+        const DialogueTextRow second{speaker.name,line.secondLine,speaker.bossSpeaking};
+        rows[line.secondLineReplacesFirst ? 0 : 1]=second;
+    }
+    return rows;
+}
+
 std::array<int, 2> DialogueExpressionsAt(
     std::span<const DialogueLine> lines, std::size_t lineIndex, float elapsed) {
     std::array<int, 2> expressions{};
     // 从台词重建状态，保证跳句、战后独白和截图跳转都不继承上一次对话的表情。
-    for (std::size_t index = 0; index < lines.size() && index <= lineIndex; ++index)
+    for (std::size_t index = 0; index < lines.size() && index <= lineIndex; ++index) {
         if(index<lineIndex || elapsed+0.00001F>=lines[index].expressionDelay)
             expressions[lines[index].bossSpeaking ? 1 : 0] = lines[index].expression;
+        const auto& line=lines[index];
+        if(line.secondLineSpeaker && (index<lineIndex || elapsed+0.00001F>=line.textDelay+line.line2Delay))
+            expressions[line.secondLineSpeaker->bossSpeaking ? 1 : 0]=line.secondLineSpeaker->expression;
+    }
     return expressions;
 }
 bool DialogueFlagAt(std::span<const DialogueCue> cues, DialogueCueKind kind, float seconds, bool initial) {
@@ -63,6 +79,7 @@ struct EventExecutor {
         sink.BeginStageDialogue(*event.id,action.afterBattle,action.scene,action.clearPolicy);
         return false;
     }
+    bool operator()(const StartSceneryTransition&) const { sink.BeginStageSceneryTransition();return true; }
     bool operator()(const ResumeBoss&) const { sink.ResumeStageBoss();return true; }
     bool operator()(const WaitDialogueSignal& action) const {
         if(!event.id||action.signal<0)throw std::invalid_argument("Invalid dialogue signal wait");

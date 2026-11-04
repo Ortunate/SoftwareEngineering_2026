@@ -273,18 +273,25 @@ void Game::DrawDialogue() const {
     }
     const Font font = assets_.Common().hudFont;
     const Rectangle panel = l.DialoguePanel();
+    const auto rows=DialogueTextRowsAt(line,elapsed);
     if (elapsed >= line.textDelay) {
         Panel(panel, l.scale);
         const float x = panel.x + 22 * l.scale, w = panel.width - 44 * l.scale;
-        Label(font, line.speaker, {x, panel.y + 12 * l.scale}, 20 * l.scale, w, kGold);
         // 每句的两个原文行共享字号，长句按可用宽度收敛，不能静默裁掉末尾或改变等待时序。
         const float size = std::min(ui::FittedSize(font, line.text, 26 * l.scale, w),
                                     ui::FittedSize(font, line.secondLine, 26 * l.scale, w));
-        const bool secondVisible=elapsed>=line.textDelay+line.line2Delay;
-        Label(font, line.secondLineReplacesFirst && secondVisible ? line.secondLine : line.text,
-              {x, panel.y + 48 * l.scale}, size, w, kInk);
-        if (secondVisible && !line.secondLineReplacesFirst)
-            Label(font, line.secondLine, {x, panel.y + 89 * l.scale}, size, w, kInk);
+        if(line.secondLineSpeaker) {
+            // 共同发言仍占一页，每行单独标名；保留完整宽度，窄屏也不会把任一方挤到框外。
+            for(std::size_t row=0;row<rows.size();++row) {
+                const float y=panel.y+(12+64*row)*l.scale;
+                Label(font,rows[row].speaker,{x,y},20*l.scale,w,kGold);
+                Label(font,rows[row].text,{x,y+28*l.scale},size,w,kInk);
+            }
+        } else {
+            Label(font,rows[0].speaker,{x,panel.y+12*l.scale},20*l.scale,w,kGold);
+            Label(font,rows[0].text,{x,panel.y+48*l.scale},size,w,kInk);
+            Label(font,rows[1].text,{x,panel.y+89*l.scale},size,w,kInk);
+        }
     }
     if (line.introduce&&elapsed>=line.introduceDelay) {
         const float w = std::min(l.width * 0.42F, 250 * l.scale);

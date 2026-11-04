@@ -42,6 +42,8 @@ struct StartDialogue { bool afterBattle = false; DialogueScene scene=DialogueSce
     DialogueClearPolicy clearPolicy=DialogueClearPolicy::ClearEnemiesAndBullets; };
 /// @brief 在对话实际完成后通知现存 Boss 开战；同步动作，不替换入场演员或重置其位置/随机流。
 struct ResumeBoss {};
+/// @brief 同步启动本关背景转场；具体轨迹由内容实现，计时随背景世界时钟冻结。
+struct StartSceneryTransition {};
 /// @brief 等待当前对白的放行序号；signal>=1 对应 MSG 的第几次时间轴放行，0 表示整段结束。
 /// 必须带事件 id；等待本身不暂停对白或关卡时钟，后续事件用 afterEndOf 依赖其实际完成。
 struct WaitDialogueSignal {int signal=0;};
@@ -53,7 +55,7 @@ struct ShowMessage {
 };
 
 /// @brief 带参事件动作；新增分支须同步扩展校验与执行访问器。
-using StageAction = std::variant<SpawnActors, StartBoss, StartDialogue, ShowMessage, ResumeBoss, WaitDialogueSignal>;
+using StageAction = std::variant<SpawnActors, StartBoss, StartDialogue, ShowMessage, ResumeBoss, WaitDialogueSignal, StartSceneryTransition>;
 
 /// @brief 一条时间轴事件：调度信息独立于带参动作，事件表本身不保存执行进度。
 struct StageEvent {

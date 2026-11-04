@@ -26,12 +26,12 @@ constexpr std::array kMarisaBImages{
     Background(12,"endings/native/end12.dds"),Background(13,"endings/native/end13.dds")};
 constexpr std::array kBadImages{Background(14,"endings/native/end00b.dds")};
 const std::array<StageAssetManifest,6> kAssets{{
-    {kReimuAImages,"endings/ending.mp3",{},{}},
-    {kReimuBImages,"endings/ending.mp3",{},{}},
-    {kMarisaAImages,"endings/ending.mp3",{},{}},
-    {kMarisaBImages,"endings/ending.mp3",{},{}},
-    {kBadImages,"endings/ending.mp3",{},{}},
-    {kBadImages,"endings/ending.mp3",{},{}}
+    {kReimuAImages,"endings/ending.flac",{},{}},
+    {kReimuBImages,"endings/ending.flac",{},{}},
+    {kMarisaAImages,"endings/ending.flac",{},{}},
+    {kMarisaBImages,"endings/ending.flac",{},{}},
+    {kBadImages,"endings/ending.flac",{},{}},
+    {kBadImages,"endings/ending.flac",{},{}}
 }};
 constexpr std::array<std::string_view,6> kTitles{
     "灵梦 · 灵之御札结局","灵梦 · 梦之御札结局","魔理沙 · 魔之御札结局","魔理沙 · 恋之御札结局",

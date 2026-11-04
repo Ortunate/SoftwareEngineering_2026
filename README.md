@@ -52,7 +52,7 @@ Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Pr
 - 战斗 3D 场景覆盖整个窗口；左侧关卡题签、右侧状态卡和 Boss 血条悬浮显示，对话与符卡演出随窗口比例布局
 - 对话立绘按窗口等比贴边，按新典差分与中断标签切换，非发言者 Alpha 为 128；保留原生入退场和暂停冻结
 - 通用素材在启动时加载，各关素材在进入该关时加载；全部战斗图集按需缓存，在结算或离开关卡时卸载
-- 标题、各关道中和关底 Boss 使用独立的流式 BGM
+- 标题、各关道中和关底 Boss 使用独立 BGM，按原作循环点连续播放
 - 红雾背景使用六面天空盒，转动镜头时保持固定的世界方向，避免球面极区拉伸
 - 子弹、敌人和 Boss 的贴图锚点与球形判定中心分别配置；大幅仰俯视时贴图仍面向镜头
 - Windows/macOS 共用 CMake 工程
@@ -100,7 +100,7 @@ Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Pr
 
 raylib 会在首次配置时通过 CMake FetchContent 下载。仅 `assets/runtime` 会在构建时复制到可执行文件旁的 `assets` 目录；立绘原始参考和生成记录不进入运行包。
 
-`AssetManager` 在程序启动时加载菜单与关卡共用的天空盒和标题 BGM；进入各关时加载角色、弹幕、对话立绘、着色器及道中/Boss BGM；切关、结束或返回菜单前先清除全部借用者，再释放本关资源。世界角色使用原包 DDS/ANM，演出立绘独立加载。BGM 以流式方式播放，暂停游戏时暂停，静默截图模式不初始化音频设备。通用音效覆盖菜单、射击、击破、受击、Bomb、擦弹、拾取、符卡、通关与满火力，独立 SE 音量与 BGM 分开控制。新增插画、音效及字体的来源和重建方法见 [素材说明](docs/STAGE1_ASSETS.md)。
+`AssetManager` 在程序启动时加载菜单与关卡共用的天空盒和标题 BGM；进入各关时加载角色、弹幕、对话立绘、着色器及道中/Boss BGM；切关、结束或返回菜单前先清除全部借用者，再释放本关资源。世界角色使用原包 DDS/ANM，演出立绘独立加载。BGM 从 FLAC 预解码为 PCM，由音频回调按原作循环点连续取样；暂停游戏时暂停，静默截图模式不初始化音频设备。循环依据与素材重建见 [BGM 循环说明](docs/BGM_LOOP_REFERENCE.md)。通用音效覆盖菜单、射击、击破、受击、Bomb、擦弹、拾取、符卡、通关与满火力，独立 SE 音量与 BGM 分开控制。新增插画、音效及字体的来源和重建方法见 [素材说明](docs/STAGE1_ASSETS.md)。
 
 天空盒素材是 `assets/runtime/common/crimson_mist_skybox.png`，按 OpenGL 的 +X、-X、+Y、-Y、+Z、-Z 顺序横向排列。六面由同一个方向采样函数生成；如需重绘，在项目根目录运行 `cmake --build build --target generate_skybox`，然后运行 `./build/generate_skybox assets/runtime/common/crimson_mist_skybox.png`（Windows 下使用对应的可执行文件路径）。常规构建只加载现成贴图，不在启动时生成纹理。
 
@@ -172,7 +172,7 @@ ctest --test-dir build --output-on-failure
 .\build\koumakyou.exe
 ```
 
-有可用音频设备时，可额外静音验证标题和一面共 3 首 BGM 的文件加载、MP3 解码及播放推进；此测试不创建窗口，也不修改玩家设置：
+有可用音频设备时，可额外静音验证全部 17 首 BGM 的 FLAC 解码、原作循环点、回放定位、暂停及资源释放；此测试不创建窗口，也不修改玩家设置：
 
 ```powershell
 cmake --build build --target koumakyou_music_tests

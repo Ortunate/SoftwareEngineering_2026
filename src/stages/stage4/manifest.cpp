@@ -22,7 +22,7 @@ const auto kVisuals=[] {
     std::sort(visuals.begin(),visuals.end(),[](const auto& a,const auto& b){return a.id<b.id;});return visuals;
 }();
 constexpr std::array<SoundDefinition,0> kSounds{};
-const StageAssetManifest kAssets{kVisuals,"stages/stage4/stage_theme.mp3","stages/stage4/boss_theme.mp3",kSounds};
+const StageAssetManifest kAssets{kVisuals,"stages/stage4/stage_theme.flac","stages/stage4/boss_theme.flac",kSounds};
 }
 const StageAssetManifest& Stage4Manifest() {return kAssets;}
 }

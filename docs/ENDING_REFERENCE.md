@@ -22,7 +22,7 @@
 | 魔理沙 · 魔之御札 | `end10.end` | `end10b.end` |
 | 魔理沙 · 恋之御札 | `end11.end` | `end10b.end` |
 
-中文取 `localization.msgpack` 的官方 `zh-CN`，保留换行、叙述、人物颜色和结束文字。15 张背景直接保留原生 3840×2160 DDS，使用现有 DX10/BC7 解码器；每条分支仅加载实际需要的一或四张。结局曲来自 `bgm/th06_17.opus`，离线重封装后转换为 MP3。运行时只依赖仓库内的内容表、素材和音乐，不读取安装目录、EXE 或解包文件。
+中文取 `localization.msgpack` 的官方 `zh-CN`，保留换行、叙述、人物颜色和结束文字。15 张背景直接保留原生 3840×2160 DDS，使用现有 DX10/BC7 解码器；每条分支仅加载实际需要的一或四张。结局曲来自 `bgm/th06_17.opus`，离线重封装后解码为 FLAC，并按原作 `.pos` 循环；详见 [BGM 原作循环](BGM_LOOP_REFERENCE.md)。运行时只依赖仓库内的内容表、素材和音乐，不读取安装目录、EXE 或解包文件。
 
 经典原作的 [Ending.cpp](https://github.com/GensokyoClub/th06/blob/master/src/Ending.cpp)、[ResultScreen.cpp](https://github.com/GensokyoClub/th06/blob/master/src/ResultScreen.cpp) 与 [GameManager.hpp](https://github.com/GensokyoClub/th06/blob/master/src/GameManager.hpp) 用于辅助核对 END 操作、八字符命名和前十插入方式；新典特有的挑战 Miss 条件以本机二进制为准。
 
@@ -50,12 +50,12 @@ macOS 游戏窗口仍不启动 IME，局部视图子类将可打印 ASCII 交回
 
 ## 重新导入
 
-使用已有 `thdat-nc` 将六份 END、`end00_4k.dds`～`end13_4k.dds`、`end00b_4k.dds` 解至临时目录，同时解出 `th06IN.dat` 的 `localization.msgpack`。将 DDS 按报告中的文件名映射原样复制到 `assets/runtime/endings/native/`。不导入 `staff*` 文件。
+POSITIONS 为从 `th06MD.dat` 解出的 `.pos` 目录。先导入统一音乐素材，再生成结局报告。使用已有 `thdat-nc` 将六份 END、`end00_4k.dds`～`end13_4k.dds`、`end00b_4k.dds` 解至临时目录，同时解出 `th06IN.dat` 的 `localization.msgpack`。将 DDS 按报告中的文件名映射原样复制到 `assets/runtime/endings/native/`。不导入 `staff*` 文件。
 
 ```bash
 # GAME 为本机合法安装目录，EXTRACTED 为上述临时解包目录。
-python3 tools/rewrap_native_opus.py "$GAME/data/bgm/th06_17.opus" /tmp/ending.ogg
-ffmpeg -i /tmp/ending.ogg -codec:a libmp3lame -q:a 2 assets/runtime/endings/ending.mp3
+python3 tools/import_bgm.py --native-root "$GAME" --positions "$POSITIONS" \
+  --runtime-root assets/runtime --report assets/source/music/native_reference.json
 python3 tools/import_endings.py "$GAME/th06nc.exe" "$EXTRACTED" "$EXTRACTED/localization.msgpack" \
   --output src/narrative/ending_content.inc \
   --report assets/source/endings/native_reference.json \

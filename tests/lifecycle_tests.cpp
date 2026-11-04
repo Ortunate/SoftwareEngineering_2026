@@ -3011,17 +3011,17 @@ struct GameLifecycleProbe {
         for(bool after:{false,true}) {
             game.BeginStageDialogue(1,after,DialogueScene::FinalBoss,DialogueClearPolicy::PreserveWorld);
             assert(assets.activeMusic_==AssetManager::MusicSlot::Event&&game.dialogueMusicCursor_==1&&!game.dialogueBossMusic_);
-            AdvanceAudio();const float initial=GetMusicTimePlayed(assets.eventMusic_);assert(initial>.02F);
+            AdvanceAudio();const float initial=(assets.eventMusic_).PositionSeconds();assert(initial>.02F);
             StepTo(119.5);assert(game.dialogueMusicCursor_==1);
             game.TogglePause();const auto timer=game.dialogueTimer_;game.Update(1);
-            assert(game.dialogueTimer_==timer&&game.dialogueMusicCursor_==1&&!IsMusicStreamPlaying(assets.eventMusic_));
-            game.TogglePause();StepTo(120);assert(game.dialogueMusicCursor_==2&&IsMusicStreamPlaying(assets.eventMusic_));
-            assert(GetMusicTimePlayed(assets.eventMusic_)>=initial-.02F); // 同槽选择不重启。
+            assert(game.dialogueTimer_==timer&&game.dialogueMusicCursor_==1&&!(assets.eventMusic_).Playing());
+            game.TogglePause();StepTo(120);assert(game.dialogueMusicCursor_==2&&(assets.eventMusic_).Playing());
+            assert((assets.eventMusic_).PositionSeconds()>=initial-.02F); // 同槽选择不重启。
             StepTo(179.5);assert(game.dialogueMusicCursor_==2);
-            StepTo(180);assert(game.dialogueMusicCursor_==4&&IsMusicStreamPlaying(assets.eventMusic_));
-            assert(GetMusicTimePlayed(assets.eventMusic_)<.025F); // 停止与重播不能合并为最终槽号。
-            AdvanceAudio();const auto restarted=GetMusicTimePlayed(assets.eventMusic_);game.Update(1.0F/120);
-            assert(GetMusicTimePlayed(assets.eventMusic_)>=restarted-.02F&&game.dialogueMusicCursor_==4);
+            StepTo(180);assert(game.dialogueMusicCursor_==4&&(assets.eventMusic_).Playing());
+            assert((assets.eventMusic_).PositionSeconds()<.025F); // 停止与重播不能合并为最终槽号。
+            AdvanceAudio();const auto restarted=(assets.eventMusic_).PositionSeconds();game.Update(1.0F/120);
+            assert((assets.eventMusic_).PositionSeconds()>=restarted-.02F&&game.dialogueMusicCursor_==4);
             StepTo(240);assert(assets.activeMusic_==AssetManager::MusicSlot::Stage&&!game.dialogueBossMusic_);
             StepTo(300);assert(assets.activeMusic_==AssetManager::MusicSlot::Boss&&game.dialogueBossMusic_);
             // 模拟确认跳句跨过停止/两次选择；按表序消费全部音乐，不能受历史BossMusic布尔值屏蔽。
@@ -3029,7 +3029,7 @@ struct GameLifecycleProbe {
             assert(game.dialogueMusicCursor_==9&&assets.activeMusic_==AssetManager::MusicSlot::Event&&!game.dialogueBossMusic_);
             StepTo(600);assert(game.dialogueMusicCursor_==10&&assets.activeMusic_==AssetManager::MusicSlot::None);
         }
-        game.EnterMainMenu();assert(!IsMusicValid(assets.eventMusic_));
+        game.EnterMainMenu();assert(!(assets.eventMusic_).Valid());
         std::cout<<"Dialogue three-slot BGM, ordered restart, pause, skip and legacy cues passed\n";
     }
 
@@ -3059,24 +3059,24 @@ struct GameLifecycleProbe {
             }
             assert(assets.GetVisual(stage_extra::kFlandrePortraits[0]).texture.id==assets.GetVisual(stage_extra::kFlandrePortraits[1]).texture.id);
             assert(stage_extra::PatchouliMidbossConfig().visual==stage_extra::kPatchouli);
-            for(const auto item:std::array<std::pair<Music*,float>,3>{{{&assets.stageMusic_,166.8575F},{&assets.bossMusic_,174.7375F},{&assets.eventMusic_,117.0575F}}}) {
-                assert(IsMusicValid(*item.first)&&std::abs(GetMusicTimeLength(*item.first)-item.second)<.15F);
+            for(const auto item:std::array<std::pair<audio::BgmPlayer*,float>,3>{{{&assets.stageMusic_,166.8575F},{&assets.bossMusic_,174.7375F},{&assets.eventMusic_,117.0575F}}}) {
+                assert((*item.first).Valid()&&std::abs((*item.first).LengthSeconds()-item.second)<.15F);
             }
-            assert(assets.stageMusic_.ctxData!=assets.bossMusic_.ctxData&&assets.bossMusic_.ctxData!=assets.eventMusic_.ctxData);
+            assert(assets.stageMusic_.PcmBytes()>0&&assets.bossMusic_.PcmBytes()>0&&assets.eventMusic_.PcmBytes()>0);
             for(int track=0;track<3;++track) {
                 assets.PlayStageTrack(track);assert(assets.activeMusic_==(track==0?AssetManager::MusicSlot::Stage:track==1?AssetManager::MusicSlot::Boss:AssetManager::MusicSlot::Event));
-                auto* current=assets.MusicFor(assets.activeMusic_);assert(current&&IsMusicStreamPlaying(*current));
-                for(const auto* other:{&assets.stageMusic_,&assets.bossMusic_,&assets.eventMusic_})if(other!=current)assert(!IsMusicStreamPlaying(*other));
+                auto* current=assets.MusicFor(assets.activeMusic_);assert(current&&(*current).Playing());
+                for(const auto* other:{&assets.stageMusic_,&assets.bossMusic_,&assets.eventMusic_})if(other!=current)assert(!(*other).Playing());
                 for(int n=0;n<20;++n) {assets.UpdateAudio();WaitTime(.01);}
-                const float before=GetMusicTimePlayed(*current);assert(before>.02F);
-                assets.PlayStageTrack(track);assert(GetMusicTimePlayed(*current)>=before-.02F);
-                assets.PauseMusic();assert(!IsMusicStreamPlaying(*current));const auto paused=GetMusicTimePlayed(*current);
-                WaitTime(.03);assets.UpdateAudio();assert(std::abs(GetMusicTimePlayed(*current)-paused)<.02F);
-                assets.ResumeMusic();assert(IsMusicStreamPlaying(*current));
+                const float before=(*current).PositionSeconds();assert(before>.02F);
+                assets.PlayStageTrack(track);assert((*current).PositionSeconds()>=before-.02F);
+                assets.PauseMusic();assert(!(*current).Playing());const auto paused=(*current).PositionSeconds();
+                WaitTime(.03);assets.UpdateAudio();assert(std::abs((*current).PositionSeconds()-paused)<.02F);
+                assets.ResumeMusic();assert((*current).Playing());
             }
             for(int invalid:{-2,3}) {bool rejected=false;try {assets.PlayStageTrack(invalid);}catch(const std::invalid_argument&) {rejected=true;}assert(rejected&&assets.activeMusic_==AssetManager::MusicSlot::Event);}
             assets.SetMusicGain(.5F);assets.SetMusicVolumePercent(25);assets.UpdateAudio();
-            assets.PlayStageTrack(-1);assert(assets.activeMusic_==AssetManager::MusicSlot::None&&!IsMusicStreamPlaying(assets.eventMusic_));
+            assets.PlayStageTrack(-1);assert(assets.activeMusic_==AssetManager::MusicSlot::None&&!(assets.eventMusic_).Playing());
             // 独立画真实立绘，检查近透明留白不会把窗口侧边和底边的锚点推离可见人物。
             if(!async)for(Vector2 size:{Vector2{1100,760},Vector2{1280,720},Vector2{390,844}}) {
                 GameplayLayout layout(size.x,size.y);auto target=LoadRenderTexture(size.x,size.y);assert(IsRenderTextureValid(target));
@@ -3094,13 +3094,13 @@ struct GameLifecycleProbe {
                 UnloadRenderTexture(target);
             }
             std::weak_ptr<const anm::Archive> borrowed=flandre.archive;assets.PlayStageTrack(2);assets.UnloadStage();
-            assert(!assets.HasStage()&&assets.Stage().visuals.empty()&&borrowed.expired()&&IsMusicValid(assets.menuMusic_));
-            assert(!IsMusicValid(assets.stageMusic_)&&!IsMusicValid(assets.bossMusic_)&&!IsMusicValid(assets.eventMusic_)&&assets.activeMusic_==AssetManager::MusicSlot::None);
+            assert(!assets.HasStage()&&assets.Stage().visuals.empty()&&borrowed.expired()&&(assets.menuMusic_).Valid());
+            assert(!(assets.stageMusic_).Valid()&&!(assets.bossMusic_).Valid()&&!(assets.eventMusic_).Valid()&&assets.activeMusic_==AssetManager::MusicSlot::None);
             assets.BeginStageLoad(manifest);assert(!assets.AdvanceStageLoad());assets.UnloadStage();assert(!assets.HasStage());
         }
         // 无第三槽的旧关卡不能沿用Extra音乐；缺失槽停止旧曲，公共菜单音乐仍属于全局生命周期。
         game.assets_.LoadStage(stage4::Stage4Content{}.Assets());game.assets_.PlayStageTrack(0);game.assets_.PlayStageTrack(2);
-        assert(!IsMusicValid(game.assets_.eventMusic_)&&game.assets_.activeMusic_==AssetManager::MusicSlot::None);
+        assert(!(game.assets_.eventMusic_).Valid()&&game.assets_.activeMusic_==AssetManager::MusicSlot::None);
         game.EnterMainMenu();assert(!game.assets_.HasStage());game.assets_.SetMusicGain(1);
         std::cout<<"Extra formal assets sync/async, three BGM streams, portraits, native background and ownership verified\n";
     }

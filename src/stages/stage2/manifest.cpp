@@ -26,7 +26,7 @@ const auto kVisuals=[] {
     return visuals;
 }();
 constexpr std::array<SoundDefinition,0> kSounds{};
-const StageAssetManifest kAssets{kVisuals,"stages/stage2/stage_theme.mp3","stages/stage2/boss_theme.mp3",kSounds};
+const StageAssetManifest kAssets{kVisuals,"stages/stage2/stage_theme.flac","stages/stage2/boss_theme.flac",kSounds};
 }
 const StageAssetManifest& Stage2Manifest() { return kAssets; }
 }

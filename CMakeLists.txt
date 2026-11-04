@@ -30,6 +30,8 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(raylib)
+# BGM 从原始 Opus 离线解码为 FLAC，运行时无二次有损编码或 MP3 填充。
+target_compile_definitions(raylib PRIVATE SUPPORT_FILEFORMAT_FLAC=1)
 
 # 第三方公开头文件按系统头传递，避免 raymath.h 的 C 风格初始化在每个 C++ 使用方重复报警。
 # 仅改变 raylib 头文件的诊断边界；项目源码仍使用原有警告选项，兼容 CMake 3.20。
@@ -116,6 +118,7 @@ add_library(koumakyou_engine STATIC
     src/render/sprite_renderer.cpp
     src/render/animated_sprite.cpp
     src/resources/asset_manager.cpp
+    src/audio/bgm_player.cpp
     src/resources/animation.cpp
     src/resources/battle_catalog.cpp
     src/resources/dds_image.cpp
@@ -278,6 +281,15 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_postgame_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME koumakyou_postgame_tests COMMAND koumakyou_postgame_tests)
+    # 采样级循环验证无需音频设备，覆盖一次前奏、跨缓冲接缝和观战定位。
+    add_executable(koumakyou_bgm_player_tests tests/bgm_player_tests.cpp)
+    target_link_libraries(koumakyou_bgm_player_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_compile_options(koumakyou_bgm_player_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_bgm_player_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME koumakyou_bgm_player_tests COMMAND koumakyou_bgm_player_tests)
     # 真实结局贴图及键鼠命名回归需桌面图形会话，按需执行，不加入无窗口 CTest。
     add_executable(koumakyou_postgame_lifecycle_tests EXCLUDE_FROM_ALL tests/postgame_lifecycle_tests.cpp)
     target_link_libraries(koumakyou_postgame_lifecycle_tests PRIVATE koumakyou_engine)
@@ -369,7 +381,8 @@ if(BUILD_TESTING)
                 tests/test_extra_flow.py
                 tests/test_extra_dialogue.py
                 tests/test_stage_script_inspection.py
-                tests/test_stage1_reference_import.py)
+                tests/test_stage1_reference_import.py
+                tests/test_import_bgm.py)
         set_tests_properties(koumakyou_reference_tool_tests PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
@@ -429,7 +442,7 @@ if(BUILD_TESTING)
     target_link_libraries(projectile_runtime_tests PRIVATE koumakyou_engine)
 endif()
 
-# 真实音频设备回归按需运行；静音验证中文文件名和 MP3 流，不依赖图形窗口。
+# 真实音频设备回归按需运行；静音验证中文文件名和原作循环 PCM 流，不依赖图形窗口。
 if(BUILD_TESTING)
     add_executable(koumakyou_music_tests EXCLUDE_FROM_ALL tests/music_tests.cpp)
     target_link_libraries(koumakyou_music_tests PRIVATE koumakyou_engine)

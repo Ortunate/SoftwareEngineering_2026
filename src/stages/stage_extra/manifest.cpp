@@ -31,8 +31,8 @@ const auto kVisuals=[] {
     visuals.push_back({.id=kBackground,.path="stages/stage_extra/background.dds"});
     std::sort(visuals.begin(),visuals.end(),[](const auto& a,const auto& b){return a.id<b.id;});return visuals;
 }();
-const StageAssetManifest kAssets{.visuals=kVisuals,.stageBgm="stages/stage_extra/stage_theme.mp3",
-    .bossBgm="stages/stage_extra/boss_theme.mp3",.sounds={},.eventBgm="stages/stage_extra/event_theme.mp3"};
+const StageAssetManifest kAssets{.visuals=kVisuals,.stageBgm="stages/stage_extra/stage_theme.flac",
+    .bossBgm="stages/stage_extra/boss_theme.flac",.sounds={},.eventBgm="stages/stage_extra/event_theme.flac"};
 }
 const StageAssetManifest& StageExtraManifest() {return kAssets;}
 }

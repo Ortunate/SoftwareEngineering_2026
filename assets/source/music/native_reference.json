@@ -1,0 +1,553 @@
+{
+  "schema_version": 1,
+  "hash_algorithm": "sha256",
+  "inputs": {
+    "th06nc.exe": "48630a42a2eb6762d0db2a7e0d151203efbe67220fef7d2f9d0d51857928ac82",
+    "data/th06MD.dat": "9ceefcc3ad19625078eda0ada6402c4888068ba47fd4f84e63e72e215b8d30d3"
+  },
+  "catalog_sha256": "dd93f31799285b22c90d4c9f46d256362782b1579e1f0e7cad91ed3f7c20ba37",
+  "ffmpeg_version": "ffmpeg version 8.1.2 Copyright (c) 2000-2026 the FFmpeg developers",
+  "conversion": {
+    "status": "source_verified",
+    "pos_layout": "nonnegative little-endian int32 start, exclusive_end",
+    "position_rate": 44100,
+    "output_rate": 48000,
+    "rounding": "floor(value * 480 / 441)",
+    "pre_skip": 120,
+    "pre_skip_handling": "decoder_consumes_once; no_coordinate_subtraction",
+    "channels": 2,
+    "sample_format": "s16le",
+    "loop_end": "exclusive",
+    "position_variant": "no-o suffix -> data/bgm; o suffix belongs to data/bgm2 and is excluded",
+    "eof_rule": "effective_end = min(configured_end, pcm_frames); no_silence_padding"
+  },
+  "tracks": [
+    {
+      "source_id": 1,
+      "source": "data/bgm/th06_01.opus",
+      "source_sha256": "49a711314d9fb083f0b00c8fe083da43cd69efb7b023626bc34f9e3e213f22a2",
+      "position": "th06_01.pos",
+      "position_sha256": "5f071c372f80d8a1e7a32fa386fedf3fbf89263186ad1aaf3f52db7a33f00b98",
+      "position_raw": [
+        485100,
+        5192292
+      ],
+      "runtime": "common/比赤色更鲜红的梦.flac",
+      "runtime_sha256": "d05b67da8d3cbe1a2c28dd2cb5069552ca233704fbe5d9b69969f3a1626dca4b",
+      "loop": "common/比赤色更鲜红的梦.loop",
+      "loop_sha256": "706499ec6d067a0d633bcaed6ad811f4949a5a8e238ea38b21d9775b98faff18",
+      "configured_loop_frames": [
+        528000,
+        5651474
+      ],
+      "effective_loop_frames": [
+        528000,
+        5651474
+      ],
+      "pcm": {
+        "frames": 6277320,
+        "bytes": 25109280,
+        "sha256": "3c8f27a09ef68dfdcdc523d6e8ca463952f02939e869faa27f4d48a7155a4701",
+        "ogg_decode_sha256": "3c8f27a09ef68dfdcdc523d6e8ca463952f02939e869faa27f4d48a7155a4701",
+        "flac_decode_sha256": "3c8f27a09ef68dfdcdc523d6e8ca463952f02939e869faa27f4d48a7155a4701"
+      },
+      "position_raw_hex": "ec660700643a4f00"
+    },
+    {
+      "source_id": 2,
+      "source": "data/bgm/th06_02.opus",
+      "source_sha256": "d55588e01a67dd9c88978a91db9168492d1980905ab26f43ebc8d81df399e4c7",
+      "position": "th06_02.pos",
+      "position_sha256": "17cbbe62ce90a7b066c0b403c545334735a1ee6a456f5d11f1887d60808ac252",
+      "position_raw": [
+        1420020,
+        4339740
+      ],
+      "runtime": "stages/stage1/宛如鬼灯的鲜红之魂.flac",
+      "runtime_sha256": "205b41b57674f481c4a2fda333d5635c0ff1e6a37d71fd7a7381fb4a5bc6ed61",
+      "loop": "stages/stage1/宛如鬼灯的鲜红之魂.loop",
+      "loop_sha256": "6d9c1218d3aa392bc16eabedb6ea0f76bf1ee170e39491af514975ced846103b",
+      "configured_loop_frames": [
+        1545600,
+        4723526
+      ],
+      "effective_loop_frames": [
+        1545600,
+        4723526
+      ],
+      "pcm": {
+        "frames": 4727880,
+        "bytes": 18911520,
+        "sha256": "90314e192ee43634cb0fc8df50fb9e067291edc4d0b4c0c5beb11ea1fd5e6124",
+        "ogg_decode_sha256": "90314e192ee43634cb0fc8df50fb9e067291edc4d0b4c0c5beb11ea1fd5e6124",
+        "flac_decode_sha256": "90314e192ee43634cb0fc8df50fb9e067291edc4d0b4c0c5beb11ea1fd5e6124"
+      },
+      "position_raw_hex": "f4aa15001c384200"
+    },
+    {
+      "source_id": 3,
+      "source": "data/bgm/th06_03.opus",
+      "source_sha256": "c5ef1842daafe7b517896f08c93adf7cbd41b3de98e774c45ecd86c03121c17a",
+      "position": "th06_03.pos",
+      "position_sha256": "3cc5dac936e700e60209ee7961711af84486ac744f8a307ee2d2d83f52d5fb77",
+      "position_raw": [
+        325044,
+        2675128
+      ],
+      "runtime": "stages/stage1/妖魔夜行.flac",
+      "runtime_sha256": "a2b8fd7778db3d8799433933de55c5fa1e3c52f828ec9addad2d1d4e7c2f6e93",
+      "loop": "stages/stage1/妖魔夜行.loop",
+      "loop_sha256": "3024e20a1ca46dd0cd9969da166fef016e5ce822c86c38ee50bcc3da5908c11b",
+      "configured_loop_frames": [
+        353789,
+        2911703
+      ],
+      "effective_loop_frames": [
+        353789,
+        2911703
+      ],
+      "pcm": {
+        "frames": 2916360,
+        "bytes": 11665440,
+        "sha256": "dcd211f7bcb11800c86f1977293d5e5e3008c8d7e2d206087fb8ac3c7ec5abb0",
+        "ogg_decode_sha256": "dcd211f7bcb11800c86f1977293d5e5e3008c8d7e2d206087fb8ac3c7ec5abb0",
+        "flac_decode_sha256": "dcd211f7bcb11800c86f1977293d5e5e3008c8d7e2d206087fb8ac3c7ec5abb0"
+      },
+      "position_raw_hex": "b4f50400b8d12800"
+    },
+    {
+      "source_id": 4,
+      "source": "data/bgm/th06_04.opus",
+      "source_sha256": "4a9f0d22b12697469dae8a296a950fc7ec06767f2ac09a0683f77b4aa566a084",
+      "position": "th06_04.pos",
+      "position_sha256": "328563d0143c8b75e6c4bc3aa22b6ea40377263fa7cb66e1166aef3a7a48db2b",
+      "position_raw": [
+        555660,
+        4149968
+      ],
+      "runtime": "stages/stage2/stage_theme.flac",
+      "runtime_sha256": "764fdda53b7d8e637458423588af8fbf0b43b21754b6a9d014f642f1dde96990",
+      "loop": "stages/stage2/stage_theme.loop",
+      "loop_sha256": "a126a506cc627cdcf69cee5ead7b713d93a4f897eb211912555cfc2b8cf82ccb",
+      "configured_loop_frames": [
+        604800,
+        4516971
+      ],
+      "effective_loop_frames": [
+        604800,
+        4516971
+      ],
+      "pcm": {
+        "frames": 4754760,
+        "bytes": 19019040,
+        "sha256": "0da3e0c3e6e8b1d9568471f1ee2bca5a2455f6db9de213e66dca10f03e799608",
+        "ogg_decode_sha256": "0da3e0c3e6e8b1d9568471f1ee2bca5a2455f6db9de213e66dca10f03e799608",
+        "flac_decode_sha256": "0da3e0c3e6e8b1d9568471f1ee2bca5a2455f6db9de213e66dca10f03e799608"
+      },
+      "position_raw_hex": "8c7a0800d0523f00"
+    },
+    {
+      "source_id": 5,
+      "source": "data/bgm/th06_05.opus",
+      "source_sha256": "731f34b07747e4d2fea8c1e138755bd16299d3cc657d5b90a9cd925f64986b83",
+      "position": "th06_05.pos",
+      "position_sha256": "9fb8e439426dbf1ea05439007b398084a4d2af7225bc4de9021d24faa6746d4d",
+      "position_raw": [
+        741944,
+        4534776
+      ],
+      "runtime": "stages/stage2/boss_theme.flac",
+      "runtime_sha256": "2859fa211267bccb898c6bcf30884e08494885e0e3b8b658a04a08749d33981a",
+      "loop": "stages/stage2/boss_theme.loop",
+      "loop_sha256": "f001d41832d6a96c541afe0c673f6d5db391657608cc31128cdcd22ba76a71a2",
+      "configured_loop_frames": [
+        807558,
+        4935810
+      ],
+      "effective_loop_frames": [
+        807558,
+        4935810
+      ],
+      "pcm": {
+        "frames": 4945800,
+        "bytes": 19783200,
+        "sha256": "660df0b76420e1b5de6ff15b05529213147e728b300c74e68c493e1b8db7e3c7",
+        "ogg_decode_sha256": "660df0b76420e1b5de6ff15b05529213147e728b300c74e68c493e1b8db7e3c7",
+        "flac_decode_sha256": "660df0b76420e1b5de6ff15b05529213147e728b300c74e68c493e1b8db7e3c7"
+      },
+      "position_raw_hex": "38520b00f8314500"
+    },
+    {
+      "source_id": 6,
+      "source": "data/bgm/th06_06.opus",
+      "source_sha256": "cf7880179a46a8cfb96c07e54dd0871d48c3cddd5c1fdd3bfc26f8b590b9a052",
+      "position": "th06_06.pos",
+      "position_sha256": "45c4b852444b897fa8bb339f3f22f5b012648af7511f687dfad105ac0377676e",
+      "position_raw": [
+        679140,
+        6803276
+      ],
+      "runtime": "stages/stage3/stage_theme.flac",
+      "runtime_sha256": "7c8ef735dee219bc4f607731ed7b0dd64001635c5feb030ef01f43db7326a00a",
+      "loop": "stages/stage3/stage_theme.loop",
+      "loop_sha256": "09d844570a95f9d806cd83d2c4dcbfa63f60bf17f553b9f0e46a79d7ebb6f209",
+      "configured_loop_frames": [
+        739200,
+        7404926
+      ],
+      "effective_loop_frames": [
+        739200,
+        7404926
+      ],
+      "pcm": {
+        "frames": 7409160,
+        "bytes": 29636640,
+        "sha256": "abd063c1b85f6aaa40aece52862bf1cd75ab828468ee83bcbf230ae085694f2b",
+        "ogg_decode_sha256": "abd063c1b85f6aaa40aece52862bf1cd75ab828468ee83bcbf230ae085694f2b",
+        "flac_decode_sha256": "abd063c1b85f6aaa40aece52862bf1cd75ab828468ee83bcbf230ae085694f2b"
+      },
+      "position_raw_hex": "e45c0a004ccf6700"
+    },
+    {
+      "source_id": 7,
+      "source": "data/bgm/th06_07.opus",
+      "source_sha256": "b4b6cdb2545dd5581f6429583dced8eca327d7eae796951508e710226c0c986a",
+      "position": "th06_07.pos",
+      "position_sha256": "8db61f7d5b2d6b1e3152f7569be029f90f6220b7bfaa52a355642a1026586548",
+      "position_raw": [
+        926100,
+        4552468
+      ],
+      "runtime": "stages/stage3/boss_theme.flac",
+      "runtime_sha256": "83e0b0b71fb642f983262e1f945e7c2c4f889983744826f422bbcacc1389f67d",
+      "loop": "stages/stage3/boss_theme.loop",
+      "loop_sha256": "cff3d2478da1fa6bb47eb81397cbe2b0668f7951e567fcf5b156f8e10a310988",
+      "configured_loop_frames": [
+        1008000,
+        4955067
+      ],
+      "effective_loop_frames": [
+        1008000,
+        4954440
+      ],
+      "pcm": {
+        "frames": 4954440,
+        "bytes": 19817760,
+        "sha256": "74c2c09b3d1f515f86db2e015862919f2dea29f51cae0890c7e5fe8967291eaa",
+        "ogg_decode_sha256": "74c2c09b3d1f515f86db2e015862919f2dea29f51cae0890c7e5fe8967291eaa",
+        "flac_decode_sha256": "74c2c09b3d1f515f86db2e015862919f2dea29f51cae0890c7e5fe8967291eaa"
+      },
+      "position_raw_hex": "94210e0014774500"
+    },
+    {
+      "source_id": 8,
+      "source": "data/bgm/th06_08.opus",
+      "source_sha256": "e766e172d1dbcbfbd51b2abf52b6b4fb0160aad37ad95f4832129c408488bd01",
+      "position": "th06_08.pos",
+      "position_sha256": "2008e310c5d2255e3c801db53f0907759777e15d03cf54d9d3a8e6642607c3ea",
+      "position_raw": [
+        449820,
+        5159492
+      ],
+      "runtime": "stages/stage4/stage_theme.flac",
+      "runtime_sha256": "bb3883beb1114f5055a03d6a96e626695f55689d10794795bba66ca3ec088782",
+      "loop": "stages/stage4/stage_theme.loop",
+      "loop_sha256": "bc20c3c53dc9076bde7ffae802eb1e3f03e2ca155a7e889abd6a29dcb7a4254a",
+      "configured_loop_frames": [
+        489600,
+        5615773
+      ],
+      "effective_loop_frames": [
+        489600,
+        5615773
+      ],
+      "pcm": {
+        "frames": 5626440,
+        "bytes": 22505760,
+        "sha256": "1b919ff08b54bbbab09cec86aacff2e992ffbe596f99ba9bf7bab76c9716027f",
+        "ogg_decode_sha256": "1b919ff08b54bbbab09cec86aacff2e992ffbe596f99ba9bf7bab76c9716027f",
+        "flac_decode_sha256": "1b919ff08b54bbbab09cec86aacff2e992ffbe596f99ba9bf7bab76c9716027f"
+      },
+      "position_raw_hex": "1cdd060044ba4e00"
+    },
+    {
+      "source_id": 9,
+      "source": "data/bgm/th06_09.opus",
+      "source_sha256": "2aa3d21e28671be8e78584a2d94f10fe65e91f17c506ddbd7e6dd846c4b64242",
+      "position": "th06_09.pos",
+      "position_sha256": "3fe5aa238af3aeecee06f5effda39008c0a4868ebaee647e5b58cdc728c7ab25",
+      "position_raw": [
+        1439108,
+        5293348
+      ],
+      "runtime": "stages/stage4/boss_theme.flac",
+      "runtime_sha256": "f982c88fd14368a5eab1a1a71d05b94d9decb132e8809d32436d8d13dd7b8d2b",
+      "loop": "stages/stage4/boss_theme.loop",
+      "loop_sha256": "e3218f074e7ca913807768715b3d423ea5bc04b78d92c42d88a6d1545393a105",
+      "configured_loop_frames": [
+        1566376,
+        5761467
+      ],
+      "effective_loop_frames": [
+        1566376,
+        5761467
+      ],
+      "pcm": {
+        "frames": 6056520,
+        "bytes": 24226080,
+        "sha256": "8e5935c9092b5b11e16ac225745002649fca7837a658b830f6feab637bf579f5",
+        "ogg_decode_sha256": "8e5935c9092b5b11e16ac225745002649fca7837a658b830f6feab637bf579f5",
+        "flac_decode_sha256": "8e5935c9092b5b11e16ac225745002649fca7837a658b830f6feab637bf579f5"
+      },
+      "position_raw_hex": "84f5150024c55000"
+    },
+    {
+      "source_id": 10,
+      "source": "data/bgm/th06_10.opus",
+      "source_sha256": "22617c1b897b784f0278da4d96103b2e220118a0d16354b107bb95fcd649619f",
+      "position": "th06_10.pos",
+      "position_sha256": "0e8723d7c16e8187d929b6e4b52646bb9f0386161fab33818316b61137a88f84",
+      "position_raw": [
+        702844,
+        6983248
+      ],
+      "runtime": "stages/stage5/stage_theme.flac",
+      "runtime_sha256": "eab126e26708e5bb15ca2df2852ae45aa6397cfba236738c9e9ee5c5ada20fa1",
+      "loop": "stages/stage5/stage_theme.loop",
+      "loop_sha256": "cdc5cdae25bda2494572e49f0a7332d55d091223e9401fe0e9854fb568e1ae36",
+      "configured_loop_frames": [
+        765000,
+        7600814
+      ],
+      "effective_loop_frames": [
+        765000,
+        7600814
+      ],
+      "pcm": {
+        "frames": 8430600,
+        "bytes": 33722400,
+        "sha256": "bc41384ab63d268abd3c64be33f27e3012c60f8ca148ecb3e2d77b0f22cd06eb",
+        "ogg_decode_sha256": "bc41384ab63d268abd3c64be33f27e3012c60f8ca148ecb3e2d77b0f22cd06eb",
+        "flac_decode_sha256": "bc41384ab63d268abd3c64be33f27e3012c60f8ca148ecb3e2d77b0f22cd06eb"
+      },
+      "position_raw_hex": "7cb90a00508e6a00"
+    },
+    {
+      "source_id": 11,
+      "source": "data/bgm/th06_11.opus",
+      "source_sha256": "d8db415ae88af211338945f65b1c918a2cc8ddbaf2061d283093e63a87017432",
+      "position": "th06_11.pos",
+      "position_sha256": "e25fc85ec093cc92d1d968f87668c468961ef03472bb56a00cb1b9d0e30ce1f3",
+      "position_raw": [
+        326340,
+        5398078
+      ],
+      "runtime": "stages/stage5/boss_theme.flac",
+      "runtime_sha256": "e8b87ec6734be691deb8ce48e15b23ccb2fadfbfe32334e1170b42aa58c97f0a",
+      "loop": "stages/stage5/boss_theme.loop",
+      "loop_sha256": "fd6bcd4702658c7d31a85ba8c89f6a1da6e4debeec9bdb227893c25f31af5982",
+      "configured_loop_frames": [
+        355200,
+        5875459
+      ],
+      "effective_loop_frames": [
+        355200,
+        5875459
+      ],
+      "pcm": {
+        "frames": 6200520,
+        "bytes": 24802080,
+        "sha256": "1eb0be6a884e9e496ee66008da2aefec1c36ce8a150c5b71925ff7e4f5f3e30a",
+        "ogg_decode_sha256": "1eb0be6a884e9e496ee66008da2aefec1c36ce8a150c5b71925ff7e4f5f3e30a",
+        "flac_decode_sha256": "1eb0be6a884e9e496ee66008da2aefec1c36ce8a150c5b71925ff7e4f5f3e30a"
+      },
+      "position_raw_hex": "c4fa04003e5e5200"
+    },
+    {
+      "source_id": 12,
+      "source": "data/bgm/th06_12.opus",
+      "source_sha256": "64009d1cf6bee74c092ab78dd91d97c9130166647b2b84d5f885a5bfaf1387bb",
+      "position": "th06_12.pos",
+      "position_sha256": "2d5391718dcdd8935179c85d31041c990e4b34556780e675da5ef179ae603c3b",
+      "position_raw": [
+        331248,
+        2773808
+      ],
+      "runtime": "stages/stage6/stage_theme.flac",
+      "runtime_sha256": "2851b2fab3536e2be1e9552ac53a0ef040747a97b07438ee00aa2b680fa07c6f",
+      "loop": "stages/stage6/stage_theme.loop",
+      "loop_sha256": "ad094de5e8894820c1c109664bc1bd7175ae0fdb7774d0d05ec3c5079bad1405",
+      "configured_loop_frames": [
+        360542,
+        3019110
+      ],
+      "effective_loop_frames": [
+        360542,
+        3019110
+      ],
+      "pcm": {
+        "frames": 3042120,
+        "bytes": 12168480,
+        "sha256": "dcd51855bcc4c219da13f1a89a04ca8ecfcb9e0586e8c9c0726a6ea4651cb440",
+        "ogg_decode_sha256": "dcd51855bcc4c219da13f1a89a04ca8ecfcb9e0586e8c9c0726a6ea4651cb440",
+        "flac_decode_sha256": "dcd51855bcc4c219da13f1a89a04ca8ecfcb9e0586e8c9c0726a6ea4651cb440"
+      },
+      "position_raw_hex": "f00d050030532a00"
+    },
+    {
+      "source_id": 13,
+      "source": "data/bgm/th06_13.opus",
+      "source_sha256": "13143aecae90f5c22b9105f818f5b7aa6108727b40f0de226380d111be426d4c",
+      "position": "th06_13.pos",
+      "position_sha256": "306fb12068af9b14292141f68ddb6cde621d27d718d0e0b3d9b9ff5ba5876416",
+      "position_raw": [
+        1658236,
+        7616768
+      ],
+      "runtime": "stages/stage6/boss_theme.flac",
+      "runtime_sha256": "dd0eae2e3675fe431b31953ec34afd712dfcae6f446e03ab93c21fa594dc270b",
+      "loop": "stages/stage6/boss_theme.loop",
+      "loop_sha256": "a209066e4ae15c33d5882bb852598cd39dc49b83c7d3b8b2924bf1cf7b4f2717",
+      "configured_loop_frames": [
+        1804882,
+        8290359
+      ],
+      "effective_loop_frames": [
+        1804882,
+        8290359
+      ],
+      "pcm": {
+        "frames": 8463240,
+        "bytes": 33852960,
+        "sha256": "10db96d9e023f5c65d11e1578bd02ddc1b50142eb06e6e4c1461325767f0043a",
+        "ogg_decode_sha256": "10db96d9e023f5c65d11e1578bd02ddc1b50142eb06e6e4c1461325767f0043a",
+        "flac_decode_sha256": "10db96d9e023f5c65d11e1578bd02ddc1b50142eb06e6e4c1461325767f0043a"
+      },
+      "position_raw_hex": "7c4d190000397400"
+    },
+    {
+      "source_id": 14,
+      "source": "data/bgm/th06_14.opus",
+      "source_sha256": "273dd53a7f56c4693b7b3f7b8bce4039ba9bde4e2d238a5cb993f3294c9ece42",
+      "position": "th06_14.pos",
+      "position_sha256": "8eb0a332d535c89490b47921bb0419a83fbed27d3f14164c175b7dce90d81a4b",
+      "position_raw": [
+        1916156,
+        7220184
+      ],
+      "runtime": "stages/stage_extra/stage_theme.flac",
+      "runtime_sha256": "5426089eacade5755a84f5eb2959abf65f93b8737edcd6d9a7905c2f97602bc4",
+      "loop": "stages/stage_extra/stage_theme.loop",
+      "loop_sha256": "6af443be59aa5ab4c9ae73227ccbb9705a281b320e5649dbf5a7b9a0ef0dddd9",
+      "configured_loop_frames": [
+        2085611,
+        7858703
+      ],
+      "effective_loop_frames": [
+        2085611,
+        7858703
+      ],
+      "pcm": {
+        "frames": 8009160,
+        "bytes": 32036640,
+        "sha256": "72f3e86e842a15276486e161a939c1f7dcd8780218ad70784b6c5d07b0a56d27",
+        "ogg_decode_sha256": "72f3e86e842a15276486e161a939c1f7dcd8780218ad70784b6c5d07b0a56d27",
+        "flac_decode_sha256": "72f3e86e842a15276486e161a939c1f7dcd8780218ad70784b6c5d07b0a56d27"
+      },
+      "position_raw_hex": "fc3c1d00d82b6e00"
+    },
+    {
+      "source_id": 15,
+      "source": "data/bgm/th06_15.opus",
+      "source_sha256": "75aa1e465eee30ea68aef6b1c4247b8143bc85ab825b27898050bf2aa108cfbd",
+      "position": "th06_15.pos",
+      "position_sha256": "4cd04c4fa565cf1f0432bb99c4268a2c61e7b733b9e5b1231fa0ae779bd6ddbb",
+      "position_raw": [
+        546840,
+        7705652
+      ],
+      "runtime": "stages/stage_extra/boss_theme.flac",
+      "runtime_sha256": "740cc06045db4d2b12172a31372a74fe6aa88892af7299b461af40bea7413a1e",
+      "loop": "stages/stage_extra/boss_theme.loop",
+      "loop_sha256": "15cf90e8b391407fbc58c9d5f75a5afc67bdfa796ed6561154b117b52d912326",
+      "configured_loop_frames": [
+        595200,
+        8387104
+      ],
+      "effective_loop_frames": [
+        595200,
+        8387104
+      ],
+      "pcm": {
+        "frames": 8387400,
+        "bytes": 33549600,
+        "sha256": "56ae590428086b1c4f5100aa47a2d1953241089e8022c9bb7181ead04e5db25b",
+        "ogg_decode_sha256": "56ae590428086b1c4f5100aa47a2d1953241089e8022c9bb7181ead04e5db25b",
+        "flac_decode_sha256": "56ae590428086b1c4f5100aa47a2d1953241089e8022c9bb7181ead04e5db25b"
+      },
+      "position_raw_hex": "1858080034947500"
+    },
+    {
+      "source_id": 16,
+      "source": "data/bgm/th06_16.opus",
+      "source_sha256": "2ecfd83f037143b9eb99afda8bf4add0102e8a2eae40e29aa7a548d2d1520fbd",
+      "position": "th06_16.pos",
+      "position_sha256": "f3c72f4cdb2d548b48aaf44a94f79a22c49cefffce5acd661be9462e525e9fba",
+      "position_raw": [
+        326340,
+        5157212
+      ],
+      "runtime": "stages/stage_extra/event_theme.flac",
+      "runtime_sha256": "571ae41e0240f4f27430069de5ee580aa481aa10fa93d4d55ac8fe8e4530a12f",
+      "loop": "stages/stage_extra/event_theme.loop",
+      "loop_sha256": "c835bfde8522461020e1491565377ffcd1c4cfb1339264c839a54e9fafd9f396",
+      "configured_loop_frames": [
+        355200,
+        5613291
+      ],
+      "effective_loop_frames": [
+        355200,
+        5613291
+      ],
+      "pcm": {
+        "frames": 5618760,
+        "bytes": 22475040,
+        "sha256": "442555c831ea393b6028828868f391b1bca9e23eadc7143b5f3ea766d94dafb0",
+        "ogg_decode_sha256": "442555c831ea393b6028828868f391b1bca9e23eadc7143b5f3ea766d94dafb0",
+        "flac_decode_sha256": "442555c831ea393b6028828868f391b1bca9e23eadc7143b5f3ea766d94dafb0"
+      },
+      "position_raw_hex": "c4fa04005cb14e00"
+    },
+    {
+      "source_id": 17,
+      "source": "data/bgm/th06_17.opus",
+      "source_sha256": "3cf8c39cdd0f33bad20216d6b5b2552ff33795b129b2a28957fe6846205240e8",
+      "position": "th06_17.pos",
+      "position_sha256": "08d6354ba12580cb2c1ff26ca41e0ae4bb33fcd6075975347a9cf841ffa5b440",
+      "position_raw": [
+        485100,
+        2610764
+      ],
+      "runtime": "endings/ending.flac",
+      "runtime_sha256": "2521ba08ce644b449abb2ce5d68a506bcc8498d2cfed7da472fc4fd492c1cbe6",
+      "loop": "endings/ending.loop",
+      "loop_sha256": "7031cab1df786b052d10b87ff92e25cf98013b6f1b211901577ee97ac4bb4cf6",
+      "configured_loop_frames": [
+        528000,
+        2841647
+      ],
+      "effective_loop_frames": [
+        528000,
+        2841647
+      ],
+      "pcm": {
+        "frames": 3152520,
+        "bytes": 12610080,
+        "sha256": "c4976e2045c1652b52dc043c49ffcd8b9fd18e68f42a75efbb6363c41f43d7b1",
+        "ogg_decode_sha256": "c4976e2045c1652b52dc043c49ffcd8b9fd18e68f42a75efbb6363c41f43d7b1",
+        "flac_decode_sha256": "c4976e2045c1652b52dc043c49ffcd8b9fd18e68f42a75efbb6363c41f43d7b1"
+      },
+      "position_raw_hex": "ec6607004cd62700"
+    }
+  ]
+}

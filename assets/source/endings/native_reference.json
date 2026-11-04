@@ -121,7 +121,7 @@
   "music": {
     "source": "bgm/th06_17.opus",
     "source_sha256": "3cf8c39cdd0f33bad20216d6b5b2552ff33795b129b2a28957fe6846205240e8",
-    "runtime": "endings/ending.mp3",
-    "runtime_sha256": "5625c2c5e98138c5204cc6c2d3dc47794572e927c4013c5a86450c767c135667"
+    "runtime": "endings/ending.flac",
+    "runtime_sha256": "2521ba08ce644b449abb2ce5d68a506bcc8498d2cfed7da472fc4fd492c1cbe6"
   }
 }

@@ -143,7 +143,7 @@ struct GameLifecycleProbe {
     static void MusicTitle(Game& game) {game.EnterMainMenu();game.selectedMenuItem_=6;game.titleEntrance_.Complete();}
     static bool MusicOnly(const Game& game) {return !game.assets_.HasStage() && game.assets_.MusicRoomTrack()>=0;}
     static int PlayingTrack(const Game& game) {return game.assets_.MusicRoomTrack();}
-    static bool MusicReleased(const Game& game) {return !IsMusicValid(game.assets_.roomMusic_);}
+    static bool MusicReleased(const Game& game) {return !(game.assets_.roomMusic_).Valid();}
     static bool MainMenu(const Game& game) { return game.state_==RunState::MainMenu; }
     static bool EntranceComplete(const Game& game) { return game.titleEntrance_.Finished(); }
     static int MenuSelection(const Game& game) { return game.selectedMenuItem_; }

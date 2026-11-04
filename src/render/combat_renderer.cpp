@@ -3,6 +3,7 @@
 #include "render/projectiles/effects_asset.hpp"
 #include "render/projectiles/marisa_asset.hpp"
 #include "render/projectiles/marisa_beam_geometry.hpp"
+#include "render/projectile_visibility.hpp"
 #include "external/glad.h"
 #include "rlgl.h"
 #include "render/projectiles/model_draw.hpp"
@@ -13,7 +14,7 @@
 namespace koumakyou {
 using namespace projectile_detail;
 CombatRenderer::CombatRenderer(){opaque_.reserve(BulletSystem::kCapacity);transparent_.reserve(BulletSystem::kCapacity);grouped_.reserve(BulletSystem::kCapacity);spawning_.reserve(BulletSystem::kCapacity);depths_.reserve(BulletSystem::kCapacity);preparedGroups_.reserve(BulletSystem::kCapacity);lasers_.reserve(BulletSystem::kCapacity);laserIndices_.reserve(BulletSystem::kCapacity);}
-void CombatRenderer::Prepare(const ProjectileAssets*assets,const BulletSystem&bullets,std::span<const VisualResource>visuals,const Camera3D&camera,float aspect,float simulationSeconds){
+void CombatRenderer::Prepare(const ProjectileAssets*assets,const BulletSystem&bullets,std::span<const VisualResource>visuals,const Camera3D&camera,Vector3 playerPosition,float aspect,float simulationSeconds){
  assets_=assets;camera_=camera;aspect_=aspect;opaque_.clear();transparent_.clear();depths_.clear();time_=std::max(0.F,simulationSeconds);lasers_.clear();laserIndices_.clear();if(!assets_)return;
  Vector3 forward=Vector3Normalize(Vector3Subtract(camera.target,camera.position));
  const VisualResource fallbackVisual{};
@@ -23,14 +24,19 @@ void CombatRenderer::Prepare(const ProjectileAssets*assets,const BulletSystem&bu
   const auto& visual=b.visual<visuals.size()?visuals[b.visual]:fallbackVisual;
   auto binding=ProjectileFrameBuilder::Resolve(b,visual);
   if(binding.beam&&b.owner==BulletOwner::Enemy){
-   projectiles::LaserInstance item;item.origin=b.position;item.direction=b.Direction();item.length=b.beamLength;item.radius=b.radius;item.visualScaleOverride=b.BeamVisualScale();item.dangerOverride=b.Dangerous()?1:0;item.color=std::clamp(binding.color,0,15);item.variant=binding.id==ProjectileAssetId::LaserRound?1:0;item.useColorOverride=visual.animation.atlas!=battle::Atlas::BeamBullets;item.tintOverride=b.color;item.warning=0;item.growEnd=0;item.dangerEnd=10;item.end=11;item.age=1;item.fadeSeconds=0;
+   projectiles::LaserInstance item;item.origin=b.position;item.direction=b.Direction();item.length=b.beamLength;item.radius=b.radius;item.visualScaleOverride=b.BeamVisualScale();item.dangerOverride=b.Dangerous()?1:0;item.color=std::clamp(binding.color,0,15);item.variant=binding.id==ProjectileAssetId::LaserRound?1:0;
+   // 近自机淡化需要通过实例 Alpha 进入激光批次；原生色号先解析为同一调色，不能因强制 override 丢失色相。
+   item.useColorOverride=true;item.tintOverride=visual.animation.atlas!=battle::Atlas::BeamBullets?b.color:projectiles::ClassicPalette(item.color).bodyColor;
+   item.tintOverride.a=ScaleProjectileAlpha(b.color.a,NearPlayerBulletAlpha(b,playerPosition,b.radius*b.BeamVisualScale()));item.warning=0;item.growEnd=0;item.dangerEnd=10;item.end=11;item.age=1;item.fadeSeconds=0;
    if(item.radius>0&&item.length>0){laserIndices_.push_back({&b,lasers_.size()});lasers_.push_back(item);}return;
   }
   if(binding.type<0||binding.beam)return;
-  auto pose=ProjectileFrameBuilder::Pose(b,binding,*assets_);projectiles::CollectionInstance item;item.type=binding.type;item.transform.position=pose.position;item.transform.rotation=pose.rotation;item.transform.scale=pose.scale;item.transform.appearance=projectiles::AppearanceFor(binding.type,binding.color);item.transform.appearance.bodyColor.a=b.color.a;
+  auto pose=ProjectileFrameBuilder::Pose(b,binding,*assets_);projectiles::CollectionInstance item;item.type=binding.type;item.transform.position=pose.position;item.transform.rotation=pose.rotation;item.transform.scale=pose.scale;item.transform.appearance=projectiles::AppearanceFor(binding.type,binding.color);
+  const float visualRadius=assets_->Get(binding.id).visualRadius*pose.scale;
+  item.transform.appearance.bodyColor.a=ScaleProjectileAlpha(b.color.a,NearPlayerBulletAlpha(b,playerPosition,visualRadius));
   bool spawning=b.spawnVisualSeconds>0&&b.age<b.spawnVisualSeconds;
-  if(spawning){projectiles::SpawnParams p;p.age=b.age;p.duration=b.spawnVisualSeconds;auto sample=projectiles::SampleEffect(p);item.transform.scale*=sample.scale;item.transform.appearance.bodyColor.a=static_cast<unsigned char>(std::min(254.F,sample.alpha*b.color.a));}
-  float depth=Vector3DotProduct(Vector3Subtract(b.position,camera.position),forward);transparent_.push_back(item);depths_.push_back(depth);if(!spawning&&b.color.a==255)opaque_.push_back(item);
+  if(spawning){projectiles::SpawnParams p;p.age=b.age;p.duration=b.spawnVisualSeconds;auto sample=projectiles::SampleEffect(p);item.transform.scale*=sample.scale;item.transform.appearance.bodyColor.a=static_cast<unsigned char>(std::min(254.F,sample.alpha*item.transform.appearance.bodyColor.a));}
+  float depth=Vector3DotProduct(Vector3Subtract(b.position,camera.position),forward);transparent_.push_back(item);depths_.push_back(depth);if(!spawning&&item.transform.appearance.bodyColor.a==255)opaque_.push_back(item);
  });
  // 指针只在本次 Draw 借用；排序只影响查找，不改变透明队列、弹池或发弹顺序。
  std::sort(laserIndices_.begin(),laserIndices_.end(),[](const auto& a,const auto& b){return std::less<const Bullet*>{}(a.first,b.first);});
@@ -41,6 +47,8 @@ void CombatRenderer::DrawOpaque(){if(!assets_||opaque_.empty())return;auto&r=ass
 void CombatRenderer::DrawGroup(int group){std::size_t index=group;DrawGroups(std::span(&index,1));}
 void CombatRenderer::DrawGroups(std::span<const std::size_t> groups){
  if(!assets_||groups.empty())return;grouped_.clear();spawning_.clear();
+ // Alpha 主体的混合不可交换；逐实例入口也必须遵守传入的远到近顺序。
+ if(groups.size()>1&&std::any_of(groups.begin(),groups.end(),[&](auto index){return GroupTranslucent(index);})){for(auto index:groups)DrawGroup(static_cast<int>(index));return;}
  for(auto index:groups){const auto& item=transparent_.at(index);grouped_.push_back(item);if(item.transform.appearance.bodyColor.a<255)spawning_.push_back(item);}
  auto&r=assets_->Collection();
  if(!spawning_.empty()){r.Prepare(spawning_,camera_,aspect_);r.Draw(time_,false,0,0,0);}

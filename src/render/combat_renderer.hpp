@@ -9,18 +9,22 @@ class CombatRenderer {
 public:
  CombatRenderer();
  /// @brief 预分配实例交给统一透明队列按真实视深排序；不持有跨帧弹池指针，年龄只读取不推进。
- void Prepare(const ProjectileAssets*,const BulletSystem&,std::span<const VisualResource>,const Camera3D&,float aspect,float simulationSeconds=0);
+ /// playerPosition 是实际自机世界坐标，仅用于近镜头敌弹淡化；回放观察相机不得代替它。
+ void Prepare(const ProjectileAssets*,const BulletSystem&,std::span<const VisualResource>,const Camera3D&,Vector3 playerPosition,float aspect,float simulationSeconds=0);
  bool Available()const{return assets_!=nullptr;}
  bool Handles(const Bullet&,const VisualResource&)const;
  void DrawOpaque();
  int TransparentGroups()const{return static_cast<int>(transparent_.size());}
  float GroupDepth(int group)const{return depths_[group];}
+ /// @brief 本帧实例主体是否半透明；此类实例必须独立 PrepareGroup，保留远到近的 Alpha 顺序。
+ bool GroupTranslucent(std::size_t group)const{return transparent_.at(group).transform.appearance.bodyColor.a<255;}
  void DrawGroup(int group);
  /// @brief 合并统一队列内连续的模型命令；不能跨越演员/道具的透明绘制命令。
  void DrawGroups(std::span<const std::size_t> groups);
  /// @brief Prepare 后开始透明阶段收集，清除上次的批次句柄；仅借用本帧素材。
  void BeginGroups();
  /// @brief 素材须 Available；groups 使用本帧 TransparentGroups 的索引，返回本阶段句柄。
+ /// 半透明主体须单独传入；多实例只用于不透明主体的装饰合批，避免按弹种重排 Alpha 主体。
  /// 调用序列为 BeginGroups → PrepareGroup（可多次）→ UploadGroups → DrawPreparedGroup（按原透明顺序）。
  std::size_t PrepareGroup(std::span<const std::size_t> groups);
  void UploadGroups();

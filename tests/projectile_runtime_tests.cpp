@@ -19,6 +19,31 @@
 #include "resources/projectile_paths.hpp"
 using namespace koumakyou;
 void Require(bool v,std::source_location at=std::source_location::current()){if(!v)throw std::runtime_error("Projectile runtime integration failed at line "+std::to_string(at.line()));}
+/// @brief 将统一队列与独立逐弹绘制比较；混合弹种必须保持远到近的主体/装饰顺序，并且绘制不改战斗 Alpha。
+void CheckNearFadeOrdering(ProjectileAssets& assets){
+ auto bullets=std::make_unique<BulletSystem>();std::array<VisualResource,2> visuals{};
+ auto* far=bullets->Spawn(BulletOwner::Enemy,{0,0,-.2F},{0,0,-1},.2F,WHITE,0);far->nativeType=3;far->nativeColor=2;
+ auto* near=bullets->Spawn(BulletOwner::Enemy,{0,0,.2F},{0,0,-1},.2F,WHITE,1);near->nativeType=0;near->nativeColor=6;
+ Camera3D camera{{0,0,3},{0,0,0},{0,1,0},42,CAMERA_PERSPECTIVE};const Vector3 player{0,0,.3F};
+ auto target=LoadRenderTexture(192,192);SpriteRenderer sprites;ActorEffectSystem effects;
+ for(bool spawning:{false,true}){
+  far->spawnVisualSeconds=spawning?1.F:0.F;far->age=.5F;
+  const auto render=[&](bool unified){
+   CombatRenderer models;models.Prepare(&assets,*bullets,visuals,camera,player,1);
+   Require(models.GroupTranslucent(0)&&models.GroupTranslucent(1));
+   BeginTextureMode(target);ClearBackground({15,21,33,255});BeginMode3D(camera);
+   if(unified)sprites.Draw(camera,player,*bullets,{},nullptr,{},visuals,{},effects,{},nullptr,&models);
+   else{models.DrawOpaque();models.DrawGroup(0);models.DrawGroup(1);}
+   EndMode3D();EndTextureMode();return LoadImageFromTexture(target.texture);
+  };
+  auto expected=render(false),actual=render(true);auto a=LoadImageColors(expected),b=LoadImageColors(actual);int visible=0;
+  for(int i=0;i<192*192;++i){visible+=a[i].r!=15||a[i].g!=21||a[i].b!=33;
+   Require(std::abs(int(a[i].r)-b[i].r)<=1&&std::abs(int(a[i].g)-b[i].g)<=1&&std::abs(int(a[i].b)-b[i].b)<=1);}
+  Require(visible>100&&far->color.a==255&&near->color.a==255);
+  UnloadImageColors(a);UnloadImageColors(b);UnloadImage(expected);UnloadImage(actual);
+ }
+ UnloadRenderTexture(target);
+}
 /// @brief 正式加载路径必须保留针晶的平面法线，防止通用平滑把六棱实体变成圆润外观。
 void CheckNeedleCrystal(const ProjectileAssets& assets){
  const auto& model=assets.Get(ProjectileAssetId::NeedleClassic).layers[0];Require(model.meshCount==1);
@@ -97,7 +122,7 @@ void CheckFrameBatches(ProjectileAssets& assets){
  immediate=renderLasers(false);prepared=renderLasers(true);a=LoadImageColors(immediate);b=LoadImageColors(prepared);Require(std::memcmp(a,b,256*256*sizeof(Color))==0);UnloadImageColors(a);UnloadImageColors(b);UnloadImage(immediate);UnloadImage(prepared);
  // 手工敌激光没有有效图集编号时也必须沿用默认模型，不能因帧内预收集漏掉而消失。
  BulletSystem manual;auto* beam=manual.SpawnBeam({0,-1,0},{0,1,0},2,.1F,0,10,WHITE);beam->visual=kInvalidVisualId;beam->age=1;
- CombatRenderer combat;combat.Prepare(&assets,manual,{},camera,1);BeginTextureMode(target);BeginMode3D(camera);Require(combat.DrawBeam(*beam,{},0,1));EndMode3D();EndTextureMode();Require(assets.Lasers().Stats().drawCalls==3);
+ CombatRenderer combat;combat.Prepare(&assets,manual,{},camera,camera.position,1);BeginTextureMode(target);BeginMode3D(camera);Require(combat.DrawBeam(*beam,{},0,1));EndMode3D();EndTextureMode();Require(assets.Lasers().Stats().drawCalls==3);
  // 正式批次必须容纳整个弹池，而不是到 8193 才抛出运行时异常。
  std::vector<projectiles::CollectionInstance> full(BulletSystem::kCapacity);for(auto& item:full)item.transform.scale=.01F;
  renderer.Prepare(full,camera,1);Require(renderer.Stats().submitted==BulletSystem::kCapacity);UnloadRenderTexture(target);
@@ -143,7 +168,7 @@ void CheckMarisaBeamClipping(ProjectileAssets& assets,const std::filesystem::pat
  for(const float radius:{.15F,.45F})for(const auto position:std::array<Vector3,4>{{{0,0,4},{2,1,3},{.2F,3,.1F},{.2F,-1.2F,.1F}}})for(const int projection:{CAMERA_PERSPECTIVE,CAMERA_ORTHOGRAPHIC}){
   beam->radius=radius;const auto geometry=projectiles::SampleMarisaBeamGeometry(*beam,binding.tier);pose.position=geometry.origin;
   Camera3D camera{position,{0,0,0},{0,1,0},projection==CAMERA_PERSPECTIVE?42.F:3.F,projection};
-  CombatRenderer combat;combat.Prepare(&assets,bullets,std::span(&visual,1),camera,1);
+  CombatRenderer combat;combat.Prepare(&assets,bullets,std::span(&visual,1),camera,camera.position,1);
   for(const auto interval:std::array<Vector2,5>{{{0,1},{0,.4F},{.4F,1},{.2F,.8F},{.49F,.51F}}}){
    const auto render=[&](bool clipped){
     BeginTextureMode(target);ClearBackground({15,21,33,255});BeginMode3D(camera);rlDisableBackfaceCulling();
@@ -170,7 +195,7 @@ void CheckMarisaBeamClipping(ProjectileAssets& assets,const std::filesystem::pat
  // RenderTexture 不带 MSAA，另在真实 4×MSAA 窗口比较整束与 20 段相加。
  // 没有其他透明对象时两种画法必须连续，防止硬件裁剪后再 discard 造成切口缺样。
  Camera3D nearCamera{{.2F,-1.2F,.1F},{0,0,0},{0,1,0},65,CAMERA_PERSPECTIVE};
- CombatRenderer windowCombat;windowCombat.Prepare(&assets,bullets,std::span(&visual,1),nearCamera,float(GetRenderWidth())/GetRenderHeight());
+ CombatRenderer windowCombat;windowCombat.Prepare(&assets,bullets,std::span(&visual,1),nearCamera,nearCamera.position,float(GetRenderWidth())/GetRenderHeight());
  const auto renderWindow=[&](int segments){
   BeginDrawing();ClearBackground({15,21,33,255});BeginMode3D(nearCamera);rlDisableBackfaceCulling();
   for(int i=0;i<segments;++i)Require(windowCombat.DrawBeam(*beam,visual,float(i)/segments,float(i+1)/segments));
@@ -246,14 +271,14 @@ void CheckProjectileLighting(ProjectileAssets& assets,const std::filesystem::pat
 int main(int argc,char**argv){try{
  if(argc<2)throw std::runtime_error("Asset root required");CheckFirstPersonMarisaGeometry();SetConfigFlags(FLAG_WINDOW_HIDDEN|FLAG_MSAA_4X_HINT);InitWindow(1280,800,"Projectile runtime integration");
  for(int cycle=0;cycle<2;cycle++){
-  ProjectileAssets assets(argv[1]);CheckNeedleCrystal(assets);CheckKnifeShape(assets);CheckFrameBatches(assets);CheckMarisaBeamClipping(assets,argc>2?std::filesystem::path(argv[2]):std::filesystem::path{});if(cycle==0){CheckSealColors(assets,argc>2?std::filesystem::path(argv[2]):std::filesystem::path{});CheckProjectileLighting(assets,argv[1],argc>2?std::filesystem::path(argv[2]):std::filesystem::path{});}for(const auto&d:ProjectileModels)Require(assets.Get(d.name).layers[0].meshCount>0);
+  ProjectileAssets assets(argv[1]);CheckNearFadeOrdering(assets);CheckNeedleCrystal(assets);CheckKnifeShape(assets);CheckFrameBatches(assets);CheckMarisaBeamClipping(assets,argc>2?std::filesystem::path(argv[2]):std::filesystem::path{});if(cycle==0){CheckSealColors(assets,argc>2?std::filesystem::path(argv[2]):std::filesystem::path{});CheckProjectileLighting(assets,argv[1],argc>2?std::filesystem::path(argv[2]):std::filesystem::path{});}for(const auto&d:ProjectileModels)Require(assets.Get(d.name).layers[0].meshCount>0);
   // DropSystem 模拟年龄决定旋转，相同模拟时间不依赖帧率；零步长冻结，池复用恢复零角。
   DropSystem drops(7);drops.SpawnFixedPower({0,0,0},1);drops.Update(1,{0,-9,-8});
   drops.ForEachActive([](const Pickup&p){Require(std::abs(p.RotationRadians()-PI/2)<1e-5F);Require(p.NativeItemType()==0);});
   drops.Update(0,{0,-9,-8});drops.ForEachActive([](const Pickup&p){Require(std::abs(p.RotationRadians()-PI/2)<1e-5F);});
   drops.Clear();drops.SpawnFixedPower({0,0,0},8);drops.ForEachActive([](const Pickup&p){Require(p.RotationRadians()==0&&p.NativeItemType()==2);});
   Camera3D itemCamera{{0,0,8},{0,0,0},{0,1,0},4,CAMERA_ORTHOGRAPHIC};
-  CombatRenderer itemRenderer;BulletSystem empty;itemRenderer.Prepare(&assets,empty,{},itemCamera,1,0);
+  CombatRenderer itemRenderer;BulletSystem empty;itemRenderer.Prepare(&assets,empty,{},itemCamera,itemCamera.position,1,0);
   auto itemTarget=LoadRenderTexture(1024,640);BeginTextureMode(itemTarget);ClearBackground(BLACK);BeginMode3D(itemCamera);
   for(int item=0;item<7;item++){Require(assets.Item(item).meshCount>0);VisualResource visual{};visual.animation=battle::Item(item);visual.worldHeight=.8F;PickupSprite sprite;sprite.position={(item%4-1.5F)*1.3F,(.5F-item/4)*1.5F,0};sprite.itemRotation=.5F;Require(itemRenderer.DrawItem(sprite,visual));}
   EndMode3D();rlEnableDepthMask();rlEnableBackfaceCulling();EndTextureMode();auto itemImage=LoadImageFromTexture(itemTarget.texture);ImageFlipVertical(&itemImage);
@@ -281,7 +306,7 @@ int main(int argc,char**argv){try{
   auto world=[&](Vector3 p){return Vector3Add(pose.position,Vector3RotateByQuaternion(Vector3Scale(p,pose.scale),pose.rotation));};
   Require(collision.DistanceSquared(&assets,knife,visuals[4],world({0,-.335F,0}),1)>.00001F);
   Require(collision.DistanceSquared(&assets,knife,visuals[4],world({0,.2F,0}),1)<.00001F);
-  Camera3D camera{{0,0,6},{0,0,0},{0,1,0},42,CAMERA_PERSPECTIVE};CombatRenderer models;models.Prepare(&assets,bullets,visuals,camera,1.6F);
+  Camera3D camera{{0,0,6},{0,0,0},{0,1,0},42,CAMERA_PERSPECTIVE};CombatRenderer models;models.Prepare(&assets,bullets,visuals,camera,camera.position,1.6F);
   auto target=LoadRenderTexture(1280,800);BeginTextureMode(target);ClearBackground({15,21,33,255});BeginMode3D(camera);models.DrawOpaque();for(int group=models.TransparentGroups()-1;group>=0;group--)models.DrawGroup(group);EndMode3D();EndTextureMode();
   Image image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);int visible=0;for(int y=0;y<800;y+=2)for(int x=0;x<1280;x+=2){auto pixel=GetImageColor(image,x,y);if(pixel.r>35||pixel.g>40||pixel.b>55)visible++;}Require(visible>200);
   if(argc>2&&cycle==0){std::filesystem::create_directories(argv[2]);Require(ExportImage(image,(std::filesystem::path(argv[2])/"enemy-models-runtime.png").string().c_str()));}

@@ -1,11 +1,24 @@
-// 本文件验证速度方向不变量、静止束轴及模型姿态对齐，不执行性能测试。
+// 本文件验证弹幕方向、模型姿态与近自机淡化的纯计算规则，不执行性能测试。
 #include "gameplay/bullets/system.hpp"
 #include "render/projectile_pose.hpp"
+#include "render/projectile_visibility.hpp"
 #include <limits>
 #include <iostream>
 using namespace koumakyou;
 void Check(bool v){if(!v)throw std::runtime_error("Projectile direction check failed");}
 int main(){
+ Bullet visibility;visibility.active=true;visibility.owner=BulletOwner::Enemy;visibility.position={0,0,3};visibility.SetVelocity({0,0,-1});
+ Check(NearPlayerBulletAlpha(visibility,{},.1F)==1);
+ visibility.position={0,0,.1F};
+ Check(std::abs(NearPlayerBulletAlpha(visibility,{},.1F)-.65F)<1e-6F);
+ visibility.SetVelocity({0,0,1});
+ Check(std::abs(NearPlayerBulletAlpha(visibility,{},.1F)-.35F)<1e-6F);
+ visibility.position={0,0,1};const float small=NearPlayerBulletAlpha(visibility,{},.1F),large=NearPlayerBulletAlpha(visibility,{},.8F);
+ Check(large<small&&small>.35F&&small<1);
+ visibility.owner=BulletOwner::Player;Check(NearPlayerBulletAlpha(visibility,{},10)==1);
+ visibility=Bullet{};visibility.active=true;visibility.owner=BulletOwner::Enemy;visibility.position={0,0,-1};visibility.SetBeamDirection({0,0,1});visibility.beamLength=2;
+ Check(std::abs(NearPlayerBulletAlpha(visibility,{},.1F)-.65F)<1e-6F);
+ Check(ScaleProjectileAlpha(200,.5F)==100);
  Bullet b;b.SetVelocity({3,4,0});Check(Vector3Distance(b.Direction(),{.6F,.8F,0})<1e-5F);
  b.SetVelocity({});Check(Vector3Distance(b.Direction(),{.6F,.8F,0})<1e-5F);
  b.SetInitialDirection({0,0,-2});Check(b.Direction().z==-1);b.SetVelocity({-3,0,0});Check(b.Direction().x==-1);
@@ -32,5 +45,5 @@ int main(){
   Vector3 nearReverse=Vector3Normalize(Vector3Add(Vector3Negate(Vector3RotateByQuaternion(asset.direction.forward,previous)),{.0002F,.0001F,0}));
   auto turn=ProjectilePoseBuilder::BuildPose(asset.direction,nearReverse,{},1,&previous);Check(Vector3Distance(Vector3RotateByQuaternion(asset.direction.forward,turn.rotation),nearReverse)<1e-4F);
  }
- std::cout<<"Bullet direction, beam axis and all model poses PASS\n";
+ std::cout<<"Bullet direction, visibility fade, beam axis and all model poses PASS\n";
 }

@@ -172,8 +172,8 @@ void Game::DrawWorld() const {
        (player_.InvulnerabilitySeconds()<=0 || static_cast<int>(player_.VisualAge()*12)%2==0))
         pickupSprites_.push_back({player_.Position(),static_cast<VisualId>(stage_assets::kPlayerBody+(player_.IsMarisa()?5:0)+playerBodyAction_),1,&playerBodyAnimation_.player.Sample()});
     DrawPlayerBombBackdrop(viewport.width,viewport.height);
-    combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,drawCamera,viewport.width/viewport.height,stage_.Elapsed());
-    spriteRenderer_.Draw(drawCamera, bullets_, visible, boss_.get(),
+    combatRenderer_.Prepare(assets_.Projectiles(),bullets_,assets_.Stage().visuals,drawCamera,player_.Position(),viewport.width/viewport.height,stage_.Elapsed());
+    spriteRenderer_.Draw(drawCamera, player_.Position(), bullets_, visible, boss_.get(),
                          pickupSprites_,
                          assets_.Stage().visuals, assets_.Stage().shaders,
                          actorEffects_,playerBombVolumes_,&externalEffects_,&combatRenderer_);

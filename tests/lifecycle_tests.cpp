@@ -944,8 +944,8 @@ struct GameLifecycleProbe {
             for(const auto& sprite:game.playerBomb_.Sprites())volumes.push_back({&sprite,visuals[sprite.layer]});
             BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(game.camera_);
             assert(game.assets_.Projectiles());
-            game.combatRenderer_.Prepare(game.assets_.Projectiles(),game.bullets_,game.assets_.Stage().visuals,game.camera_,1100.F/760);
-            game.spriteRenderer_.Draw(game.camera_,game.bullets_,{},nullptr,{},game.assets_.Stage().visuals,
+            game.combatRenderer_.Prepare(game.assets_.Projectiles(),game.bullets_,game.assets_.Stage().visuals,game.camera_,game.player_.Position(),1100.F/760);
+            game.spriteRenderer_.Draw(game.camera_,game.player_.Position(),game.bullets_,{},nullptr,{},game.assets_.Stage().visuals,
                                       game.assets_.Stage().shaders,game.actorEffects_,volumes,&game.externalEffects_,&game.combatRenderer_);
             EndMode3D();EndTextureMode();EndDrawing();
             Image image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);

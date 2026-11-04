@@ -24,7 +24,7 @@ double DrawFrames(koumakyou::SpriteRenderer& renderer,
         BeginDrawing();
         ClearBackground(BLACK);
         BeginMode3D(camera);
-        renderer.Draw(camera, bullets, {}, nullptr, {}, visuals, shaders, effects);
+        renderer.Draw(camera, camera.position, bullets, {}, nullptr, {}, visuals, shaders, effects);
         EndMode3D();
         EndDrawing();
     }

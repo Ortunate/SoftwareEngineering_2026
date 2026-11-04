@@ -46,6 +46,9 @@ void ProjectileAssets::LoadModelResource(std::size_t i){
     UpdateMeshBuffer(mesh,2,mesh.normals,mesh.vertexCount*3*sizeof(float),0);
    }}
   if(!r.layers[0].meshCount)throw std::runtime_error("Projectile body missing: "+name);
+  for(int meshIndex=0;meshIndex<r.layers[0].meshCount;++meshIndex){const auto& mesh=r.layers[0].meshes[meshIndex];
+   for(int vertex=0;vertex<mesh.vertexCount;++vertex)r.visualRadius=std::max(r.visualRadius,
+    Vector3Length(Vector3Transform({mesh.vertices[3*vertex],mesh.vertices[3*vertex+1],mesh.vertices[3*vertex+2]},r.layers[0].transform)));}
   auto box=GetModelBoundingBox(r.layers[0]);auto axis=ProjectileModels[i].direction.forward;r.forwardExtent=std::abs(axis.x)*(box.max.x-box.min.x)+std::abs(axis.y)*(box.max.y-box.min.y)+std::abs(axis.z)*(box.max.z-box.min.z);if(r.forwardExtent<=0)throw std::runtime_error("Empty projectile extent");
   if(std::filesystem::exists(dir/"collision.bin")){r.collision=std::make_unique<projectiles::CollisionAsset>(dir/"collision.bin");r.referenceRadius=r.collision->BoundingRadius();}
 }

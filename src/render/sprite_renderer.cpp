@@ -5,6 +5,7 @@
 #include "render/animated_sprite.hpp"
 #include "render/bomb_geometry.hpp"
 #include "render/projectiles/marisa_beam_geometry.hpp"
+#include "render/projectile_visibility.hpp"
 #include "gameplay/data/native_sizes.hpp"
 
 #include "rlgl.h"
@@ -218,7 +219,7 @@ void DrawBeamShell(Vector3 start,Vector3 end,float radius,Color color,bool capSt
 
 }  // namespace
 
-void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
+void SpriteRenderer::Draw(const Camera3D& camera, Vector3 playerPosition, const BulletSystem& bullets,
                           std::span<const behavior::Actor*> enemies, const Boss* boss,
                           std::span<const PickupSprite> pickups,
                           std::span<const VisualResource> visuals,
@@ -331,7 +332,8 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
     bullets.Pool().ForEachActive([&](const Bullet& bullet) {
         const auto& visual=FindVisual(visuals,bullet.visual);
         if(bullet.IsBeam()) {
-            if((!models||!models->Handles(bullet,visual))&&!visual.archive && (bullet.Dangerous() || bullet.beamGrowSeconds>0)) {
+            if((!models||!models->Handles(bullet,visual))&&!visual.archive && (bullet.Dangerous() || bullet.beamGrowSeconds>0)&&
+               ScaleProjectileAlpha(bullet.color.a,NearPlayerBulletAlpha(bullet,playerPosition,bullet.radius*bullet.BeamVisualScale()))==255) {
                 const auto end=bullet.BeamEnd();
                 const float width=bullet.radius*bullet.BeamVisualScale();
                 DrawCylinderEx(bullet.position,end,width*0.45F,width*0.45F,10,WHITE);
@@ -342,12 +344,15 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             if(ProjectileFrameBuilder::Resolve(bullet,visual).type<0)queue({Kind::Bullet,0,0,&bullet},SpritePlane{depth(bullet.position)});
             return;
         }
-        if(visual.mode==VisualMode::Sphere && bullet.color.a==255) {
+        const float visualRadius=visual.mode==VisualMode::Sphere ? bullet.radius : BulletHeight(visual,bullet)*0.5F;
+        const auto displayAlpha=ScaleProjectileAlpha(bullet.color.a,NearPlayerBulletAlpha(bullet,playerPosition,visualRadius));
+        if(visual.mode==VisualMode::Sphere && displayAlpha==255) {
             DrawSphere(bullet.position,bullet.radius,bullet.color);return;
         }
         const float distance=DistanceSquared(bullet.position,camera.position);
-        if(bullet.visual>=visuals.size() || (!visual.archive&&distance<0.7F*0.7F))return;
-        if(!visual.archive && bullet.owner==BulletOwner::Enemy && distance<1.1F*1.1F)return;
+        if(bullet.visual>=visuals.size())return;
+        // 自机旧 PNG 保留枪口近裁规则；连续淡化只替换敌弹的近距离隐藏，不能改变自机弹曝光。
+        if(bullet.owner==BulletOwner::Player&&!visual.archive&&distance<0.7F*0.7F)return;
         const auto plane=spritePlane(visual,BulletHeight(visual,bullet),bullet.position,
                                   &bullet.animation.player.Sample(),bullet.Direction());
         // 同深度按插入顺序稳定绘制，光晕先于自身弹体，避免光效盖住前方角色或道具。
@@ -449,7 +454,9 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
             auto command=transparentDraws_[read++];
             if(command.kind==Kind::ModelGroup){
                 modelCommands_.clear();modelCommands_.push_back(command.index);
-                while(read<transparentDraws_.size()&&transparentDraws_[read].kind==Kind::ModelGroup)modelCommands_.push_back(transparentDraws_[read++].index);
+                // 合集会按弹种重排实例；只有不透明主体的装饰允许合并，淡化主体逐只保持视深顺序。
+                if(!models->GroupTranslucent(command.index))while(read<transparentDraws_.size()&&transparentDraws_[read].kind==Kind::ModelGroup&&
+                    !models->GroupTranslucent(transparentDraws_[read].index))modelCommands_.push_back(transparentDraws_[read++].index);
                 command.index=models->PrepareGroup(modelCommands_);
             }
             transparentDraws_[write++]=command;
@@ -489,14 +496,17 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         } else if(command.kind==Kind::Bullet) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
             if(models&&models->DrawBullet(bullet,visual))continue;
-            if(visual.mode==VisualMode::Sphere)DrawSphere(bullet.position,bullet.radius,bullet.color);
+            const auto alpha=ScaleProjectileAlpha(bullet.color.a,NearPlayerBulletAlpha(
+                bullet,playerPosition,visual.mode==VisualMode::Sphere ? bullet.radius : BulletHeight(visual,bullet)*0.5F));
+            if(visual.mode==VisualMode::Sphere)DrawSphere(bullet.position,bullet.radius,Color{bullet.color.r,bullet.color.g,bullet.color.b,alpha});
             else DrawSprite(camera,screenUp,Spec(visual,BulletHeight(visual,bullet),
-                            &bullet.animation.player.Sample(),bullet.Direction()),bullet.position,{255,255,255,bullet.color.a});
+                            &bullet.animation.player.Sample(),bullet.Direction()),bullet.position,{255,255,255,alpha});
         } else if(command.kind==Kind::Glow) {
             const auto& bullet=*command.bullet;const auto& visual=visuals[bullet.visual];
             const float distance=std::sqrt(DistanceSquared(bullet.position,camera.position));
             const float nearFade=std::clamp((distance-0.35F)/0.75F,0.0F,1.0F);
-            const auto opacity=static_cast<unsigned char>(36+28*nearFade);
+            const auto opacity=ScaleProjectileAlpha(static_cast<unsigned char>(36+28*nearFade),
+                NearPlayerBulletAlpha(bullet,playerPosition,BulletHeight(visual,bullet)*0.5F));
             BeginBlendMode(BLEND_ADDITIVE);
             DrawSprite(camera,screenUp,Spec(visual,bullet.radius*(distance<1.1F ? 2.6F : 3.15F)),
                        bullet.position,{255,255,255,opacity});
@@ -528,6 +538,8 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
         } else {
             const auto& beam=*command.bullet;const auto& visual=FindVisual(visuals,beam.visual);
             if(models&&models->DrawBeam(beam,visual,command.from,command.to))continue;
+            Color beamColor=beam.color;beamColor.a=ScaleProjectileAlpha(beam.color.a,
+                NearPlayerBulletAlpha(beam,playerPosition,beam.radius*beam.BeamVisualScale()));
             const auto point=[&](float t) {return Vector3{beam.position.x+beam.Direction().x*beam.beamLength*t,
                 beam.position.y+beam.Direction().y*beam.beamLength*t,beam.position.z+beam.Direction().z*beam.beamLength*t};};
             const auto start=point(command.from),end=point(command.to);
@@ -537,15 +549,17 @@ void SpriteRenderer::Draw(const Camera3D& camera, const BulletSystem& bullets,
                 frame.source.y+=(1-command.to)*frame.source.height;
                 frame.source.height*=command.to-command.from;
                 // 自机激光三级原生脚本以 scale.x 控制横向宽度，不能只换颜色而丢失强度档位的形状。
-                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,AnimatedBeamWidth(beam,frame),{255,255,255,beam.color.a});
+                DrawAnimatedBeam(camera,visual.texture,*visual.archive,frame,start,end,AnimatedBeamWidth(beam,frame),{255,255,255,beamColor.a});
             } else if(!beam.Dangerous() && beam.beamGrowSeconds<=0) {
                 BeginBlendMode(BLEND_ALPHA);
-                DrawLine3D(start,end,Fade(beam.color,0.7F));
-                DrawBeamShell(start,end,beam.radius*0.3F,Fade(beam.color,0.4F),command.from==0,command.to==1,true);
+                DrawLine3D(start,end,Fade(beamColor,0.7F*beamColor.a/255.F));
+                DrawBeamShell(start,end,beam.radius*0.3F,Fade(beamColor,0.4F*beamColor.a/255.F),command.from==0,command.to==1,true);
             } else {
+                // 淡化后的旧几何束芯进入透明切片，避免深度预通道仍挡住后排；Fade 会替换而非乘入 Alpha。
+                if(beamColor.a<255){BeginBlendMode(BLEND_ALPHA);DrawCylinderEx(start,end,width*.45F,width*.45F,10,Fade(WHITE,beamColor.a/255.F));}
                 BeginBlendMode(BLEND_ADDITIVE);
-                DrawBeamShell(start,end,width,Fade(beam.color,0.7F),command.from==0,command.to==1);
-                DrawBeamShell(start,end,width*1.5F,Fade(beam.color,0.2F),command.from==0,command.to==1);
+                DrawBeamShell(start,end,width,Fade(beamColor,0.7F*beamColor.a/255.F),command.from==0,command.to==1);
+                DrawBeamShell(start,end,width*1.5F,Fade(beamColor,0.2F*beamColor.a/255.F),command.from==0,command.to==1);
                 EndBlendMode();
             }
         }

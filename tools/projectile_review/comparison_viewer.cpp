@@ -208,7 +208,7 @@ private:
    beam.age=1;beam.warning=beam.growEnd=0;beam.dangerEnd=10;beam.end=11;beam.fadeSeconds=0;
    a->Lasers().Draw(std::span(&beam,1),camera,aspect);
   }else if(e.kind==Kind::Player){
-   combat_.Prepare(a,*pool_,{},camera,aspect);if(b.IsBeam())combat_.DrawBeam(b,v,0,1);else combat_.DrawBullet(b,v);
+   combat_.Prepare(a,*pool_,{},camera,{},aspect);if(b.IsBeam())combat_.DrawBeam(b,v,0,1);else combat_.DrawBullet(b,v);
   }else if(e.kind==Kind::Option){
    // 核心固定在世界空间，允许观察背面与厚度；不使用生产环境中始终朝向相机的副机姿态。
    ProjectilePose pose;const auto frame=NativeFrame();Model body=a->Get(e.model).layers[0];const auto box=GetModelBoundingBox(body);pose.scale=1.2F/Vector3Distance(box.min,box.max);

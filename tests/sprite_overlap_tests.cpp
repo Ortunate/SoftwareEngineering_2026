@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 using namespace koumakyou;
@@ -47,11 +48,12 @@ struct Fixture {
         visuals.push_back(visual);
     }
     /// @brief 通过正式 SpriteRenderer 画到 256×256；probe 检查返回后的深度/剔除/混合，blocker 放置前景墙。
-    Image Render(const char* name,std::span<const behavior::Actor*> enemies={},std::span<const PickupSprite> pickups={},bool probe=false,bool blocker=false) {
+    Image Render(const char* name,std::span<const behavior::Actor*> enemies={},std::span<const PickupSprite> pickups={},bool probe=false,bool blocker=false,
+                 Vector3 playerPosition={0,0,-10}) {
         auto target=LoadRenderTexture(256,256);
         BeginDrawing();BeginTextureMode(target);ClearBackground(BLACK);BeginMode3D(camera);
         if(blocker)DrawCube({0,0,-2},1,1,0.2F,WHITE);
-        renderer.Draw(camera,bullets,enemies,nullptr,pickups,visuals,{},effects);
+        renderer.Draw(camera,playerPosition,bullets,enemies,nullptr,pickups,visuals,{},effects);
         if(probe) {
             DrawCube({0,0,4},1,1,0.2F,BLUE);
             DrawCube({0,0,6},1,1,0.2F,kRed);
@@ -69,6 +71,18 @@ void Expect(const Image& image,int x,int y,Color expected,const char* reason) {
     if(std::abs(int(actual.r)-expected.r)>2 || std::abs(int(actual.g)-expected.g)>2 || std::abs(int(actual.b)-expected.b)>2)
         throw std::runtime_error(std::string(reason)+": expected "+std::to_string(expected.r)+","+std::to_string(expected.g)+","+std::to_string(expected.b)+
                                  " got "+std::to_string(actual.r)+","+std::to_string(actual.g)+","+std::to_string(actual.b));
+}
+/// @brief 用独立观察相机核对自机距离 Alpha，防止误改为相机距离或只接入模型路径。
+void CheckNearPlayerFade(Fixture& f) {
+    auto* bullet=f.bullets.Spawn(BulletOwner::Enemy,{0,0,0},{0,0,-1},.25F,kRed,0);assert(bullet);
+    Image approaching=f.Render("near-fade-approaching",{}, {},false,false,{0,0,-.1F});
+    Expect(approaching,128,128,{166,0,0,255},"approaching threat lost 65 percent floor");UnloadImage(approaching);
+    bullet->SetVelocity({0,0,1});
+    Image receding=f.Render("near-fade-receding",{}, {},false,false,{0,0,-.1F});
+    Expect(receding,128,128,{89,0,0,255},"receding bullet lost 35 percent floor");UnloadImage(receding);
+    Image far=f.Render("near-fade-far",{}, {},false,false,{0,0,-3});
+    Expect(far,128,128,kRed,"far bullet did not restore original Alpha");UnloadImage(far);
+    f.bullets.Reset();
 }
 void CheckOverlaps(Fixture& f) {
     behavior::Actor enemy;InitializeActor(enemy,0,{0,0,1});std::array<const behavior::Actor*,1> actors{&enemy};
@@ -279,7 +293,7 @@ void ReviewRealAssets(const std::filesystem::path& root,const std::filesystem::p
             beam->visual=stage1::kNativeLaserBase+2;beam->age=1;
         }
         BeginDrawing();BeginTextureMode(target);ClearBackground({24,30,40,255});BeginMode3D(camera);
-        renderer.Draw(camera,bullets,actors,nullptr,pickups,visuals,assets.Stage().shaders,effects);
+        renderer.Draw(camera,camera.position,bullets,actors,nullptr,pickups,visuals,assets.Stage().shaders,effects);
         EndMode3D();EndTextureMode();EndDrawing();
         Image image=LoadImageFromTexture(target.texture);ImageFlipVertical(&image);
         if(!output.empty())ExportImage(image,(output/("real-assets-"+std::to_string(scene)+".png")).string().c_str());
@@ -288,17 +302,19 @@ void ReviewRealAssets(const std::filesystem::path& root,const std::filesystem::p
     UnloadRenderTexture(target);
 }
 }
-/// @brief argv[1] 可选为截图目录、argv[2] 可选为 runtime 资源根目录；需图形会话，不加载音频或设置。
+/// @brief argv[1] 可选为截图目录、argv[2] 可选为 runtime 资源根目录；--fade-only 只跑近自机 Alpha。
 /// 未提供资源根时只运行独立像素回归，任何失败返回非零。
 int main(int argc,char** argv) {
     SetTraceLogLevel(LOG_WARNING);SetConfigFlags(FLAG_WINDOW_HIDDEN|FLAG_WINDOW_UNFOCUSED|FLAG_WINDOW_ALWAYS_RUN);
     InitWindow(256,256,"Sprite overlap regression");SetTargetFPS(0);
     int result=0;
     try {
-        std::filesystem::path output=argc>1 ? std::filesystem::absolute(argv[1]) : std::filesystem::path{};
+        const bool fadeOnly=argc>1&&std::string_view(argv[1])=="--fade-only";
+        std::filesystem::path output=argc>1&&!fadeOnly ? std::filesystem::absolute(argv[1]) : std::filesystem::path{};
         if(!output.empty())std::filesystem::create_directories(output);
-        Fixture fixture(output);CheckOverlaps(fixture);CheckBeamPartitioning(fixture);
-        if(argc>2)ReviewRealAssets(std::filesystem::absolute(argv[2]),output);
+        Fixture fixture(output);CheckNearPlayerFade(fixture);
+        if(!fadeOnly){CheckOverlaps(fixture);CheckBeamPartitioning(fixture);}
+        if(argc>2&&!fadeOnly)ReviewRealAssets(std::filesystem::absolute(argv[2]),output);
         std::cout<<"Sprite overlap regression passed\n";
     } catch(const std::exception& error){std::cerr<<error.what()<<"\n";result=1;}
     CloseWindow();return result;

@@ -100,7 +100,7 @@ struct Scene {
    bombs.push_back({&bomb,stage1::kMarisaBombSpark});
   }
  }
- void Draw(const AssetManager& assets){const auto& stage=assets.Stage();BeginMode3D(camera);models.Prepare(assets.Projectiles(),bullets,stage.visuals,camera,float(GetRenderWidth())/GetRenderHeight(),1);sprites.Draw(camera,bullets,visible,nullptr,pickups,stage.visuals,stage.shaders,effects,bombs,nullptr,&models);EndMode3D();}
+ void Draw(const AssetManager& assets){const auto& stage=assets.Stage();BeginMode3D(camera);models.Prepare(assets.Projectiles(),bullets,stage.visuals,camera,camera.position,float(GetRenderWidth())/GetRenderHeight(),1);sprites.Draw(camera,camera.position,bullets,visible,nullptr,pickups,stage.visuals,stage.shaders,effects,bombs,nullptr,&models);EndMode3D();}
 };
 
 double CpuSeconds(){rusage usage{};getrusage(RUSAGE_SELF,&usage);return usage.ru_utime.tv_sec+usage.ru_utime.tv_usec/1e6+usage.ru_stime.tv_sec+usage.ru_stime.tv_usec/1e6;}

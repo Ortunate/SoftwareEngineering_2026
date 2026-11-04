@@ -12,14 +12,21 @@ const cards = [
   <main class="project-home">
     <section class="hero">
       <div class="hero-grid" aria-hidden="true"></div>
-      <img class="hero-moon" :src="withBase('/media/moon.png')" alt="" aria-hidden="true">
-      <img class="hero-reimu" :src="withBase('/media/reimu.png')" alt="项目标题页灵梦立绘" fetchpriority="high">
+      <div class="hero-stage">
       <div class="hero-copy">
         <p class="eyebrow">东方红魔乡：异典 / PROJECT WIKI</p>
         <h1>红雾之中，<br>重新感受<span>弹幕的距离。</span></h1>
         <p class="hero-description">从二维轨迹到三维空间。<br>一场基于 C++20 与 raylib 的第一人称弹幕实践。</p>
         <div class="hero-actions"><a class="primary-action" :href="withBase('/guide/start.html')">开始探索 <span>↗</span></a><a class="secondary-action" :href="withBase('/development.html')">阅读开发 Wiki →</a></div>
         <p class="hero-caption">视觉素材：项目标题立绘与月亮图层 · 非实机截图</p>
+      </div>
+      <!-- 原图为 1672×941 且右侧透明；以固定素材坐标取景，再由外层等比缩放，避免窗口相关负偏移。 -->
+      <svg class="hero-art" viewBox="0 0 1100 1100" role="img" aria-label="项目标题页灵梦立绘与红月" xmlns="http://www.w3.org/2000/svg">
+        <image class="hero-art-moon" :href="withBase('/media/moon.png')" x="0" y="0" width="1550" height="872" />
+        <svg class="hero-art-portrait" x="70" y="100" width="970" height="950" viewBox="0 0 970 941">
+          <image :href="withBase('/media/reimu.png')" width="1672" height="941" />
+        </svg>
+      </svg>
       </div>
       <div class="hero-bottom"><span>东方红魔乡：异典 · 三维弹幕课设</span><span>WINDOWS / macOS</span></div>
     </section>

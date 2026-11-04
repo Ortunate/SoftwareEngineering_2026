@@ -140,9 +140,11 @@ cmake --build --preset macos-release --target koumakyou
 python3 tools/package_game_macos.py
 ```
 
-生成 `output/koumakyou.app`，包含原生游戏和运行时素材，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/koumakyou_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
+生成 `output/koumakyou.app`，包含原生游戏、运行时素材与芙兰朵露应用图标，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/koumakyou_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
 
 工具拒绝覆盖已有 app；再次打包时可用 `--output output/koumakyou-new.app` 指定新目标，或用 `--build` 指定其他构建目录。生成的 app 与截图不提交到 Git。
+
+应用图标使用已审查的芙兰朵露头像：Windows 构建嵌入多尺寸 ICO，运行时设置窗口图标；macOS 原生程序设置 Dock 图标，打包工具同时加入 Finder 使用的 ICNS。原图、来源和格式重建方法见 [图标素材说明](assets/source/app_icon/README.md)。
 
 ## Windows Visual Studio
 

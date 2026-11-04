@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.20)
 # 根工程显式启用 C，供原生桥接与 raylib 共用完整的语言配置。
 project(koumakyou VERSION 0.1.0 LANGUAGES C CXX)
 
-# MinGW 通过资源脚本嵌入进程清单，不能只把 .manifest 列为源码。
-if(WIN32 AND NOT MSVC)
+# Windows 通过资源脚本嵌入图标；MinGW 还通过该语言嵌入进程清单。
+if(WIN32)
     enable_language(RC)
 endif()
 
@@ -106,6 +106,7 @@ add_library(koumakyou_engine STATIC
     src/gameplay/effects/bomb_volume.cpp
     src/gameplay/items/drop_system.cpp
     src/platform/file_publish.cpp
+    src/platform/window_icon.cpp
     src/platform/window_input.cpp
     src/render/menu_render.cpp
     src/render/start_setup_render.cpp
@@ -117,8 +118,8 @@ add_library(koumakyou_engine STATIC
     src/render/bomb_geometry.cpp
     src/render/sprite_renderer.cpp
     src/render/animated_sprite.cpp
-    src/resources/asset_manager.cpp
     src/audio/bgm_player.cpp
+    src/resources/asset_manager.cpp
     src/resources/animation.cpp
     src/resources/battle_catalog.cpp
     src/resources/dds_image.cpp
@@ -184,7 +185,7 @@ target_include_directories(koumakyou_engine PUBLIC src)
 find_package(Threads REQUIRED)
 target_link_libraries(koumakyou_engine PUBLIC koumakyou_ui raylib Threads::Threads)
 if(APPLE)
-    target_sources(koumakyou_engine PRIVATE src/platform/window_input_macos.m)
+    target_sources(koumakyou_engine PRIVATE src/platform/window_input_macos.m src/platform/window_icon_macos.m)
     target_link_libraries(koumakyou_engine PRIVATE "-framework AppKit")
 elseif(WIN32)
     target_link_libraries(koumakyou_engine PRIVATE imm32)
@@ -208,6 +209,13 @@ target_sources(koumakyou_engine PRIVATE
 
 add_executable(koumakyou src/main.cpp)
 target_link_libraries(koumakyou PRIVATE koumakyou_engine)
+if(WIN32)
+    target_sources(koumakyou PRIVATE src/windows_icon.rc)
+    target_include_directories(koumakyou PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/assets/source/app_icon")
+    # 显式追踪 RC 引用的二进制资源，替换图标后也会重新嵌入。
+    set_property(SOURCE src/windows_icon.rc APPEND PROPERTY OBJECT_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/source/app_icon/koumakyou.ico")
+endif()
 
 # Rebuild the six-face strip only when its source artwork needs changing.
 add_executable(generate_skybox EXCLUDE_FROM_ALL tools/generate_skybox.cpp)
@@ -273,14 +281,6 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
-    add_executable(koumakyou_postgame_tests tests/ending_tests.cpp)
-    target_link_libraries(koumakyou_postgame_tests PRIVATE koumakyou_engine)
-    if(MSVC)
-        target_compile_options(koumakyou_postgame_tests PRIVATE /UNDEBUG /utf-8)
-    else()
-        target_compile_options(koumakyou_postgame_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
-    endif()
-    add_test(NAME koumakyou_postgame_tests COMMAND koumakyou_postgame_tests)
     # 采样级循环验证无需音频设备，覆盖一次前奏、跨缓冲接缝和观战定位。
     add_executable(koumakyou_bgm_player_tests tests/bgm_player_tests.cpp)
     target_link_libraries(koumakyou_bgm_player_tests PRIVATE koumakyou_engine)
@@ -290,6 +290,14 @@ if(BUILD_TESTING)
         target_compile_options(koumakyou_bgm_player_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME koumakyou_bgm_player_tests COMMAND koumakyou_bgm_player_tests)
+    add_executable(koumakyou_postgame_tests tests/ending_tests.cpp)
+    target_link_libraries(koumakyou_postgame_tests PRIVATE koumakyou_engine)
+    if(MSVC)
+        target_compile_options(koumakyou_postgame_tests PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(koumakyou_postgame_tests PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME koumakyou_postgame_tests COMMAND koumakyou_postgame_tests)
     # 真实结局贴图及键鼠命名回归需桌面图形会话，按需执行，不加入无窗口 CTest。
     add_executable(koumakyou_postgame_lifecycle_tests EXCLUDE_FROM_ALL tests/postgame_lifecycle_tests.cpp)
     target_link_libraries(koumakyou_postgame_lifecycle_tests PRIVATE koumakyou_engine)

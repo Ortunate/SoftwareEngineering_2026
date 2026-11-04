@@ -10,16 +10,23 @@ def package_game(build: Path, destination: Path) -> Path:
     """复制 build 中的游戏与 assets 到新的 app；源须存在，目标已存在时拒绝覆盖。
 
     设置保存在包内 MacOS 目录；启动器以 exec 保持同一进程，便于 computer use 识别。
+    ICNS 从项目源素材复制到 Contents/Resources，用于 Finder 与启动前的 Dock 图标。
     返回 app 绝对路径；不签名、不安装到系统 Applications，也不修改源构建目录。
     """
     executable = build / 'koumakyou'
     assets = build / 'assets'
+    icon = Path(__file__).resolve().parents[1] / 'assets/source/app_icon/koumakyou.icns'
     if not executable.is_file() or not assets.is_dir():
         raise FileNotFoundError('先构建 koumakyou，确保同目录含 assets')
     if destination.exists():
         raise FileExistsError(f'目标已存在：{destination}')
+    if not icon.is_file():
+        raise FileNotFoundError(f'缺少应用图标：{icon}')
     macos = destination / 'Contents/MacOS'
     macos.mkdir(parents=True)
+    resources = destination / 'Contents/Resources'
+    resources.mkdir()
+    shutil.copy2(icon, resources / 'koumakyou.icns')
     shutil.copy2(executable, macos / 'koumakyou')
     shutil.copytree(assets, macos / 'assets')
     launcher = macos / 'launch-koumakyou'
@@ -37,6 +44,7 @@ def package_game(build: Path, destination: Path) -> Path:
             'CFBundleIdentifier': 'local.koumakyou.stage1',
             'CFBundleName': 'koumakyou',
             'CFBundleDisplayName': 'koumakyou',
+            'CFBundleIconFile': 'koumakyou.icns',
             'CFBundlePackageType': 'APPL',
             'CFBundleShortVersionString': '0.2.0',
             'CFBundleVersion': '2',

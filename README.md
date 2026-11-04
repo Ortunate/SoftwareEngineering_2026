@@ -195,6 +195,16 @@ python tools/render_aim_lock_gif.py output/aim-lock/frames output/aim-lock/aim-l
 
 导出 6 秒、24 FPS：开头与结尾关闭辅助，中间四秒展示移动敌机的四向锁定箭头。预览使用独立设置目录，不修改玩家记录。
 
+## GitHub 自动构建与发布
+
+`.github/workflows/game.yml` 在面向 `main` 的 PR 和推送到 `main` 时触发，也支持手动运行。先在 Windows 与 macOS 分别构建 Release 测试目标并运行完整 CTest；任一失败会阻止两个平台的打包和 Release，每个测试最长运行 900 秒。图形集成目标仍按需执行，不属于无窗口 CTest。
+
+两端测试全部通过后，并行生成 `koumakyou-windows-x64.zip` 和 `koumakyou-macos-universal.zip`，作为 Actions 产物保留 14 天。Windows 包含静态链接 raylib 与 MSVC 运行库的 EXE、运行时 `assets/` 和 raylib 许可，素材未嵌入 EXE；macOS ZIP 内为 Intel / Apple Silicon 通用 `.app`，第三方库静态链接，系统框架仍由系统提供，尚未接入 Developer ID 签名或公证。包体只包含运行所需内容，不复制玩家数据或构建缓存。
+
+只有 `main` 推送会在两个包体都成功后发布 Release，首次正式发布使用 `0.1.0` 标签，绑定本次触发的完整提交 SHA；已有 `0.1.0` 标签时，后续推送与重跑改用 `main-<运行编号>-<重跑次数>-<提交SHA前7位>`，不会移动或覆盖版本标签。附件包含两个 ZIP 和 `SHA256SUMS`。发布先创建草稿并上传全部附件，再公开 Release；PR 和手动运行只测试及打包。发布使用内置 `GITHUB_TOKEN`，无需额外令牌。
+
+网站继续由现有 `.github/workflows/website.yml` 验证和部署：面向 `main` 的 PR 运行网站检查，`main` 推送成功后发布到 GitHub Pages。仓库的 Pages 发布源需设为 GitHub Actions。
+
 ## 操作
 
 | 按键 | 功能 |

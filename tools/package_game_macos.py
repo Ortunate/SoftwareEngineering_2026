@@ -49,8 +49,8 @@ def package_game(build: Path, destination: Path) -> Path:
             'CFBundleDisplayName': 'koumakyou',
             'CFBundleIconFile': 'koumakyou.icns',
             'CFBundlePackageType': 'APPL',
-            'CFBundleShortVersionString': '0.2.0',
-            'CFBundleVersion': '2',
+            'CFBundleShortVersionString': '0.1.0',
+            'CFBundleVersion': '1',
             'NSHighResolutionCapable': True,
         }, output)
     return destination

@@ -22,16 +22,14 @@ test('首页、移动布局与深层页面可直接访问', async ({ page }) => 
   expect(await page.locator('.VPContent').evaluate(el => el.getAnimations().length)).toBe(0)
   expect(errors).toEqual([])
 })
-test('进度页筛选与分页', async ({ page }) => {
+test('进度页展示关键事件与可追溯记录', async ({ page }) => {
   await page.goto('progress.html')
-  await expect(page.locator('.timeline li')).toHaveCount(20)
-  await page.getByRole('button', { name: '下一页 →', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText('第 2')
-  await page.getByLabel('关键词', { exact: true }).fill('music')
-  await expect(page.getByRole('status')).toContainText('第 1')
-  await expect(page.locator('.timeline')).toContainText('music')
-  await page.getByLabel('关键词', { exact: true }).fill('不存在的提交XYZ')
-  await expect(page.getByText('没有符合条件的提交，请调整筛选条件。')).toBeVisible()
+  await expect(page.getByRole('list', { name: '项目关键事件时间轴' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '三维弹幕原型成形', exact: true })).toBeVisible()
+  await expect(page.locator('.milestone-evidence a').first()).toHaveAttribute('href', /\/commit\/[a-f0-9]{40}$/)
+  await expect(page.getByRole('button', { name: '下一页 →', exact: true })).toHaveCount(0)
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 test('中文搜索和 Mermaid 图表', async ({ page }) => {
   await page.goto('reference/SOFTWARE_DESIGN.html')

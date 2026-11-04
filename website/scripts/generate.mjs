@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { site, groups, coursePages, courseSourceRevision } from '../site.config.mjs'
 import { resolveLink, parseHistory } from './content.mjs'
+import { milestones } from '../milestones.mjs'
 
 const web = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const root = path.dirname(web)
@@ -57,7 +58,17 @@ for (const [source, route] of pages) {
   await fs.writeFile(path.join(web, route.replace('.html', '.md')), intro + body)
 }
 const history = parseHistory(git('log', '--date-order', '--format=%H%x00%aI%x00%an%x00%s%x00'), site.timezone)
-await fs.writeFile(path.join(web, '_generated/history.json'), JSON.stringify(history))
+// 核对引用后只生成关键事件和少量证据，避免拼错 SHA 或将摘要日期误作完整工期。
+const events = milestones.map(event => {
+  const evidence = event.refs.map(ref => {
+    const matches = history.filter(entry => entry.hash.startsWith(ref))
+    if (matches.length !== 1) throw new Error(`关键事件引用无效或不唯一：${ref}`)
+    return { hash: matches[0].hash, date: matches[0].date }
+  })
+  const dates = evidence.map(entry => entry.date).sort()
+  return { title: event.title, summary: event.summary, start: dates[0], end: dates.at(-1), evidence }
+}).sort((a, b) => a.start.localeCompare(b.start))
+await fs.writeFile(path.join(web, '_generated/milestones.json'), JSON.stringify(events))
 await fs.writeFile(path.join(web, '_generated/meta.json'), JSON.stringify({ revision, groups: groups.map(([text, files]) => ({ text, collapsed: true, items: files.map(name => ({ text: titles[`docs/${name}.md`], link: `/reference/${name}` })) })) }, null, 2))
 for (const [slug, title, needed] of coursePages) {
   await fs.mkdir(path.join(web, 'course'), { recursive: true })

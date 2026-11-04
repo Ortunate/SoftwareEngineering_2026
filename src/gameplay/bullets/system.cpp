@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 namespace koumakyou {
 namespace {
@@ -107,7 +108,7 @@ void Bounce(Bullet& bullet) {
 
 }  // namespace
 
-void BulletSystem::Reset() { bullets_->Clear(); }
+void BulletSystem::Reset() { bullets_->Clear();enemyClearSeconds_=0; }
 BulletSystem::Handle BulletSystem::MakeHandle(Bullet* bullet) const {
     Handle handle;
     if(bullet) {handle.owner_=this;handle.slot_=bullet;handle.generation_=bullet->generation;}
@@ -118,6 +119,12 @@ Bullet* BulletSystem::Resolve(Handle handle) {
 }
 
 void BulletSystem::Update(float deltaTime, std::span<const Vector3> targets, Vector3 enemyAimTarget,bool timeStopped) {
+    // 在演员交付本步新弹后清理，且覆盖窗口的最后一个固定步；不能先减时钟再漏掉尾步。
+    if(!timeStopped&&enemyClearSeconds_>0) {
+        ClearEnemyBullets();
+        enemyClearSeconds_=std::max(0.0,enemyClearSeconds_-std::max(0.0F,deltaTime));
+        if(enemyClearSeconds_<1e-6)enemyClearSeconds_=0;
+    }
     bullets_->ForEachActive([deltaTime, targets, enemyAimTarget,timeStopped](Bullet& bullet) {
         if(bullet.pendingExpiration) {bullet.active=false;return;}
         if(timeStopped) {
@@ -308,7 +315,9 @@ Bullet* BulletSystem::SpawnBeam(Vector3 origin, Vector3 direction, float length,
     return beam;
 }
 
-void BulletSystem::ClearEnemyBullets() {
+void BulletSystem::ClearEnemyBullets(float durationSeconds) {
+    if(!std::isfinite(durationSeconds)||durationSeconds<0)throw std::invalid_argument("Invalid enemy bullet clear duration");
+    enemyClearSeconds_=std::max(enemyClearSeconds_,static_cast<double>(durationSeconds));
     bullets_->ForEachActive([](Bullet& bullet) {
         if (bullet.owner == BulletOwner::Enemy) {
             bullet.active = false;

@@ -1,4 +1,4 @@
-// 本文件负责敌人掉落和清弹星点生成，并统一处理道具移动和拾取。
+// 本文件负责敌人/自机受击掉落和清弹星点生成，并统一处理道具移动和拾取。
 
 #include "gameplay/items/drop_system.hpp"
 #include "gameplay/data/native_sizes.hpp"
@@ -104,6 +104,23 @@ void DropSystem::SpawnFixedPower(Vector3 position, int power) {
     Spawn(PickupKind::Power, position, power);
 }
 
+void DropSystem::SpawnPlayerMiss(Vector3 position, bool hasSpareLife) {
+    // 原生 drop_state=2 的目标跨场地前方随机分布；按战场比例映射 X/Z，Y 保持受击高度。
+    // 连续插值替代原作逐帧采样的末帧差，避免不同更新频率改变散落终点。
+    std::uniform_real_distribution<float> horizontal(-0.75F*kArenaHalfExtents.x,0.75F*kArenaHalfExtents.x);
+    std::uniform_real_distribution<float> depth(kArenaHalfExtents.z*3.0F/7,kArenaHalfExtents.z*9.0F/7);
+    for(int index=0;index<(hasSpareLife?6:5);++index) {
+        const Vector3 target{horizontal(random_),position.y,depth(random_)};
+        if(Pickup* pickup=pickups_.Acquire()) {
+            pickup->kind=hasSpareLife?PickupKind::Power:PickupKind::FullPower;
+            pickup->value=hasSpareLife?(index==0?8:1):128;
+            pickup->position=pickup->scatterOrigin=position;
+            pickup->scatterTarget=target;
+            pickup->missScattering=true;
+        }
+    }
+}
+
 void DropSystem::SpawnReferenceDrop(Vector3 position, int item, bool fullPower) {
     // 原作随机掉落实际为共享轮换表；每三次满足随机掉落条件的击破才前进一项。
     static constexpr std::array<int,32> items{0,0,1,0,1,0,0,1,1,1,0,0,0,1,1,0,
@@ -158,6 +175,18 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
     PickupReward reward{};
     const auto updatePickup = [&](Pickup& pickup) {
         pickup.age+=std::max(0.0F,deltaTime);
+        float motionSeconds=deltaTime;
+        if(pickup.missScattering) {
+            const double remaining=1.0-pickup.scatterSeconds;
+            pickup.scatterSeconds=std::min(1.0,pickup.scatterSeconds+std::max(0.0F,deltaTime));
+            if(pickup.scatterSeconds>1.0-1e-6)pickup.scatterSeconds=1;
+            const float ratio=static_cast<float>(pickup.scatterSeconds);
+            pickup.position={pickup.scatterOrigin.x+(pickup.scatterTarget.x-pickup.scatterOrigin.x)*ratio,
+                pickup.scatterOrigin.y,pickup.scatterOrigin.z+(pickup.scatterTarget.z-pickup.scatterOrigin.z)*ratio};
+            if(pickup.scatterSeconds<1)return;
+            pickup.missScattering=false;
+            motionSeconds=std::max(0.0F,deltaTime-static_cast<float>(remaining));
+        }
         // 吸取状态属于单个道具；玩家离开触发区域不会取消已有道具的追踪。
         if (playerPosition.z >= kAutoCollectZ) pickup.homing = true;
         if (pickup.homing) {
@@ -171,7 +200,7 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
                                              toPlayer.z * toPlayer.z);
             if (distance > 0.0001F) {
                 // 限制单帧位移，避免越过玩家后反复折返。
-                const float ratio = std::min(kAutoCollectSpeed * deltaTime / distance, 1.0F);
+                const float ratio = std::min(kAutoCollectSpeed * motionSeconds / distance, 1.0F);
                 pickup.position.x += toPlayer.x * ratio;
                 pickup.position.y += toPlayer.y * ratio;
                 pickup.position.z += toPlayer.z * ratio;
@@ -180,10 +209,10 @@ PickupReward DropSystem::Update(float deltaTime, Vector3 playerPosition) {
             // 按达到速度上限的时刻拆分本帧，并精确积分加速段；跨越顶点或限速点时，
             // 位移仍须与分成多个小帧的结果一致，不能用帧末速度代替整帧速度。
             const float accelerationTime = std::min(
-                deltaTime, (pickup.velocityZ + kFallSpeed) / kFallAcceleration);
+                motionSeconds, (pickup.velocityZ + kFallSpeed) / kFallAcceleration);
             pickup.position.z += pickup.velocityZ * accelerationTime -
                                  0.5F * kFallAcceleration * accelerationTime * accelerationTime -
-                                 kFallSpeed * (deltaTime - accelerationTime);
+                                 kFallSpeed * (motionSeconds - accelerationTime);
             pickup.velocityZ = std::max(
                 -kFallSpeed, pickup.velocityZ - kFallAcceleration * accelerationTime);
             // 仅下落道具按后边界回收；先判断越界再拾取，避免穿出场地后仍发放奖励。

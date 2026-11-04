@@ -319,13 +319,16 @@ void Game::PausePlayerBombSounds(bool paused) {
 
 void Game::HandlePlayerHit() {
     ClearPlayerBomb();
+    // TakeHit 会立即复位位置和扣命；掉落必须使用受击位置及扣命前库存，满 Power 也不转分数。
+    drops_.SpawnPlayerMiss(player_.Position(),player_.RemainingLives()>1);
     // 原生Miss确认更新净Miss、Power与复活状态，不附加旧兼容规则的16级rank惩罚。
     ++missCount_;
     assets_.PlaySoundEffect("hit");
     const bool survived = player_.TakeHit();
     player_.SyncCamera(camera_);
     screenFlashTimer_ = 0.22F;
-    bullets_.ClearEnemyBullets();
+    // 项目沿用即时复活；把原生重生段及其尾窗合计 120 内容帧的全池消弹从本次确认 Miss 开始。
+    bullets_.ClearEnemyBullets(2.0F);
     if (!survived) {
         EndStage(RunState::GameOver);
     } else {

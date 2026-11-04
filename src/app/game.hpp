@@ -237,7 +237,7 @@ private:
     void ResolvePlayerBombDamage();
     /// @brief 只读取当前活动遭遇的世界时停，不包含暂停菜单或加载状态。
     bool WorldTimeStopped() const {return boss_&&boss_->active&&boss_->WorldTimeStopped();}
-    /// @brief 玩家命中后更新场景反馈，并按剩余残机处理游戏失败。
+    /// @brief 合并后的确认 Miss 生成受击掉落、启动两秒持续消弹并更新反馈；残机用尽则结束游戏。
     void HandlePlayerHit();
     /// @brief 结算当前 Boss 阶段并进入下一阶段或一面结算。
     void AdvanceBossSkill();

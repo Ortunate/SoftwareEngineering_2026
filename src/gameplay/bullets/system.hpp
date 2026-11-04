@@ -27,9 +27,10 @@ public:
     /// 四面 Lunatic 无攻击整关在 168.117 秒的普通波已超过旧 8192 槽，三维采样不缩减源弹数来适配容量。
     static constexpr std::size_t kCapacity = 16384;
 
-    /// @brief 清空弹幕池及丢弃计数。
+    /// @brief 清空弹幕池及丢弃计数，并取消尚未结束的持续消弹。
     void Reset();
     /// @brief 按速度、加速度与角速度推进弹幕，追踪弹朝最近目标转向，并清除过期或越界者。
+    /// 持续消弹窗口内先清理本步新生敌弹再推进；仅非时停更新消费该窗口。
     /// @param deltaTime 本帧经过的秒数。
     /// @param targets 当前可攻击目标的世界坐标；仅在本次调用期间借用。
     /// @param enemyAimTarget 敌弹延迟重新瞄准时的玩家世界坐标，普通弹不使用。
@@ -66,8 +67,10 @@ public:
     Bullet* SpawnBeam(Vector3 origin, Vector3 direction, float length, float radius,
                       float warning, float duration, Color color);
 
-    /// @brief 清除敌方弹幕和光束，保留玩家弹幕。
-    void ClearEnemyBullets();
+    /// @brief 立即清除敌方弹幕和光束，保留玩家弹幕；可选持续消弹不生成星点或奖励。
+    /// @param durationSeconds 非负有限游戏秒数；正值在后续 Update 中继续清除新生敌弹，重复调用只延长保护。
+    /// 零值只清当前敌弹，不取消已有窗口；暂停或 timeStopped 冻结窗口，Reset 取消窗口。
+    void ClearEnemyBullets(float durationSeconds = 0);
     /// @brief 获取可修改的弹幕池。
     /// @return 弹幕池引用。
     FixedPool<Bullet, kCapacity>& Pool() { return *bullets_; }
@@ -97,6 +100,7 @@ public:
     static float Length(Vector3 vector);
 
 private:
+    double enemyClearSeconds_=0; // 剩余游戏秒数；按模拟时间消费，与显示帧率和玩家无敌时间独立。
     std::uint64_t nextGeneration_=1; // Reset 只清活动标记，不重置序列，避免旧激光句柄误指向新生弹。
     // 独立 ANM 实例增大了单弹状态；固定池放在堆上，避免 Windows 默认线程栈溢出。
     std::unique_ptr<FixedPool<Bullet, kCapacity>> bullets_ =

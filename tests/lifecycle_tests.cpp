@@ -473,7 +473,7 @@ struct GameLifecycleProbe {
         auto* bullet=game.bullets_.Spawn(BulletOwner::Enemy,position,{},0.1F,RED,stage1::kBlueBullet);assert(bullet);
         game.ResolveCollisions();
         assert(game.missCount_==1 && game.player_.RemainingLives()==3 && game.player_.Power()==64);
-        assert(game.score_==0 && game.graze_==0 && PickupCount(game)==0 && game.actorEffects_.Pool().ActiveCount()==0);
+        assert(game.score_==0 && game.graze_==0 && PickupCount(game)==6 && game.actorEffects_.Pool().ActiveCount()==0);
         game.actors_.ForEachActive([](const behavior::Actor& enemy){assert(enemy.health==100);});
         assert(EnemyCount(game)==2 && game.boss_->health==100 && !bullet->active);
         game.ResolveCollisions();assert(game.missCount_==1); // 重叠不绕过复活无敌。
@@ -510,6 +510,54 @@ struct GameLifecycleProbe {
             assert(game.player_.RemainingLives()==(challenge?4:3));
         }
         game.Reset();std::cout<<"Player/enemy/Boss body contacts, configured respawn Bombs and protection gates passed\n";
+    }
+
+    /// @brief 经过正式碰撞与固定步验证受击点掉落、持续消弹、暂停冻结及重开清理。
+    static void TestPlayerMiss(Game& game) {
+        game.StartPreview();game.stage_=StageDirector{};
+        for(int fps:{30,60,120,144,240}) {
+            game.bullets_.Reset();game.drops_.Clear();game.player_.Reset();game.battleTicks_=0;
+            game.missCount_=game.graze_=0;game.score_=0;
+#ifdef KOUMAKYOU_DEBUG_FEATURES
+            game.debugInvincible_=false;
+#endif
+            // 移离出生点，使 ResetPose 后错误地取位置也会被检出。
+            PlayerInput move;move.ascend=true;
+            for(int tick=0;tick<60;++tick)game.UpdateBattleStep(1.F/120,move,false,false);
+            game.player_.SetInvulnerability(0);game.player_.AdjustPower(128);
+            const Vector3 hitPosition=game.player_.Position();
+            assert(hitPosition.y>0);
+            assert(game.bullets_.Spawn(BulletOwner::Enemy,hitPosition,{},.1F,RED,stage1::kBlueBullet));
+            game.ResolveCollisions();assert(game.missCount_==1&&game.player_.Power()==112&&PickupCount(game)==6);
+            int large=0,small=0;
+            game.drops_.ForEachActive([&](const Pickup& p) {
+                assert(p.kind==PickupKind::Power&&p.position.y==hitPosition.y&&p.position.z==hitPosition.z);
+                if(p.value==8)++large;else {assert(p.value==1);++small;}
+            });
+            assert(large==1&&small==5);
+            const auto spawn=[&] {return game.bullets_.Spawn(BulletOwner::Enemy,{8,0,8},{},.1F,RED,stage1::kBlueBullet);};
+            auto* frozen=spawn();assert(frozen);
+            game.TogglePause();game.Update(3);assert(frozen->active&&PickupCount(game)==6);
+            game.drops_.ForEachActive([](const Pickup& p){assert(p.age==0&&p.scatterSeconds==0);});
+            game.TogglePause();
+            double pendingSteps=0;
+            for(int frame=0;frame<fps*2;++frame) {
+                assert(spawn());game.Update(1.F/fps);
+                pendingSteps+=120.0/fps;
+                // 高显示帧率允许本帧没有逻辑步；手工注入的敌弹须等到下一固定步才会清除。
+                if(pendingSteps+1e-9>=1) {
+                    pendingSteps-=std::floor(pendingSteps+1e-9);
+                    game.bullets_.Pool().ForEachActive([](const Bullet& b){assert(b.owner==BulletOwner::Player);});
+                }
+            }
+            assert(game.missCount_==1&&game.graze_==0&&game.score_==0);
+            assert(PickupCount(game)==6); // 清弹不能生成星点或收走受击掉落。
+            auto* released=spawn();assert(released);game.Update(1.F/120);assert(released->active);
+        }
+        game.bullets_.ClearEnemyBullets(2);game.StartPreview();game.stage_=StageDirector{};
+        auto* restarted=game.bullets_.Spawn(BulletOwner::Enemy,{8,0,8},{},.1F,RED,stage1::kBlueBullet);
+        assert(restarted);game.Update(1.F/120);assert(restarted->active&&PickupCount(game)==0);
+        game.Reset();std::cout<<"Miss drops, sustained cancellation, pause and restart passed\n";
     }
 
     /// @brief 独立绘制世界，检查四边没有留黑，左右边缘随镜头变化，防止旧侧栏或裁切恢复。
@@ -5146,6 +5194,9 @@ int main(int argc, char** argv) {
             koumakyou::GameLifecycleProbe::TestActorLifecycle(*game,prefix);
         } else if(argc>=3 && std::string(argv[2])=="--spatial-only") {
             koumakyou::GameLifecycleProbe::TestSpatialFrameRates(*game,prefix);
+        } else if(argc>=3 && std::string(argv[2])=="--player-miss-only") {
+            koumakyou::GameLifecycleProbe::TestPlayerMiss(*game);
+            koumakyou::GameLifecycleProbe::TestActorContacts(*game);
         } else if(argc>=3 && std::string(argv[2])=="--actor-contacts-only") {
             koumakyou::GameLifecycleProbe::TestActorContacts(*game);
         } else if(argc>=3 && std::string(argv[2])=="--viewport-only") {

@@ -1,4 +1,4 @@
-// 本文件负责验证敌人掉落、道具运动、满火力清弹星点与拾取结算。
+// 本文件负责验证敌人/自机受击掉落、道具运动、满火力清弹星点与拾取结算。
 
 #include "gameplay/arena.hpp"
 #include "gameplay/items/drop_system.hpp"
@@ -221,10 +221,55 @@ void TestBulletStars() {
     drops.ForEachActive([&](const Pickup&) { ++remaining; });
     assert(remaining == 0);
 }
+/// @brief 以独立数量核对 Miss 配方；三维散落保护期间不可原地拾回，分帧不能改变终点或下落交接。
+void TestPlayerMissDrops() {
+    using namespace koumakyou;
+    const Vector3 origin{2,3,-5},player{-9,-9,-9};
+    for(bool spare:{false,true}) {
+        DropSystem drops(17);drops.SpawnPlayerMiss(origin,spare);
+        int small=0,large=0,full=0;
+        drops.ForEachActive([&](const Pickup& p) {
+            assert(p.position.x==origin.x&&p.position.y==origin.y&&p.position.z==origin.z);
+            assert(p.missScattering&&!p.homing&&p.velocityZ==0);
+            assert(p.scatterTarget.y==origin.y);
+            assert(std::abs(p.scatterTarget.x)<=7.5F&&p.scatterTarget.z>=11.5F*3/7&&p.scatterTarget.z<=11.5F*9/7);
+            if(p.kind==PickupKind::FullPower) {assert(p.value==128);++full;}
+            else {assert(p.kind==PickupKind::Power);if(p.value==8)++large;else {assert(p.value==1);++small;}}
+        });
+        assert(small==(spare?5:0)&&large==(spare?1:0)&&full==(spare?0:5));
+        assert(drops.Update(0,origin).power==0);
+        // Bomb 吸取也不能绕过散落段；终点之后才开始追踪。
+        drops.MagnetAllItems();assert(drops.Update(.5F,origin).power==0);
+        drops.ForEachActive([](const Pickup& p){assert(p.missScattering&&p.scatterSeconds==.5);});
+    }
+    std::array<Pickup,6> baseline{};
+    for(int fps:{30,60,120,144,240}) {
+        DropSystem drops(17);drops.SpawnPlayerMiss(origin,true);
+        for(int frame=0;frame<fps;++frame)assert(drops.Update(1.F/fps,player).power==0);
+        int index=0;
+        drops.ForEachActive([&](const Pickup& p) {
+            assert(!p.missScattering&&std::abs(p.velocityZ)<1e-5F);
+            assert(std::abs(p.position.x-p.scatterTarget.x)<5e-4F&&std::abs(p.position.z-p.scatterTarget.z)<5e-4F);
+            if(fps==30)baseline[index]=p;
+            else assert(std::abs(p.position.x-baseline[index].position.x)<5e-4F&&std::abs(p.position.z-baseline[index].position.z)<5e-4F);
+            ++index;
+        });
+        assert(index==6);
+        drops.Update(.25F,player);
+        drops.ForEachActive([](const Pickup& p){assert(std::abs(p.velocityZ+2)<1e-5F&&std::abs(p.position.z-p.scatterTarget.z+.25F)<5e-4F);});
+        drops.Clear();drops.SpawnFixedPower(origin,1);
+        const auto reused=SinglePickup(drops);assert(!reused.missScattering&&reused.scatterSeconds==0);
+    }
+    DropSystem combined(17),split(17);combined.SpawnPlayerMiss(origin,true);split.SpawnPlayerMiss(origin,true);
+    combined.Update(1.25F,player);split.Update(1,player);split.Update(.25F,player);
+    int index=0;combined.ForEachActive([&](const Pickup& p){baseline[index++]=p;});index=0;
+    split.ForEachActive([&](const Pickup& p){assert(std::abs(p.position.z-baseline[index++].position.z)<5e-4F);});
+}
 }  // namespace
 
 /// @brief 验证普通道具掉落与运动、吸取状态持续性，以及清弹星点的转换和计分。
 void RunDropTests() {
+    TestPlayerMissDrops();
     TestPickupMotion();
     TestPickupBoundary();
     TestBulletStars();

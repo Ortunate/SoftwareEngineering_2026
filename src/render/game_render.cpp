@@ -145,7 +145,8 @@ void Game::DrawWorld() const {
             const VisualId visual=PickupVisual(pickup);
             const float scale = assets_.GetVisual(visual).archive ? 1.0F : pickup.kind == PickupKind::Power &&
                                         pickup.value >= 8 ? 1.25F : 0.9F;
-            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),255,pickup.RotationRadians()});
+            // 普通掉落物与清弹星点统一使用 50% 不透明度，并与素材自身 Alpha 相乘。
+            pickupSprites_.push_back({pickup.position, visual, scale,&pickup.animation.player.Sample(),128,pickup.RotationRadians()});
         });
         if (player_.OptionsVisible()) {
             // 两名角色共用局内显示倍率，模型、光晕与透明排序范围同步缩放。

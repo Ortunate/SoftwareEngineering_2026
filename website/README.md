@@ -14,6 +14,8 @@ npm run preview
 
 `site.config.mjs` 管理文档分类、网站地址和真实下载条目。新增 docs 文档必须加入分类清单，生成器对遗漏报错。开发文档修改原始 `docs/` 文件；`reference/`、`_generated/`、`public/media/` 是可重建输入，不应手工修改或提交。课程占位页首次生成后作为普通 Markdown 维护。
 
+导航、首页和浏览器标签页复用项目应用图标。`prepare:content` 从 `assets/runtime/common/app_icon.png` 与 `assets/source/app_icon/koumakyou.ico` 复制到 `public/media/`，更新图标后重新构建即可同步。
+
 `docs/course/` 保存从开发分支同步的课程材料原文，分类清单使用 `course/文件名`。同步时一并更新 `courseSourceRevision` 为实际来源提交；该标识仅说明材料来源，不表示网站分支包含同版本游戏代码。不要将新设计材料自动视为缺失会议、交互原型截图或用户反馈的证明。
 
 Windows 浏览测试使用本机 Edge；其他平台先执行 `npx playwright install chromium`。测试会自动启动静态预览。重新构建后须重启已有预览服务，以免保留旧资源索引。Vite 覆盖版本用于修复 VitePress 1.x 所带旧构建依赖，升级 VitePress 时需复核该覆盖配置。

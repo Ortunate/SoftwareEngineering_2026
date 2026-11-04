@@ -78,7 +78,9 @@ for (const [slug, title, needed] of coursePages) {
     await fs.writeFile(file, `# ${title}\n\n::: info 待补充\n本页为课程材料占位，尚未提供真实材料。\n:::\n\n需要补充：${needed}\n\n[返回课程材料](/course/) · [查看实际开发进度](/progress)\n`)
   }
 }
-for (const [source, dest] of [['title_layers/moon.png', 'moon.png'], ['title_layers/reimu.png', 'reimu.png']]) {
+for (const [source, dest] of [['title_layers/moon.png', 'moon.png'], ['title_layers/reimu.png', 'reimu.png'], ['app_icon.png', 'app_icon.png']]) {
   await fs.copyFile(path.join(root, 'assets/runtime/common', source), path.join(web, 'public/media', dest))
 }
+// 网站复用桌面端已审查的图标；ICO 保留多尺寸帧，所有副本随内容生成，避免维护分叉。
+await fs.copyFile(path.join(root, 'assets/source/app_icon/koumakyou.ico'), path.join(web, 'public/media', 'favicon.ico'))
 console.log(`已生成 ${pages.size} 篇文档、${history.length} 条提交，版本 ${revision.slice(0, 7)}`)

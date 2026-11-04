@@ -1,4 +1,4 @@
-<!-- 项目首页使用已有标题素材；这些装饰图片不作为实机运行证据。 -->
+<!-- 项目首页复用应用图标与标题素材；这些装饰图片不作为实机运行证据。 -->
 <script setup lang="ts">
 import { withBase } from 'vitepress'
 const cards = [
@@ -14,7 +14,7 @@ const cards = [
       <div class="hero-grid" aria-hidden="true"></div>
       <div class="hero-stage">
       <div class="hero-copy">
-        <p class="eyebrow">东方红魔乡：异典 / PROJECT WIKI</p>
+        <div class="hero-brand"><img :src="withBase('/media/app_icon.png')" alt="芙兰朵露项目图标" width="48" height="48"><p class="eyebrow">东方红魔乡：异典 / PROJECT WIKI</p></div>
         <h1>红雾之中，<br>重新感受<span>弹幕的距离。</span></h1>
         <p class="hero-description">从二维轨迹到三维空间。<br>一场基于 C++20 与 raylib 的第一人称弹幕实践。</p>
         <div class="hero-actions"><a class="primary-action" :href="withBase('/guide/start.html')">开始探索 <span>↗</span></a><a class="secondary-action" :href="withBase('/development.html')">阅读开发 Wiki →</a></div>

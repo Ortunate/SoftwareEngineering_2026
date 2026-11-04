@@ -8,7 +8,12 @@ export default defineConfig({
   base: site.base, cleanUrls: false,
   srcExclude: ['README.md', 'test-results/**', 'playwright-report/**', 'browser-tests/**', 'scripts/**'],
   appearance: 'light', lastUpdated: false,
-  head: [['meta', { name: 'theme-color', content: '#9e304a' }]],
+  // head 中的静态地址显式带部署前缀；主题 logo 由 VitePress 自动补上 base。
+  head: [
+    ['meta', { name: 'theme-color', content: '#9e304a' }],
+    ['link', { rel: 'icon', href: `${site.base}media/favicon.ico`, sizes: 'any' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '256x256', href: `${site.base}media/app_icon.png` }]
+  ],
   markdown: {
     html: true,
     config(md) {
@@ -23,6 +28,7 @@ export default defineConfig({
   },
   themeConfig: {
     siteTitle: site.name,
+    logo: { src: '/media/app_icon.png', alt: '芙兰朵露项目图标' },
     nav: [{ text: '开始游戏', link: '/guide/start' }, { text: '开发 Wiki', link: '/development' }, { text: '开发进度', link: '/progress' }, { text: '课程材料', link: '/course/' }],
     sidebar: {
       '/guide/': [{ text: '玩家指南', items: [{ text: '获取与开始', link: '/guide/start' }, { text: '玩法与模式', link: '/guide/play' }, { text: '录像、音乐与设置', link: '/guide/features' }] }],

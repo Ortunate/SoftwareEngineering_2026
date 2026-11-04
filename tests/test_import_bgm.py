@@ -180,6 +180,9 @@ class ImportBgmTests(unittest.TestCase):
                 path.write_bytes(data)
             source.chmod(0o644)
             first.chmod(0o640)
+            # Windows 只映射只读属性，不保留 POSIX 的组权限；回滚与发布应保留各自文件的实际模式。
+            original_mode = first.stat().st_mode & 0o777
+            published_mode = source.stat().st_mode & 0o777
             original = subject.os.replace
             calls = 0
 
@@ -194,13 +197,13 @@ class ImportBgmTests(unittest.TestCase):
             with patch.object(subject.os, 'replace', side_effect=fail_second), self.assertRaises(OSError):
                 subject.publish([(source, first), (source, second)])
             self.assertEqual(first.read_bytes(), b'old')
-            self.assertEqual(first.stat().st_mode & 0o777, 0o640)
+            self.assertEqual(first.stat().st_mode & 0o777, original_mode)
             self.assertFalse(second.exists())
             self.assertEqual(mp3.read_bytes(), b'music')
             self.assertEqual(sorted(p.name for p in root.iterdir()), ['first', 'old.mp3', 'source'])
             subject.publish([(source, first), (source, second)])
-            self.assertEqual(first.stat().st_mode & 0o777, 0o644)
-            self.assertEqual(second.stat().st_mode & 0o777, 0o644)
+            self.assertEqual(first.stat().st_mode & 0o777, published_mode)
+            self.assertEqual(second.stat().st_mode & 0o777, published_mode)
 
     def test_batch_report_and_validation_before_publish(self):
         with tempfile.TemporaryDirectory() as tmp:

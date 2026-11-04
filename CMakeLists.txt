@@ -213,6 +213,15 @@ target_link_libraries(generate_skybox PRIVATE raylib)
 add_executable(sprite_benchmark EXCLUDE_FROM_ALL tools/sprite_benchmark.cpp)
 target_link_libraries(sprite_benchmark PRIVATE koumakyou_engine)
 
+# 统一原作素材/正式模型对照工具，按需构建；不进入游戏运行或普通 CTest。
+add_executable(projectile_comparison EXCLUDE_FROM_ALL tools/projectile_review/comparison_viewer.cpp)
+target_link_libraries(projectile_comparison PRIVATE koumakyou_engine)
+if(MSVC)
+    target_compile_options(projectile_comparison PRIVATE /W4 /permissive- /utf-8)
+else()
+    target_compile_options(projectile_comparison PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # 正式模型与透明队列的窗口压测仅按需运行，不进入普通 CTest。
 if(UNIX)
     add_executable(render_benchmark EXCLUDE_FROM_ALL tools/render_benchmark.cpp)
@@ -349,6 +358,8 @@ if(BUILD_TESTING)
     # 参考导入与结构审阅使用独立合成数据；仅测试期使用 Python，不成为游戏运行依赖。
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME projectile_comparison_launcher_tests
+            COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_projectile_comparison_launcher.py)
         add_test(NAME koumakyou_reference_tool_tests
             COMMAND ${Python3_EXECUTABLE} -B -m unittest
                 tests/test_native_combat_data.py

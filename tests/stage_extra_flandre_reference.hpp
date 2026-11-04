@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <string>
 #include <vector>
 namespace koumakyou::stage_extra::reference {
 /// @brief 仅接受已审阅的入场/非符及39…119调用链，保留独立局部栈、阶段总钟、周期计数和激光槽位。

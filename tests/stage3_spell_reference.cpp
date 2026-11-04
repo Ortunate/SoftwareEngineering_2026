@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
+#include <string>
 namespace koumakyou::stage3::reference {
 namespace {
 constexpr float pi=std::numbers::pi_v<float>;

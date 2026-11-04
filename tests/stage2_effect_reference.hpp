@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <numbers>
 #include <stdexcept>
+#include <string>
 #include <vector>
 namespace koumakyou::stage2::reference {
 /// @brief 源请求的像素位置/半径、无量纲源XYZ轴和整数ARGB；不执行粒子运动或原生全局随机数。

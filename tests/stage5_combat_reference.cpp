@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
+#include <string>
 namespace koumakyou::stage5::reference {
 namespace {constexpr float pi=std::numbers::pi_v<float>;}
 CombatReference::CombatReference(unsigned difficulty,int sub,Vector3 point,unsigned seed,int rank)

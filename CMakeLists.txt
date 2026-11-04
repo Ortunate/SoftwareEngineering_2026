@@ -378,6 +378,8 @@ if(BUILD_TESTING)
     # 参考导入与结构审阅使用独立合成数据；仅测试期使用 Python，不成为游戏运行依赖。
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME koumakyou_macos_package_tests
+            COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_package_game_macos.py)
         add_test(NAME projectile_comparison_launcher_tests
             COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_projectile_comparison_launcher.py)
         add_test(NAME koumakyou_reference_tool_tests

@@ -90,7 +90,7 @@ Start 全部四难度、Extra Start、Practice Start 各可玩关卡与 Spell Pr
 └── docs/                                # 设计说明与录像对照记录
 ```
 
-运行时生成的 `koumakyou_settings.cfg` 位于启动目录，不属于源码。详细类关系和数据结构见 [设计文档](docs/DESIGN.md)。
+直接运行游戏程序时，设置、成绩及 `replays/` 位于当前工作目录；通过下述 macOS app 启动器运行时，统一位于 `~/Library/Application Support/koumakyou/`。这些玩家数据不属于源码。详细类关系和数据结构见 [设计文档](docs/DESIGN.md)。
 
 项目名、可执行文件和 C++ 命名空间统一使用 `koumakyou`，开发分支为 `dev/koumakyou`。旧版玩家设置需要将文件重命名为 `koumakyou_settings.cfg` 后放回启动目录；配置内容与格式保持兼容。
 
@@ -142,7 +142,7 @@ cmake --build --preset macos-release --target koumakyou
 python3 tools/package_game_macos.py
 ```
 
-生成 `output/koumakyou.app`，包含原生游戏、运行时素材与芙兰朵露应用图标，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。设置保存在包内 `Contents/MacOS/koumakyou_settings.cfg`，打包工具不复制构建目录的玩家记录。无需 Wine，也不安装到系统 Applications。
+生成 `output/koumakyou.app`，包含原生游戏、运行时素材与芙兰朵露应用图标，可双击运行，也可由 computer use 按完整路径连接。此 app 使用当前机器的构建架构；本次已在 Apple Silicon 上实际启动验证。通过 app 启动器运行时，设置 `koumakyou_settings.cfg`、成绩 `koumakyou_scores.dat` 和录像 `replays/` 保存在 `~/Library/Application Support/koumakyou/`；首次启动自动创建目录，移动或替换 app 会保留这些记录。目录创建或进入失败时启动器停止，不回退到 app 内保存。直接运行构建目录中的程序仍使用当前工作目录，打包工具不复制玩家记录。旧版 app 内的记录不会自动迁移，可手动从 `Contents/MacOS/` 复制到上述用户目录。无需 Wine，也不安装到系统 Applications。
 
 工具拒绝覆盖已有 app；再次打包时可用 `--output output/koumakyou-new.app` 指定新目标，或用 `--build` 指定其他构建目录。生成的 app 与截图不提交到 Git。
 
